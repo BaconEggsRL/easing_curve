@@ -9,6 +9,12 @@ Designed for parity with Godot's Tween system and easing equations.
 
 **&nbsp;**
 
+<!--- ![easing_curve.png](https://github.com/BaconEggsRL/easing_curve/blob/master/screenshots/easing_curve.png) --->
+
+![preset_example.gif](https://github.com/BaconEggsRL/easing_curve/blob/master/screenshots/preset_example.gif)
+
+**&nbsp;**
+
 # User Guide
 
 
