@@ -1,4 +1,4 @@
-# <img src="media/Curve.svg" width="64" height="64"> EasingCurve
+# <img src="media/Curve.svg" width="64" height="64"> Easing Curve
 GDScript curve editor for easing functions.
 
 Designed for parity with Godot's Tween system and easing equations.
