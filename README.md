@@ -9,7 +9,7 @@ Designed for parity with Godot's Tween system and easing equations.
 
 **&nbsp;**
 
-# User Guide:  
+# User Guide
 
 
 
@@ -75,17 +75,7 @@ Bezier curve points can be modified in the curve editor. This is supported on an
 
 **&nbsp;**
 
-### Congrats, you're done! Now go make some EasingCurves!
-
----
-
-Thank you for using the EasingCurve plugin!  
-Please support the development by sharing, starring or commenting if you found it useful.  
-This is my first plugin, so please feel free to submit an issue or PR if you find anything that needs fixing.
-
-**&nbsp;**
-
-### **Known Issues:**
+### **Known Issues**
 
 ---
 
@@ -96,9 +86,24 @@ This is my first plugin, so please feel free to submit an issue or PR if you fin
 
 **&nbsp;**
 
-### **Future feature map:**
+### **Future feature map**
 
 ---
 
 * Handle mode support akin to AnimationPlayer (Free, Linear, Balanced, Mirrored)
 * Additional function options (CSS linear(), Back overshoot parameter, Spring stiffness & damping)
+
+**&nbsp;**
+
+### Thank you!
+
+---
+
+Thank you for using the EasingCurve plugin.
+Please support the development by sharing, starring or commenting if you found it useful.  
+
+This is my first plugin, so please feel free to submit an issue or PR if you find anything that needs fixing.
+
+You can find all my addons on my [GitHub profile page](https://github.com/BaconEggsRL/).
+
+<a href='https://ko-fi.com/baconeggsrl' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://cdn.ko-fi.com/cdn/kofi1.png?v=3' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
