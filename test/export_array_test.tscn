@@ -1,0 +1,44 @@
+[gd_scene format=3 uid="uid://bd0qh78msruov"]
+
+[ext_resource type="Script" uid="uid://dmx3tetijwh22" path="res://test/export_array_test.gd" id="1_s53tr"]
+[ext_resource type="Script" uid="uid://0cphkvwtfwop" path="res://test/export_array_resource.gd" id="2_mgu0x"]
+[ext_resource type="Texture2D" uid="uid://ckq8rdh87fm8m" path="res://addons/easing_curve/assets/icons/Reload.svg" id="2_o3ifi"]
+
+[sub_resource type="Resource" id="Resource_ne5kg"]
+script = ExtResource("2_mgu0x")
+point_count = 2
+point_0/position = Vector2(0.4, 0)
+
+[sub_resource type="Animation" id="Animation_s53tr"]
+resource_name = "new_animation"
+step = 0.0333333
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_abdqr"]
+_data = {
+&"new_animation": SubResource("Animation_s53tr")
+}
+
+[node name="export_array_test" type="Control" unique_id=21690778]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_s53tr")
+export_array_resource = SubResource("Resource_ne5kg")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=2070723595]
+libraries/ = SubResource("AnimationLibrary_abdqr")
+
+[node name="restart" type="Button" parent="." unique_id=1238503882]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Reload Scene"
+icon = ExtResource("2_o3ifi")
+
+[connection signal="pressed" from="restart" to="." method="_on_restart_pressed"]

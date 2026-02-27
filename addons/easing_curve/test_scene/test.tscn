@@ -1,0 +1,88 @@
+[gd_scene format=3 uid="uid://qviblxegxd23"]
+
+[ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/test_scene/test.gd" id="1_37kl0"]
+[ext_resource type="Script" uid="uid://cxmmenoobxiyp" path="res://addons/easing_curve/scripts/point.gd" id="2_env3b"]
+[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="3_ucfbi"]
+[ext_resource type="Texture2D" uid="uid://d23t7b73acleh" path="res://icon.svg" id="4_ppyta"]
+[ext_resource type="Texture2D" uid="uid://ckq8rdh87fm8m" path="res://addons/easing_curve/assets/icons/Reload.svg" id="4_ykrsh"]
+
+[sub_resource type="Resource" id="Resource_env3b"]
+script = ExtResource("2_env3b")
+
+[sub_resource type="Resource" id="Resource_ucfbi"]
+script = ExtResource("2_env3b")
+position = Vector2(1, 1)
+left_control_point = Vector2(1, 1)
+right_control_point = Vector2(1, 1)
+
+[sub_resource type="Resource" id="Resource_y184y"]
+script = ExtResource("3_ucfbi")
+points = Array[ExtResource("2_env3b")]([SubResource("Resource_env3b"), SubResource("Resource_ucfbi")])
+metadata/_custom_type_script = "uid://c10cjby72qngf"
+
+[node name="test" type="Control" unique_id=198225181]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_37kl0")
+easing_curve = SubResource("Resource_y184y")
+
+[node name="nodes" type="Node2D" parent="." unique_id=1843378729]
+position = Vector2(0, 367)
+
+[node name="tween_nodes_container" type="Node2D" parent="nodes" unique_id=1472119880]
+position = Vector2(0, -74)
+
+[node name="Label2" type="Label" parent="nodes/tween_nodes_container" unique_id=611090884]
+offset_left = 184.0
+offset_top = -4.0
+offset_right = 232.0
+offset_bottom = 19.0
+text = "tween"
+
+[node name="tween_node" type="Sprite2D" parent="nodes/tween_nodes_container" unique_id=54676297]
+position = Vector2(320, 0)
+texture = ExtResource("4_ppyta")
+
+[node name="tween_start" type="Marker2D" parent="nodes/tween_nodes_container" unique_id=280680456]
+position = Vector2(320, 0)
+
+[node name="tween_end" type="Marker2D" parent="nodes/tween_nodes_container" unique_id=325023668]
+position = Vector2(960, 0)
+
+[node name="curve_nodes_container" type="Node2D" parent="nodes" unique_id=1899049406]
+position = Vector2(0, 75)
+
+[node name="Label" type="Label" parent="nodes/curve_nodes_container" unique_id=417350127]
+offset_left = 185.0
+offset_top = -12.000015
+offset_right = 228.0
+offset_bottom = 10.999985
+text = "curve"
+
+[node name="curve_node" type="Sprite2D" parent="nodes/curve_nodes_container" unique_id=502456279]
+position = Vector2(320, 0)
+texture = ExtResource("4_ppyta")
+
+[node name="curve_start" type="Marker2D" parent="nodes/curve_nodes_container" unique_id=125912984]
+position = Vector2(320, 0)
+
+[node name="curve_end" type="Marker2D" parent="nodes/curve_nodes_container" unique_id=183358020]
+position = Vector2(960, 0)
+
+[node name="restart" type="Button" parent="." unique_id=2072471650]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -119.0
+offset_bottom = 81.0
+grow_horizontal = 0
+icon = ExtResource("4_ykrsh")
+icon_alignment = 1
+expand_icon = true
+
+[connection signal="pressed" from="restart" to="." method="_on_restart_pressed"]

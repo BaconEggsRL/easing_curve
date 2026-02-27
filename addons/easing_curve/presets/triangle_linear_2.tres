@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EasingCurve" format=3 uid="uid://bi8t8lknmdtw4"]
+
+[ext_resource type="Script" uid="uid://cxmmenoobxiyp" path="res://addons/easing_curve/scripts/point.gd" id="1_uql37"]
+[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="2_hlwve"]
+
+[sub_resource type="Resource" id="Resource_y184y"]
+script = ExtResource("1_uql37")
+right_control_point = Vector2(-0.00048399717, 0)
+
+[sub_resource type="Resource" id="Resource_env3b"]
+script = ExtResource("1_uql37")
+position = Vector2(0.5, 1)
+left_control_point = Vector2(0.5, 1)
+right_control_point = Vector2(0.5, 1)
+
+[sub_resource type="Resource" id="Resource_uql37"]
+script = ExtResource("1_uql37")
+position = Vector2(0.6114331, 0.32939553)
+left_control_point = Vector2(0.51143306, 0.32939553)
+right_control_point = Vector2(0.7114331, 0.32939553)
+
+[sub_resource type="Resource" id="Resource_d30fn"]
+script = ExtResource("1_uql37")
+position = Vector2(1, 0)
+left_control_point = Vector2(1, 0)
+right_control_point = Vector2(1, 0)
+
+[resource]
+script = ExtResource("2_hlwve")
+points = Array[ExtResource("1_uql37")]([SubResource("Resource_y184y"), SubResource("Resource_env3b"), SubResource("Resource_uql37"), SubResource("Resource_d30fn")])
+trans_type = 0
+metadata/_custom_type_script = "uid://c10cjby72qngf"
