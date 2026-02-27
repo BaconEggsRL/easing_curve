@@ -1,4 +1,4 @@
-# EasingCurve
+# <img src="media/Curve.svg" width="64" height="64"> Easing Curve
 GDScript curve editor for easing functions.
 
 Designed for parity with Godot's Tween system and easing equations.
@@ -9,9 +9,9 @@ Designed for parity with Godot's Tween system and easing equations.
 
 **&nbsp;**
 
-<!--- ![easing_curve.png](https://github.com/BaconEggsRL/easing_curve/blob/master/screenshots/easing_curve.png) --->
+<!--- ![easing_curve.png](https://github.com/BaconEggsRL/easing_curve/blob/master/media/easing_curve.png) --->
 
-![preset_example.gif](https://github.com/BaconEggsRL/easing_curve/blob/master/screenshots/preset_example.gif)
+![preset_example.gif](https://github.com/BaconEggsRL/easing_curve/blob/master/media/preset_example.gif)
 
 **&nbsp;**
 
