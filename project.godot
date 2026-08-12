@@ -10,10 +10,14 @@ config_version=5
 
 [application]
 
-config/name="EasingCurve"
+config/name="Easing Curve"
 run/main_scene="uid://qviblxegxd23"
-config/features=PackedStringArray("4.6", "GL Compatibility")
+config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
+
+[autoload]
+
+_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 
 [display]
 
@@ -23,7 +27,7 @@ window/size/always_on_top=true
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/easing_curve/plugin.cfg", "res://addons/gdscript_formatter/plugin.cfg", "res://addons/toggle_external_editor/plugin.cfg")
+enabled=PackedStringArray("res://addons/easing_curve/plugin.cfg", "res://addons/godot_ai/plugin.cfg")
 
 [physics]
 

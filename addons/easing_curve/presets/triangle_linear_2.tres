@@ -27,6 +27,6 @@ right_control_point = Vector2(1, 0)
 
 [resource]
 script = ExtResource("2_hlwve")
-points = Array[ExtResource("1_uql37")]([SubResource("Resource_y184y"), SubResource("Resource_env3b"), SubResource("Resource_uql37"), SubResource("Resource_d30fn")])
 trans_type = 0
+points = Array[ExtResource("1_uql37")]([SubResource("Resource_y184y"), SubResource("Resource_env3b"), SubResource("Resource_uql37"), SubResource("Resource_d30fn")])
 metadata/_custom_type_script = "uid://c10cjby72qngf"
