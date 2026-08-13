@@ -10,3 +10,8 @@
 # Easing Curve distribution.
 /addons/godot_ai export-ignore
 /addons/godot_ai/** export-ignore
+
+# Preserve the two files already committed as Git LFS objects. Repository
+# images and addon assets otherwise remain ordinary Git blobs.
+/media/icon_32x32.png filter=lfs diff=lfs merge=lfs -text
+/media/icon_128x128.png filter=lfs diff=lfs merge=lfs -text

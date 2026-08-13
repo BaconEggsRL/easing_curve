@@ -3,12 +3,19 @@
 [ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/test_scene/test.gd" id="1_37kl0"]
 [ext_resource type="Script" uid="uid://cxmmenoobxiyp" path="res://addons/easing_curve/scripts/point.gd" id="2_env3b"]
 [ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="3_ucfbi"]
-[ext_resource type="Texture2D" path="res://addons/easing_curve/assets/icon.svg" id="4_env3b"]
 
 [sub_resource type="Resource" id="Resource_2abx0"]
+script = ExtResource("2_env3b")
+
+[sub_resource type="Resource" id="Resource_cycue"]
+script = ExtResource("2_env3b")
+position = Vector2(1, 1)
+left_control_point = Vector2(1, 1)
+right_control_point = Vector2(1, 1)
+
+[sub_resource type="Resource" id="Resource_d30fn"]
 script = ExtResource("3_ucfbi")
-trans_type = 14
-curve_mode = 1
+points = Array[ExtResource("2_env3b")]([SubResource("Resource_2abx0"), SubResource("Resource_cycue")])
 metadata/_custom_type_script = "uid://c10cjby72qngf"
 
 [node name="test" type="Control" unique_id=198225181]
@@ -19,7 +26,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_37kl0")
-easing_curve = SubResource("Resource_2abx0")
+easing_curve = SubResource("Resource_d30fn")
 
 [node name="nodes" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)
@@ -34,12 +41,14 @@ offset_right = 232.0
 offset_bottom = 19.0
 text = "tween"
 
-[node name="tween_node" type="Sprite2D" parent="nodes/tween_nodes_container" unique_id=54676297]
-position = Vector2(320, 0)
-texture = ExtResource("4_env3b")
-
 [node name="tween_start" type="Marker2D" parent="nodes/tween_nodes_container" unique_id=280680456]
 position = Vector2(320, 0)
+
+[node name="tween_node" type="Node2D" parent="nodes/tween_nodes_container/tween_start" unique_id=377179111]
+
+[node name="tween_visuals" type="Polygon2D" parent="nodes/tween_nodes_container/tween_start/tween_node" unique_id=54676297]
+color = Color(0.341176, 0.627451, 1, 1)
+polygon = PackedVector2Array(-18, 0, 0, -18, 18, 0, 0, 18)
 
 [node name="tween_end" type="Marker2D" parent="nodes/tween_nodes_container" unique_id=325023668]
 position = Vector2(960, 0)
@@ -54,12 +63,14 @@ offset_right = 228.0
 offset_bottom = 10.999985
 text = "curve"
 
-[node name="curve_node" type="Sprite2D" parent="nodes/curve_nodes_container" unique_id=502456279]
-position = Vector2(320, 0)
-texture = ExtResource("4_env3b")
-
 [node name="curve_start" type="Marker2D" parent="nodes/curve_nodes_container" unique_id=125912984]
 position = Vector2(320, 0)
+
+[node name="curve_node" type="Node2D" parent="nodes/curve_nodes_container/curve_start" unique_id=1059760795]
+
+[node name="curve_visuals" type="Polygon2D" parent="nodes/curve_nodes_container/curve_start/curve_node" unique_id=502456279]
+color = Color(0.372549, 0.811765, 0.466667, 1)
+polygon = PackedVector2Array(-18, -18, 18, -18, 18, 18, -18, 18)
 
 [node name="curve_end" type="Marker2D" parent="nodes/curve_nodes_container" unique_id=183358020]
 position = Vector2(960, 0)
@@ -72,8 +83,24 @@ anchor_right = 1.0
 offset_left = -128.0
 offset_bottom = 128.0
 grow_horizontal = 0
-text = "RELOAD"
+text = "RESTART"
 icon_alignment = 1
 expand_icon = true
+
+[node name="instructions" type="Label" parent="." unique_id=1420596714]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -20.0
+offset_right = 20.0
+offset_bottom = 23.0
+grow_horizontal = 2
+text = "Instructions:
+
+Run the current scene.
+Change the exported Curve and Tween properties in the editor.
+Applying new Ease and Trans settings will restart the comparison automatically."
+horizontal_alignment = 1
 
 [connection signal="pressed" from="restart" to="." method="_on_restart_pressed"]

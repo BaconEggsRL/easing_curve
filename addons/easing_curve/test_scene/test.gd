@@ -5,11 +5,21 @@ extends Control
 ## Test scene showcasing the EasingCurve plugin.
 ## Add a new EasingCurve resource to the exported properties and run the scene.
 ## Compare the interpolation of Godot's Tween system with the EasingCurve plugin.
-## Connect the curve's points_changed signal to _on_points_changed if you want to restart the scene automatically when the curve's preset is changed.
-## Updating the curve at runtime does not yet work in all cases. Close the running scene and re-run it from the editor to see changes.
+## Curve point changes and exported Tween settings restart the comparison automatically.
+## Some runtime curve updates are not fully supported; rerun the scene if a curve change does not appear.
 
-@export var tween_ease: Tween.EaseType = 0
-@export var tween_trans: Tween.TransitionType = 0
+@export var tween_ease: Tween.EaseType = 0:
+	set(value):
+		if tween_ease == value:
+			return
+		tween_ease = value
+		_restart_running_tweens()
+@export var tween_trans: Tween.TransitionType = 0:
+	set(value):
+		if tween_trans == value:
+			return
+		tween_trans = value
+		_restart_running_tweens()
 @export_range(1, 2, 1) var easing_curve_to_use: int = 1
 @export var easing_curve: EasingCurve:
 	set = set_easing_curve
@@ -29,12 +39,13 @@ var _debug_last_t: float = 0.0
 
 # @export var curve:Curve
 @onready var tween_nodes_container: Node2D = $nodes/tween_nodes_container
-@onready var tween_node: Sprite2D = tween_nodes_container.get_node("tween_node")
 @onready var tween_start: Marker2D = tween_nodes_container.get_node("tween_start")
+@onready var tween_node: Node2D = tween_start.get_node("tween_node")
 @onready var tween_end: Marker2D = tween_nodes_container.get_node("tween_end")
+
 @onready var curve_nodes_container: Node2D = $nodes/curve_nodes_container
-@onready var curve_node: Sprite2D = curve_nodes_container.get_node("curve_node")
 @onready var curve_start: Marker2D = curve_nodes_container.get_node("curve_start")
+@onready var curve_node: Node2D = curve_start.get_node("curve_node")
 @onready var curve_end: Marker2D = curve_nodes_container.get_node("curve_end")
 
 
@@ -43,6 +54,11 @@ func _ready() -> void:
 		reset_and_start()
 	else:
 		reset_positions()
+
+
+func _restart_running_tweens() -> void:
+	if is_node_ready() and not Engine.is_editor_hint():
+		reset_and_start.call_deferred()
 
 
 func _process(delta: float) -> void:
@@ -190,7 +206,7 @@ func start_tween(tween_ref: Tween, end: Marker2D, node: Node2D, use_curve: bool)
 		if easing_curve == null:
 			return
 
-	var target := end.position
+	var target := end.global_position
 	var duration := 2.0
 
 	# Kill existing tween
@@ -205,7 +221,7 @@ func start_tween(tween_ref: Tween, end: Marker2D, node: Node2D, use_curve: bool)
 	else:
 		tween_tween = new_tween
 
-	var position_tweener = new_tween.tween_property(node, "position", target, duration)
+	var position_tweener = new_tween.tween_property(node, "global_position", target, duration)
 
 	if use_curve:
 		if easing_curve_to_use == 1:
