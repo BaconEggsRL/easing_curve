@@ -13,7 +13,7 @@ position = Vector2(1, 1)
 left_control_point = Vector2(1, 1)
 right_control_point = Vector2(1, 1)
 
-[sub_resource type="Resource" id="Resource_d30fn"]
+[sub_resource type="Resource" id="Resource_y184y"]
 script = ExtResource("3_ucfbi")
 points = Array[ExtResource("2_env3b")]([SubResource("Resource_2abx0"), SubResource("Resource_cycue")])
 metadata/_custom_type_script = "uid://c10cjby72qngf"
@@ -26,7 +26,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_37kl0")
-easing_curve = SubResource("Resource_d30fn")
+easing_curve = SubResource("Resource_y184y")
 
 [node name="nodes" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)
@@ -99,8 +99,8 @@ grow_horizontal = 2
 text = "Instructions:
 
 Run the current scene.
-Change the exported curve and Tween properties in the editor.
-Tween Ease and Tween Trans restart the comparison automatically."
+Change the exported Curve and Tween properties in the editor.
+Applying new Ease and Trans settings will restart the comparison automatically."
 horizontal_alignment = 1
 
 [connection signal="pressed" from="restart" to="." method="_on_restart_pressed"]
