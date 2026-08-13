@@ -6,18 +6,15 @@
 
 [sub_resource type="Resource" id="Resource_2abx0"]
 script = ExtResource("2_env3b")
-right_control_point = Vector2(0.11, 0)
 
 [sub_resource type="Resource" id="Resource_cycue"]
 script = ExtResource("2_env3b")
 position = Vector2(1, 1)
-left_control_point = Vector2(0.5, 0)
+left_control_point = Vector2(1, 1)
 right_control_point = Vector2(1, 1)
 
-[sub_resource type="Resource" id="Resource_6wlcs"]
+[sub_resource type="Resource" id="Resource_d30fn"]
 script = ExtResource("3_ucfbi")
-trans_type = 7
-function_callable = Callable()
 points = Array[ExtResource("2_env3b")]([SubResource("Resource_2abx0"), SubResource("Resource_cycue")])
 metadata/_custom_type_script = "uid://c10cjby72qngf"
 
@@ -29,9 +26,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_37kl0")
-tween_ease = 1
-tween_trans = 3
-easing_curve = SubResource("Resource_6wlcs")
+easing_curve = SubResource("Resource_d30fn")
 
 [node name="nodes" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)

@@ -8,8 +8,18 @@ extends Control
 ## Connect the curve's points_changed signal to _on_points_changed if you want to restart the scene automatically when the curve's preset is changed.
 ## Updating the curve at runtime does not yet work in all cases. Close the running scene and re-run it from the editor to see changes.
 
-@export var tween_ease: Tween.EaseType = 0
-@export var tween_trans: Tween.TransitionType = 0
+@export var tween_ease: Tween.EaseType = 0:
+	set(value):
+		if tween_ease == value:
+			return
+		tween_ease = value
+		_restart_running_tweens()
+@export var tween_trans: Tween.TransitionType = 0:
+	set(value):
+		if tween_trans == value:
+			return
+		tween_trans = value
+		_restart_running_tweens()
 @export_range(1, 2, 1) var easing_curve_to_use: int = 1
 @export var easing_curve: EasingCurve:
 	set = set_easing_curve
@@ -44,6 +54,11 @@ func _ready() -> void:
 		reset_and_start()
 	else:
 		reset_positions()
+
+
+func _restart_running_tweens() -> void:
+	if is_node_ready() and not Engine.is_editor_hint():
+		reset_and_start.call_deferred()
 
 
 func _process(delta: float) -> void:
