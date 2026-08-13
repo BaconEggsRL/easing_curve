@@ -9,6 +9,7 @@
 script = ExtResource("3_ucfbi")
 trans_type = 14
 curve_mode = 1
+function_callable = Callable()
 metadata/_custom_type_script = "uid://c10cjby72qngf"
 
 [node name="test" type="Control" unique_id=198225181]
