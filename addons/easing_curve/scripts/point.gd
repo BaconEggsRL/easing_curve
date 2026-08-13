@@ -13,15 +13,8 @@ signal lock_changed(property_name: String, locked: bool)
 @export var left_control_point: Vector2 = Vector2.ZERO: set = set_left_control_point
 @export var right_control_point: Vector2 = Vector2.ZERO: set = set_right_control_point
 
-## Stores references to the editor plugin Vector2 input sliders.
-var input = {
-	"position":
-		{"x": null, "y": null},
-	"left_control_point":
-		{"x": null, "y": null},
-	"right_control_point":
-		{"x": null, "y": null}
-}
+## Stores editor-only Vector2 input sliders outside the resource property graph.
+static var _input_controls: Dictionary[int, Dictionary] = {}
 
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
 var locked:Dictionary[String, bool] = {
@@ -45,8 +38,8 @@ func _init(pos: Vector2 = Vector2.ZERO) -> void:
 
 
 func set_locked(property_name: String, toggled_on:bool) -> void:
-	var x_input = input[property_name].x
-	var y_input = input[property_name].y
+	var x_input = _get_input(property_name, "x")
+	var y_input = _get_input(property_name, "y")
 	if x_input:
 		x_input.read_only = toggled_on
 	if y_input:
@@ -57,8 +50,8 @@ func set_locked(property_name: String, toggled_on:bool) -> void:
 
 
 func set_position(value) -> void:
-	var x_input = input["position"].x
-	var y_input = input["position"].y
+	var x_input = _get_input("position", "x")
+	var y_input = _get_input("position", "y")
 	if x_input:
 		x_input.value = value.x
 	if y_input:
@@ -68,8 +61,8 @@ func set_position(value) -> void:
 
 
 func set_left_control_point(value) -> void:
-	var x_input = input["left_control_point"].x
-	var y_input = input["left_control_point"].y
+	var x_input = _get_input("left_control_point", "x")
+	var y_input = _get_input("left_control_point", "y")
 	if x_input:
 		x_input.value = value.x
 	if y_input:
@@ -79,11 +72,23 @@ func set_left_control_point(value) -> void:
 
 
 func set_right_control_point(value) -> void:
-	var x_input = input["right_control_point"].x
-	var y_input = input["right_control_point"].y
+	var x_input = _get_input("right_control_point", "x")
+	var y_input = _get_input("right_control_point", "y")
 	if x_input:
 		x_input.value = value.x
 	if y_input:
 		y_input.value = value.y
 	right_control_point = value
 	emit_changed()
+
+
+func set_input_control(property_name: String, axis: String, control: EditorSpinSlider) -> void:
+	var id := get_instance_id()
+	if not _input_controls.has(id):
+		_input_controls[id] = {}
+	_input_controls[id][property_name + axis] = weakref(control)
+
+
+func _get_input(property_name: String, axis: String) -> EditorSpinSlider:
+	var input_ref: WeakRef = _input_controls.get(get_instance_id(), {}).get(property_name + axis)
+	return input_ref.get_ref() if input_ref else null

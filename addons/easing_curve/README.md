@@ -68,7 +68,6 @@ Bezier curve points can be modified in the curve editor. This is supported on an
 
 * The curve editor allows you to start from a basic preset and modify to suit your needs.
 * When you're happy with your custom curve, you can save the resource to use wherever you want.
-  * **NOTE:** Making an EasingCurve resource unique WILL crash the editor.
   * It is recommended to first save your custom resource, then duplicate it in the FileSystem dock.
 
 * Refer to the presets folder for some examples and try them out in the test scene.
@@ -89,7 +88,6 @@ This is my first plugin, so please feel free to submit an issue or PR if you fin
 
 ---
 
-* Making the resource unique will crash the editor.
 * Runtime updating of curves is not fully supported (works on some modes, but not on others.) This is partially due to a Godot Engine bug regarding Arrays of type Resource which will hopefully be fixed soon (https://github.com/godotengine/godot/issues/101979).
 * Minor differences between cubic_bezier and Godot's built-in Tweens for some functions. This is likely due to some errors in the sampling function; in the future will implement some sample_baked methods like Godot's built-in Curve resource.
 * Undo / Redo not fully implemented.

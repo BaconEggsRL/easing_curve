@@ -451,7 +451,7 @@ func _create_vector2_property(
 	x_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	x_input.value_changed.connect(_on_x_input_value_changed.bind(i, x_input, reset_btn, position.x, property_name))
-	point.input[property_name].x = x_input
+	point.set_input_control(property_name, "x", x_input)
 	x_input.read_only = point.locked[property_name]
 	y_input.read_only = point.locked[property_name]
 
@@ -481,7 +481,7 @@ func _create_vector2_property(
 	y_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	y_input.value_changed.connect(_on_y_input_value_changed.bind(i, y_input, reset_btn, position.y, property_name))
-	point.input[property_name].y = y_input
+	point.set_input_control(property_name, "y", y_input)
 
 	reset_btn.pressed.connect(_on_reset_btn_pressed.bind(i, position, x_input, y_input, property_name, reset_btn))
 
