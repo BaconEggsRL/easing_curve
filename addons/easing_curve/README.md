@@ -68,7 +68,8 @@ Bezier curve points can be modified in the curve editor. This is supported on an
 
 * The curve editor allows you to start from a basic preset and modify to suit your needs.
 * When you're happy with your custom curve, you can save the resource to use wherever you want.
-  * It is recommended to first save your custom resource, then duplicate it in the FileSystem dock.
+  * The previous crash when making an EasingCurve resource unique has been fixed; **Make Unique** should no longer crash.
+  * For a fully independent curve, use **Make Unique Recursive** so its Point resources are duplicated too.
 
 * Refer to the presets folder for some examples and try them out in the test scene.
 

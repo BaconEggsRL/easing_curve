@@ -15,7 +15,7 @@ extends Control
 	set = set_easing_curve
 @export var easing_curve_2: EasingCurve
 
-var points: Array[Point] = []:
+var points: Array[EasingCurvePoint] = []:
 	set = set_points
 var curve_tween: Tween
 var tween_tween: Tween
@@ -231,7 +231,7 @@ func tween_curve(_offset: float, _curve: Curve) -> float:
 	return _curve.sample(_offset)
 
 
-func _on_points_changed(points: Array[Point]) -> void:
+func _on_points_changed(points: Array[EasingCurvePoint]) -> void:
 	# print("points changed; restarting tweens")
 	reset_and_start.call_deferred()
 

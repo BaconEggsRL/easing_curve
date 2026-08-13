@@ -92,7 +92,7 @@ var function_callable: Callable:
 ## Placeholder for the curve editor (replaced by the editor plugin script.)
 @export var easing_curve_editor: bool
 ## Points list
-@export var points: Array[Point] = []:
+@export var points: Array[EasingCurvePoint] = []:
 	set(value):
 		points = value
 		emit_changed()
@@ -271,8 +271,8 @@ func get_default_for_property(i: int, property_name: String) -> Vector2:
 
 
 func cubic_bezier(x0, y0, x1, y1) -> void:
-	var p0 := Point.new(Vector2(0, 0))
-	var p1 := Point.new(Vector2(1, 1))
+	var p0 := EasingCurvePoint.new(Vector2(0, 0))
+	var p1 := EasingCurvePoint.new(Vector2(1, 1))
 	p0.right_control_point = Vector2(x0, y0)
 	p1.left_control_point = Vector2(x1, y1)
 	add_point(p0)
@@ -289,35 +289,6 @@ func set_trans(_trans: TRANS) -> void:
 	_update_preset()
 
 
-#func set_curve_elastic() -> void:
-	#add_point(Point.new(Vector2(0, 0)))
-#
-	#add_point(Point.new(Vector2(.04, -0.0004)))
-#
-	#add_point(Point.new(Vector2(.08, -0.0016)))
-#
-	#add_point(Point.new(Vector2(.14, -0.0017)))
-#
-	#add_point(Point.new(Vector2(.18, 0.0004)))
-#
-	#add_point(Point.new(Vector2(.26, 0.0058)))
-#
-	#add_point(Point.new(Vector2(.28, 0.0055)))
-#
-	#add_point(Point.new(Vector2(.40, -0.0156)))
-#
-	#add_point(Point.new(Vector2(.42, -0.0164)))
-#
-	#add_point(Point.new(Vector2(.56, 0.0463)))
-#
-	#add_point(Point.new(Vector2(.58, -0.044)))
-	#add_point(Point.new(Vector2(.72, .1312)))
-	#add_point(Point.new(Vector2(.86, -0.3706)))
-	#add_point(Point.new(Vector2(1, 1)))
-#
-	#auto_smooth_handles()
-
-
 func printpoints():
 	for i in range(points.size()):
 		var p = points[i]
@@ -329,7 +300,7 @@ func sort_points() -> void:
 	force_update()
 
 
-func swap_properties(p0: Point, p1: Point) -> void:
+func swap_properties(p0: EasingCurvePoint, p1: EasingCurvePoint) -> void:
 	var temp_position_x = p0.position.x
 	p0.position.x = p1.position.x
 	p1.position.x = temp_position_x
@@ -350,7 +321,7 @@ func swap_points(a, b) -> void:
 		var j = b
 		swap_points(points[i], points[j])
 
-	elif a is Point and b is Point:
+	elif a is EasingCurvePoint and b is EasingCurvePoint:
 		# var p0 = a
 		# var p1 = b
 		#var temp_x = p0.position.x
@@ -363,7 +334,7 @@ func swap_points(a, b) -> void:
 		push_warning("Could not swap due to type mismatch")
 
 
-func add_point_with_undo(p: Point) -> void:
+func add_point_with_undo(p: EasingCurvePoint) -> void:
 	if not editor_undo_redo:
 		return
 	editor_undo_redo.create_action("Add Point")
@@ -372,7 +343,7 @@ func add_point_with_undo(p: Point) -> void:
 	editor_undo_redo.commit_action()
 
 
-func add_point(p: Point) -> void:
+func add_point(p: EasingCurvePoint) -> void:
 	# print("adding point")
 	points.append(p)
 	if not p.changed.is_connected(_on_point_changed):
@@ -389,7 +360,7 @@ func add_point(p: Point) -> void:
 	points_changed.emit(points)
 
 
-func remove_point_with_undo(p: Point) -> void:
+func remove_point_with_undo(p: EasingCurvePoint) -> void:
 	if not editor_undo_redo:
 		return
 	editor_undo_redo.create_action("Remove point")
@@ -398,7 +369,7 @@ func remove_point_with_undo(p: Point) -> void:
 	editor_undo_redo.commit_action()
 
 
-func remove_point(p: Point) -> void:
+func remove_point(p: EasingCurvePoint) -> void:
 	# print("removing point")
 	if p not in points:
 		return
@@ -584,7 +555,7 @@ func generate_from_function(func_ref: Callable, resolution := 40):
 	for i in range(resolution + 1):
 		var x = float(i) / resolution
 		var y = func_ref.call(x)
-		add_point(Point.new(Vector2(x, y)))
+		add_point(EasingCurvePoint.new(Vector2(x, y)))
 
 
 func derivative(func_ref: Callable, x: float, eps := 0.0001) -> float:
@@ -645,73 +616,73 @@ func _init_function() -> void:
 		TRANS.JITTER:
 			match ease_type:
 				EASE.IN:
-					set_function(Easing.Jitter.easeIn)
+					set_function(EasingCurveEasing.Jitter.easeIn)
 				EASE.OUT:
-					set_function(Easing.Jitter.easeOut)
+					set_function(EasingCurveEasing.Jitter.easeOut)
 				EASE.IN_OUT:
-					set_function(Easing.Jitter.easeInOut)
+					set_function(EasingCurveEasing.Jitter.easeInOut)
 				EASE.OUT_IN:
-					set_function(Easing.Jitter.easeOutIn)
+					set_function(EasingCurveEasing.Jitter.easeOutIn)
 		TRANS.IRREGULAR:
 			match ease_type:
 				EASE.IN:
-					set_function(Easing.Irregular.easeIn)
+					set_function(EasingCurveEasing.Irregular.easeIn)
 				EASE.OUT:
-					set_function(Easing.Irregular.easeOut)
+					set_function(EasingCurveEasing.Irregular.easeOut)
 				EASE.IN_OUT:
-					set_function(Easing.Irregular.easeInOut)
+					set_function(EasingCurveEasing.Irregular.easeInOut)
 				EASE.OUT_IN:
-					set_function(Easing.Irregular.easeOutIn)
+					set_function(EasingCurveEasing.Irregular.easeOutIn)
 		TRANS.STEP:
 			match ease_type:
 				EASE.IN:
-					set_function(Easing.Step.easeIn)
+					set_function(EasingCurveEasing.Step.easeIn)
 				EASE.OUT:
-					set_function(Easing.Step.easeOut)
+					set_function(EasingCurveEasing.Step.easeOut)
 				EASE.IN_OUT:
-					set_function(Easing.Step.easeInOut)
+					set_function(EasingCurveEasing.Step.easeInOut)
 				EASE.OUT_IN:
-					set_function(Easing.Step.easeOutIn)
+					set_function(EasingCurveEasing.Step.easeOutIn)
 		TRANS.POWER:
 			match ease_type:
 				EASE.IN:
-					set_function(Easing.Power.easeIn)
+					set_function(EasingCurveEasing.Power.easeIn)
 				EASE.OUT:
-					set_function(Easing.Power.easeOut)
+					set_function(EasingCurveEasing.Power.easeOut)
 				EASE.IN_OUT:
-					set_function(Easing.Power.easeInOut)
+					set_function(EasingCurveEasing.Power.easeInOut)
 				EASE.OUT_IN:
-					set_function(Easing.Power.easeOutIn)
+					set_function(EasingCurveEasing.Power.easeOutIn)
 		TRANS.ELASTIC:
 			match ease_type:
 				EASE.IN:
-					set_function(Easing.Elastic.easeInEx)
+					set_function(EasingCurveEasing.Elastic.easeInEx)
 				EASE.OUT:
-					set_function(Easing.Elastic.easeOutEx)
+					set_function(EasingCurveEasing.Elastic.easeOutEx)
 				EASE.IN_OUT:
-					set_function(Easing.Elastic.easeInOutEx)
+					set_function(EasingCurveEasing.Elastic.easeInOutEx)
 				EASE.OUT_IN:
-					set_function(Easing.Elastic.easeOutInEx)
+					set_function(EasingCurveEasing.Elastic.easeOutInEx)
 		TRANS.BOUNCE:
 			match ease_type:
 				EASE.IN:
-					set_function(Easing.Bounce.easeIn)
+					set_function(EasingCurveEasing.Bounce.easeIn)
 				EASE.OUT:
-					set_function(Easing.Bounce.easeOut)
+					set_function(EasingCurveEasing.Bounce.easeOut)
 				EASE.IN_OUT:
-					set_function(Easing.Bounce.easeInOut)
+					set_function(EasingCurveEasing.Bounce.easeInOut)
 				EASE.OUT_IN:
-					set_function(Easing.Bounce.easeOutIn)
+					set_function(EasingCurveEasing.Bounce.easeOutIn)
 		TRANS.SPRING:
 			match ease_type:
 				EASE.IN:
-					set_function(Easing.Spring.easeIn)
+					set_function(EasingCurveEasing.Spring.easeIn)
 				EASE.OUT:
-					set_function(Easing.Spring.easeOut)
+					set_function(EasingCurveEasing.Spring.easeOut)
 				EASE.IN_OUT:
-					set_function(Easing.Spring.easeInOut)
+					set_function(EasingCurveEasing.Spring.easeInOut)
 				EASE.OUT_IN:
-					set_function(Easing.Spring.easeOutIn)
+					set_function(EasingCurveEasing.Spring.easeOutIn)
 
 
 func _update_preset() -> void:
@@ -723,11 +694,11 @@ func _update_preset() -> void:
 		TRANS.CUSTOM:
 			return
 		TRANS.CONSTANT:
-			add_point(Point.new(Vector2(0, .5)))
-			add_point(Point.new(Vector2(1, .5)))
+			add_point(EasingCurvePoint.new(Vector2(0, .5)))
+			add_point(EasingCurvePoint.new(Vector2(1, .5)))
 		TRANS.LINEAR:
-			add_point(Point.new(Vector2(0, 0)))
-			add_point(Point.new(Vector2(1, 1)))
+			add_point(EasingCurvePoint.new(Vector2(0, 0)))
+			add_point(EasingCurvePoint.new(Vector2(1, 1)))
 		TRANS.QUAD:
 			match ease_type:
 				EASE.IN:
@@ -831,7 +802,7 @@ func _on_point_changed() -> void:
 
 
 # Newton-Raphson solver
-func _solve_for_t(x: float, a: Point, b: Point) -> float:
+func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
 	var t := x # good initial guess
 
 	for i in 5: # usually converges in 3–4 iterations
@@ -860,7 +831,7 @@ func _solve_for_t(x: float, a: Point, b: Point) -> float:
 	return t
 
 
-func _binary_search_t(x: float, a: Point, b: Point) -> float:
+func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
 	var low := 0.0
 	var high := 1.0
 	var mid := 0.5

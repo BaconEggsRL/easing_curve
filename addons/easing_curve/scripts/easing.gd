@@ -26,7 +26,7 @@
 
 # Usage:
 #
-#	onready var Easing = preload("easing.gd")
+#	onready var EasingCurveEasing = preload("easing.gd")
 #
 #	func testEasing():
 #		var startValue = 0.0
@@ -34,11 +34,11 @@
 #		var change = 1.0
 #		var duration = 1.0
 #
-#		print(Easing.Cubic.easeOut(0, startValue, change, duration))						# --> 0
-#		print(Easing.Cubic.easeOut(duration / 4.0, startValue, change, duration))			# --> 0.578125
-#		print(Easing.Cubic.easeOut(duration / 2.0, startValue, change, duration))			# --> 0.875
-#		print(Easing.Cubic.easeOut(duration / (3.0/4.0), startValue, change, duration))		# --> 1.037037
-#		print(Easing.Cubic.easeOut(duration, startValue, change, duration))					# --> 1
+#		print(EasingCurveEasing.Cubic.easeOut(0, startValue, change, duration))						# --> 0
+#		print(EasingCurveEasing.Cubic.easeOut(duration / 4.0, startValue, change, duration))			# --> 0.578125
+#		print(EasingCurveEasing.Cubic.easeOut(duration / 2.0, startValue, change, duration))			# --> 0.875
+#		print(EasingCurveEasing.Cubic.easeOut(duration / (3.0/4.0), startValue, change, duration))		# --> 1.037037
+#		print(EasingCurveEasing.Cubic.easeOut(duration, startValue, change, duration))					# --> 1
 
 
 # All easing functions take these parameters:
@@ -51,7 +51,7 @@
 # which also can receive an amplitud and a period parameters (defaults
 # are included)
 
-class_name Easing
+class_name EasingCurveEasing
 
 static var interpolators := [
 	[Linear.easeIn, Linear.easeOut, Linear.easeInOut, Linear.easeOutIn],

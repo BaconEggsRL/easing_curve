@@ -249,7 +249,7 @@ func _on_reset_btn_pressed(
 	reset_btn.visible = false
 
 
-func _on_remove_btn_pressed(point_list: VBoxContainer, i: int, point_panel: PanelContainer, p: Point) -> void:
+func _on_remove_btn_pressed(point_list: VBoxContainer, i: int, point_panel: PanelContainer, p: EasingCurvePoint) -> void:
 	# print("p%d: remove" % i)
 	# curve.remove_point(point)
 	editor_undo_redo.create_action("Remove point")
@@ -297,7 +297,7 @@ func _move_point_down(i: int) -> void:
 
 
 # remember bind() arguments are at the end
-func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: PanelContainer, point: Point) -> VBoxContainer:
+func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: PanelContainer, point: EasingCurvePoint) -> VBoxContainer:
 	var side_vbox = VBoxContainer.new()
 	side_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	# side_vbox.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -338,7 +338,7 @@ func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: Pan
 
 
 func _create_vector2_property(
-		point: Point,
+	point: EasingCurvePoint,
 		i: int,
 		property_name: String,
 		label_text: String,
@@ -491,7 +491,7 @@ func _create_vector2_property(
 
 func _on_add_point_btn_pressed() -> void:
 	editor_undo_redo.create_action("Add point")
-	var p := Point.new()
+	var p := EasingCurvePoint.new()
 	editor_undo_redo.add_do_method(curve, "add_point", p)
 	editor_undo_redo.add_undo_method(curve, "remove_point", p)
 	editor_undo_redo.commit_action()
@@ -501,7 +501,7 @@ func _create_inspector_section(title: String, content: Control, curve: EasingCur
 	return content
 
 
-func _on_curve_editor_point_changed(i: int, new_point: Point) -> void:
+func _on_curve_editor_point_changed(i: int, new_point: EasingCurvePoint) -> void:
 	# Update the point in the EasingCurve resource
 	var point := curve.points[i]
 

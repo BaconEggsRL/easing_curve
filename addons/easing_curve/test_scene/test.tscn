@@ -6,21 +6,11 @@
 [ext_resource type="Texture2D" uid="uid://d23t7b73acleh" path="res://icon.svg" id="4_ppyta"]
 [ext_resource type="Texture2D" uid="uid://bsv1ikv7ovwnl" path="res://addons/easing_curve/assets/icons/Reload.svg" id="4_ykrsh"]
 
-[sub_resource type="Resource" id="Resource_env3b"]
-script = ExtResource("2_env3b")
-right_control_point = Vector2(0.7, 0)
-
-[sub_resource type="Resource" id="Resource_ucfbi"]
-script = ExtResource("2_env3b")
-position = Vector2(1, 1)
-left_control_point = Vector2(0.84, 0)
-right_control_point = Vector2(1, 1)
-
-[sub_resource type="Resource" id="Resource_cycue"]
+[sub_resource type="Resource" id="Resource_2abx0"]
 script = ExtResource("3_ucfbi")
-trans_type = 11
+trans_type = 14
+curve_mode = 1
 function_callable = Callable()
-points = Array[ExtResource("2_env3b")]([SubResource("Resource_env3b"), SubResource("Resource_ucfbi")])
 metadata/_custom_type_script = "uid://c10cjby72qngf"
 
 [node name="test" type="Control" unique_id=198225181]
@@ -31,7 +21,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_37kl0")
-easing_curve = SubResource("Resource_cycue")
+easing_curve = SubResource("Resource_2abx0")
 
 [node name="nodes" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)

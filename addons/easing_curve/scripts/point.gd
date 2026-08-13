@@ -1,5 +1,5 @@
 @tool
-class_name Point
+class_name EasingCurvePoint
 extends Resource
 ## Point class for cubic bezier curves.
 ##

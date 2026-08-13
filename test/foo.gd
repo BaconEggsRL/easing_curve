@@ -2,7 +2,7 @@
 class_name Foo
 extends Resource
 
-@export var points: Array[Point] = []:
+@export var points: Array[EasingCurvePoint] = []:
 	set = _set_points
 
 

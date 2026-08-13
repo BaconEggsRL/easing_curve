@@ -240,7 +240,7 @@ func _gui_input(event: InputEvent) -> void:
 				return
 
 			# --- If we hit nothing, add a new point ---
-			var new_point = Point.new()
+			var new_point = EasingCurvePoint.new()
 			var world_pos = get_world_pos(event.position)
 			var clamped_pos = world_pos.clamp(Vector2(0, _curve.min_value), Vector2(1.0, _curve.max_value))
 			new_point.position = clamped_pos
@@ -578,7 +578,7 @@ func _get_minimum_size() -> Vector2:
 	return Vector2(64, max(35, size.x * ASPECT_RATIO) * _editor_scale)
 
 
-func _draw_bezier_segment(a: Point, b: Point) -> void:
+func _draw_bezier_segment(a: EasingCurvePoint, b: EasingCurvePoint) -> void:
 	var steps = 20
 	var prev = get_view_pos(a.position)
 	for j in range(1, steps + 1):
