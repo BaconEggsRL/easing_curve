@@ -29,11 +29,11 @@ var _debug_last_t: float = 0.0
 
 # @export var curve:Curve
 @onready var tween_nodes_container: Node2D = $nodes/tween_nodes_container
-@onready var tween_node: Sprite2D = tween_nodes_container.get_node("tween_node")
+@onready var tween_node: Polygon2D = tween_nodes_container.get_node("tween_node")
 @onready var tween_start: Marker2D = tween_nodes_container.get_node("tween_start")
 @onready var tween_end: Marker2D = tween_nodes_container.get_node("tween_end")
 @onready var curve_nodes_container: Node2D = $nodes/curve_nodes_container
-@onready var curve_node: Sprite2D = curve_nodes_container.get_node("curve_node")
+@onready var curve_node: Polygon2D = curve_nodes_container.get_node("curve_node")
 @onready var curve_start: Marker2D = curve_nodes_container.get_node("curve_start")
 @onready var curve_end: Marker2D = curve_nodes_container.get_node("curve_end")
 
