@@ -17,6 +17,16 @@ Designed for parity with Godot's Tween system and easing equations.
 
 # User Guide
 
+### Installation:
+
+* Copy `addons/easing_curve/` into your project's `addons/` folder.
+* Enable **Easing Curve** through **Project > Project Settings > Plugins**.
+
+### Compatibility:
+
+* Godot 4.4.0 is the verified minimum for plugin loading.
+* The full workflow has been verified on Godot 4.7.1.
+
 
 
 ### Create a new EasingCurve:
@@ -75,11 +85,15 @@ Bezier curve points can be modified in the curve editor. This is supported on an
 * The curve editor allows you to start from a basic preset and modify to suit your needs.
 * When you're happy with your custom curve, you can save the resource to use wherever you want.
   * The previous crash when making an EasingCurve resource unique has been fixed; **Make Unique** should no longer crash.
-  * For a fully independent curve, use **Make Unique Recursive** so its Point resources are duplicated too.
+  * For a fully independent curve, use **Make Unique Recursive** so its contained EasingCurvePoint objects, which are also Resources, are duplicated too.
 
 * Refer to the presets folder for some examples and try them out in the test scene.
 
 **&nbsp;**
+
+### License
+
+Released under the [MIT License](LICENSE.md).
 
 ### **Known Issues**
 
