@@ -1,5 +1,5 @@
 @tool
-class_name DragHandle
+class_name EasingCurveDragHandle
 extends TextureRect
 ## Drag handle used to re-order points in a list.
 ##

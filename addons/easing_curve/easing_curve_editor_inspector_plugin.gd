@@ -311,7 +311,7 @@ func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: Pan
 	side_vbox.add_child(move_up_btn)
 
 	# TripleBar TextureRect (drag handle)
-	var triple_bar = DragHandle.new()
+	var triple_bar = EasingCurveDragHandle.new()
 	triple_bar.texture = TRIPLE_BAR
 	triple_bar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	triple_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER

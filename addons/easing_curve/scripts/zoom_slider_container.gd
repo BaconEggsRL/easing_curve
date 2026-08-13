@@ -1,5 +1,5 @@
 @tool
-class_name ZoomSliderContainer
+class_name EasingCurveZoomSliderContainer
 extends Control
 ## Zoom slider container for easing curve editor.
 ##

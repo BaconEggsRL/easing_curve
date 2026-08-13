@@ -61,7 +61,7 @@ var _zoom_x: float = 1.0 # horizontal zoom
 var _zoom_y: float = 1.0 # vertical zoom
 var _zoom_step := 0
 var _curve: EasingCurve
-var _slider: ZoomSliderContainer:
+var _slider: EasingCurveZoomSliderContainer:
 	set = set_slider_container
 var _world_to_view: Transform2D
 var _editor_scale: float = 1.0
@@ -420,7 +420,7 @@ func zoom_to_step(zoom: float) -> int:
 	return int(round(log(zoom / ZOOM_MIN) / log(ZOOM_FACTOR)))
 
 
-func set_slider_container(value: ZoomSliderContainer) -> void:
+func set_slider_container(value: EasingCurveZoomSliderContainer) -> void:
 	_slider = value
 	# print("_slider = ", _slider)
 
