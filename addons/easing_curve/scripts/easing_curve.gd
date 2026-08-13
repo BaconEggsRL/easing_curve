@@ -43,9 +43,10 @@ const ZOOM_STEPS := int(round(log(ZOOM_MAX / ZOOM_MIN) / log(ZOOM_FACTOR)))
 const DEFAULT_SLIDER_VALUE := floor(ZOOM_STEPS / 2.0)
 const min_value := 0.0
 const max_value := 1.0
+const EASING_LIBRARY := preload("res://addons/easing_curve/scripts/easing.gd")
 
 ## Store reference to Editor Undo Redo Manager
-var editor_undo_redo: EditorUndoRedoManager
+var editor_undo_redo: Object
 ## Zoom slider variables
 var _last_slider_value: float = DEFAULT_SLIDER_VALUE
 var _last_zoom := Vector2(1, 1)
@@ -616,73 +617,73 @@ func _init_function() -> void:
 		TRANS.JITTER:
 			match ease_type:
 				EASE.IN:
-					set_function(EasingCurveEasing.Jitter.easeIn)
+					set_function(EASING_LIBRARY.Jitter.easeIn)
 				EASE.OUT:
-					set_function(EasingCurveEasing.Jitter.easeOut)
+					set_function(EASING_LIBRARY.Jitter.easeOut)
 				EASE.IN_OUT:
-					set_function(EasingCurveEasing.Jitter.easeInOut)
+					set_function(EASING_LIBRARY.Jitter.easeInOut)
 				EASE.OUT_IN:
-					set_function(EasingCurveEasing.Jitter.easeOutIn)
+					set_function(EASING_LIBRARY.Jitter.easeOutIn)
 		TRANS.IRREGULAR:
 			match ease_type:
 				EASE.IN:
-					set_function(EasingCurveEasing.Irregular.easeIn)
+					set_function(EASING_LIBRARY.Irregular.easeIn)
 				EASE.OUT:
-					set_function(EasingCurveEasing.Irregular.easeOut)
+					set_function(EASING_LIBRARY.Irregular.easeOut)
 				EASE.IN_OUT:
-					set_function(EasingCurveEasing.Irregular.easeInOut)
+					set_function(EASING_LIBRARY.Irregular.easeInOut)
 				EASE.OUT_IN:
-					set_function(EasingCurveEasing.Irregular.easeOutIn)
+					set_function(EASING_LIBRARY.Irregular.easeOutIn)
 		TRANS.STEP:
 			match ease_type:
 				EASE.IN:
-					set_function(EasingCurveEasing.Step.easeIn)
+					set_function(EASING_LIBRARY.Step.easeIn)
 				EASE.OUT:
-					set_function(EasingCurveEasing.Step.easeOut)
+					set_function(EASING_LIBRARY.Step.easeOut)
 				EASE.IN_OUT:
-					set_function(EasingCurveEasing.Step.easeInOut)
+					set_function(EASING_LIBRARY.Step.easeInOut)
 				EASE.OUT_IN:
-					set_function(EasingCurveEasing.Step.easeOutIn)
+					set_function(EASING_LIBRARY.Step.easeOutIn)
 		TRANS.POWER:
 			match ease_type:
 				EASE.IN:
-					set_function(EasingCurveEasing.Power.easeIn)
+					set_function(EASING_LIBRARY.Power.easeIn)
 				EASE.OUT:
-					set_function(EasingCurveEasing.Power.easeOut)
+					set_function(EASING_LIBRARY.Power.easeOut)
 				EASE.IN_OUT:
-					set_function(EasingCurveEasing.Power.easeInOut)
+					set_function(EASING_LIBRARY.Power.easeInOut)
 				EASE.OUT_IN:
-					set_function(EasingCurveEasing.Power.easeOutIn)
+					set_function(EASING_LIBRARY.Power.easeOutIn)
 		TRANS.ELASTIC:
 			match ease_type:
 				EASE.IN:
-					set_function(EasingCurveEasing.Elastic.easeInEx)
+					set_function(EASING_LIBRARY.Elastic.easeInEx)
 				EASE.OUT:
-					set_function(EasingCurveEasing.Elastic.easeOutEx)
+					set_function(EASING_LIBRARY.Elastic.easeOutEx)
 				EASE.IN_OUT:
-					set_function(EasingCurveEasing.Elastic.easeInOutEx)
+					set_function(EASING_LIBRARY.Elastic.easeInOutEx)
 				EASE.OUT_IN:
-					set_function(EasingCurveEasing.Elastic.easeOutInEx)
+					set_function(EASING_LIBRARY.Elastic.easeOutInEx)
 		TRANS.BOUNCE:
 			match ease_type:
 				EASE.IN:
-					set_function(EasingCurveEasing.Bounce.easeIn)
+					set_function(EASING_LIBRARY.Bounce.easeIn)
 				EASE.OUT:
-					set_function(EasingCurveEasing.Bounce.easeOut)
+					set_function(EASING_LIBRARY.Bounce.easeOut)
 				EASE.IN_OUT:
-					set_function(EasingCurveEasing.Bounce.easeInOut)
+					set_function(EASING_LIBRARY.Bounce.easeInOut)
 				EASE.OUT_IN:
-					set_function(EasingCurveEasing.Bounce.easeOutIn)
+					set_function(EASING_LIBRARY.Bounce.easeOutIn)
 		TRANS.SPRING:
 			match ease_type:
 				EASE.IN:
-					set_function(EasingCurveEasing.Spring.easeIn)
+					set_function(EASING_LIBRARY.Spring.easeIn)
 				EASE.OUT:
-					set_function(EasingCurveEasing.Spring.easeOut)
+					set_function(EASING_LIBRARY.Spring.easeOut)
 				EASE.IN_OUT:
-					set_function(EasingCurveEasing.Spring.easeInOut)
+					set_function(EASING_LIBRARY.Spring.easeInOut)
 				EASE.OUT_IN:
-					set_function(EasingCurveEasing.Spring.easeOutIn)
+					set_function(EASING_LIBRARY.Spring.easeOutIn)
 
 
 func _update_preset() -> void:

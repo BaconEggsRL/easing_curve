@@ -82,13 +82,13 @@ func set_right_control_point(value) -> void:
 	emit_changed()
 
 
-func set_input_control(property_name: String, axis: String, control: EditorSpinSlider) -> void:
+func set_input_control(property_name: String, axis: String, control: Object) -> void:
 	var id := get_instance_id()
 	if not _input_controls.has(id):
 		_input_controls[id] = {}
 	_input_controls[id][property_name + axis] = weakref(control)
 
 
-func _get_input(property_name: String, axis: String) -> EditorSpinSlider:
+func _get_input(property_name: String, axis: String) -> Object:
 	var input_ref: WeakRef = _input_controls.get(get_instance_id(), {}).get(property_name + axis)
 	return input_ref.get_ref() if input_ref else null
