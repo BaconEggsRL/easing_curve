@@ -34,13 +34,14 @@ offset_right = 232.0
 offset_bottom = 19.0
 text = "tween"
 
-[node name="tween_node" type="Polygon2D" parent="nodes/tween_nodes_container" unique_id=54676297]
-position = Vector2(320, 0)
-color = Color(0.341176, 0.627451, 1, 1)
-polygon = PackedVector2Array(-18, 0, 0, -18, 18, 0, 0, 18)
-
 [node name="tween_start" type="Marker2D" parent="nodes/tween_nodes_container" unique_id=280680456]
 position = Vector2(320, 0)
+
+[node name="tween_node" type="Node2D" parent="nodes/tween_nodes_container/tween_start" unique_id=377179111]
+
+[node name="tween_visuals" type="Polygon2D" parent="nodes/tween_nodes_container/tween_start/tween_node" unique_id=54676297]
+color = Color(0.341176, 0.627451, 1, 1)
+polygon = PackedVector2Array(-18, 0, 0, -18, 18, 0, 0, 18)
 
 [node name="tween_end" type="Marker2D" parent="nodes/tween_nodes_container" unique_id=325023668]
 position = Vector2(960, 0)
@@ -55,13 +56,14 @@ offset_right = 228.0
 offset_bottom = 10.999985
 text = "curve"
 
-[node name="curve_node" type="Polygon2D" parent="nodes/curve_nodes_container" unique_id=502456279]
-position = Vector2(320, 0)
-color = Color(0.372549, 0.811765, 0.466667, 1)
-polygon = PackedVector2Array(-18, -18, 18, -18, 18, 18, -18, 18)
-
 [node name="curve_start" type="Marker2D" parent="nodes/curve_nodes_container" unique_id=125912984]
 position = Vector2(320, 0)
+
+[node name="curve_node" type="Node2D" parent="nodes/curve_nodes_container/curve_start" unique_id=1059760795]
+
+[node name="curve_visuals" type="Polygon2D" parent="nodes/curve_nodes_container/curve_start/curve_node" unique_id=502456279]
+color = Color(0.372549, 0.811765, 0.466667, 1)
+polygon = PackedVector2Array(-18, -18, 18, -18, 18, 18, -18, 18)
 
 [node name="curve_end" type="Marker2D" parent="nodes/curve_nodes_container" unique_id=183358020]
 position = Vector2(960, 0)

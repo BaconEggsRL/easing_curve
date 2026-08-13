@@ -29,12 +29,13 @@ var _debug_last_t: float = 0.0
 
 # @export var curve:Curve
 @onready var tween_nodes_container: Node2D = $nodes/tween_nodes_container
-@onready var tween_node: Polygon2D = tween_nodes_container.get_node("tween_node")
 @onready var tween_start: Marker2D = tween_nodes_container.get_node("tween_start")
+@onready var tween_node: Node2D = tween_start.get_node("tween_node")
 @onready var tween_end: Marker2D = tween_nodes_container.get_node("tween_end")
+
 @onready var curve_nodes_container: Node2D = $nodes/curve_nodes_container
-@onready var curve_node: Polygon2D = curve_nodes_container.get_node("curve_node")
 @onready var curve_start: Marker2D = curve_nodes_container.get_node("curve_start")
+@onready var curve_node: Node2D = curve_start.get_node("curve_node")
 @onready var curve_end: Marker2D = curve_nodes_container.get_node("curve_end")
 
 
@@ -190,7 +191,7 @@ func start_tween(tween_ref: Tween, end: Marker2D, node: Node2D, use_curve: bool)
 		if easing_curve == null:
 			return
 
-	var target := end.position
+	var target := end.global_position
 	var duration := 2.0
 
 	# Kill existing tween
@@ -205,7 +206,7 @@ func start_tween(tween_ref: Tween, end: Marker2D, node: Node2D, use_curve: bool)
 	else:
 		tween_tween = new_tween
 
-	var position_tweener = new_tween.tween_property(node, "position", target, duration)
+	var position_tweener = new_tween.tween_property(node, "global_position", target, duration)
 
 	if use_curve:
 		if easing_curve_to_use == 1:
