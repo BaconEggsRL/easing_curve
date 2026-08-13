@@ -5,8 +5,8 @@ extends Control
 ## Test scene showcasing the EasingCurve plugin.
 ## Add a new EasingCurve resource to the exported properties and run the scene.
 ## Compare the interpolation of Godot's Tween system with the EasingCurve plugin.
-## Connect the curve's points_changed signal to _on_points_changed if you want to restart the scene automatically when the curve's preset is changed.
-## Updating the curve at runtime does not yet work in all cases. Close the running scene and re-run it from the editor to see changes.
+## Curve point changes and exported Tween settings restart the comparison automatically.
+## Some runtime curve updates are not fully supported; rerun the scene if a curve change does not appear.
 
 @export var tween_ease: Tween.EaseType = 0:
 	set(value):

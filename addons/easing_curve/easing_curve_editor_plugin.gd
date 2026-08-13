@@ -46,4 +46,3 @@ func _on_resource_saved(resource: Resource) -> void:
 		return
 	if resource.trans_type != EasingCurve.TRANS.CUSTOM:
 		resource.trans_type = EasingCurve.TRANS.CUSTOM
-	print("EasingCurve saved: %s" % [resource])

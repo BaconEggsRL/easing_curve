@@ -83,7 +83,7 @@ anchor_right = 1.0
 offset_left = -128.0
 offset_bottom = 128.0
 grow_horizontal = 0
-text = "RELOAD"
+text = "RESTART"
 icon_alignment = 1
 expand_icon = true
 
@@ -99,7 +99,8 @@ grow_horizontal = 2
 text = "Instructions:
 
 Run the current scene.
-Play with changing the exported curve and tween properties in the editor. Reload the scene."
+Change the exported curve and Tween properties in the editor.
+Tween Ease and Tween Trans restart the comparison automatically."
 horizontal_alignment = 1
 
 [connection signal="pressed" from="restart" to="." method="_on_restart_pressed"]
