@@ -3,12 +3,13 @@
 [ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/test_scene/test.gd" id="1_37kl0"]
 [ext_resource type="Script" uid="uid://cxmmenoobxiyp" path="res://addons/easing_curve/scripts/point.gd" id="2_env3b"]
 [ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="3_ucfbi"]
-[ext_resource type="Texture2D" path="res://addons/easing_curve/assets/icon.svg" id="4_env3b"]
+[ext_resource type="Texture2D" uid="uid://btshwm5mbox7k" path="res://addons/easing_curve/assets/icon.svg" id="4_env3b"]
 
 [sub_resource type="Resource" id="Resource_2abx0"]
 script = ExtResource("3_ucfbi")
 trans_type = 14
 curve_mode = 1
+function_callable = Callable()
 metadata/_custom_type_script = "uid://c10cjby72qngf"
 
 [node name="test" type="Control" unique_id=198225181]
