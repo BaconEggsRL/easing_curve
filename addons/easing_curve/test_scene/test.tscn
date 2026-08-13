@@ -3,8 +3,7 @@
 [ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/test_scene/test.gd" id="1_37kl0"]
 [ext_resource type="Script" uid="uid://cxmmenoobxiyp" path="res://addons/easing_curve/scripts/point.gd" id="2_env3b"]
 [ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="3_ucfbi"]
-[ext_resource type="Texture2D" uid="uid://d23t7b73acleh" path="res://icon.svg" id="4_ppyta"]
-[ext_resource type="Texture2D" uid="uid://bsv1ikv7ovwnl" path="res://addons/easing_curve/assets/icons/Reload.svg" id="4_ykrsh"]
+[ext_resource type="Texture2D" uid="uid://btshwm5mbox7k" path="res://addons/easing_curve/assets/icon.svg" id="4_env3b"]
 
 [sub_resource type="Resource" id="Resource_2abx0"]
 script = ExtResource("3_ucfbi")
@@ -38,7 +37,7 @@ text = "tween"
 
 [node name="tween_node" type="Sprite2D" parent="nodes/tween_nodes_container" unique_id=54676297]
 position = Vector2(320, 0)
-texture = ExtResource("4_ppyta")
+texture = ExtResource("4_env3b")
 
 [node name="tween_start" type="Marker2D" parent="nodes/tween_nodes_container" unique_id=280680456]
 position = Vector2(320, 0)
@@ -58,7 +57,7 @@ text = "curve"
 
 [node name="curve_node" type="Sprite2D" parent="nodes/curve_nodes_container" unique_id=502456279]
 position = Vector2(320, 0)
-texture = ExtResource("4_ppyta")
+texture = ExtResource("4_env3b")
 
 [node name="curve_start" type="Marker2D" parent="nodes/curve_nodes_container" unique_id=125912984]
 position = Vector2(320, 0)
@@ -71,10 +70,10 @@ layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -119.0
-offset_bottom = 81.0
+offset_left = -128.0
+offset_bottom = 128.0
 grow_horizontal = 0
-icon = ExtResource("4_ykrsh")
+text = "RELOAD"
 icon_alignment = 1
 expand_icon = true
 
