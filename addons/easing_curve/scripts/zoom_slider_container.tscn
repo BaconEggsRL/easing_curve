@@ -1,10 +1,10 @@
 [gd_scene format=3 uid="uid://r1ymwr6nae"]
 
 [ext_resource type="Script" uid="uid://crsm247gjjooh" path="res://addons/easing_curve/scripts/zoom_slider_container.gd" id="1_58cbu"]
-[ext_resource type="Texture2D" uid="uid://ctl70j7a1e3h2" path="res://addons/easing_curve/assets/icons/Zoom.svg" id="2_ttjl0"]
-[ext_resource type="Texture2D" uid="uid://cbuotaayujkpj" path="res://addons/easing_curve/assets/icons/GuiSliderGrabber.svg" id="3_0p7tn"]
-[ext_resource type="Texture2D" uid="uid://b3ewdyeli8y8q" path="res://addons/easing_curve/assets/icons/GuiSliderGrabberHl.svg" id="4_l64f2"]
-[ext_resource type="Texture2D" uid="uid://f3f3d5qs4sqb" path="res://addons/easing_curve/assets/icons/AnimationAutoFitBezier.svg" id="5_wx5pa"]
+[ext_resource type="Texture2D" path="res://addons/easing_curve/assets/icons/Zoom.svg" id="2_ttjl0"]
+[ext_resource type="Texture2D" path="res://addons/easing_curve/assets/icons/GuiSliderGrabber.svg" id="3_0p7tn"]
+[ext_resource type="Texture2D" path="res://addons/easing_curve/assets/icons/GuiSliderGrabberHl.svg" id="4_l64f2"]
+[ext_resource type="Texture2D" path="res://addons/easing_curve/assets/icons/AnimationAutoFitBezier.svg" id="5_wx5pa"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_x2nmy"]
 content_margin_left = 4.0
