@@ -5,3 +5,8 @@
 /**        export-ignore
 /addons    !export-ignore
 /addons/** !export-ignore
+
+# This repository also contains local Codex tooling. It is not part of the
+# Easing Curve distribution.
+/addons/godot_ai export-ignore
+/addons/godot_ai/** export-ignore
