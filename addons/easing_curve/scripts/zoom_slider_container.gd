@@ -20,6 +20,8 @@ const DEFAULT_SLIDER_VALUE := floor(ZOOM_STEPS / 2.0)
 
 
 func _ready():
+	slider.custom_minimum_size.x = 0.0
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.gui_input.connect(_on_slider_gui_input)
 	autofit_btn.pressed.connect(_on_autofit_btn_pressed)
 	slider.value_changed.connect(_on_slider_value_changed)

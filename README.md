@@ -1,4 +1,4 @@
-# <img src="media/Curve.svg" width="64" height="64"> Easing Curve
+# <img src="https://raw.githubusercontent.com/BaconEggsRL/easing_curve/refs/heads/master/media/Curve.svg" width="64" height="64"> Easing Curve
 GDScript curve editor for easing functions.
 
 Designed for parity with Godot's Tween system and easing equations.
@@ -17,26 +17,27 @@ Designed for parity with Godot's Tween system and easing equations.
 
 # User Guide
 
-### Installation:
-
-* Copy `addons/easing_curve/` into your project's `addons/` folder.
-* Enable **Easing Curve** through **Project > Project Settings > Plugins**.
-
 ### Compatibility:
 
 * Godot 4.4.0 is the verified minimum for plugin loading.
 * The full workflow has been verified on Godot 4.7.1.
 
+### Installation:
 
+* Copy `addons/easing_curve/` into your project's `addons/` folder.
+* Enable **Easing Curve** through **Project > Project Settings > Plugins**.
 
 ### Create a new EasingCurve:
 
  * Export a variable of type EasingCurve, and create a new EasingCurve resource.
-  * The resource will pre-populate with a linear cubic_bezier curve.
+  * The resource will pre-populate with a linear cubic_bezier curve
 
 **&nbsp;**
 
+<ul>
+
 ### Select a Curve Preset:
+---
 
 * Select the **Ease** and **Trans** option buttons to choose from a variety of pre-made curve presets.
 * These presets mimic the behavior of Godot's Tween system (See test_scene/test.tscn to compare.)
@@ -52,60 +53,52 @@ Designed for parity with Godot's Tween system and easing equations.
 **&nbsp;**
 
 ### Adjust your curve using the Curve Editor:
+---
 
-Bezier curve points can be modified in the curve editor. This is supported on any preset generated using the cubic_bezier function.
+Bézier-backed presets, including multi-segment presets, expose all points and handles in the curve editor.
 
 * **Add and Remove Points**
   * Left click anywhere on the grid to add a new point, or click the "Add Point" button.
   * Right click a point to delete it, or click the trash button icon in the points list.
-  
+
 * **Adjust the Control Points**
   * You can adjust the bezier curve control points by dragging with the mouse or editing the points list.
   * Control handles can be moved outside the grid box, but point positions cannot.
 
-
 * **Locking Control Points**
   * Vector2 properties can be locked by clicking the lock icon.
-  * Locked properties cannot be changed. This can be used to drag a point without affecting its control handles.
-  
+  * Locked properties cannot be changed, except by copy-paste. This can be used to drag a point without affecting its control handles.
+
 * **Zoom and Pan**
   * Zoom and pan can be used to see points outside the grid box. The grid box represents an x_range and y_range of 0 to 1.
   * Use the zoom slider or scroll wheel to adjust the zoom level. The arrow box to the right of the zoom slider will reset the zoom.
   * Click and drag with the middle mouse button to pan the curve editor. The arrow box to the right of the zoom slider will reset the pan.
-  
-* **Reordering the Points List**
 
+* **Reordering the Points List**
   * Click the up or down arrows or drag a point in the points list to swap it with another point.
-  
+  * You can also use the drag handles to move a point anywhere in the points list.
+  * Select a property of any point and right click to copy / paste.
 
 **&nbsp;**
+
+</ul>
 
 ### Save your custom EasingCurve:
 
 * The curve editor allows you to start from a basic preset and modify to suit your needs.
 * When you're happy with your custom curve, you can save the resource to use wherever you want.
-  * The previous crash when making an EasingCurve resource unique has been fixed; **Make Unique** should no longer crash.
-  * For a fully independent curve, use **Make Unique Recursive** so its contained EasingCurvePoint objects, which are also Resources, are duplicated too.
+* Use the "Make Unique" option on saved resources to avoid modifying the original resource.
+* Refer to the presets folder for some examples and try them out in the provided test scene.
 
-* Refer to the presets folder for some examples and try them out in the test scene.
+### Runtime updates:
 
-**&nbsp;**
-
-### License
-
-Released under the [MIT License](LICENSE.md).
-
-### **Known Issues**
-
----
-
-* Runtime updating of curves is not fully supported (works on some modes, but not on others.) This is partially due to a Godot Engine bug regarding Arrays of type Resource which will hopefully be fixed soon (https://github.com/godotengine/godot/issues/101979).
-* Minor differences between cubic_bezier and Godot's built-in Tweens for some functions. This is likely due to some errors in the sampling function; in the future will implement some sample_baked methods like Godot's built-in Curve resource.
-* Undo / Redo not fully implemented.
+* Any changes you make to the curve take effect immediately at runtime in the test scene--even when modifying in the local scene tree.
+* See how your changes affect the scene in real time. A restart button is provided in the top-right corner as a fallback.
 
 **&nbsp;**
 
-### **Future feature map**
+
+### **Future feature map:**
 
 ---
 
@@ -114,15 +107,23 @@ Released under the [MIT License](LICENSE.md).
 
 **&nbsp;**
 
+
 ### Thank you!
 
 ---
 
 Thank you for using the EasingCurve plugin.
-Please support the development by sharing, starring or commenting if you found it useful.  
+Please support the development by sharing, starring or commenting if you found it useful.
 
 This is my first plugin, so please feel free to submit an issue or PR if you find anything that needs fixing.
 
 You can find all my addons on my [GitHub profile page](https://github.com/BaconEggsRL/).
 
 <a href='https://ko-fi.com/baconeggsrl' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://cdn.ko-fi.com/cdn/kofi1.png?v=3' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+
+
+### AI Usage Disclaimer:
+AI-assisted coding was used during development for implementation, debugging, refactoring, and release-readiness review. Generated suggestions and changes were reviewed, modified where needed, and tested in Godot before release.
+
+### License:
+Released under the [MIT License](LICENSE.md).

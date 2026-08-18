@@ -7,6 +7,10 @@ extends Control
 ## More info here to come.
 
 signal point_changed
+signal point_property_change_requested(index: int, property_name: StringName, value: Variant, changing: bool)
+signal point_add_requested(point: EasingCurvePoint)
+signal point_remove_requested(point: EasingCurvePoint)
+signal point_edit_finished
 signal slider_changed
 signal zoom_changed
 signal pan_changed
@@ -15,12 +19,14 @@ enum GrabMode { NONE, ADD, MOVE }
 enum ControlIndex { NONE = -1, LEFT = 0, RIGHT = 1 }
 
 const ZOOM_SLIDER_CONTAINER = preload("uid://r1ymwr6nae")
+const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 const ZOOM_MIN := 0.1
 const ZOOM_MAX := 10.0
 const ZOOM_FACTOR := 1.2 # same as wheel multiplier
 const ZOOM_STEPS := int(round(log(ZOOM_MAX / ZOOM_MIN) / log(ZOOM_FACTOR)))
 const DEFAULT_SLIDER_VALUE := floor(ZOOM_STEPS / 2.0)
 const ASPECT_RATIO: float = 6. / 13.
+const MIN_GRAPH_HEIGHT := 135.0
 const MIN_X: float = 0.0
 const MAX_X: float = 1.0
 const MIN_Y: float = 0.0
@@ -68,12 +74,13 @@ var _editor_scale: float = 1.0
 
 
 func _ready() -> void:
-	self.custom_minimum_size = Vector2(0, 150)
+	custom_minimum_size = Vector2.ZERO
 	focus_mode = Control.FOCUS_ALL
 	clip_contents = true
 
 	if Engine.is_editor_hint():
 		_editor_scale = EditorInterface.get_editor_scale()
+	update_minimum_size()
 
 	if _curve == null:
 		_curve = EasingCurve.new()
@@ -135,22 +142,24 @@ func _gui_input(event: InputEvent) -> void:
 			match dragging_control:
 				ControlIndex.LEFT:
 					if dragging_point != 0: # ignore left control for first point
-						p.left_control_point = world_pos
+						_request_point_property_change(dragging_point, &"left_control_point", world_pos, true)
 				ControlIndex.RIGHT:
 					if dragging_point != _curve.points.size() - 1: # ignore right control for last point
-						p.right_control_point = world_pos
+						_request_point_property_change(dragging_point, &"right_control_point", world_pos, true)
 				ControlIndex.NONE: # dragging main point
 					var clamped_pos = world_pos.clamp(Vector2(0, _curve.min_value), Vector2(1.0, _curve.max_value))
 
 					var delta = clamped_pos - p.position
-					p.position = clamped_pos
+					var left_control: Vector2 = p.left_control_point
+					var right_control: Vector2 = p.right_control_point
+					_request_point_property_change(dragging_point, &"position", clamped_pos, true)
 
 					# Only move controls if they are NOT locked
 					if not p.locked["left_control_point"]:
-						p.left_control_point += delta
+						_request_point_property_change(dragging_point, &"left_control_point", left_control + delta, true)
 
 					if not p.locked["right_control_point"]:
-						p.right_control_point += delta
+						_request_point_property_change(dragging_point, &"right_control_point", right_control + delta, true)
 
 			point_changed.emit(dragging_point, p)
 			queue_redraw()
@@ -247,15 +256,19 @@ func _gui_input(event: InputEvent) -> void:
 			new_point.left_control_point = clamped_pos + Vector2(-0.1, 0)
 			new_point.right_control_point = clamped_pos + Vector2(0.1, 0)
 			# _curve.add_point(new_point)
-			_curve.add_point_with_undo(new_point)
-			selected_index = _curve.points.find(new_point)
+			_request_point_add(new_point)
+			selected_index = -1
+			for i in range(_curve.points.size()):
+				if _curve.points[i].position == clamped_pos:
+					selected_index = i
+					break
 
 		# --- RIGHT CLICK ---
 		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 			var point_idx = get_point_at(event.position)
 			if point_idx != -1:
 				# _curve.remove_point(_curve.points[point_idx])
-				_curve.remove_point_with_undo(_curve.points[point_idx])
+				_request_point_remove(_curve.points[point_idx])
 				if selected_index == point_idx:
 					selected_index = -1
 				elif selected_index > point_idx:
@@ -265,8 +278,41 @@ func _gui_input(event: InputEvent) -> void:
 
 		# Reset dragging state when mouse button released
 		elif not event.pressed:
+			if dragging_point != -1:
+				point_edit_finished.emit()
 			dragging_point = -1
 			dragging_control = ControlIndex.NONE
+
+
+func _request_point_property_change(index: int, property_name: StringName, value: Variant, changing: bool = false) -> void:
+	if point_property_change_requested.has_connections():
+		point_property_change_requested.emit(index, property_name, value, changing)
+	else:
+		_curve.set_point_property(index, property_name, value)
+
+
+func _request_point_add(point: EasingCurvePoint) -> void:
+	if point_add_requested.has_connections():
+		point_add_requested.emit(point)
+	else:
+		EASING_CURVE_EDITOR_UNDO.apply_action(
+			editor_undo_redo,
+			_curve,
+			"Add Easing Curve Point",
+			_curve.add_point.bind(point),
+		)
+
+
+func _request_point_remove(point: EasingCurvePoint) -> void:
+	if point_remove_requested.has_connections():
+		point_remove_requested.emit(point)
+	else:
+		EASING_CURVE_EDITOR_UNDO.apply_action(
+			editor_undo_redo,
+			_curve,
+			"Remove Easing Curve Point",
+			_curve.remove_point.bind(point),
+		)
 
 
 # =========================
@@ -277,13 +323,6 @@ func _draw():
 		return
 
 	update_view_transform()
-
-	# --- Draw background panel ---
-	var style_box = get_theme_stylebox("panel", "Tree")
-	if style_box:
-		draw_style_box(style_box, Rect2(Vector2.ZERO, size))
-	else:
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.1, 0.1, 0.1, 0.8))
 
 	# --- Draw Grid ---
 	var grid_color_primary: Color = Color(0.3, 0.3, 0.3, 0.8)
@@ -450,7 +489,6 @@ func set_curve(easing_curve: EasingCurve):
 		if _curve != null:
 			_curve.changed.disconnect(_on_curve_changed)
 		_curve = easing_curve
-		_curve.editor_undo_redo = editor_undo_redo
 		if _curve != null:
 			_curve.changed.connect(_on_curve_changed)
 		queue_redraw()
@@ -571,11 +609,21 @@ func _apply_zoom_from_step():
 
 
 func _on_curve_changed() -> void:
+	var point_count := _curve.points.size() if _curve != null else 0
+	if selected_index >= point_count:
+		selected_index = -1
+		selected_control_index = ControlIndex.NONE
+	if hovered_index >= point_count:
+		hovered_index = -1
+		hovered_control_index = ControlIndex.NONE
+	if dragging_point >= point_count:
+		dragging_point = -1
+		dragging_control = ControlIndex.NONE
 	queue_redraw()
 
 
 func _get_minimum_size() -> Vector2:
-	return Vector2(64, max(35, size.x * ASPECT_RATIO) * _editor_scale)
+	return Vector2(64.0, maxf(MIN_GRAPH_HEIGHT, size.x * ASPECT_RATIO)) * _editor_scale
 
 
 func _draw_bezier_segment(a: EasingCurvePoint, b: EasingCurvePoint) -> void:

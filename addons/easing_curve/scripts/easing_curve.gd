@@ -7,7 +7,7 @@ extends Resource
 ## Main script for the EasingCurve resource.
 ## More info here to come.
 
-signal points_changed
+signal points_changed(points: Array[EasingCurvePoint])
 signal range_changed
 
 enum CurveMode {
@@ -39,19 +39,51 @@ enum TRANS {
 const ZOOM_MIN := 0.1
 const ZOOM_MAX := 10.0
 const ZOOM_FACTOR := 1.2 # same as wheel multiplier
+const PRESET_GEOMETRY_TOLERANCE := 0.000001
 const ZOOM_STEPS := int(round(log(ZOOM_MAX / ZOOM_MIN) / log(ZOOM_FACTOR)))
 const DEFAULT_SLIDER_VALUE := floor(ZOOM_STEPS / 2.0)
 const min_value := 0.0
 const max_value := 1.0
 const EASING_LIBRARY := preload("res://addons/easing_curve/scripts/easing.gd")
+## Editor/live-debug bridge containing only primitive values, never point Resources.
+const POINT_SNAPSHOT_PROPERTY := &"_point_snapshot"
+const FUNCTION_SNAPSHOT_PROPERTY := &"_function_snapshot"
+const EDITOR_STATE_SNAPSHOT_PROPERTY := &"_editor_state_snapshot"
+const POINT_STORAGE_COUNT := &"_point_count"
+const POINT_STORAGE_PREFIX := "_point_"
+const POINT_PROPERTIES: Array[StringName] = [
+	&"position",
+	&"left_control_point",
+	&"right_control_point",
+	&"locked",
+]
+const DEFERRED_PARAMETER_PROPERTIES: Array[StringName] = [
+	&"num_points",
+	&"randomness",
+	&"steps",
+	&"y_offset",
+	&"power",
+	&"amplitude",
+	&"period",
+]
 
-## Store reference to Editor Undo Redo Manager
-var editor_undo_redo: Object
 ## Zoom slider variables
 var _last_slider_value: float = DEFAULT_SLIDER_VALUE
 var _last_zoom := Vector2(1, 1)
 var _last_pan := Vector2.ZERO
 var _last_t := 0.0
+var _points: Array[EasingCurvePoint] = []
+var _connected_points: Array[EasingCurvePoint] = []
+var _point_topology: Array[EasingCurvePoint] = []
+var _change_revision := 0
+var _suppress_point_notifications := 0
+var _point_snapshot_change_pending := false
+var _point_snapshot_property_list_pending := false
+var _parameter_edit_depth := 0
+var _parameter_update_depth := 0
+var _parameter_update_change_pending := false
+var _applying_function_snapshot := false
+var _applying_editor_state_snapshot := false
 
 ######################################################
 # EXPORTED OPTIONS
@@ -60,43 +92,63 @@ var _last_t := 0.0
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
 var ease_type: EASE = EASE.IN:
 	set(value):
+		if ease_type == value:
+			return
+		var revision_before := _change_revision
 		ease_type = value
-		# print("set ease_type = ", EASE.keys()[ease_type])
-		if Engine.is_editor_hint():
-			_update_preset()
+		if _applying_editor_state_snapshot:
+			return
+		_update_preset()
+		if _change_revision == revision_before:
+			_notify_curve_changed(false, true)
 ## Option button to select Trans type
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
 var trans_type: TRANS = TRANS.LINEAR:
 	set(value):
+		if trans_type == value:
+			return
+		var revision_before := _change_revision
 		trans_type = value
-		# print("set trans_type = ", TRANS.keys()[trans_type])
-		if Engine.is_editor_hint():
-			_update_preset()
+		if _applying_editor_state_snapshot:
+			return
+		_update_preset()
+		if _change_revision == revision_before:
+			_notify_curve_changed(false, true)
 
 ## Store the curve mode (CurveMode.BEZIER or CurveMode.FUNCTION)
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
 var curve_mode: CurveMode:
 	set(value):
+		if curve_mode == value:
+			return
 		curve_mode = value
-		# print("curve_mode = ", CurveMode.keys()[curve_mode])
+		if _applying_editor_state_snapshot:
+			return
+		emit_changed()
 ## Store the callable used in curve_mode == CurveMode.FUNCTION
 ## Has to be re-initiliazed when the resource is loaded
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
 var function_callable: Callable:
 	set(value):
+		if function_callable == value:
+			return
 		function_callable = value
-		# print("function_callable = ", function_callable)
+		if _applying_editor_state_snapshot:
+			return
+		emit_changed()
 
 ######################################################
 # CURVE EDITOR
 ######################################################
 ## Placeholder for the curve editor (replaced by the editor plugin script.)
 @export var easing_curve_editor: bool
-## Points list
-@export var points: Array[EasingCurvePoint] = []:
+## Runtime point API. Point data is serialized through primitive properties so live
+## updates do not depend on Godot's Array[Resource] change propagation.
+var points: Array[EasingCurvePoint]:
+	get:
+		return _points
 	set(value):
-		points = value
-		emit_changed()
+		_set_points(value)
 
 ######################################################
 # FUNCTION PARAMETERS
@@ -112,8 +164,10 @@ var function_callable: Callable:
 		if num_points == value:
 			return
 		num_points = value
-		_generate_irregular()
-		emit_changed()
+		if _applying_function_snapshot:
+			_notify_parameter_changed()
+		else:
+			_generate_irregular()
 ## Controls the amplitude of random variations.
 ## Higher values create more dramatic jumps between steps (default: 1).
 @export_range(0.0, 4.0, 0.1) var randomness: float = 3.5:
@@ -121,8 +175,10 @@ var function_callable: Callable:
 		if randomness == value:
 			return
 		randomness = value
-		_generate_irregular()
-		emit_changed()
+		if _applying_function_snapshot:
+			_notify_parameter_changed()
+		else:
+			_generate_irregular()
 ## Used to regenerate the random points
 @export_tool_button("Generate", "Callable")
 var generate_tool_button = generate_irregular
@@ -134,7 +190,7 @@ var _irregular_points_x: Array[float] = []:
 		if _irregular_points_x == value:
 			return
 		_irregular_points_x = value
-		emit_changed()
+		_notify_parameter_changed()
 		# print(_irregular_points_x)
 
 ## Y positions of irregular points
@@ -144,7 +200,7 @@ var _irregular_points_y: Array[float] = []:
 		if _irregular_points_y == value:
 			return
 		_irregular_points_y = value
-		emit_changed()
+		_notify_parameter_changed()
 		# print("_irregular_points_y: ", _irregular_points_y)
 
 ####################
@@ -157,7 +213,7 @@ var _irregular_points_y: Array[float] = []:
 		if steps == value:
 			return
 		steps = value
-		emit_changed()
+		_notify_parameter_changed()
 ## When true, the change happens at the start of each step.
 ## When false, the change happens at the end of each step.
 @export var from_start: bool = false:
@@ -165,6 +221,8 @@ var _irregular_points_y: Array[float] = []:
 		if from_start == value:
 			return
 		from_start = value
+		if _applying_editor_state_snapshot:
+			return
 		emit_changed()
 ## Adds a constant y_offset. The step function is clamped to a range of [0,1].
 ## When the number of steps is zero, this converges to the constant function (y = y_offset).
@@ -173,7 +231,7 @@ var _irregular_points_y: Array[float] = []:
 		if y_offset == value:
 			return
 		y_offset = value
-		emit_changed()
+		_notify_parameter_changed()
 
 ####################
 # POWER
@@ -183,7 +241,7 @@ var _irregular_points_y: Array[float] = []:
 		if power == value:
 			return
 		power = value
-		emit_changed()
+		_notify_parameter_changed()
 
 ####################
 # ELASTIC
@@ -193,13 +251,13 @@ var _irregular_points_y: Array[float] = []:
 		if amplitude == value:
 			return
 		amplitude = value
-		emit_changed()
+		_notify_parameter_changed()
 @export_range(0.01, 1.0, 0.01) var period: float = 0.3:
 	set(value):
 		if period == value:
 			return
 		period = value
-		emit_changed()
+		_notify_parameter_changed()
 
 ######################################################
 # INIT
@@ -207,21 +265,139 @@ var _irregular_points_y: Array[float] = []:
 # --- Constructor ---
 #func _init():
 #pass
-func _init():
-	if Engine.is_editor_hint():
-		if points.size() == 0:
-			_update_preset()
-	# debug
+func _init() -> void:
+	if _points.is_empty():
+		_update_preset()
+
+
+func _get_property_list() -> Array[Dictionary]:
+	var properties: Array[Dictionary] = [
+		{
+			"name": POINT_SNAPSHOT_PROPERTY,
+			"type": TYPE_DICTIONARY,
+			"usage": PROPERTY_USAGE_EDITOR,
+		},
+		{
+			"name": FUNCTION_SNAPSHOT_PROPERTY,
+			"type": TYPE_DICTIONARY,
+			"usage": PROPERTY_USAGE_EDITOR,
+		},
+		{
+			"name": EDITOR_STATE_SNAPSHOT_PROPERTY,
+			"type": TYPE_DICTIONARY,
+			"usage": PROPERTY_USAGE_EDITOR,
+		},
+		{
+			"name": POINT_STORAGE_COUNT,
+			"type": TYPE_INT,
+			"usage": PROPERTY_USAGE_STORAGE,
+		},
+	]
+
+	for i in range(_points.size()):
+		for property_name in POINT_PROPERTIES:
+			properties.append(
+				{
+					"name": _get_point_storage_name(i, property_name),
+					"type": TYPE_DICTIONARY if property_name == &"locked" else TYPE_VECTOR2,
+					"usage": PROPERTY_USAGE_STORAGE,
+				},
+			)
+
+	return properties
+
+
+func _get(property: StringName) -> Variant:
+	if property == POINT_SNAPSHOT_PROPERTY:
+		return get_point_snapshot()
+	if property == FUNCTION_SNAPSHOT_PROPERTY:
+		return get_function_snapshot()
+	if property == EDITOR_STATE_SNAPSHOT_PROPERTY:
+		return get_editor_state_snapshot()
+
+	if property == POINT_STORAGE_COUNT:
+		return _points.size()
+
+	var point_property := _parse_point_storage_name(property)
+	if point_property.is_empty():
+		return null
+
+	var index: int = point_property.index
+	if index < 0 or index >= _points.size() or _points[index] == null:
+		return null
+
+	var value: Variant = _points[index].get(point_property.name)
+	return value.duplicate(true) if value is Dictionary else value
+
+
+func _set(property: StringName, value: Variant) -> bool:
+	if property == POINT_SNAPSHOT_PROPERTY:
+		if value is Dictionary:
+			set_point_snapshot(value)
+		return true
+	if property == FUNCTION_SNAPSHOT_PROPERTY:
+		if value is Dictionary:
+			set_function_snapshot(value)
+		return true
+	if property == EDITOR_STATE_SNAPSHOT_PROPERTY:
+		if value is Dictionary:
+			set_editor_state_snapshot(value)
+		return true
+
+	if property == POINT_STORAGE_COUNT:
+		_resize_points(maxi(int(value), 0))
+		return true
+
+	var point_property := _parse_point_storage_name(property)
+	if point_property.is_empty():
+		return false
+
+	var index: int = point_property.index
+	if index < 0:
+		return false
+	if index >= _points.size():
+		_resize_points(index + 1)
+
+	var point := _points[index]
+	var property_name: StringName = point_property.name
+	if property_name == &"locked":
+		var locks: Dictionary[String, bool] = {
+			"position": bool(value.get("position", false)),
+			"left_control_point": bool(value.get("left_control_point", false)),
+			"right_control_point": bool(value.get("right_control_point", false)),
+		}
+		point.locked = locks
 	else:
-		#print("init")
-		#print("curve_mode = ", CurveMode.keys()[curve_mode])
-		#print("trans_type = ", TRANS.keys()[trans_type])
-		#print("ease_type = ", EASE.keys()[ease_type])
-		pass
-	# print("init: ", _irregular_points_x, _irregular_points_y)
+		point.set(property_name, value)
+	return true
+
+
+func _get_point_storage_name(index: int, property_name: StringName) -> StringName:
+	return StringName("%s%d/%s" % [POINT_STORAGE_PREFIX, index, property_name])
+
+
+func _parse_point_storage_name(property: StringName) -> Dictionary:
+	var property_string := String(property)
+	if not property_string.begins_with(POINT_STORAGE_PREFIX):
+		return {}
+
+	var parts := property_string.trim_prefix(POINT_STORAGE_PREFIX).split("/", false, 1)
+	if parts.size() != 2 or not parts[0].is_valid_int():
+		return {}
+
+	var property_name := StringName(parts[1])
+	if property_name not in POINT_PROPERTIES:
+		return {}
+
+	return {"index": parts[0].to_int(), "name": property_name}
 
 
 func _validate_property(property: Dictionary):
+	if property.name == "points":
+		property.usage |= PROPERTY_USAGE_EDITOR
+		property.usage &= ~PROPERTY_USAGE_STORAGE
+		return
+
 	if property.name in ["num_points", "randomness", "generate_tool_button"]:
 		if trans_type in [TRANS.JITTER, TRANS.IRREGULAR]:
 			# enable property
@@ -268,7 +444,52 @@ func get_default_for_property(i: int, property_name: String) -> Vector2:
 	temp.set_ease(ease_type)
 	temp.set_trans(trans_type)
 	temp._update_preset()
+
+	if i < 0 or i >= temp.points.size():
+		return Vector2.ZERO
+
 	return temp.points[i].get(property_name)
+
+
+func has_builtin_bezier_preset() -> bool:
+	return trans_type in [
+		TRANS.CONSTANT,
+		TRANS.LINEAR,
+		TRANS.SINE,
+		TRANS.QUAD,
+		TRANS.CUBIC,
+		TRANS.QUART,
+		TRANS.QUINT,
+		TRANS.EXPO,
+		TRANS.CIRC,
+		TRANS.BACK,
+	]
+
+
+func get_canonical_preset_point_snapshot() -> Dictionary:
+	if not has_builtin_bezier_preset():
+		return {}
+	var preset := EasingCurve.new()
+	preset.set_ease(ease_type)
+	preset.set_trans(trans_type)
+	return preset.get_point_snapshot()
+
+
+## A modified built-in keeps its Transition/Ease origin. Explicit Custom and
+## function-backed transitions are separate modes and never report this state.
+func is_selected_preset_modified(tolerance: float = PRESET_GEOMETRY_TOLERANCE) -> bool:
+	if not has_builtin_bezier_preset():
+		return false
+	if curve_mode != CurveMode.BEZIER:
+		return true
+	return not _point_snapshot_matches(get_canonical_preset_point_snapshot(), maxf(tolerance, 0.0))
+
+
+func reset_selected_preset() -> bool:
+	if not is_selected_preset_modified():
+		return false
+	_update_preset()
+	return true
 
 
 func cubic_bezier(x0, y0, x1, y1) -> void:
@@ -280,14 +501,45 @@ func cubic_bezier(x0, y0, x1, y1) -> void:
 	add_point(p1)
 
 
+func cubic_bezier_pair(first_controls: Vector4, second_controls: Vector4) -> void:
+	# Combined Tween modes are two normalized halves joined at their mathematical transition.
+	# Scaling unit control sets around (0.5, 0.5) keeps that boundary editor-visible.
+	var p0 := EasingCurvePoint.new(Vector2.ZERO)
+	var midpoint := EasingCurvePoint.new(Vector2(0.5, 0.5))
+	var p1 := EasingCurvePoint.new(Vector2.ONE)
+	p0.right_control_point = Vector2(first_controls.x, first_controls.y) * 0.5
+	midpoint.left_control_point = Vector2(first_controls.z, first_controls.w) * 0.5
+	midpoint.right_control_point = Vector2(0.5, 0.5) + Vector2(second_controls.x, second_controls.y) * 0.5
+	p1.left_control_point = Vector2(0.5, 0.5) + Vector2(second_controls.z, second_controls.w) * 0.5
+	add_point(p0)
+	add_point(midpoint)
+	add_point(p1)
+
+
+func _set_composed_bezier_preset(in_controls: Vector4, out_controls: Vector4) -> void:
+	match ease_type:
+		EASE.IN:
+			cubic_bezier(in_controls.x, in_controls.y, in_controls.z, in_controls.w)
+		EASE.OUT:
+			cubic_bezier(out_controls.x, out_controls.y, out_controls.z, out_controls.w)
+		EASE.IN_OUT:
+			cubic_bezier_pair(in_controls, out_controls)
+		EASE.OUT_IN:
+			cubic_bezier_pair(out_controls, in_controls)
+
+
 func set_ease(_ease: EASE) -> void:
-	ease_type = _ease
-	_update_preset()
+	if ease_type == _ease:
+		_update_preset()
+	else:
+		ease_type = _ease
 
 
 func set_trans(_trans: TRANS) -> void:
-	trans_type = _trans
-	_update_preset()
+	if trans_type == _trans:
+		_update_preset()
+	else:
+		trans_type = _trans
 
 
 func printpoints():
@@ -297,8 +549,9 @@ func printpoints():
 
 
 func sort_points() -> void:
-	points.sort_custom(func(a, b): return a.position.x < b.position.x)
-	force_update()
+	_points.sort_custom(func(a, b): return a.position.x < b.position.x)
+	_synchronize_point_connections()
+	_notify_curve_changed(true, true)
 
 
 func swap_properties(p0: EasingCurvePoint, p1: EasingCurvePoint) -> void:
@@ -335,76 +588,454 @@ func swap_points(a, b) -> void:
 		push_warning("Could not swap due to type mismatch")
 
 
-func add_point_with_undo(p: EasingCurvePoint) -> void:
-	if not editor_undo_redo:
-		return
-	editor_undo_redo.create_action("Add Point")
-	editor_undo_redo.add_do_method(self, "add_point", p)
-	editor_undo_redo.add_undo_method(self, "remove_point", p)
-	editor_undo_redo.commit_action()
-
-
 func add_point(p: EasingCurvePoint) -> void:
-	# print("adding point")
-	points.append(p)
-	if not p.changed.is_connected(_on_point_changed):
-		p.changed.connect(_on_point_changed)
-
-	sort_points()
-
-	# debug print
-	# print("easing_curve add_point")
-	#if Engine.is_editor_hint():
-	#for _p in points:
-	#print(_p.position)
-
-	points_changed.emit(points)
-
-
-func remove_point_with_undo(p: EasingCurvePoint) -> void:
-	if not editor_undo_redo:
+	if p == null:
 		return
-	editor_undo_redo.create_action("Remove point")
-	editor_undo_redo.add_do_method(self, "remove_point", p)
-	editor_undo_redo.add_undo_method(self, "add_point", p)
-	editor_undo_redo.commit_action()
+	_points.append(p)
+	_points.sort_custom(func(a, b): return a.position.x < b.position.x)
+	_synchronize_point_connections()
+	_notify_curve_changed(true, true)
 
 
 func remove_point(p: EasingCurvePoint) -> void:
-	# print("removing point")
-	if p not in points:
+	if p not in _points:
 		return
 
-	points.erase(p)
-	if p.changed.is_connected(_on_point_changed):
-		p.changed.disconnect(_on_point_changed)
-
-	force_update()
-
-	# debug print
-	# print("easing_curve remove_point")
-	#if Engine.is_editor_hint():
-	#for _p in points:
-	#print(_p.position)
-
-	points_changed.emit(points)
+	_points.erase(p)
+	_synchronize_point_connections()
+	_notify_curve_changed(true, true)
 
 
-func set_point(i, p) -> void:
-	points[i] = p
-	# emit_changed()
-	# force_update()
+func set_point(i: int, p: EasingCurvePoint) -> void:
+	if i < 0 or i >= _points.size() or p == null:
+		return
+	_points[i] = p
+	_synchronize_point_connections()
+	_notify_curve_changed(true, false)
+
+
+func set_point_property(i: int, property_name: StringName, value: Variant) -> void:
+	if i < 0 or i >= _points.size() or property_name not in POINT_PROPERTIES:
+		return
+	set(_get_point_storage_name(i, property_name), value)
+
+
+func set_point_locked(i: int, property_name: StringName, locked_value: bool) -> void:
+	if i < 0 or i >= _points.size() or _points[i] == null:
+		return
+	if not _points[i].locked.has(property_name):
+		return
+	var locks := _points[i].locked.duplicate()
+	locks[property_name] = locked_value
+	set_point_property(i, &"locked", locks)
+
+
+func get_point_snapshot() -> Dictionary:
+	return make_point_snapshot(_points)
+
+
+func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
+	var positions := PackedVector2Array()
+	var left_control_points := PackedVector2Array()
+	var right_control_points := PackedVector2Array()
+	var locks: Array[Dictionary] = []
+	for point in point_values:
+		if point == null:
+			positions.append(Vector2.ZERO)
+			left_control_points.append(Vector2.ZERO)
+			right_control_points.append(Vector2.ZERO)
+			locks.append({})
+			continue
+		positions.append(point.position)
+		left_control_points.append(point.left_control_point)
+		right_control_points.append(point.right_control_point)
+		locks.append(point.locked.duplicate())
+	return {
+		"positions": positions,
+		"left_control_points": left_control_points,
+		"right_control_points": right_control_points,
+		"locks": locks,
+	}
+
+
+func set_point_snapshot(snapshot: Dictionary) -> void:
+	var positions: PackedVector2Array = snapshot.get("positions", PackedVector2Array())
+	var left_control_points: PackedVector2Array = snapshot.get("left_control_points", PackedVector2Array())
+	var right_control_points: PackedVector2Array = snapshot.get("right_control_points", PackedVector2Array())
+	var locks: Array = snapshot.get("locks", [])
+	var changing := bool(snapshot.get("changing", false))
+	var topology_changed := positions.size() != _points.size() or _points.has(null)
+	var point_data_changed := _point_snapshot_differs(positions, left_control_points, right_control_points, locks)
+	_suppress_point_notifications += 1
+	if not topology_changed:
+		for i in range(positions.size()):
+			_points[i].position = positions[i]
+			if i < left_control_points.size():
+				_points[i].left_control_point = left_control_points[i]
+			if i < right_control_points.size():
+				_points[i].right_control_point = right_control_points[i]
+			if i < locks.size() and locks[i] is Dictionary:
+				var lock_values: Dictionary = locks[i]
+				_points[i].locked = {
+					"position": bool(lock_values.get("position", false)),
+					"left_control_point": bool(lock_values.get("left_control_point", false)),
+					"right_control_point": bool(lock_values.get("right_control_point", false)),
+				}
+	else:
+		var new_points: Array[EasingCurvePoint] = []
+		for i in range(positions.size()):
+			var point := EasingCurvePoint.new(positions[i])
+			if i < left_control_points.size():
+				point.left_control_point = left_control_points[i]
+			if i < right_control_points.size():
+				point.right_control_point = right_control_points[i]
+			if i < locks.size() and locks[i] is Dictionary:
+				var lock_values: Dictionary = locks[i]
+				point.locked = {
+					"position": bool(lock_values.get("position", false)),
+					"left_control_point": bool(lock_values.get("left_control_point", false)),
+					"right_control_point": bool(lock_values.get("right_control_point", false)),
+				}
+			new_points.append(point)
+		_disconnect_point_signals()
+		_points = new_points
+		_synchronize_point_connections()
+	_suppress_point_notifications -= 1
+
+	if _applying_editor_state_snapshot:
+		_point_snapshot_change_pending = false
+		_point_snapshot_property_list_pending = false
+		return
+
+	if changing:
+		_point_snapshot_change_pending = _point_snapshot_change_pending or point_data_changed
+		_point_snapshot_property_list_pending = _point_snapshot_property_list_pending or topology_changed
+		return
+
+	var notify_points := point_data_changed or _point_snapshot_change_pending
+	var notify_property_list := topology_changed or _point_snapshot_property_list_pending
+	_point_snapshot_change_pending = false
+	_point_snapshot_property_list_pending = false
+	if notify_points:
+		_notify_curve_changed(true, notify_property_list)
+
+
+func get_editor_state_snapshot() -> Dictionary:
+	return {
+		"ease_type": ease_type,
+		"trans_type": trans_type,
+		"curve_mode": curve_mode,
+		"from_start": from_start,
+		"point_snapshot": get_point_snapshot(),
+		"function_snapshot": get_function_snapshot(),
+	}
+
+
+func set_editor_state_snapshot(snapshot: Dictionary) -> void:
+	var snapshot_ease := int(snapshot.get("ease_type", ease_type))
+	var snapshot_trans := int(snapshot.get("trans_type", trans_type))
+	var snapshot_mode := int(snapshot.get("curve_mode", curve_mode))
+	var snapshot_from_start := bool(snapshot.get("from_start", from_start))
+	var point_snapshot: Dictionary = snapshot.get("point_snapshot", get_point_snapshot())
+	var function_snapshot: Dictionary = snapshot.get("function_snapshot", get_function_snapshot())
+
+	var positions: PackedVector2Array = point_snapshot.get("positions", PackedVector2Array())
+	var left_control_points: PackedVector2Array = point_snapshot.get("left_control_points", PackedVector2Array())
+	var right_control_points: PackedVector2Array = point_snapshot.get("right_control_points", PackedVector2Array())
+	var locks: Array = point_snapshot.get("locks", [])
+	var topology_changed := positions.size() != _points.size() or _points.has(null)
+	var point_data_changed := _point_snapshot_differs(
+		positions,
+		left_control_points,
+		right_control_points,
+		locks,
+	)
+	var locks_changed := _point_snapshot_locks_differ(locks)
+	var function_changed := get_function_snapshot() != function_snapshot
+	var scalar_changed := (
+		ease_type != snapshot_ease
+		or trans_type != snapshot_trans
+		or curve_mode != snapshot_mode
+		or from_start != snapshot_from_start
+	)
+	if not point_data_changed and not function_changed and not scalar_changed:
+		return
+
+	var property_list_changed := (
+		topology_changed
+		or locks_changed
+		or ease_type != snapshot_ease
+		or trans_type != snapshot_trans
+		or curve_mode != snapshot_mode
+	)
+
+	_applying_editor_state_snapshot = true
+	ease_type = snapshot_ease
+	trans_type = snapshot_trans
+	curve_mode = snapshot_mode
+	function_callable = Callable()
+	from_start = snapshot_from_start
+	set_function_snapshot(function_snapshot)
+	set_point_snapshot(point_snapshot)
+	if curve_mode == CurveMode.FUNCTION and trans_type != TRANS.CUSTOM:
+		_init_function()
+	_applying_editor_state_snapshot = false
+	_notify_curve_changed(point_data_changed, property_list_changed)
+
+
+func get_function_snapshot() -> Dictionary:
+	return {
+		"num_points": num_points,
+		"randomness": randomness,
+		"steps": steps,
+		"y_offset": y_offset,
+		"power": power,
+		"amplitude": amplitude,
+		"period": period,
+		"generated_points_x": PackedFloat64Array(_irregular_points_x),
+		"generated_points_y": PackedFloat64Array(_irregular_points_y),
+	}
+
+
+func set_function_snapshot(snapshot: Dictionary) -> void:
+	var snapshot_num_points := int(snapshot.get("num_points", num_points))
+	var snapshot_randomness := float(snapshot.get("randomness", randomness))
+	var snapshot_steps := int(snapshot.get("steps", steps))
+	var snapshot_y_offset := float(snapshot.get("y_offset", y_offset))
+	var snapshot_power := float(snapshot.get("power", power))
+	var snapshot_amplitude := float(snapshot.get("amplitude", amplitude))
+	var snapshot_period := float(snapshot.get("period", period))
+	var snapshot_points_x := _function_snapshot_float_array(
+		snapshot.get("generated_points_x", PackedFloat64Array(_irregular_points_x)),
+	)
+	var snapshot_points_y := _function_snapshot_float_array(
+		snapshot.get("generated_points_y", PackedFloat64Array(_irregular_points_y)),
+	)
+	var force_notify := bool(snapshot.get("force_notify", false))
+	var changed := (
+		num_points != snapshot_num_points
+		or not is_equal_approx(randomness, snapshot_randomness)
+		or steps != snapshot_steps
+		or not is_equal_approx(y_offset, snapshot_y_offset)
+		or not is_equal_approx(power, snapshot_power)
+		or not is_equal_approx(amplitude, snapshot_amplitude)
+		or not is_equal_approx(period, snapshot_period)
+		or _irregular_points_x != snapshot_points_x
+		or _irregular_points_y != snapshot_points_y
+	)
+	if not changed and not force_notify:
+		return
+
+	_parameter_edit_depth += 1
+	_applying_function_snapshot = true
+	num_points = snapshot_num_points
+	randomness = snapshot_randomness
+	steps = snapshot_steps
+	y_offset = snapshot_y_offset
+	power = snapshot_power
+	amplitude = snapshot_amplitude
+	period = snapshot_period
+	_irregular_points_x = snapshot_points_x
+	_irregular_points_y = snapshot_points_y
+	_applying_function_snapshot = false
+	_parameter_edit_depth -= 1
+	_notify_parameter_changed()
+
+
+func _function_snapshot_float_array(value: Variant) -> Array[float]:
+	var result: Array[float] = []
+	if value is Array or value is PackedFloat32Array or value is PackedFloat64Array:
+		for item in value:
+			result.append(float(item))
+	return result
+
+
+func _point_snapshot_differs(
+		positions: PackedVector2Array,
+		left_control_points: PackedVector2Array,
+		right_control_points: PackedVector2Array,
+		locks: Array,
+) -> bool:
+	if positions.size() != _points.size() or _points.has(null):
+		return true
+	for i in range(positions.size()):
+		var point := _points[i]
+		if point.position != positions[i]:
+			return true
+		if i < left_control_points.size() and point.left_control_point != left_control_points[i]:
+			return true
+		if i < right_control_points.size() and point.right_control_point != right_control_points[i]:
+			return true
+		if i < locks.size() and locks[i] is Dictionary:
+			var lock_values: Dictionary = locks[i]
+			for property_name in POINT_PROPERTIES.slice(0, 3):
+				if bool(point.locked.get(property_name, false)) != bool(lock_values.get(property_name, false)):
+					return true
+	return false
+
+
+func _point_snapshot_locks_differ(locks: Array) -> bool:
+	if locks.size() != _points.size():
+		return true
+	for i in range(locks.size()):
+		if locks[i] is not Dictionary or _points[i] == null:
+			return true
+		var lock_values: Dictionary = locks[i]
+		for property_name in POINT_PROPERTIES.slice(0, 3):
+			if bool(_points[i].locked.get(property_name, false)) != bool(lock_values.get(property_name, false)):
+				return true
+	return false
+
+
+func _point_snapshot_matches(snapshot: Dictionary, tolerance: float) -> bool:
+	var positions: PackedVector2Array = snapshot.get("positions", PackedVector2Array())
+	var left_control_points: PackedVector2Array = snapshot.get("left_control_points", PackedVector2Array())
+	var right_control_points: PackedVector2Array = snapshot.get("right_control_points", PackedVector2Array())
+	var locks: Array = snapshot.get("locks", [])
+	if (
+		positions.size() != _points.size()
+		or left_control_points.size() != _points.size()
+		or right_control_points.size() != _points.size()
+		or locks.size() != _points.size()
+		or _points.has(null)
+	):
+		return false
+
+	for i in range(_points.size()):
+		var point := _points[i]
+		if not _vectors_equal_with_tolerance(point.position, positions[i], tolerance):
+			return false
+		if not _vectors_equal_with_tolerance(point.left_control_point, left_control_points[i], tolerance):
+			return false
+		if not _vectors_equal_with_tolerance(point.right_control_point, right_control_points[i], tolerance):
+			return false
+		if locks[i] is not Dictionary:
+			return false
+		var lock_values: Dictionary = locks[i]
+		for property_name in POINT_PROPERTIES.slice(0, 3):
+			if bool(point.locked.get(property_name, false)) != bool(lock_values.get(property_name, false)):
+				return false
+	return true
+
+
+func _vectors_equal_with_tolerance(a: Vector2, b: Vector2, tolerance: float) -> bool:
+	return absf(a.x - b.x) <= tolerance and absf(a.y - b.y) <= tolerance
 
 
 func force_update() -> void:
-	# Force inspector update
-	points = points.duplicate(true)
-	notify_changed()
+	_synchronize_point_connections()
+	_notify_curve_changed(true, true)
 
 
 func notify_changed() -> void:
+	_notify_curve_changed(false, true)
+
+
+func _set_points(value: Array[EasingCurvePoint]) -> void:
+	if _point_arrays_match(_points, value):
+		_synchronize_point_connections()
+		return
+
+	_disconnect_point_signals()
+	_points = value
+	_synchronize_point_connections()
+	_notify_curve_changed(true, true)
+
+
+func _resize_points(new_size: int) -> void:
+	if new_size == _points.size():
+		_synchronize_point_connections()
+		return
+
+	while _points.size() > new_size:
+		_points.pop_back()
+	while _points.size() < new_size:
+		_points.append(EasingCurvePoint.new())
+
+	_synchronize_point_connections()
+	_notify_curve_changed(true, true)
+
+
+func _clear_points() -> void:
+	if _points.is_empty():
+		return
+	_points.clear()
+	_synchronize_point_connections()
+	_notify_curve_changed(true, true)
+
+
+func _synchronize_point_connections() -> bool:
+	var topology_changed := not _point_arrays_match(_point_topology, _points)
+	var current_points: Array[EasingCurvePoint] = []
+	for point in _points:
+		if point != null and point not in current_points:
+			current_points.append(point)
+
+	for point in _connected_points:
+		if point != null and point not in current_points and point.changed.is_connected(_on_point_changed):
+			point.changed.disconnect(_on_point_changed)
+
+	for point in current_points:
+		if not point.changed.is_connected(_on_point_changed):
+			point.changed.connect(_on_point_changed)
+
+	_connected_points = current_points
+	_point_topology = _points.duplicate()
+	return topology_changed
+
+
+func _disconnect_point_signals() -> void:
+	for point in _connected_points:
+		if point != null and point.changed.is_connected(_on_point_changed):
+			point.changed.disconnect(_on_point_changed)
+	_connected_points.clear()
+	_point_topology.clear()
+
+
+func _point_arrays_match(a: Array[EasingCurvePoint], b: Array[EasingCurvePoint]) -> bool:
+	if a.size() != b.size():
+		return false
+	for i in range(a.size()):
+		if a[i] != b[i]:
+			return false
+	return true
+
+
+func _notify_curve_changed(point_data_changed: bool, property_list_changed: bool) -> void:
+	_change_revision += 1
+	if property_list_changed:
+		notify_property_list_changed()
+	if point_data_changed:
+		points_changed.emit(_points)
 	emit_changed()
-	notify_property_list_changed()
+
+
+func _begin_editor_parameter_edit() -> void:
+	_parameter_edit_depth += 1
+
+
+func _cancel_editor_parameter_edit() -> void:
+	if _parameter_edit_depth <= 0:
+		return
+	_parameter_edit_depth -= 1
+
+
+func _finish_editor_parameter_edit() -> void:
+	if _parameter_edit_depth <= 0:
+		return
+	_parameter_edit_depth -= 1
+	_notify_parameter_changed()
+
+
+func _notify_parameter_changed() -> void:
+	if _applying_editor_state_snapshot:
+		return
+	if _parameter_update_depth > 0:
+		_parameter_update_change_pending = true
+		return
+	if _parameter_edit_depth > 0:
+		return
+	emit_changed()
 
 
 ## Generic callable for non-function CurveMode
@@ -414,39 +1045,39 @@ func do_nothing() -> void:
 
 func clear_function() -> void:
 	if trans_type == TRANS.CUSTOM:
+		if curve_mode == CurveMode.FUNCTION:
+			curve_mode = CurveMode.BEZIER
+			function_callable = Callable()
+			if _points.size() < 2:
+				_clear_points()
+				add_point(EasingCurvePoint.new(Vector2.ZERO))
+				add_point(EasingCurvePoint.new(Vector2.ONE))
 		return
-	# print("clear function")
 	curve_mode = CurveMode.BEZIER
-	points.clear()
-	# function_callable = do_nothing
-	# points.clear()
-	# notify_changed()
+	_clear_points()
 
 
 func set_function(func_ref: Callable):
-	# print("set function")
 	curve_mode = CurveMode.FUNCTION
 	function_callable = func_ref
-	points.clear()
-	notify_changed()
-	# Emit points_changed so tweens can restart
-	points_changed.emit(points)
+	_clear_points()
+	if _applying_editor_state_snapshot:
+		return
+	_notify_curve_changed(false, true)
 
 
 ## Sample the curve, calculating f(t) given x
 func sample(offset: float) -> float:
-	# print("sample curve_mode = ", CurveMode.keys()[curve_mode])
+	if _synchronize_point_connections():
+		_notify_curve_changed(true, true)
 	offset = clamp(offset, 0.0, 1.0)
 
 	if curve_mode == CurveMode.FUNCTION:
-		# print("func")
 		if not function_callable.is_valid():
 			_init_function()
 
-		if trans_type == TRANS.IRREGULAR:
+		if trans_type in [TRANS.JITTER, TRANS.IRREGULAR]:
 			return function_callable.call(offset, 0.0, 1.0, 1.0, _irregular_points_x, _irregular_points_y)
-		if trans_type == TRANS.JITTER:
-			return function_callable.call(offset, 0.0, 1.0, 1.0, num_points, randomness)
 		elif trans_type == TRANS.STEP:
 			return function_callable.call(offset, 0.0, 1.0, 1.0, steps, from_start, y_offset)
 		elif trans_type == TRANS.ELASTIC:
@@ -455,14 +1086,6 @@ func sample(offset: float) -> float:
 			return function_callable.call(offset, 0.0, 1.0, 1.0, power)
 		else:
 			return function_callable.call(offset, 0.0, 1.0, 1.0)
-
-		return 0.0
-
-	else:
-		# print("curve")
-		pass
-
-	# existing bezier sampling logic below
 
 	if points.size() < 2:
 		return 0.0
@@ -551,7 +1174,7 @@ func auto_smooth_handles():
 
 
 func generate_from_function(func_ref: Callable, resolution := 40):
-	points.clear()
+	_clear_points()
 
 	for i in range(resolution + 1):
 		var x = float(i) / resolution
@@ -577,37 +1200,54 @@ func _on_curve_editor_pan_changed(pan: Vector2) -> void:
 
 
 func _generate_irregular() -> Dictionary:
+	_parameter_update_depth += 1
 	var result := { "x": [], "y": [] }
 	var points_x: Array[float] = []
 	var points_y: Array[float] = []
 
-	if num_points <= 2:
+	if trans_type == TRANS.JITTER:
+		var jitter_steps := maxi(num_points, 1)
+		for i in range(jitter_steps + 1):
+			var x := float(i) / float(jitter_steps)
+			points_x.append(x)
+			if i == 0:
+				points_y.append(0.0)
+			elif i == jitter_steps:
+				points_y.append(1.0)
+			else:
+				var offset := (randf() - 0.5) * randomness / float(jitter_steps)
+				points_y.append(clampf(x + offset, 0.0, 1.0))
+	elif num_points <= 2:
 		points_x = [0.0, 1.0]
 		points_y = [0.0, 1.0]
-		return result
+	else:
+		var clamped_randomness := clampf(randomness, 0.0, 4.0)
 
-	var randomness = clamp(randomness, 0.0, 4.0)
+		for i in range(num_points):
+			var x = float(i) / float(num_points - 1)
+			points_x.append(x)
 
-	for i in range(num_points):
-		var x = float(i) / float(num_points - 1)
-		points_x.append(x)
-
-		if i == 0:
-			points_y.append(0.0)
-		elif i == num_points - 1:
-			points_y.append(1.0)
-		else:
-			var linear_y = x
-			var max_offset = min(linear_y, 1.0 - linear_y)
-			var r = randf() * 2.0 - 1.0
-			var offset = r * max_offset * (randomness / 4.0)
-			points_y.append(clamp(linear_y + offset, 0.0, 1.0))
+			if i == 0:
+				points_y.append(0.0)
+			elif i == num_points - 1:
+				points_y.append(1.0)
+			else:
+				var linear_y = x
+				var max_offset = min(linear_y, 1.0 - linear_y)
+				var r = randf() * 2.0 - 1.0
+				var offset = r * max_offset * (clamped_randomness / 4.0)
+				points_y.append(clampf(linear_y + offset, 0.0, 1.0))
 
 	result.x = points_x
 	result.y = points_y
 
 	_irregular_points_x = points_x
 	_irregular_points_y = points_y
+	_notify_parameter_changed()
+	_parameter_update_depth -= 1
+	if _parameter_update_depth == 0 and _parameter_update_change_pending:
+		_parameter_update_change_pending = false
+		_notify_parameter_changed()
 
 	return result
 
@@ -615,16 +1255,20 @@ func _generate_irregular() -> Dictionary:
 func _init_function() -> void:
 	match trans_type:
 		TRANS.JITTER:
+			if _irregular_points_x.size() != num_points + 1 or _irregular_points_y.size() != num_points + 1:
+				_generate_irregular()
 			match ease_type:
 				EASE.IN:
-					set_function(EASING_LIBRARY.Jitter.easeIn)
+					set_function(EASING_LIBRARY.Irregular.easeIn)
 				EASE.OUT:
-					set_function(EASING_LIBRARY.Jitter.easeOut)
+					set_function(EASING_LIBRARY.Irregular.easeOut)
 				EASE.IN_OUT:
-					set_function(EASING_LIBRARY.Jitter.easeInOut)
+					set_function(EASING_LIBRARY.Irregular.easeInOut)
 				EASE.OUT_IN:
-					set_function(EASING_LIBRARY.Jitter.easeOutIn)
+					set_function(EASING_LIBRARY.Irregular.easeOutIn)
 		TRANS.IRREGULAR:
+			if _irregular_points_x.size() != num_points or _irregular_points_y.size() != num_points:
+				_generate_irregular()
 			match ease_type:
 				EASE.IN:
 					set_function(EASING_LIBRARY.Irregular.easeIn)
@@ -688,8 +1332,6 @@ func _init_function() -> void:
 
 func _update_preset() -> void:
 	clear_function()
-	# print("trans = ", TRANS.keys()[trans_type])
-	# print("ease = ", EASE.keys()[ease_type])
 
 	match trans_type:
 		TRANS.CUSTOM:
@@ -700,76 +1342,73 @@ func _update_preset() -> void:
 		TRANS.LINEAR:
 			add_point(EasingCurvePoint.new(Vector2(0, 0)))
 			add_point(EasingCurvePoint.new(Vector2(1, 1)))
+		TRANS.SINE:
+			# A sine graph is not polynomial; these handles are optimized approximations.
+			_set_composed_bezier_preset(
+				Vector4(.361149818, -.000326393, .673540771, .486909956),
+				Vector4(.326459229, .513090014, .638850212, 1.0003264),
+			)
 		TRANS.QUAD:
-			match ease_type:
-				EASE.IN:
-					cubic_bezier(.11, 0, .5, 0)
-				EASE.OUT:
-					cubic_bezier(.5, 1, .89, 1)
-				EASE.IN_OUT:
-					cubic_bezier(.45, 0, .55, 1)
-				EASE.OUT_IN:
-					cubic_bezier(.55, 1, .45, 0)
+			# Degree elevation makes each quadratic half an exact cubic Bézier.
+			_set_composed_bezier_preset(
+				Vector4(1.0 / 3.0, 0, 2.0 / 3.0, 1.0 / 3.0),
+				Vector4(1.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0, 1),
+			)
 		TRANS.CUBIC:
+			# Cubic easing is exact. OUT_IN simplifies to one global cubic, so it needs no midpoint.
 			match ease_type:
 				EASE.IN:
-					cubic_bezier(.32, 0, .67, 0)
+					cubic_bezier(1.0 / 3.0, 0, 2.0 / 3.0, 0)
 				EASE.OUT:
-					cubic_bezier(.33, 1, .68, 1)
+					cubic_bezier(1.0 / 3.0, 1, 2.0 / 3.0, 1)
 				EASE.IN_OUT:
-					cubic_bezier(.65, 0, .35, 1)
+					cubic_bezier_pair(
+						Vector4(1.0 / 3.0, 0, 2.0 / 3.0, 0),
+						Vector4(1.0 / 3.0, 1, 2.0 / 3.0, 1),
+					)
 				EASE.OUT_IN:
-					cubic_bezier(.35, 1, .65, 0)
+					cubic_bezier(1.0 / 3.0, 1, 2.0 / 3.0, 0)
 		TRANS.QUART:
-			match ease_type:
-				EASE.IN:
-					cubic_bezier(.5, 0, .75, 0)
-				EASE.OUT:
-					cubic_bezier(.25, 1, .5, 1)
-				EASE.IN_OUT:
-					cubic_bezier(.76, 0, .24, 1)
-				EASE.OUT_IN:
-					cubic_bezier(.24, 1, .76, 0)
+			# Degree-four and degree-five graphs require optimized cubic approximations.
+			_set_composed_bezier_preset(
+				Vector4(.439210773, .004901892, .732221782, -.067109145),
+				Vector4(.267778218, 1.06710911, .560789227, .995098114),
+			)
 		TRANS.QUINT:
-			match ease_type:
-				EASE.IN:
-					cubic_bezier(.64, 0, .78, 0)
-				EASE.OUT:
-					cubic_bezier(.22, 1, .36, 1)
-				EASE.IN_OUT:
-					cubic_bezier(.83, 0, .17, 1)
-				EASE.OUT_IN:
-					cubic_bezier(.17, 1, .83, 0)
+			_set_composed_bezier_preset(
+				Vector4(.522905409, .010620826, .775169373, -.113423072),
+				Vector4(.224830627, 1.11342311, .477094591, .989379168),
+			)
 		TRANS.EXPO:
-			match ease_type:
-				EASE.IN:
-					cubic_bezier(.7, 0, .84, 0)
-				EASE.OUT:
-					cubic_bezier(.16, 1, .3, 1)
-				EASE.IN_OUT:
-					cubic_bezier(.87, 0, .13, 1)
-				EASE.OUT_IN:
-					cubic_bezier(.13, 1, .87, 0)
+			# Godot's endpoint corrections introduce small discontinuities that continuous geometry cannot copy.
+			_set_composed_bezier_preset(
+				Vector4(.632421792, .015909066, .846576214, -.060294569),
+				Vector4(.153921053, 1.0531143, .359647602, .985371113),
+			)
 		TRANS.CIRC:
-			match ease_type:
-				EASE.IN:
-					cubic_bezier(.55, 0, 1, .45)
-				EASE.OUT:
-					cubic_bezier(0, .55, .45, 1)
-				EASE.IN_OUT:
-					cubic_bezier(.85, 0, .15, 1)
-				EASE.OUT_IN:
-					cubic_bezier(.15, 1, .85, 0)
+			# A polynomial cubic can only approximate a circular arc.
+			_set_composed_bezier_preset(
+				Vector4(.565830648, .002238899, .999889314, .459180534),
+				Vector4(.000110686, .540819466, .434169352, .99776113),
+			)
 		TRANS.BACK:
+			# Back is cubic; combined modes are exact pieces, with Godot's larger IN_OUT overshoot.
 			match ease_type:
 				EASE.IN:
-					cubic_bezier(.36, 0, .66, -0.56)
+					cubic_bezier(1.0 / 3.0, 0, 2.0 / 3.0, -1.70158 / 3.0)
 				EASE.OUT:
-					cubic_bezier(.34, 1.56, .64, 1)
+					cubic_bezier(1.0 / 3.0, 1.0 + 1.70158 / 3.0, 2.0 / 3.0, 1)
 				EASE.IN_OUT:
-					cubic_bezier(.68, -0.6, .32, 1.6)
+					var in_out_overshoot := 1.70158 * 1.525
+					cubic_bezier_pair(
+						Vector4(1.0 / 3.0, 0, 2.0 / 3.0, -in_out_overshoot / 3.0),
+						Vector4(1.0 / 3.0, 1.0 + in_out_overshoot / 3.0, 2.0 / 3.0, 1),
+					)
 				EASE.OUT_IN:
-					cubic_bezier(.32, 1.6, .68, -0.6)
+					cubic_bezier_pair(
+						Vector4(1.0 / 3.0, 1.0 + 1.70158 / 3.0, 2.0 / 3.0, 1),
+						Vector4(1.0 / 3.0, 0, 2.0 / 3.0, -1.70158 / 3.0),
+					)
 		TRANS.JITTER:
 			_init_function()
 		TRANS.IRREGULAR:
@@ -784,30 +1423,34 @@ func _update_preset() -> void:
 			_init_function()
 		TRANS.SPRING:
 			_init_function()
-		TRANS.SINE:
-			match ease_type:
-				EASE.IN:
-					cubic_bezier(.12, 0, .39, 0)
-				EASE.OUT:
-					cubic_bezier(.61, 1, .88, 1)
-				EASE.IN_OUT:
-					cubic_bezier(.37, 0, .63, 1)
-				EASE.OUT_IN:
-					cubic_bezier(.63, 1, .37, 0)
 
 
 func _on_point_changed() -> void:
-	# print("point changed")
-	# force_update()
-	pass
+	if _suppress_point_notifications > 0:
+		return
+	_synchronize_point_connections()
+	_notify_curve_changed(true, false)
 
 
-# Newton-Raphson solver
+# Newton-Raphson solver with a binary-search fallback for flat handles.
 func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
-	var t := x # good initial guess
+	var segment_width := b.position.x - a.position.x
+	var t := clampf((x - a.position.x) / segment_width, 0.0, 1.0) if not is_zero_approx(segment_width) else 0.5
 
-	for i in 5: # usually converges in 3–4 iterations
-		var x_est = _bezier_interpolate(
+	for _iteration in range(12):
+		var x_est := _bezier_interpolate(
+			a.position.x,
+			a.right_control_point.x,
+			b.left_control_point.x,
+			b.position.x,
+			t,
+		)
+		var error := x_est - x
+		if absf(error) <= 0.00000001:
+			_last_t = t
+			return t
+
+		var dx := _bezier_derivative(
 			a.position.x,
 			a.right_control_point.x,
 			b.left_control_point.x,
@@ -815,20 +1458,16 @@ func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
 			t,
 		)
 
-		var dx = _bezier_derivative(
-			a.position.x,
-			a.right_control_point.x,
-			b.left_control_point.x,
-			b.position.x,
-			t,
-		)
+		if absf(dx) < 0.00000001:
+			break
 
-		if abs(dx) < 0.000001:
-			return _binary_search_t(x, a, b)
+		var next_t := t - error / dx
+		if next_t < 0.0 or next_t > 1.0:
+			break
+		t = next_t
 
-		t -= (x_est - x) / dx
-		t = clamp(t, 0.0, 1.0)
-
+	t = _binary_search_t(x, a, b)
+	_last_t = t
 	return t
 
 
@@ -837,7 +1476,7 @@ func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> flo
 	var high := 1.0
 	var mid := 0.5
 
-	for i in range(12): # 10–15 iterations is plenty
+	for _iteration in range(32):
 		mid = (low + high) * 0.5
 
 		var x_est = _bezier_interpolate(
@@ -847,6 +1486,8 @@ func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> flo
 			b.position.x,
 			mid,
 		)
+		if absf(x_est - x) <= 0.00000001:
+			break
 
 		if x_est < x:
 			low = mid

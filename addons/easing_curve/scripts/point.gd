@@ -17,11 +17,11 @@ signal lock_changed(property_name: String, locked: bool)
 static var _input_controls: Dictionary[int, Dictionary] = {}
 
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
-var locked:Dictionary[String, bool] = {
+var locked: Dictionary[String, bool] = {
 	"position": false,
 	"left_control_point": false,
 	"right_control_point": false
-}
+}: set = set_locks
 
 
 func _set(property: StringName, value: Variant) -> bool:
@@ -37,7 +37,9 @@ func _init(pos: Vector2 = Vector2.ZERO) -> void:
 	emit_changed()
 
 
-func set_locked(property_name: String, toggled_on:bool) -> void:
+func set_locked(property_name: String, toggled_on: bool) -> void:
+	if locked.get(property_name, false) == toggled_on:
+		return
 	var x_input = _get_input(property_name, "x")
 	var y_input = _get_input(property_name, "y")
 	if x_input:
@@ -49,35 +51,36 @@ func set_locked(property_name: String, toggled_on:bool) -> void:
 	emit_changed()
 
 
-func set_position(value) -> void:
-	var x_input = _get_input("position", "x")
-	var y_input = _get_input("position", "y")
-	if x_input:
-		x_input.value = value.x
-	if y_input:
-		y_input.value = value.y
+func set_locks(value: Dictionary[String, bool]) -> void:
+	if locked == value:
+		return
+	locked = value
+	emit_changed()
+
+
+func set_position(value: Vector2) -> void:
+	if position == value:
+		return
+	_set_input_value("position", "x", value.x)
+	_set_input_value("position", "y", value.y)
 	position = value
 	emit_changed()
 
 
-func set_left_control_point(value) -> void:
-	var x_input = _get_input("left_control_point", "x")
-	var y_input = _get_input("left_control_point", "y")
-	if x_input:
-		x_input.value = value.x
-	if y_input:
-		y_input.value = value.y
+func set_left_control_point(value: Vector2) -> void:
+	if left_control_point == value:
+		return
+	_set_input_value("left_control_point", "x", value.x)
+	_set_input_value("left_control_point", "y", value.y)
 	left_control_point = value
 	emit_changed()
 
 
-func set_right_control_point(value) -> void:
-	var x_input = _get_input("right_control_point", "x")
-	var y_input = _get_input("right_control_point", "y")
-	if x_input:
-		x_input.value = value.x
-	if y_input:
-		y_input.value = value.y
+func set_right_control_point(value: Vector2) -> void:
+	if right_control_point == value:
+		return
+	_set_input_value("right_control_point", "x", value.x)
+	_set_input_value("right_control_point", "y", value.y)
 	right_control_point = value
 	emit_changed()
 
@@ -92,3 +95,9 @@ func set_input_control(property_name: String, axis: String, control: Object) -> 
 func _get_input(property_name: String, axis: String) -> Object:
 	var input_ref: WeakRef = _input_controls.get(get_instance_id(), {}).get(property_name + axis)
 	return input_ref.get_ref() if input_ref else null
+
+
+func _set_input_value(property_name: String, axis: String, value: float) -> void:
+	var input := _get_input(property_name, axis)
+	if input != null and input.has_method("set_value_no_signal"):
+		input.call("set_value_no_signal", value)

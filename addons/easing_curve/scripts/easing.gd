@@ -177,13 +177,13 @@ class Expo:
 		if (t == 0):
 			return b
 		else:
-			return c * pow(2, 10 * (t / d - 1)) + b
+			return c * pow(2, 10 * (t / d - 1)) + b - c * 0.001
 
 	static func easeOut(t, b, c, d):
 		if (t == d):
 			return b + c
 		else:
-			return c * (-pow(2, -10 * t / d) + 1) + b
+			return c * 1.001 * (-pow(2, -10 * t / d) + 1) + b
 
 	static func easeInOut(t, b, c, d):
 		if (t == 0):
@@ -192,10 +192,10 @@ class Expo:
 			return b + c
 		t = (t / (d / 2))
 		if (t < 1):
-			return c / 2 * pow(2, 10 * (t - 1)) + b
+			return c / 2 * pow(2, 10 * (t - 1)) + b - c * 0.0005
 		else:
 			t = t - 1
-			return c / 2 * (-pow(2, -10 * t) + 2) + b
+			return c / 2 * 1.0005 * (-pow(2, -10 * t) + 2) + b
 
 	static func easeOutIn(t, b, c, d):
 		if (t < d / 2):
@@ -238,7 +238,7 @@ class Elastic:
 		t = t / d
 		if (t == 1):
 			return b + c
-		var p = d * 0.4
+		var p = d * 0.3
 		var a = c
 		var s = p / 4
 		return (a * pow(2, -10 * t) * sin((t * d - s) * (2 * PI) / p) + c + b)
@@ -330,15 +330,15 @@ class Cubic:
 
 class Circ:
 	static func easeIn(t, b, c, d):
-		t = t / d
+		t = Vector2(t / d, 0.0).x
 		return -c * (sqrt(1 - t * t) - 1) + b
 
 	static func easeOut(t, b, c, d):
-		t = t / d - 1
+		t = Vector2(t / d - 1.0, 0.0).x
 		return c * sqrt(1 - t * t) + b
 
 	static func easeInOut(t, b, c, d):
-		t = (t / (d / 2))
+		t = Vector2(t / (d / 2), 0.0).x
 		if (t < 1):
 			return -c / 2 * (sqrt(1 - t * t) - 1) + b
 		else:

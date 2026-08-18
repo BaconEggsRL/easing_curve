@@ -6,12 +6,13 @@ extends TextureRect
 ## This is used in the EasingCurve editor inspector plugin when generating the point list.
 ## Contains reference for the curve, editor, and undo redo.
 
+signal point_swap_requested(from_index: int, to_index: int)
+
 var index: int
 var point_panel: PanelContainer
 var point_list: VBoxContainer
 var curve: EasingCurve
 var easing_curve_editor: EasingCurveEditor
-var editor_undo_redo: EditorUndoRedoManager
 
 
 func _ready():
@@ -39,16 +40,32 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 
 
 func _can_drop_data(position: Vector2, data) -> bool:
-	return data.has("index") and data.has("point")
+	var valid:bool = data.has("index") and data.has("point")
+
+	if valid and point_list != null and point_list.has_method("set_drop_index"):
+		point_list.call("set_drop_index", index)
+
+	return valid
 
 
 func _drop_data(position: Vector2, data) -> void:
+	if point_list != null and point_list.has_method("clear_drop_index"):
+		point_list.call("clear_drop_index")
+
 	if not _can_drop_data(position, data):
 		return
+
 	var from_index = data["index"]
 	var to_index = index
+
 	if from_index != to_index:
-		editor_undo_redo.create_action("Move point")
-		editor_undo_redo.add_do_method(curve, "swap_points", from_index, to_index)
-		editor_undo_redo.add_undo_method(curve, "swap_points", to_index, from_index)
-		editor_undo_redo.commit_action()
+		if point_swap_requested.has_connections():
+			point_swap_requested.emit(from_index, to_index)
+		elif curve != null:
+			curve.swap_points(from_index, to_index)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_DRAG_END:
+		if point_list != null and point_list.has_method("clear_drop_index"):
+			point_list.call("clear_drop_index")

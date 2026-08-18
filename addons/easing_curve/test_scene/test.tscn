@@ -1,24 +1,9 @@
 [gd_scene format=3 uid="uid://qviblxegxd23"]
 
 [ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/test_scene/test.gd" id="1_37kl0"]
-[ext_resource type="Script" uid="uid://cxmmenoobxiyp" path="res://addons/easing_curve/scripts/point.gd" id="2_env3b"]
-[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="3_ucfbi"]
+[ext_resource type="Resource" uid="uid://cc3fgm2eye62k" path="res://addons/easing_curve/presets/triangle_linear.tres" id="2_6iudh"]
 
-[sub_resource type="Resource" id="Resource_2abx0"]
-script = ExtResource("2_env3b")
-
-[sub_resource type="Resource" id="Resource_cycue"]
-script = ExtResource("2_env3b")
-position = Vector2(1, 1)
-left_control_point = Vector2(1, 1)
-right_control_point = Vector2(1, 1)
-
-[sub_resource type="Resource" id="Resource_d30fn"]
-script = ExtResource("3_ucfbi")
-points = Array[ExtResource("2_env3b")]([SubResource("Resource_2abx0"), SubResource("Resource_cycue")])
-metadata/_custom_type_script = "uid://c10cjby72qngf"
-
-[node name="test" type="Control" unique_id=198225181]
+[node name="TestScene" type="Control" unique_id=198225181]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -26,56 +11,61 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_37kl0")
-easing_curve = SubResource("Resource_d30fn")
+easing_curve = ExtResource("2_6iudh")
 
-[node name="nodes" type="Node2D" parent="." unique_id=1843378729]
+[node name="NodeContainer" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)
 
-[node name="tween_nodes_container" type="Node2D" parent="nodes" unique_id=1472119880]
+[node name="TweenNodeContainer" type="Node2D" parent="NodeContainer" unique_id=1472119880]
 position = Vector2(0, -74)
 
-[node name="Label2" type="Label" parent="nodes/tween_nodes_container" unique_id=611090884]
+[node name="TweenLabel" type="Label" parent="NodeContainer/TweenNodeContainer" unique_id=611090884]
 offset_left = 184.0
 offset_top = -4.0
 offset_right = 232.0
 offset_bottom = 19.0
 text = "tween"
 
-[node name="tween_start" type="Marker2D" parent="nodes/tween_nodes_container" unique_id=280680456]
+[node name="TweenStartMarker" type="Marker2D" parent="NodeContainer/TweenNodeContainer" unique_id=280680456]
+unique_name_in_owner = true
 position = Vector2(320, 0)
 
-[node name="tween_node" type="Node2D" parent="nodes/tween_nodes_container/tween_start" unique_id=377179111]
+[node name="TweenNode" type="Node2D" parent="NodeContainer/TweenNodeContainer/TweenStartMarker" unique_id=377179111]
+unique_name_in_owner = true
 
-[node name="tween_visuals" type="Polygon2D" parent="nodes/tween_nodes_container/tween_start/tween_node" unique_id=54676297]
+[node name="TweenVisuals" type="Polygon2D" parent="NodeContainer/TweenNodeContainer/TweenStartMarker/TweenNode" unique_id=54676297]
 color = Color(0.341176, 0.627451, 1, 1)
 polygon = PackedVector2Array(-18, 0, 0, -18, 18, 0, 0, 18)
 
-[node name="tween_end" type="Marker2D" parent="nodes/tween_nodes_container" unique_id=325023668]
+[node name="TweenEndMarker" type="Marker2D" parent="NodeContainer/TweenNodeContainer" unique_id=325023668]
+unique_name_in_owner = true
 position = Vector2(960, 0)
 
-[node name="curve_nodes_container" type="Node2D" parent="nodes" unique_id=1899049406]
-position = Vector2(0, 75)
+[node name="CurveNodeContainer" type="Node2D" parent="NodeContainer" unique_id=1899049406]
 
-[node name="Label" type="Label" parent="nodes/curve_nodes_container" unique_id=417350127]
+[node name="CurveLabel" type="Label" parent="NodeContainer/CurveNodeContainer" unique_id=417350127]
 offset_left = 185.0
 offset_top = -12.000015
 offset_right = 228.0
 offset_bottom = 10.999985
 text = "curve"
 
-[node name="curve_start" type="Marker2D" parent="nodes/curve_nodes_container" unique_id=125912984]
+[node name="CurveStartMarker" type="Marker2D" parent="NodeContainer/CurveNodeContainer" unique_id=125912984]
+unique_name_in_owner = true
 position = Vector2(320, 0)
 
-[node name="curve_node" type="Node2D" parent="nodes/curve_nodes_container/curve_start" unique_id=1059760795]
+[node name="CurveNode" type="Node2D" parent="NodeContainer/CurveNodeContainer/CurveStartMarker" unique_id=1059760795]
+unique_name_in_owner = true
 
-[node name="curve_visuals" type="Polygon2D" parent="nodes/curve_nodes_container/curve_start/curve_node" unique_id=502456279]
+[node name="CurveVisuals" type="Polygon2D" parent="NodeContainer/CurveNodeContainer/CurveStartMarker/CurveNode" unique_id=502456279]
 color = Color(0.372549, 0.811765, 0.466667, 1)
 polygon = PackedVector2Array(-18, -18, 18, -18, 18, 18, -18, 18)
 
-[node name="curve_end" type="Marker2D" parent="nodes/curve_nodes_container" unique_id=183358020]
+[node name="CurveEndMarker" type="Marker2D" parent="NodeContainer/CurveNodeContainer" unique_id=183358020]
+unique_name_in_owner = true
 position = Vector2(960, 0)
 
-[node name="restart" type="Button" parent="." unique_id=2072471650]
+[node name="RestartButton" type="Button" parent="." unique_id=2072471650]
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
@@ -87,7 +77,7 @@ text = "RESTART"
 icon_alignment = 1
 expand_icon = true
 
-[node name="instructions" type="Label" parent="." unique_id=1420596714]
+[node name="Instructions" type="Label" parent="." unique_id=1420596714]
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
@@ -100,7 +90,17 @@ text = "Instructions:
 
 Run the current scene.
 Change the exported Curve and Tween properties in the editor.
-Applying new Ease and Trans settings will restart the comparison automatically."
+Applying new settings will restart the comparison automatically."
 horizontal_alignment = 1
 
-[connection signal="pressed" from="restart" to="." method="_on_restart_pressed"]
+[node name="VersionLabel" type="Label" parent="." unique_id=796730062]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+offset_right = 40.0
+grow_vertical = 0
+
+[connection signal="pressed" from="RestartButton" to="." method="_on_restart_pressed"]

@@ -21,19 +21,662 @@ const MOVE_UP = preload("res://addons/easing_curve/assets/icons/MoveUp.svg")
 const TRIPLE_BAR = preload("res://addons/easing_curve/assets/icons/TripleBar.svg")
 const LOCK = preload("res://addons/easing_curve/assets/icons/Lock.svg")
 const UNLOCK = preload("res://addons/easing_curve/assets/icons/Unlock.svg")
+const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 ## Vector2 slider step
 const SLIDER_INPUT_STEP = 0.001
+const DRAGGING_META := &"_easing_curve_dragging"
+const PARAMETER_DEFAULTS := {
+	&"num_points": 3,
+	&"randomness": 3.5,
+	&"steps": 4,
+	&"y_offset": 0.0,
+	&"power": 2.0,
+	&"amplitude": 1.0,
+	&"period": 0.3,
+}
+const POINT_MENU_COPY_VALUE := 0
+const POINT_MENU_PASTE_VALUE := 1
+const POINT_MENU_COPY_PATH := 2
+
+
+func _parse_begin(object: Object) -> void:
+	if not object is EasingCurve:
+		return
+
+	if _preserve_point_selection_on_refresh:
+		_preserve_point_selection_on_refresh = false
+		return
+
+	_clear_point_property_selection()
+
+
+static func _point_property_path(
+	point_index: int,
+	property_name: StringName,
+) -> String:
+	return "points/%d/%s" % [
+		point_index,
+		String(property_name),
+	]
+
+
+func _copy_point_property_value(
+	point_index: int,
+	property_name: StringName,
+) -> void:
+	if point_index < 0 or point_index >= curve.points.size():
+		return
+
+	var value: Vector2 = curve.points[point_index].get(property_name)
+
+	DisplayServer.clipboard_set(
+		var_to_str(value)
+	)
+
+
+func _paste_point_property_value(
+	point_index: int,
+	property_name: StringName,
+) -> void:
+	if point_index < 0 or point_index >= curve.points.size():
+		return
+
+	var clipboard := DisplayServer.clipboard_get()
+	var value: Variant = str_to_var(clipboard)
+
+	if not value is Vector2:
+		return
+
+	_apply_point_property_change(
+		point_index,
+		property_name,
+		value
+	)
+
+
+func _copy_point_property_path(
+	point_index: int,
+	property_name: StringName,
+) -> void:
+	DisplayServer.clipboard_set(
+		_point_property_path(
+			point_index,
+			property_name
+		)
+	)
+
+
+static func _clipboard_has_vector2() -> bool:
+	var clipboard := DisplayServer.clipboard_get()
+
+	if clipboard.is_empty():
+		return false
+
+	return str_to_var(clipboard) is Vector2
+
+
+func _create_point_property_context_menu(
+	point_index: int,
+	property_name: StringName,
+) -> PopupMenu:
+	var menu := PopupMenu.new()
+
+	menu.add_item(
+		"Copy Value",
+		POINT_MENU_COPY_VALUE,
+		KEY_MASK_CTRL | KEY_C
+	)
+
+	menu.add_item(
+		"Paste Value",
+		POINT_MENU_PASTE_VALUE,
+		KEY_MASK_CTRL | KEY_V
+	)
+
+	menu.add_separator()
+
+	menu.add_item(
+		"Copy Property Path",
+		POINT_MENU_COPY_PATH,
+		KEY_MASK_CTRL | KEY_MASK_SHIFT | KEY_C
+	)
+
+	menu.id_pressed.connect(
+		func(id: int):
+			match id:
+				POINT_MENU_COPY_VALUE:
+					_copy_point_property_value(
+						point_index,
+						property_name
+					)
+
+				POINT_MENU_PASTE_VALUE:
+					_paste_point_property_value(
+						point_index,
+						property_name
+					)
+
+				POINT_MENU_COPY_PATH:
+					_copy_point_property_path(
+						point_index,
+						property_name
+					)
+	)
+
+	return menu
+
+
+
+class DeferredParameterEditorProperty:
+	extends EditorProperty
+
+	var input: EditorSpinSlider
+	var property_name: StringName
+	var curve_editor: EasingCurveEditor
+	var drag_original_snapshot: Dictionary
+	var undo_redo: Object
+	var reset_button: Button
+
+	func setup(
+			native_editor: EditorProperty,
+			name: StringName,
+			editor: EasingCurveEditor,
+			undo_manager: Object,
+	) -> bool:
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+		var sliders := native_editor.find_children("*", "EditorSpinSlider", true, false)
+		if sliders.size() != 1:
+			return false
+
+		input = sliders[0] as EditorSpinSlider
+		if input == null:
+			return false
+
+		property_name = name
+		curve_editor = editor
+		undo_redo = undo_manager
+
+		native_editor.remove_child(input)
+		native_editor.free()
+
+		var row := HBoxContainer.new()
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		add_child(row)
+
+		# The extracted native editor no longer has its original container managing
+		# its width, so explicitly make it consume the available value-column space.
+		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		input.custom_minimum_size.x = 0.0
+		row.add_child(input)
+		add_focusable(input)
+
+		input.deferred_drag_mode = false
+		input.grabbed.connect(_on_grabbed)
+		input.ungrabbed.connect(_on_ungrabbed)
+		input.value_focus_entered.connect(_on_value_focus_entered)
+		input.value_changed.connect(_on_value_changed)
+		input.tree_exiting.connect(_on_tree_exiting)
+
+		return true
+
+	func _update_property() -> void:
+		var object := get_edited_object() as EasingCurve
+		if object != null and input != null:
+			input.set_value_no_signal(float(object.get(property_name)))
+			_update_reset_button(object.get(property_name))
+
+	func _on_grabbed() -> void:
+		if input.has_meta(DRAGGING_META):
+			return
+		var object := get_edited_object() as EasingCurve
+		if object == null:
+			return
+		input.set_meta(DRAGGING_META, true)
+		drag_original_snapshot = EASING_CURVE_EDITOR_UNDO.capture_state(object)
+		object._begin_editor_parameter_edit()
+
+	func _on_ungrabbed() -> void:
+		_commit_drag.call_deferred()
+
+	func _on_value_focus_entered() -> void:
+		if not input.has_meta(DRAGGING_META):
+			return
+		_commit_drag()
+
+	func _on_value_changed(value: float) -> void:
+		var object := get_edited_object() as EasingCurve
+		if object == null:
+			return
+		var property_value: Variant = int(value) if object.get(property_name) is int else value
+		if input.has_meta(DRAGGING_META):
+			object.set(property_name, property_value)
+		else:
+			_commit_value(object, property_value)
+		_update_reset_button(property_value)
+		_queue_curve_redraw()
+
+	func _on_reset_pressed() -> void:
+		var object := get_edited_object() as EasingCurve
+		if object == null or not PARAMETER_DEFAULTS.has(property_name):
+			return
+		var default_value: Variant = PARAMETER_DEFAULTS[property_name]
+		_commit_value(object, default_value)
+		input.set_value_no_signal(float(default_value))
+		_update_reset_button(default_value)
+		_queue_curve_redraw()
+
+	func _update_reset_button(value: Variant) -> void:
+		if reset_button == null or not PARAMETER_DEFAULTS.has(property_name):
+			return
+		reset_button.visible = value != PARAMETER_DEFAULTS[property_name]
+
+	func _on_tree_exiting() -> void:
+		_commit_drag()
+
+	func _commit_drag() -> void:
+		if not input.has_meta(DRAGGING_META):
+			return
+		input.remove_meta(DRAGGING_META)
+		var object := get_edited_object() as EasingCurve
+		if object == null:
+			return
+
+		var final_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
+		if final_snapshot == drag_original_snapshot:
+			object._cancel_editor_parameter_edit()
+		else:
+			object._finish_editor_parameter_edit()
+			EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+				undo_redo,
+				object,
+				"Change Easing Curve %s" % String(property_name).capitalize(),
+				drag_original_snapshot,
+				final_snapshot,
+				self,
+			)
+		_queue_curve_redraw()
+
+	func _commit_value(object: EasingCurve, value: Variant) -> void:
+		var original_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
+		object._begin_editor_parameter_edit()
+		object.set(property_name, value)
+		var final_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
+		if final_snapshot == original_snapshot:
+			object._cancel_editor_parameter_edit()
+			return
+		object._finish_editor_parameter_edit()
+		EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+			undo_redo,
+			object,
+			"Change Easing Curve %s" % String(property_name).capitalize(),
+			original_snapshot,
+			final_snapshot,
+			self,
+		)
+
+	func _queue_curve_redraw() -> void:
+		if is_instance_valid(curve_editor):
+			curve_editor.queue_redraw()
+
+
+class GenerateFunctionEditorProperty:
+	extends EditorProperty
+
+	var button_container: HBoxContainer
+	var button: Button
+	var curve_editor: EasingCurveEditor
+	var undo_redo: Object
+
+	func setup(editor: EasingCurveEditor, undo_manager: Object) -> void:
+		curve_editor = editor
+		undo_redo = undo_manager
+		button_container = HBoxContainer.new()
+		button_container.alignment = BoxContainer.ALIGNMENT_CENTER
+		button_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button = Button.new()
+		button.text = "Generate"
+		button.tooltip_text = "Generate a new random curve"
+		button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		var editor_theme := EditorInterface.get_editor_theme()
+		if editor_theme.has_icon(&"Callable", &"EditorIcons"):
+			button.icon = editor_theme.get_icon(&"Callable", &"EditorIcons")
+		button_container.add_child(button)
+		add_child(button_container)
+		add_focusable(button)
+		button.pressed.connect(_on_pressed)
+
+	func _ready() -> void:
+		_hide_property_chrome()
+
+	func _update_property() -> void:
+		_hide_property_chrome()
+
+	func _hide_property_chrome() -> void:
+		label = ""
+		draw_label = false
+		draw_background = false
+		selectable = false
+		name_split_ratio = 0.0
+		tooltip_text = ""
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _on_pressed() -> void:
+		var object := get_edited_object() as EasingCurve
+		if object == null:
+			return
+		var original_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
+		object._begin_editor_parameter_edit()
+		object.generate_irregular()
+		var generated_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
+		if generated_snapshot == original_snapshot:
+			object._cancel_editor_parameter_edit()
+		else:
+			object._finish_editor_parameter_edit()
+			EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+				undo_redo,
+				object,
+				"Generate Easing Curve",
+				original_snapshot,
+				generated_snapshot,
+				self,
+			)
+		if is_instance_valid(curve_editor):
+			curve_editor.queue_redraw()
+
+
+class PointsEditorProperty:
+	extends EditorProperty
+
+	func set_content(content: Control) -> void:
+		add_child(content)
+		_hide_property_chrome()
+
+	func _ready() -> void:
+		_hide_property_chrome()
+
+	func _update_property() -> void:
+		_hide_property_chrome()
+
+	func _hide_property_chrome() -> void:
+		label = ""
+		draw_label = false
+		draw_background = false
+		selectable = false
+		name_split_ratio = 0.0
+		tooltip_text = ""
+
+
+class PointsListContainer:
+	extends VBoxContainer
+
+	var drop_index := -1
+
+	func set_drop_index(value: int) -> void:
+		if drop_index == value:
+			return
+		drop_index = value
+		queue_redraw()
+
+	func clear_drop_index() -> void:
+		if drop_index == -1:
+			return
+		drop_index = -1
+		queue_redraw()
+
+	func _draw() -> void:
+		if drop_index < 0:
+			return
+
+		var point_panels: Array[Control] = []
+
+		for child in get_children():
+			if child is PanelContainer:
+				point_panels.append(child)
+
+		if drop_index >= point_panels.size():
+			return
+
+		var target := point_panels[drop_index]
+		var y := target.position.y
+
+		var editor_theme := EditorInterface.get_editor_theme()
+		var color := editor_theme.get_color(&"accent_color", &"Editor")
+
+		draw_line(
+			Vector2(0.0, y),
+			Vector2(size.x, y),
+			color,
+			2.0
+		)
+
+
+class PointsFoldableSection:
+	extends VBoxContainer
+
+	var copy_value_callback: Callable
+	var paste_value_callback: Callable
+	var copy_path_callback: Callable
+	var can_paste_callback: Callable
+
+	static var folded_by_resource: Dictionary[int, bool] = {}
+	var resource_id: int
+	var title: String
+	var _native_section: Control
+	var _fallback_header: Button
+	var _fallback_content: Control
+	var _fallback_folded := false
+	var base := EditorInterface.get_base_control()
+	var normal_color := base.get_theme_color(
+		&"font_color",
+		&"Editor"
+	)
+	var hover_color := base.get_theme_color(
+		&"font_hover_color",
+		&"Editor"
+	)
+	#var normal_color := Color(1.0, 1.0, 1.0, 0.75)
+	#var hover_color := Color(1.0, 1.0, 1.0, 0.85)
+
+	var normal_icon_color := Color(1.0, 1.0, 1.0, 0.90)
+	var hover_icon_color := Color.WHITE
+
+	var normal_font_base := Color(
+		1.0,
+		1.0,
+		1.0,
+		normal_color.a / normal_icon_color.a
+	)
+
+	var hover_font_base := Color(
+		1.0,
+		1.0,
+		1.0,
+		hover_color.a / hover_icon_color.a
+	)
+
+	var folded: bool:
+		get:
+			if is_instance_valid(_native_section):
+				return bool(_native_section.get(&"folded"))
+			return _fallback_folded
+
+
+	func _ready() -> void:
+		set_process_input(true)
+
+
+	func _input(event: InputEvent) -> void:
+		if not event is InputEventKey:
+			return
+
+		if not event.pressed or event.echo:
+			return
+
+		if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_C:
+			if copy_path_callback.is_valid():
+				copy_path_callback.call()
+				get_viewport().set_input_as_handled()
+			return
+
+		if event.ctrl_pressed and not event.shift_pressed and event.keycode == KEY_C:
+			if copy_value_callback.is_valid():
+				copy_value_callback.call()
+				get_viewport().set_input_as_handled()
+			return
+
+		if event.ctrl_pressed and not event.shift_pressed and event.keycode == KEY_V:
+			if (
+				paste_value_callback.is_valid()
+				and can_paste_callback.is_valid()
+				and can_paste_callback.call()
+			):
+				paste_value_callback.call()
+				get_viewport().set_input_as_handled()
+
+
+	func setup(section_title: String, content: Control, object: EasingCurve) -> void:
+		resource_id = object.get_instance_id()
+		title = section_title
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var initially_folded: bool = folded_by_resource.get(resource_id, false)
+		if ClassDB.class_exists(&"FoldableContainer"):
+			_native_section = ClassDB.instantiate(&"FoldableContainer") as Control
+			_native_section.set(&"title", section_title)
+			_native_section.set(&"title_text_overrun_behavior", TextServer.OVERRUN_TRIM_ELLIPSIS)
+			_native_section.set(&"folded", initially_folded)
+			for style_name in [
+				#&"panel",
+				&"title_panel",
+				&"title_collapsed_panel",
+				&"title_hover_panel",
+				&"title_collapsed_hover_panel",
+			]:
+				_native_section.add_theme_stylebox_override(style_name, StyleBoxEmpty.new())
+
+				var style := _native_section.get_theme_stylebox(style_name).duplicate()
+				if style is StyleBoxFlat:
+					style.bg_color.a = 0.0
+				style.content_margin_top = 0.0
+				style.content_margin_left = 2.0
+				style.content_margin_bottom = 0.0
+				_native_section.add_theme_stylebox_override(style_name, style)
+
+			_native_section.add_theme_stylebox_override(
+				&"panel",
+				StyleBoxEmpty.new()
+			)
+
+			_native_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_native_section.add_child(content)
+			_native_section.connect(&"folding_changed", _on_folding_changed)
+			add_child(_native_section)
+			#call_deferred("_debug_points_layout")
+			#call_deferred("_debug_fold_alignment")
+			#call_deferred("_debug_theme")
+
+
+			_native_section.add_theme_color_override(
+				&"font_color",
+				normal_font_base
+			)
+
+			_native_section.add_theme_color_override(
+				&"collapsed_font_color",
+				normal_font_base
+			)
+
+			_native_section.add_theme_color_override(
+				&"hover_font_color",
+				hover_font_base
+			)
+
+			_native_section.self_modulate = normal_icon_color
+
+			_native_section.mouse_entered.connect(func():
+				_native_section.self_modulate = hover_icon_color
+			)
+
+			_native_section.mouse_exited.connect(func():
+				_native_section.self_modulate = normal_icon_color
+			)
+
+			return
+
+		_fallback_header = Button.new()
+		_fallback_header.text = section_title
+		_fallback_header.flat = true
+		_fallback_header.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		_fallback_header.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		_fallback_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_fallback_header.pressed.connect(_toggle_fallback)
+		add_child(_fallback_header)
+		_fallback_content = content
+		add_child(content)
+		_set_fallback_folded(initially_folded)
+
+	func fold() -> void:
+		if is_instance_valid(_native_section):
+			_native_section.call(&"fold")
+			return
+		_set_fallback_folded(true)
+
+	func expand() -> void:
+		if is_instance_valid(_native_section):
+			_native_section.call(&"expand")
+			return
+		_set_fallback_folded(false)
+
+	func _on_folding_changed(is_folded: bool) -> void:
+		folded_by_resource[resource_id] = is_folded
+
+	func _toggle_fallback() -> void:
+		_set_fallback_folded(not _fallback_folded)
+
+	func _set_fallback_folded(is_folded: bool) -> void:
+		_fallback_folded = is_folded
+		_fallback_content.visible = not is_folded
+		_fallback_header.icon = GUI_TREE_ARROW_RIGHT if is_folded else GUI_TREE_ARROW_DOWN
+		_on_folding_changed(is_folded)
+
 
 ## Curve
 var editor_undo_redo: EditorUndoRedoManager # assigned from EditorPlugin
 var easing_curve_editor: EasingCurveEditor
+var curve_editor_property: EditorProperty
+var points_editor_property: EditorProperty
 var ease_option: OptionButton
 var trans_option: OptionButton
+var preset_reset_button: Button
 var curve: EasingCurve
+var _instantiating_default_property := false
+var _point_edit_before_state: Dictionary
+var _point_edit_action_name := "Edit Easing Curve Point"
+var _selected_point_property_header: PanelContainer
+var _selected_point_index := -1
+var _selected_point_property_name := StringName()
+var _selected_point_resource_id := 0
+var _preserve_point_selection_on_refresh := false
+
+
+func _clear_point_property_selection() -> void:
+	if is_instance_valid(_selected_point_property_header):
+		_set_point_property_selected(
+			_selected_point_property_header,
+			false
+		)
+
+	_selected_point_property_header = null
+	_selected_point_index = -1
+	_selected_point_property_name = StringName()
 
 
 func handle_points(curve: EasingCurve) -> VBoxContainer:
-	var point_list = VBoxContainer.new() # contains the list of points
+	# var point_list = VBoxContainer.new() # contains the list of points
+	var point_list = PointsListContainer.new()
+	point_list.add_spacer(true) # add a gap between "Points" header label and the list of points.
+	point_list.add_theme_constant_override("separation", _point_separation())
 
 	# Show list of points
 	for i in range(curve.points.size()):
@@ -44,8 +687,9 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 		var point_panel := PanelContainer.new() # contains the point
 		point_panel.add_theme_stylebox_override("panel", X_STYLEBOX)
 
-		# Main horizontal layout
+		# Keep point controls on one stable row and let the editable fields shrink.
 		var point_main_hbox := HBoxContainer.new()
+		point_main_hbox.add_theme_constant_override("separation", _compact_separation())
 		point_panel.add_child(point_main_hbox)
 
 		# Left side VBox with Move Up / TripleBar / Move Down
@@ -100,7 +744,7 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 	return point_list
 
 
-func handle_easing_curve_editor(object) -> void:
+func handle_easing_curve_editor(object) -> Control:
 	if object == null:
 		return
 	if object is EasingCurve:
@@ -109,35 +753,28 @@ func handle_easing_curve_editor(object) -> void:
 		curve_section.add_theme_constant_override("separation", 0)
 
 		# Add toolbar
-		var _toolbar: HBoxContainer
-		_toolbar = HBoxContainer.new()
+		var _toolbar := GridContainer.new()
+		_toolbar.columns = 3
 		_toolbar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-		_toolbar.alignment = BoxContainer.ALIGNMENT_END
+		_toolbar.add_theme_constant_override("h_separation", _compact_separation())
+		_toolbar.add_theme_constant_override("v_separation", _compact_separation())
+		_toolbar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 		# Toolbar setup
-		var ease_dict = _create_option_with_reset(
-			EasingCurve.EASE,
-			object.ease_type,
-			"Ease",
-		)
+		var ease_reset_button := _create_reserved_reset_button("Reset Ease to In")
+		preset_reset_button = _create_reserved_reset_button("Restore selected preset geometry")
+		ease_option = _create_option(EasingCurve.EASE, object.ease_type)
+		trans_option = _create_option(EasingCurve.TRANS, object.trans_type)
 
-		var trans_dict = _create_option_with_reset(
-			EasingCurve.TRANS,
-			object.trans_type,
-			"Trans",
-			_update_ease_disabled,
-		)
-
-		# Add the containers
-		_toolbar.add_child(ease_dict.container)
-		_toolbar.add_child(trans_dict.container)
+		# A fixed three-column grid aligns both dropdowns and both trailing reset slots.
+		_toolbar.add_child(_create_option_label("Ease"))
+		_toolbar.add_child(ease_option)
+		_toolbar.add_child(ease_reset_button)
+		_toolbar.add_child(_create_option_label("Trans"))
+		_toolbar.add_child(trans_option)
+		_toolbar.add_child(preset_reset_button)
 
 		# Keep references
-		ease_option = ease_dict.option
-		trans_option = trans_dict.option
-		_update_ease_disabled(trans_option.selected)
-
-		# Add toolbar
 		curve_section.add_child(_toolbar)
 
 		########################################
@@ -157,43 +794,76 @@ func handle_easing_curve_editor(object) -> void:
 		easing_curve_editor.zoom_changed.connect(object._on_curve_editor_zoom_changed)
 		easing_curve_editor.pan_changed.connect(object._on_curve_editor_pan_changed)
 		easing_curve_editor.point_changed.connect(_on_curve_editor_point_changed)
+		easing_curve_editor.point_property_change_requested.connect(_on_curve_editor_point_property_change_requested)
+		easing_curve_editor.point_add_requested.connect(_on_curve_editor_point_add_requested)
+		easing_curve_editor.point_remove_requested.connect(_on_curve_editor_point_remove_requested)
+		easing_curve_editor.point_edit_finished.connect(_on_curve_editor_point_edit_finished)
 
 		# Store reference to curve resource
 		curve = object
+		_point_edit_before_state = {}
+		_point_edit_action_name = "Edit Easing Curve Point"
 		# print("curve.ease_type = ", curve.EASE.keys()[curve.ease_type])
 		# print("curve.trans_type = ", curve.TRANS.keys()[curve.trans_type])
 
 		# Connect ease/trans preset selected signals
 		ease_option.item_selected.connect(
 			func(idx):
-				editor_undo_redo.create_action("Set Ease " + curve.EASE.keys()[idx])
-				editor_undo_redo.add_do_method(curve, "set_ease", idx)
-				editor_undo_redo.add_undo_method(curve, "set_ease", curve.ease_type)
-				editor_undo_redo.commit_action()
+				_emit_curve_property(&"ease_type", ease_option.get_item_id(idx))
 		)
 
 		trans_option.item_selected.connect(
 			func(idx):
-				editor_undo_redo.create_action("Set Trans " + curve.TRANS.keys()[idx])
-				editor_undo_redo.add_do_method(curve, "set_trans", idx)
-				editor_undo_redo.add_undo_method(curve, "set_trans", curve.trans_type)
-				editor_undo_redo.commit_action()
+				_emit_curve_property(&"trans_type", trans_option.get_item_id(idx))
+		)
+
+		ease_reset_button.pressed.connect(_on_reset_ease.bind(object))
+		preset_reset_button.pressed.connect(_on_reset_selected_preset.bind(object))
+		var preset_state_callback := _update_preset_state_ui.bind(
+			object,
+			ease_option,
+			trans_option,
+			ease_reset_button,
+			preset_reset_button,
+		)
+		object.changed.connect(preset_state_callback)
+		curve_section.tree_exiting.connect(
+			_disconnect_preset_state_ui.bind(object, preset_state_callback),
+		)
+		_update_preset_state_ui(
+			object,
+			ease_option,
+			trans_option,
+			ease_reset_button,
+			preset_reset_button,
 		)
 
 		# Add curve editor
 		curve_section.add_child(easing_curve_editor)
+		easing_curve_editor.resized.connect(easing_curve_editor.update_minimum_size)
 
 		########################################
 		# Add zoom slider
+		var zoom_row := HBoxContainer.new()
+		zoom_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		curve_section.add_child(zoom_row)
+
+		var zoom_spacer := Control.new()
+		zoom_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		zoom_spacer.size_flags_stretch_ratio = 0.6
+		zoom_row.add_child(zoom_spacer)
+
 		var zoom_slider_container := ZOOM_SLIDER_CONTAINER.instantiate()
 		zoom_slider_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		curve_section.add_child(zoom_slider_container)
+		zoom_slider_container.size_flags_stretch_ratio = 0.4
+		zoom_row.add_child(zoom_slider_container)
+
 		easing_curve_editor._slider = zoom_slider_container
 		easing_curve_editor.set_slider_value(object._last_slider_value)
 
 		########################################
-		# Add all controls
-		add_custom_control(curve_section)
+		return curve_section
+	return null
 
 
 func print_properties(object, type, name, hint_type, hint_string, usage_flags, wide):
@@ -208,7 +878,7 @@ func print_properties(object, type, name, hint_type, hint_string, usage_flags, w
 
 
 func _can_handle(object):
-	if object is EasingCurve:
+	if object is EasingCurve and not _instantiating_default_property:
 		return true
 	else:
 		return false
@@ -218,19 +888,88 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 	# print_properties(object, type, name, hint_type, hint_string, usage_flags, wide)
 	# Handle properties
 	if object is EasingCurve and name == "easing_curve_editor":
-		handle_easing_curve_editor(object)
+		curve = object
+		var content := handle_easing_curve_editor(object)
+		var property_editor := PointsEditorProperty.new()
+		property_editor.set_content(content)
+		curve_editor_property = property_editor
+		add_property_editor(
+			EasingCurve.FUNCTION_SNAPSHOT_PROPERTY,
+			property_editor,
+			false,
+			String(name).capitalize(),
+		)
 		return true
 	if object is EasingCurve and name == "points":
+		curve = object
+		if object.curve_mode != object.CurveMode.BEZIER:
+			return true
 		var content = handle_points(object)
 		var section = _create_inspector_section("Points", content, object)
 		add_custom_control(section)
 		return true
+	if object is EasingCurve and name == EasingCurve.POINT_SNAPSHOT_PROPERTY:
+		return true
+	if object is EasingCurve and name == EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY:
+		return true
+	if object is EasingCurve and name == EasingCurve.FUNCTION_SNAPSHOT_PROPERTY:
+		if object.trans_type in [EasingCurve.TRANS.JITTER, EasingCurve.TRANS.IRREGULAR]:
+			var property_editor := GenerateFunctionEditorProperty.new()
+			property_editor.setup(easing_curve_editor, editor_undo_redo)
+			add_property_editor(name, property_editor)
+		return true
+	if object is EasingCurve and name == "generate_tool_button":
+		return true
+	if object is EasingCurve and StringName(name) in EasingCurve.DEFERRED_PARAMETER_PROPERTIES:
+		_instantiating_default_property = true
+		var native_editor := EditorInspector.instantiate_property_editor(
+			object,
+			type,
+			name,
+			hint_type,
+			hint_string,
+			usage_flags,
+			wide,
+		)
+		_instantiating_default_property = false
+		if native_editor == null:
+			return false
+		var property_editor := DeferredParameterEditorProperty.new()
+		if not property_editor.setup(
+			native_editor,
+			StringName(name),
+			easing_curve_editor,
+			editor_undo_redo,
+		):
+			native_editor.free()
+			property_editor.free()
+			return false
+		add_property_editor(name, property_editor)
+		return true
 	return false
 
 
-func _update_reset_btn(reset_btn: Button, value: float, default: float) -> void:
-	reset_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-	reset_btn.visible = !is_equal_approx(value, default)
+#func _update_reset_btn(reset_btn: Button, value: float, default: float) -> void:
+	#reset_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+	#reset_btn.visible = !is_equal_approx(value, default)
+func _update_point_reset_btn(
+	reset_btn: Button,
+	i: int,
+	property_name: StringName,
+) -> void:
+	if i < 0 or i >= curve.points.size():
+		return
+
+	var value: Vector2 = curve.points[i].get(property_name)
+	var default_value: Vector2 = curve.get_default_for_property(
+		i,
+		property_name
+	)
+
+	_set_point_reset_button_available(
+		reset_btn,
+		not value.is_equal_approx(default_value)
+	)
 
 
 func _on_reset_btn_pressed(
@@ -241,21 +980,18 @@ func _on_reset_btn_pressed(
 		property_name: String,
 		reset_btn: Button,
 ) -> void:
+	_preserve_point_selection_on_refresh = true
 	var new_default := curve.get_default_for_property(i, property_name)
 
-	x_input.value = new_default.x
-	y_input.value = new_default.y
+	x_input.set_value_no_signal(new_default.x)
+	y_input.set_value_no_signal(new_default.y)
+	_apply_point_property_change(i, property_name, new_default)
 
 	reset_btn.visible = false
 
 
-func _on_remove_btn_pressed(point_list: VBoxContainer, i: int, point_panel: PanelContainer, p: EasingCurvePoint) -> void:
-	# print("p%d: remove" % i)
-	# curve.remove_point(point)
-	editor_undo_redo.create_action("Remove point")
-	editor_undo_redo.add_do_method(curve, "remove_point", p)
-	editor_undo_redo.add_undo_method(curve, "add_point", p)
-	editor_undo_redo.commit_action()
+func _on_remove_btn_pressed(_point_list: VBoxContainer, _i: int, _point_panel: PanelContainer, p: EasingCurvePoint) -> void:
+	_remove_point(p)
 
 
 func _on_x_input_value_changed(value: float, i: int, x_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
@@ -263,8 +999,8 @@ func _on_x_input_value_changed(value: float, i: int, x_input: EditorSpinSlider, 
 	var point := curve.points[i]
 	var v: Vector2 = point.get(property_name)
 	v.x = value
-	point.set(property_name, v) # write to correct property
-	_update_reset_btn(reset_btn, value, default) # show reset if different
+	_apply_point_property_change(i, property_name, v, x_input.has_meta(DRAGGING_META))
+	_update_point_reset_btn(reset_btn, i, property_name) # show reset if different
 	easing_curve_editor.queue_redraw()
 
 
@@ -273,27 +1009,33 @@ func _on_y_input_value_changed(value: float, i: int, y_input: EditorSpinSlider, 
 	var point := curve.points[i]
 	var v: Vector2 = point.get(property_name)
 	v.y = value
-	point.set(property_name, v) # write to correct property
-	_update_reset_btn(reset_btn, value, default) # show reset if different
+	_apply_point_property_change(i, property_name, v, y_input.has_meta(DRAGGING_META))
+	_update_point_reset_btn(reset_btn, i, property_name) # show reset if different
 	easing_curve_editor.queue_redraw()
 
 
 func _move_point_up(i: int) -> void:
 	if i > 0 == false:
 		return
-	editor_undo_redo.create_action("Move point up")
-	editor_undo_redo.add_do_method(curve, "swap_points", i, i - 1)
-	editor_undo_redo.add_undo_method(curve, "swap_points", i - 1, i)
-	editor_undo_redo.commit_action()
+	_move_point(i, i - 1)
 
 
 func _move_point_down(i: int) -> void:
 	if i < curve.points.size() - 1 == false:
 		return
-	editor_undo_redo.create_action("Move point up")
-	editor_undo_redo.add_do_method(curve, "swap_points", i, i + 1)
-	editor_undo_redo.add_undo_method(curve, "swap_points", i + 1, i)
-	editor_undo_redo.commit_action()
+	_move_point(i, i + 1)
+
+
+func _move_point(from_index: int, to_index: int) -> void:
+	if from_index == to_index:
+		return
+	EASING_CURVE_EDITOR_UNDO.apply_action(
+		editor_undo_redo,
+		curve,
+		"Reorder Easing Curve Points",
+		curve.swap_points.bind(from_index, to_index),
+		_undo_source_property(),
+	)
 
 
 # remember bind() arguments are at the end
@@ -322,7 +1064,7 @@ func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: Pan
 	triple_bar.point_list = point_list
 	triple_bar.curve = curve
 	triple_bar.easing_curve_editor = easing_curve_editor
-	triple_bar.editor_undo_redo = editor_undo_redo
+	triple_bar.point_swap_requested.connect(_move_point)
 
 	side_vbox.add_child(triple_bar)
 
@@ -337,6 +1079,72 @@ func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: Pan
 	return side_vbox
 
 
+static func _set_point_reset_button_available(
+	reset_btn: Button,
+	available: bool,
+) -> void:
+	var tint := reset_btn.self_modulate
+	tint.a = 1.0 if available else 0.0
+	reset_btn.self_modulate = tint
+
+	reset_btn.mouse_filter = (
+		Control.MOUSE_FILTER_STOP
+		if available
+		else Control.MOUSE_FILTER_IGNORE
+	)
+
+	reset_btn.focus_mode = (
+		Control.FOCUS_ALL
+		if available
+		else Control.FOCUS_NONE
+	)
+
+
+func _select_point_property(
+	property_header: PanelContainer,
+	point_index: int,
+	property_name: StringName,
+) -> void:
+	if is_instance_valid(_selected_point_property_header):
+		_set_point_property_selected(
+			_selected_point_property_header,
+			false
+		)
+
+	_selected_point_property_header = property_header
+	_selected_point_index = point_index
+	_selected_point_property_name = property_name
+
+	_set_point_property_selected(property_header, true)
+
+
+func _set_point_property_selected(
+	property_header: PanelContainer,
+	selected: bool,
+) -> void:
+	if not selected:
+		property_header.add_theme_stylebox_override(
+			&"panel",
+			StyleBoxEmpty.new()
+		)
+		return
+
+	var style := StyleBoxFlat.new()
+
+	var accent := EditorInterface.get_base_control().get_theme_color(
+		&"accent_color",
+		&"Editor"
+	)
+
+	accent.a = 0.10
+	style.bg_color = accent
+
+	property_header.add_theme_stylebox_override(
+		&"panel",
+		style
+	)
+
+
 func _create_vector2_property(
 	point: EasingCurvePoint,
 		i: int,
@@ -344,37 +1152,144 @@ func _create_vector2_property(
 		label_text: String,
 ) -> Control:
 	var position := point.position
+	var default_vec: Vector2 = curve.get_default_for_property(i, property_name)
+	var current_vec: Vector2 = point.get(property_name)
+
+	var property_panel := PanelContainer.new()
+	property_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	property_panel.add_theme_stylebox_override(
+		&"panel",
+		StyleBoxEmpty.new()
+	)
 	var property_vbox := VBoxContainer.new()
+	property_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	property_panel.add_child(property_vbox)
+	#var property_vbox := VBoxContainer.new()
 
 	# Row container
 	var property_hbox := HBoxContainer.new()
-	# property_hbox.size_flags_horizontal = Control.SIZE_FILL
+	property_hbox.add_theme_constant_override("separation", _compact_separation())
 	property_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	property_vbox.add_child(property_hbox)
+
+	# Clickable properties
+	var property_header := PanelContainer.new()
+	property_header.focus_mode = Control.FOCUS_NONE
+
+	var property_context_menu := _create_point_property_context_menu(
+		i,
+		StringName(property_name)
+	)
+	property_header.add_child(property_context_menu)
+	var property_path := _point_property_path(
+		i,
+		StringName(property_name)
+	)
+	property_header.tooltip_text = property_path
+
+	property_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	property_header.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	property_header.add_theme_stylebox_override(
+		&"panel",
+		StyleBoxEmpty.new()
+	)
+	property_header.gui_input.connect(
+		func(event: InputEvent):
+			if not event is InputEventMouseButton:
+				return
+
+			if not event.pressed:
+				return
+
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				_select_point_property(
+					property_header,
+					i,
+					StringName(property_name)
+				)
+
+			elif event.button_index == MOUSE_BUTTON_RIGHT:
+				_select_point_property(
+					property_header,
+					i,
+					StringName(property_name)
+				)
+
+				var paste_index := property_context_menu.get_item_index(
+					POINT_MENU_PASTE_VALUE
+				)
+
+				property_context_menu.set_item_disabled(
+					paste_index,
+					not _clipboard_has_vector2()
+				)
+
+				property_context_menu.position = (
+					DisplayServer.mouse_get_position()
+				)
+
+				property_context_menu.popup()
+
+				property_header.accept_event()
+	)
+	property_hbox.add_child(property_header)
+	if (
+	_selected_point_index == i
+		and _selected_point_property_name == StringName(property_name)
+	):
+		_selected_point_property_header = property_header
+		_set_point_property_selected(property_header, true)
+
+	var header_hbox := HBoxContainer.new()
+	header_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_hbox.add_theme_constant_override(
+		&"separation",
+		_compact_separation()
+	)
+	property_header.add_child(header_hbox)
 
 	# Property label (Position / Left Control / Right Control)
 	var property_label := Label.new()
 	property_label.text = label_text
-	# property_label.custom_minimum_size.x = 150
-	property_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	property_hbox.add_child(property_label)
+	property_label.tooltip_text = property_path
+	_configure_compact_label(property_label)
+	header_hbox.add_child(property_label)
 
 	# Reset Button
 	var reset_btn := Button.new()
 	reset_btn.icon = RELOAD
-	reset_btn.hide()
-	# position_hbox.add_child(reset_btn)
-	property_label.add_child(reset_btn)
+	#reset_btn.flat = true
+	reset_btn.tooltip_text = "Reset to default"
+	reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	reset_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	reset_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	var normal_style := reset_btn.get_theme_stylebox(&"normal").duplicate()
+	var empty_style := StyleBoxEmpty.new()
+	var hover_style := reset_btn.get_theme_stylebox(&"hover").duplicate()
+	var pressed_style := reset_btn.get_theme_stylebox(&"pressed").duplicate()
+	reset_btn.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
+	reset_btn.add_theme_stylebox_override(&"hover", hover_style)
+	reset_btn.add_theme_stylebox_override(&"pressed", pressed_style)
+	reset_btn.add_theme_stylebox_override(&"focus", StyleBoxEmpty.new())
+	var reset_margin := MarginContainer.new()
+	reset_margin.add_theme_constant_override("margin_right", 2)
+	_set_point_reset_button_available(
+		reset_btn,
+		not current_vec.is_equal_approx(default_vec)
+	)
+	reset_margin.add_child(reset_btn)
+	#property_hbox.add_child(reset_margin)
+	header_hbox.add_child(reset_margin)
 
 	# Value container panel (x/y inputs; lock_btn)
 	var value_panel := PanelContainer.new()
 	value_panel.add_theme_stylebox_override("panel", X_STYLEBOX)
 	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	value_panel.custom_minimum_size = Vector2(100, 0)
 	property_hbox.add_child(value_panel)
 
 	# HBox for x/y inputs; lock_btn
 	var value_hbox := HBoxContainer.new()
+	value_hbox.add_theme_constant_override("separation", _compact_separation())
 	value_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_panel.add_child(value_hbox)
 
@@ -396,7 +1311,6 @@ func _create_vector2_property(
 	lock_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	var normal_color := lock_btn.get_theme_color("icon_normal_color")
-	# var pressed_color := Color("#57a0ff")
 	var pressed_color := Color.WHITE
 	lock_btn.add_theme_color_override("icon_pressed_color", pressed_color)
 	lock_btn.add_theme_color_override("icon_hover_pressed_color", pressed_color)
@@ -411,12 +1325,21 @@ func _create_vector2_property(
 
 	lock_btn.toggled.connect(
 		func(toggled_on: bool):
+			_preserve_point_selection_on_refresh = true
+			_select_point_property(
+				property_header,
+				i,
+				StringName(property_name)
+			)
+
 			lock_btn.icon = LOCK if toggled_on else UNLOCK
 			lock_btn.modulate.a = 1.0 if toggled_on else 0.5
 			# 🔒 Disable editing when locked
 			# x_input.read_only = toggled_on
 			# y_input.read_only = toggled_on
-			point.set_locked(property_name, toggled_on)
+			var locks: Dictionary = curve.points[i].locked.duplicate()
+			locks[property_name] = toggled_on
+			_apply_point_property_change(i, &"locked", locks)
 	)
 
 	value_hbox.add_child(lock_btn)
@@ -447,7 +1370,10 @@ func _create_vector2_property(
 	x_input.value = vec.x
 	x_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	x_input.value_changed.connect(_on_x_input_value_changed.bind(i, x_input, reset_btn, position.x, property_name))
+	x_input.value_changed.connect(_on_x_input_value_changed.bind(i, x_input, reset_btn, default_vec.x, property_name))
+	_connect_point_input_drag_signals(x_input)
+	x_input.grabbed.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
+	x_input.focus_entered.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
 	point.set_input_control(property_name, "x", x_input)
 	x_input.read_only = point.locked[property_name]
 	y_input.read_only = point.locked[property_name]
@@ -477,111 +1403,365 @@ func _create_vector2_property(
 	y_input.value = vec.y
 	y_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	y_input.value_changed.connect(_on_y_input_value_changed.bind(i, y_input, reset_btn, position.y, property_name))
+	y_input.value_changed.connect(_on_y_input_value_changed.bind(i, y_input, reset_btn, default_vec.y, property_name))
+	_connect_point_input_drag_signals(y_input)
+	y_input.grabbed.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
+	y_input.focus_entered.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
 	point.set_input_control(property_name, "y", y_input)
 
 	reset_btn.pressed.connect(_on_reset_btn_pressed.bind(i, position, x_input, y_input, property_name, reset_btn))
+	reset_btn.pressed.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
 
 	y_row.add_child(y_label)
 	y_row.add_child(y_input)
 	value_vbox.add_child(y_row)
 
-	return property_vbox
+	return property_panel
 
 
 func _on_add_point_btn_pressed() -> void:
-	editor_undo_redo.create_action("Add point")
-	var p := EasingCurvePoint.new()
-	editor_undo_redo.add_do_method(curve, "add_point", p)
-	editor_undo_redo.add_undo_method(curve, "remove_point", p)
-	editor_undo_redo.commit_action()
+	_add_point(EasingCurvePoint.new())
 
 
-func _create_inspector_section(title: String, content: Control, curve: EasingCurve) -> Control:
-	return content
+func _create_inspector_section(
+	title: String,
+	content: Control,
+	curve: EasingCurve
+) -> Control:
+	var section := PointsFoldableSection.new()
+
+	section.copy_value_callback = func():
+		if _selected_point_index >= 0:
+			_copy_point_property_value(
+				_selected_point_index,
+				_selected_point_property_name
+			)
+
+	section.paste_value_callback = func():
+		if _selected_point_index >= 0:
+			_paste_point_property_value(
+				_selected_point_index,
+				_selected_point_property_name
+			)
+
+	section.copy_path_callback = func():
+		if _selected_point_index >= 0:
+			_copy_point_property_path(
+				_selected_point_index,
+				_selected_point_property_name
+			)
+
+	section.can_paste_callback = _clipboard_has_vector2
+
+	section.setup(title, content, curve)
+	return section
 
 
-func _on_curve_editor_point_changed(i: int, new_point: EasingCurvePoint) -> void:
-	# Update the point in the EasingCurve resource
-	var point := curve.points[i]
-
-	# Copy the new_point values into the existing point
-	point.position = new_point.position
-
-	# Update the editor UI if needed
+func _on_curve_editor_point_changed(_i: int, _new_point: EasingCurvePoint) -> void:
 	easing_curve_editor.queue_redraw()
 
-	# print("Point %d changed: %s" % [i, str(point.position)])
+
+func _on_curve_editor_point_property_change_requested(i: int, property_name: StringName, value: Variant, changing: bool) -> void:
+	_apply_point_property_change(i, property_name, value, changing)
 
 
-# Returns a dictionary containing the OptionButton and its Reset Button
-func _create_option_with_reset(enum_dict: Dictionary, default_index: int, label_text: String = "", on_change: Callable = func(): pass) -> Dictionary:
-	var hbox = HBoxContainer.new()
-	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+func _on_curve_editor_point_edit_finished() -> void:
+	_commit_point_edit()
 
-	# Label
-	if label_text != "":
-		var label = Label.new()
-		label.text = label_text
-		label.size_flags_horizontal = Control.SIZE_FILL
-		hbox.add_child(label)
 
-	# Inner HBox for reset + option
-	var option_and_reset = HBoxContainer.new()
-	option_and_reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+func _commit_point_edit() -> void:
+	if _point_edit_before_state.is_empty():
+		return
+	var before := _point_edit_before_state
+	var action_name := _point_edit_action_name
+	_point_edit_before_state = {}
+	_point_edit_action_name = "Edit Easing Curve Point"
+	var after := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	# Flush the draft point notifications once at the drag boundary.
+	curve.set_point_snapshot(curve.get_point_snapshot())
+	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+		editor_undo_redo,
+		curve,
+		action_name,
+		before,
+		after,
+		_undo_source_property(),
+	)
 
-	# Reset button
-	var reset_btn = Button.new()
-	reset_btn.icon = RELOAD
-	reset_btn.flat = true
-	reset_btn.visible = false
-	option_and_reset.add_child(reset_btn)
 
-	# OptionButton
-	var option = OptionButton.new()
+func _connect_point_input_drag_signals(input: EditorSpinSlider) -> void:
+	input.grabbed.connect(_on_point_input_grabbed.bind(input))
+	input.ungrabbed.connect(_on_point_input_ungrabbed.bind(input))
+	input.value_focus_entered.connect(_on_point_input_focus_entered.bind(input))
+
+
+func _on_point_input_grabbed(input: EditorSpinSlider) -> void:
+	input.set_meta(DRAGGING_META, true)
+
+
+func _on_point_input_ungrabbed(input: EditorSpinSlider) -> void:
+	if input.has_meta(DRAGGING_META):
+		input.remove_meta(DRAGGING_META)
+	_commit_point_edit.call_deferred()
+
+
+func _on_point_input_focus_entered(input: EditorSpinSlider) -> void:
+	if input.has_meta(DRAGGING_META):
+		input.remove_meta(DRAGGING_META)
+		_commit_point_edit()
+
+
+func _on_curve_editor_point_add_requested(point: EasingCurvePoint) -> void:
+	_add_point(point)
+
+
+func _on_curve_editor_point_remove_requested(point: EasingCurvePoint) -> void:
+	_remove_point(point)
+
+
+func _apply_point_property_change(i: int, property_name: StringName, value: Variant, changing: bool = false) -> void:
+	if i < 0 or i >= curve.points.size():
+		return
+	_preserve_point_selection_on_refresh = true
+	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	if changing and _point_edit_before_state.is_empty():
+		_point_edit_before_state = before
+		_point_edit_action_name = _point_action_name(property_name)
+	var snapshot := curve.get_point_snapshot()
+	match property_name:
+		&"position", &"left_control_point", &"right_control_point":
+			var snapshot_key := String(property_name) + "s" if property_name != &"position" else "positions"
+			var values: PackedVector2Array = snapshot[snapshot_key]
+			values[i] = value
+			snapshot[snapshot_key] = values
+		&"locked":
+			var locks: Array = snapshot["locks"]
+			locks[i] = value.duplicate(true)
+			snapshot["locks"] = locks
+		_:
+			return
+	snapshot["changing"] = changing
+	curve.set_point_snapshot(snapshot)
+	if not changing:
+		EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+			editor_undo_redo,
+			curve,
+			_point_action_name(property_name),
+			before,
+			{},
+			_undo_source_property(),
+		)
+
+
+func _point_action_name(property_name: StringName) -> String:
+	match property_name:
+		&"position":
+			return "Move Easing Curve Point"
+		&"left_control_point", &"right_control_point":
+			return "Move Easing Curve Handle"
+		&"locked":
+			return "Change Easing Curve Point Lock"
+	return "Edit Easing Curve Point"
+
+
+func _add_point(point: EasingCurvePoint) -> void:
+	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	var updated_points: Array[EasingCurvePoint] = curve.points.duplicate()
+	updated_points.append(point)
+	updated_points.sort_custom(func(a: EasingCurvePoint, b: EasingCurvePoint) -> bool: return a.position.x < b.position.x)
+	curve.set_point_snapshot(curve.make_point_snapshot(updated_points))
+	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+		editor_undo_redo,
+		curve,
+		"Add Easing Curve Point",
+		before,
+		{},
+		_undo_source_property(),
+	)
+
+
+func _remove_point(point: EasingCurvePoint) -> void:
+	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	var updated_points: Array[EasingCurvePoint] = curve.points.duplicate()
+	var point_index := updated_points.find(point)
+	if point_index == -1:
+		return
+	updated_points.remove_at(point_index)
+	curve.set_point_snapshot(curve.make_point_snapshot(updated_points))
+	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+		editor_undo_redo,
+		curve,
+		"Remove Easing Curve Point",
+		before,
+		{},
+		_undo_source_property(),
+	)
+
+
+func _emit_curve_property(property_name: StringName, value: Variant) -> void:
+	if property_name == &"ease_type" and curve.is_selected_preset_modified():
+		return
+	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	curve.set(property_name, value)
+	var action_name := "Change Easing Curve Ease" if property_name == &"ease_type" else "Change Easing Curve Transition"
+	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+		editor_undo_redo,
+		curve,
+		action_name,
+		before,
+		{},
+		_undo_source_property(),
+	)
+
+func _on_reset_selected_preset(object: EasingCurve) -> void:
+	if object == null:
+		return
+	var before := EASING_CURVE_EDITOR_UNDO.capture_state(object)
+	if not object.reset_selected_preset():
+		return
+	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+		editor_undo_redo,
+		object,
+		"Reset Easing Curve Preset",
+		before,
+		{},
+		_undo_source_property(),
+	)
+
+
+func _on_reset_ease(object: EasingCurve) -> void:
+	if object == null or object.ease_type == EasingCurve.EASE.IN:
+		return
+	_emit_curve_property(&"ease_type", EasingCurve.EASE.IN)
+
+
+static func _update_preset_state_ui(
+		object: EasingCurve,
+		ease_control: OptionButton,
+		trans_control: OptionButton,
+		ease_reset_control: Button,
+		reset_control: Button,
+) -> void:
+	if (
+		object == null
+		or not is_instance_valid(ease_control)
+		or not is_instance_valid(trans_control)
+		or not is_instance_valid(ease_reset_control)
+		or not is_instance_valid(reset_control)
+	):
+		return
+
+	var ease_index := ease_control.get_item_index(object.ease_type)
+	if ease_index >= 0:
+		ease_control.select(ease_index)
+	var trans_index := trans_control.get_item_index(object.trans_type)
+	if trans_index >= 0:
+		trans_control.select(trans_index)
+	var modified := object.is_selected_preset_modified()
+	var ease_available := _transition_supports_ease(object.trans_type) and not modified
+	ease_control.disabled = not ease_available
+	_set_preset_reset_button_available(
+		ease_reset_control,
+		ease_available and object.ease_type != EasingCurve.EASE.IN,
+	)
+
+	_set_transition_display(trans_control, object.trans_type, modified)
+	_set_preset_reset_button_available(reset_control, modified)
+
+
+static func _transition_supports_ease(transition: EasingCurve.TRANS) -> bool:
+	return transition not in [
+		EasingCurve.TRANS.CUSTOM,
+		EasingCurve.TRANS.CONSTANT,
+		EasingCurve.TRANS.LINEAR,
+		EasingCurve.TRANS.STEP,
+	]
+
+
+static func _set_transition_display(
+		trans_control: OptionButton,
+		selected_transition: EasingCurve.TRANS,
+		modified: bool,
+) -> void:
+	for i in range(trans_control.item_count):
+		var transition := trans_control.get_item_id(i)
+		var display := String(EasingCurve.TRANS.keys()[transition]).to_lower().capitalize().replace("_", " ")
+		if transition == selected_transition and modified:
+			display += " *"
+		trans_control.set_item_text(i, display)
+
+
+static func _set_preset_reset_button_available(reset_control: Button, available: bool) -> void:
+	var tint := reset_control.self_modulate
+	tint.a = 1.0 if available else 0.0
+	reset_control.self_modulate = tint
+	reset_control.mouse_filter = Control.MOUSE_FILTER_STOP if available else Control.MOUSE_FILTER_IGNORE
+	reset_control.focus_mode = Control.FOCUS_ALL if available else Control.FOCUS_NONE
+
+
+func _disconnect_preset_state_ui(object: EasingCurve, callback: Callable) -> void:
+	if object != null and object.changed.is_connected(callback):
+		object.changed.disconnect(callback)
+
+
+func _undo_source_property() -> EditorProperty:
+	if is_instance_valid(points_editor_property):
+		return points_editor_property
+	if is_instance_valid(curve_editor_property):
+		return curve_editor_property
+	return null
+
+
+static func _create_option(enum_dict: Dictionary, selected_value: int) -> OptionButton:
+	var option := OptionButton.new()
+	_configure_compact_option(option)
 	var keys = enum_dict.keys()
 	for key in keys:
 		var display = key.to_lower().capitalize().replace("_", " ")
 		option.add_item(display, enum_dict[key]) # store enum value as ID
-	#for i in range(options.size()):
-	#option.add_item(options[i])
+	option.select(option.get_item_index(selected_value))
+	return option
+
+
+static func _create_option_label(label_text: String) -> Label:
+	var label := Label.new()
+	label.text = label_text
+	label.tooltip_text = label_text
+	label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	return label
+
+
+static func _create_reserved_reset_button(button_tooltip: String) -> Button:
+	var reset_button := Button.new()
+	reset_button.icon = RELOAD
+	reset_button.flat = true
+	reset_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	reset_button.tooltip_text = button_tooltip
+	_set_preset_reset_button_available(reset_button, false)
+	return reset_button
+
+
+static func _configure_compact_label(label: Label) -> void:
+	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+
+static func _configure_compact_option(option: OptionButton) -> void:
+	option.fit_to_longest_item = false
+	option.clip_text = true
+	option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	option.selected = default_index
-	option_and_reset.add_child(option)
-
-	hbox.add_child(option_and_reset)
-
-	# Show reset if value != default
-	option.item_selected.connect(
-		func(idx):
-			reset_btn.visible = (option.selected != default_index)
-			if on_change != null:
-				if on_change.get_argument_count() == 0:
-					on_change.call()
-				else:
-					on_change.call(idx)
-	)
-
-	# Reset button pressed
-	reset_btn.pressed.connect(
-		func():
-			option.selected = default_index
-			reset_btn.visible = false
-			if on_change != null:
-				if on_change.get_argument_count() == 0:
-					on_change.call()
-				else:
-					on_change.call(default_index)
-	)
-
-	return { "container": hbox, "option": option, "reset_btn": reset_btn }
 
 
-func _update_ease_disabled(_idx):
-	# Disable Ease for modes that do not use it
-	ease_option.disabled = (trans_option.selected in [
-			EasingCurve.TRANS.CUSTOM,
-			EasingCurve.TRANS.CONSTANT,
-			EasingCurve.TRANS.LINEAR,
-			EasingCurve.TRANS.STEP,
-		] )
+# Separation of dropdown elements in graph (Ease, Trans)
+static func _compact_separation() -> int:
+	if Engine.is_editor_hint():
+		return maxi(1, roundi(2.0 * EditorInterface.get_editor_scale()))
+	return 2
+
+# Separation of points in points list
+static func _point_separation() -> int:
+	if Engine.is_editor_hint():
+		return maxi(2, roundi(4.0 * EditorInterface.get_editor_scale()))
+	return 4
