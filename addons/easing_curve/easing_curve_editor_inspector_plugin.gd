@@ -25,15 +25,7 @@ const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easi
 ## Vector2 slider step
 const SLIDER_INPUT_STEP = 0.001
 const DRAGGING_META := &"_easing_curve_dragging"
-const PARAMETER_DEFAULTS := {
-	&"num_points": 3,
-	&"randomness": 3.5,
-	&"steps": 4,
-	&"y_offset": 0.0,
-	&"power": 2.0,
-	&"amplitude": 1.0,
-	&"period": 0.3,
-}
+# copy functions
 const POINT_MENU_COPY_VALUE := 0
 const POINT_MENU_PASTE_VALUE := 1
 const POINT_MENU_COPY_PATH := 2
@@ -256,20 +248,40 @@ class DeferredParameterEditorProperty:
 		_update_reset_button(property_value)
 		_queue_curve_redraw()
 
+
 	func _on_reset_pressed() -> void:
 		var object := get_edited_object() as EasingCurve
-		if object == null or not PARAMETER_DEFAULTS.has(property_name):
+		if (
+			object == null
+			or not EasingCurve.has_function_parameter_default(property_name)
+		):
 			return
-		var default_value: Variant = PARAMETER_DEFAULTS[property_name]
-		_commit_value(object, default_value)
+
+		var default_value := EasingCurve.get_function_parameter_default(
+			property_name
+		)
+
+		_commit_value(
+			object,
+			default_value,
+			"Reset Easing Curve %s" % String(property_name).capitalize(),
+		)
+
 		input.set_value_no_signal(float(default_value))
 		_update_reset_button(default_value)
 		_queue_curve_redraw()
 
+
 	func _update_reset_button(value: Variant) -> void:
-		if reset_button == null or not PARAMETER_DEFAULTS.has(property_name):
+		if (
+			reset_button == null
+			or not EasingCurve.has_function_parameter_default(property_name)
+		):
 			return
-		reset_button.visible = value != PARAMETER_DEFAULTS[property_name]
+		var default_value: Variant = (
+			EasingCurve.get_function_parameter_default(property_name)
+		)
+		reset_button.visible = value != default_value
 
 	func _on_tree_exiting() -> void:
 		_commit_drag()
@@ -297,23 +309,40 @@ class DeferredParameterEditorProperty:
 			)
 		_queue_curve_redraw()
 
-	func _commit_value(object: EasingCurve, value: Variant) -> void:
+
+	func _commit_value(
+		object: EasingCurve,
+		value: Variant,
+		action_name := "",
+	) -> void:
 		var original_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
+
 		object._begin_editor_parameter_edit()
 		object.set(property_name, value)
+
 		var final_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
+
 		if final_snapshot == original_snapshot:
 			object._cancel_editor_parameter_edit()
 			return
+
 		object._finish_editor_parameter_edit()
+
+		if action_name.is_empty():
+			action_name = (
+				"Change Easing Curve %s"
+				% String(property_name).capitalize()
+			)
+
 		EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 			undo_redo,
 			object,
-			"Change Easing Curve %s" % String(property_name).capitalize(),
+			action_name,
 			original_snapshot,
 			final_snapshot,
 			self,
 		)
+
 
 	func _queue_curve_redraw() -> void:
 		if is_instance_valid(curve_editor):
@@ -913,14 +942,19 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 	if object is EasingCurve and name == EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY:
 		return true
 	if object is EasingCurve and name == EasingCurve.FUNCTION_SNAPSHOT_PROPERTY:
-		if object.trans_type in [EasingCurve.TRANS.JITTER, EasingCurve.TRANS.IRREGULAR]:
+		if EasingCurve.uses_generated_function_data(object.trans_type):
 			var property_editor := GenerateFunctionEditorProperty.new()
 			property_editor.setup(easing_curve_editor, editor_undo_redo)
 			add_property_editor(name, property_editor)
 		return true
 	if object is EasingCurve and name == "generate_tool_button":
 		return true
-	if object is EasingCurve and StringName(name) in EasingCurve.DEFERRED_PARAMETER_PROPERTIES:
+	if (
+		object is EasingCurve
+		and EasingCurve.is_deferred_function_parameter(
+			StringName(name)
+		)
+	):
 		_instantiating_default_property = true
 		var native_editor := EditorInspector.instantiate_property_editor(
 			object,
@@ -1599,7 +1633,11 @@ func _remove_point(point: EasingCurvePoint) -> void:
 
 
 func _emit_curve_property(property_name: StringName, value: Variant) -> void:
-	if property_name == &"ease_type" and curve.is_selected_preset_modified():
+	if (
+		property_name == &"ease_type"
+		and curve.curve_mode == EasingCurve.CurveMode.BEZIER
+		and curve.is_selected_preset_modified()
+	):
 		return
 	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	curve.set(property_name, value)
@@ -1658,7 +1696,13 @@ static func _update_preset_state_ui(
 	if trans_index >= 0:
 		trans_control.select(trans_index)
 	var modified := object.is_selected_preset_modified()
-	var ease_available := _transition_supports_ease(object.trans_type) and not modified
+	var ease_available := (
+		_transition_supports_ease(object.trans_type)
+		and (
+			object.curve_mode == EasingCurve.CurveMode.FUNCTION
+			or not modified
+		)
+	)
 	ease_control.disabled = not ease_available
 	_set_preset_reset_button_available(
 		ease_reset_control,
@@ -1675,6 +1719,7 @@ static func _transition_supports_ease(transition: EasingCurve.TRANS) -> bool:
 		EasingCurve.TRANS.CONSTANT,
 		EasingCurve.TRANS.LINEAR,
 		EasingCurve.TRANS.STEP,
+		EasingCurve.TRANS.CSS_LINEAR,
 	]
 
 

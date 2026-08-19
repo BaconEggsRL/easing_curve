@@ -1,7 +1,29 @@
 [gd_scene format=3 uid="uid://qviblxegxd23"]
 
 [ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/test_scene/test.gd" id="1_37kl0"]
-[ext_resource type="Resource" uid="uid://cc3fgm2eye62k" path="res://addons/easing_curve/presets/triangle_linear.tres" id="2_6iudh"]
+[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="2_6iudh"]
+
+[sub_resource type="Resource" id="Resource_6wlcs"]
+script = ExtResource("2_6iudh")
+_css_linear_points = PackedVector2Array(0, 0, 1, 1)
+_point_count = 2
+_point_0/position = Vector2(0, 0)
+_point_0/left_control_point = Vector2(0, 0)
+_point_0/right_control_point = Vector2(0, 0)
+_point_0/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_1/position = Vector2(1, 1)
+_point_1/left_control_point = Vector2(1, 1)
+_point_1/right_control_point = Vector2(1, 1)
+_point_1/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+metadata/_custom_type_script = "uid://c10cjby72qngf"
 
 [node name="TestScene" type="Control" unique_id=198225181]
 layout_mode = 3
@@ -10,8 +32,9 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 script = ExtResource("1_37kl0")
-easing_curve = ExtResource("2_6iudh")
+easing_curve = SubResource("Resource_6wlcs")
 
 [node name="NodeContainer" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)
@@ -65,15 +88,34 @@ polygon = PackedVector2Array(-18, -18, 18, -18, 18, 18, -18, 18)
 unique_name_in_owner = true
 position = Vector2(960, 0)
 
-[node name="RestartButton" type="Button" parent="." unique_id=2072471650]
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=2041396846]
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -128.0
-offset_bottom = 128.0
+offset_left = -75.0
+offset_bottom = 40.0
 grow_horizontal = 0
+
+[node name="RestartButton" type="Button" parent="VBoxContainer" unique_id=2072471650]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 128)
+layout_mode = 2
 text = "RESTART"
+icon_alignment = 1
+expand_icon = true
+
+[node name="ReverseCheckButton" type="CheckButton" parent="VBoxContainer" unique_id=1841159960]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Play Reverse"
+icon_alignment = 1
+expand_icon = true
+
+[node name="MatchTweenCheckButton" type="CheckButton" parent="VBoxContainer" unique_id=341386837]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Match Tween"
 icon_alignment = 1
 expand_icon = true
 
@@ -103,4 +145,65 @@ offset_top = -23.0
 offset_right = 40.0
 grow_vertical = 0
 
-[connection signal="pressed" from="RestartButton" to="." method="_on_restart_pressed"]
+[node name="Settings" type="Control" parent="." unique_id=1641191891]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 126.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TweenSettings" type="GridContainer" parent="Settings" unique_id=603972351]
+layout_mode = 0
+offset_top = 138.0
+offset_right = 1280.0
+offset_bottom = 578.0
+columns = 2
+
+[node name="EaseLabel" type="Label" parent="Settings/TweenSettings" unique_id=1478574143]
+layout_mode = 2
+text = "Ease"
+
+[node name="TweenEaseDropdown" type="OptionButton" parent="Settings/TweenSettings" unique_id=443236130]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="TransLabel" type="Label" parent="Settings/TweenSettings" unique_id=217824755]
+layout_mode = 2
+text = "Trans"
+
+[node name="TweenTransDropdown" type="OptionButton" parent="Settings/TweenSettings" unique_id=370905690]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="CurveSettings" type="GridContainer" parent="Settings" unique_id=1359965359]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 220.0
+grow_horizontal = 2
+grow_vertical = 2
+columns = 2
+
+[node name="EaseLabel" type="Label" parent="Settings/CurveSettings" unique_id=1343767830]
+layout_mode = 2
+text = "Ease"
+
+[node name="CurveEaseDropdown" type="OptionButton" parent="Settings/CurveSettings" unique_id=1184015774]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="TransLabel" type="Label" parent="Settings/CurveSettings" unique_id=1608693932]
+layout_mode = 2
+text = "Trans"
+
+[node name="CurveTransDropdown" type="OptionButton" parent="Settings/CurveSettings" unique_id=1373449032]
+unique_name_in_owner = true
+layout_mode = 2
+
+[connection signal="pressed" from="VBoxContainer/RestartButton" to="." method="_on_restart_pressed"]
+[connection signal="pressed" from="VBoxContainer/ReverseCheckButton" to="." method="_on_restart_pressed"]
+[connection signal="pressed" from="VBoxContainer/MatchTweenCheckButton" to="." method="_on_restart_pressed"]

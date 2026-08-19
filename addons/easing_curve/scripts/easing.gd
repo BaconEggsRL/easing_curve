@@ -309,9 +309,32 @@ class Cubic:
 		t = t / d
 		return c * t * t * t + b;
 
+	static func easeInEx(t, b, c, d, frequency, decay):
+		return c - easeOutEx(
+			d - t,
+			0,
+			c,
+			d,
+			frequency,
+			decay
+		) + b
+
 	static func easeOut(t, b, c, d):
 		t = t / d - 1
 		return c * (t * t * t + 1) + b
+
+	static func easeOutEx(t, b, c, d, frequency, decay):
+		var t_norm = t / d
+		var s = 1.0 - t_norm
+		var t_calc = (
+			sin(
+				t_norm * PI *
+				(0.2 + frequency * t_norm * t_norm * t_norm)
+			)
+			* pow(s, decay)
+			+ t_norm
+		) * (1.0 + (1.2 * s))
+		return c * t_calc + b
 
 	static func easeInOut(t, b, c, d):
 		t = (t / (d / 2))
@@ -321,11 +344,51 @@ class Cubic:
 			t = t - 2
 			return c / 2 * (t * t * t + 2) + b
 
+	static func easeInOutEx(t, b, c, d, frequency, decay):
+		if t < d / 2:
+			return easeInEx(
+				t * 2,
+				b,
+				c / 2,
+				d,
+				frequency,
+				decay
+			)
+		var h = c / 2
+		return easeOutEx(
+			t * 2 - d,
+			b + h,
+			h,
+			d,
+			frequency,
+			decay
+		)
+
 	static func easeOutIn(t, b, c, d):
 		if (t < d / 2):
 			return easeOut(t * 2, b, c / 2, d)
 		var h = c / 2
 		return easeIn(t * 2 - d, b + h, h, d)
+
+	static func easeOutInEx(t, b, c, d, frequency, decay):
+		if t < d / 2:
+			return easeOutEx(
+				t * 2,
+				b,
+				c / 2,
+				d,
+				frequency,
+				decay
+			)
+		var h = c / 2
+		return easeInEx(
+			t * 2 - d,
+			b + h,
+			h,
+			d,
+			frequency,
+			decay
+		)
 
 
 class Circ:
@@ -418,25 +481,567 @@ class Back:
 
 class Spring:
 	static func easeIn(t, b, c, d):
-		return c - Spring.easeOut(d - t, 0, c, d) + b
+		return easeInEx(t, b, c, d, 2.5, 2.2)
 
 	static func easeOut(t, b, c, d):
-		var t_norm = t / d
-		var s = 1.0 - t_norm
-		var t_calc = (sin(t_norm * PI * (0.2 + 2.5 * t_norm * t_norm * t_norm)) * pow(s, 2.2) + t_norm) * (1.0 + (1.2 * s))
-		return c * t_calc + b
+		return easeOutEx(t, b, c, d, 2.5, 2.2)
 
 	static func easeInOut(t, b, c, d):
-		if (t < d / 2):
-			return easeIn(t * 2, b, c / 2, d)
-		var h = c / 2
-		return easeOut(t * 2 - d, b + h, h, d)
+		return easeInOutEx(t, b, c, d, 2.5, 2.2)
 
 	static func easeOutIn(t, b, c, d):
-		if (t < d / 2):
-			return easeOut(t * 2, b, c / 2, d)
+		return easeOutInEx(t, b, c, d, 2.5, 2.2)
+
+
+	static func easeInEx(t, b, c, d, frequency, decay):
+		return c - easeOutEx(
+			d - t,
+			0,
+			c,
+			d,
+			frequency,
+			decay
+		) + b
+
+
+	static func easeOutEx(t, b, c, d, frequency, decay):
+		var t_norm = t / d
+		var s = 1.0 - t_norm
+
+		var t_calc = (
+			sin(
+				t_norm
+				* PI
+				* (
+					0.2
+					+ frequency
+					* t_norm
+					* t_norm
+					* t_norm
+				)
+			)
+			* pow(s, decay)
+			+ t_norm
+		) * (1.0 + (1.2 * s))
+
+		return c * t_calc + b
+
+
+	static func easeInOutEx(t, b, c, d, frequency, decay):
+		if t < d / 2:
+			return easeInEx(
+				t * 2,
+				b,
+				c / 2,
+				d,
+				frequency,
+				decay
+			)
+
 		var h = c / 2
-		return easeIn(t * 2 - d, b + h, h, d)
+
+		return easeOutEx(
+			t * 2 - d,
+			b + h,
+			h,
+			d,
+			frequency,
+			decay
+		)
+
+
+	static func easeOutInEx(t, b, c, d, frequency, decay):
+		if t < d / 2:
+			return easeOutEx(
+				t * 2,
+				b,
+				c / 2,
+				d,
+				frequency,
+				decay
+			)
+
+		var h = c / 2
+
+		return easeInEx(
+			t * 2 - d,
+			b + h,
+			h,
+			d,
+			frequency,
+			decay
+		)
+
+
+class PhysicsSpring:
+	static func easeIn(t, b, c, d):
+		return easeInEx(
+			t,
+			b,
+			c,
+			d,
+			100.0, # stiffness
+			10.0,  # damping
+			1.0,   # mass
+			0.0,   # velocity
+		)
+
+
+	static func easeOut(t, b, c, d):
+		return easeOutEx(
+			t,
+			b,
+			c,
+			d,
+			100.0, # stiffness
+			10.0,  # damping
+			1.0,   # mass
+			0.0,   # velocity
+		)
+
+
+	static func easeInOut(t, b, c, d):
+		return easeInOutEx(
+			t,
+			b,
+			c,
+			d,
+			100.0,
+			10.0,
+			1.0,
+			0.0,
+		)
+
+
+	static func easeOutIn(t, b, c, d):
+		return easeOutInEx(
+			t,
+			b,
+			c,
+			d,
+			100.0,
+			10.0,
+			1.0,
+			0.0,
+		)
+
+
+	static func easeOutEx(
+		t,
+		b,
+		c,
+		d,
+		stiffness,
+		damping,
+		mass,
+		velocity,
+	):
+		if d <= 0.0:
+			return b + c
+
+		var time = t / d
+
+		if time <= 0.0:
+			return b
+		if time >= 1.0:
+			return b + c
+
+		stiffness = maxf(float(stiffness), 0.000001)
+		damping = maxf(float(damping), 0.0)
+		mass = maxf(float(mass), 0.000001)
+		velocity = float(velocity)
+
+		var response := _spring_response(
+			time,
+			stiffness,
+			damping,
+			mass,
+			velocity,
+		)
+
+		return b + c * response
+
+
+	static func easeInEx(
+		t,
+		b,
+		c,
+		d,
+		stiffness,
+		damping,
+		mass,
+		velocity,
+	):
+		return c - easeOutEx(
+			d - t,
+			0.0,
+			c,
+			d,
+			stiffness,
+			damping,
+			mass,
+			velocity,
+		) + b
+
+
+	static func easeInOutEx(
+		t,
+		b,
+		c,
+		d,
+		stiffness,
+		damping,
+		mass,
+		velocity,
+	):
+		if t < d / 2.0:
+			return easeInEx(
+				t * 2.0,
+				b,
+				c / 2.0,
+				d,
+				stiffness,
+				damping,
+				mass,
+				velocity,
+			)
+
+		var h = c / 2.0
+
+		return easeOutEx(
+			t * 2.0 - d,
+			b + h,
+			h,
+			d,
+			stiffness,
+			damping,
+			mass,
+			velocity,
+		)
+
+
+	static func easeOutInEx(
+		t,
+		b,
+		c,
+		d,
+		stiffness,
+		damping,
+		mass,
+		velocity,
+	):
+		if t < d / 2.0:
+			return easeOutEx(
+				t * 2.0,
+				b,
+				c / 2.0,
+				d,
+				stiffness,
+				damping,
+				mass,
+				velocity,
+			)
+
+		var h = c / 2.0
+
+		return easeInEx(
+			t * 2.0 - d,
+			b + h,
+			h,
+			d,
+			stiffness,
+			damping,
+			mass,
+			velocity,
+		)
+
+
+	static func _spring_response(
+		time: float,
+		stiffness: float,
+		damping: float,
+		mass: float,
+		velocity: float,
+	) -> float:
+		var natural_frequency := sqrt(stiffness / mass)
+		var damping_ratio := damping / (
+			2.0 * sqrt(stiffness * mass)
+		)
+
+		# We solve displacement from the target.
+		# Initial displacement is -1:
+		#   position = 0
+		#   target = 1
+		var initial_displacement := -1.0
+
+		var displacement: float
+
+		if damping_ratio < 1.0 - 0.000001:
+			# Underdamped: oscillates around the target.
+			var damped_frequency := (
+				natural_frequency
+				* sqrt(1.0 - damping_ratio * damping_ratio)
+			)
+
+			var a := initial_displacement
+
+			var b := (
+				velocity
+				+ damping_ratio
+				* natural_frequency
+				* initial_displacement
+			) / damped_frequency
+
+			displacement = (
+				exp(
+					-damping_ratio
+					* natural_frequency
+					* time
+				)
+				* (
+					a * cos(damped_frequency * time)
+					+ b * sin(damped_frequency * time)
+				)
+			)
+
+		elif damping_ratio > 1.0 + 0.000001:
+			# Overdamped: no oscillation.
+			var root := sqrt(
+				damping_ratio * damping_ratio - 1.0
+			)
+
+			var r1 := (
+				-natural_frequency
+				* (damping_ratio - root)
+			)
+
+			var r2 := (
+				-natural_frequency
+				* (damping_ratio + root)
+			)
+
+			var c1 := (
+				velocity
+				- r2 * initial_displacement
+			) / (r1 - r2)
+
+			var c2 := initial_displacement - c1
+
+			displacement = (
+				c1 * exp(r1 * time)
+				+ c2 * exp(r2 * time)
+			)
+
+		else:
+			# Critically damped: fastest return without oscillation.
+			var a := initial_displacement
+
+			var b := (
+				velocity
+				+ natural_frequency
+				* initial_displacement
+			)
+
+			displacement = (
+				(a + b * time)
+				* exp(-natural_frequency * time)
+			)
+
+		return 1.0 + displacement
+
+
+
+
+
+class CSSLinear:
+	static func easeInEx(t, b, c, d, points):
+		if points.is_empty():
+			return b
+
+		var x = t / d
+		var y := sample(x, points)
+
+		return b + c * y
+
+
+	static func easeOutEx(t, b, c, d, points):
+		return easeInEx(t, b, c, d, points)
+
+
+	static func easeInOutEx(t, b, c, d, points):
+		return easeInEx(t, b, c, d, points)
+
+
+	static func easeOutInEx(t, b, c, d, points):
+		return easeInEx(t, b, c, d, points)
+
+
+	static func sample(
+		x: float,
+		points: PackedVector2Array,
+	) -> float:
+		if points.size() == 1:
+			return points[0].y
+
+		# CSS favors the last point when multiple points have
+		# the same input position.
+		for i in range(points.size() - 1, -1, -1):
+			if is_equal_approx(x, points[i].x):
+				return points[i].y
+
+		var a: Vector2
+		var b: Vector2
+
+		if x < points[0].x:
+			a = points[0]
+			b = points[1]
+
+			if is_equal_approx(a.x, b.x):
+				return a.y
+
+		elif x > points[-1].x:
+			a = points[-2]
+			b = points[-1]
+
+			if is_equal_approx(a.x, b.x):
+				return b.y
+
+		else:
+			for i in range(points.size() - 1):
+				if points[i].x < x and x < points[i + 1].x:
+					a = points[i]
+					b = points[i + 1]
+					break
+
+		var weight := (x - a.x) / (b.x - a.x)
+		return lerpf(a.y, b.y, weight)
+
+
+	static func parse(source: String) -> PackedVector2Array:
+		var text := source.strip_edges()
+
+		if not text.begins_with("linear(") or not text.ends_with(")"):
+			return PackedVector2Array()
+
+		text = text.substr(7, text.length() - 8)
+
+		var entries := text.split(",", false)
+		if entries.size() < 2:
+			return PackedVector2Array()
+
+		var outputs: Array[float] = []
+		var positions: Array = []
+
+		for entry in entries:
+			var parts := entry.strip_edges().split(" ", false)
+
+			if parts.is_empty():
+				return PackedVector2Array()
+
+			if not parts[0].is_valid_float():
+				return PackedVector2Array()
+
+			var output := float(parts[0])
+			var entry_positions: Array[float] = []
+
+			for i in range(1, parts.size()):
+				var part := parts[i]
+
+				if not part.ends_with("%"):
+					return PackedVector2Array()
+
+				var number := part.trim_suffix("%")
+
+				if not number.is_valid_float():
+					return PackedVector2Array()
+
+				entry_positions.append(float(number) / 100.0)
+
+			if entry_positions.size() > 2:
+				return PackedVector2Array()
+
+			if entry_positions.size() == 2:
+				outputs.append(output)
+				positions.append(entry_positions[0])
+
+				outputs.append(output)
+				positions.append(entry_positions[1])
+			else:
+				outputs.append(output)
+				positions.append(
+					entry_positions[0]
+					if entry_positions.size() == 1
+					else null
+				)
+
+		_resolve_positions(positions)
+
+		var points := PackedVector2Array()
+
+		for i in outputs.size():
+			points.append(
+				Vector2(
+					float(positions[i]),
+					outputs[i],
+				)
+			)
+
+		return points
+
+
+	static func _resolve_positions(positions: Array) -> void:
+		if positions.is_empty():
+			return
+
+		# First/last unspecified positions become 0%/100%.
+		if positions[0] == null:
+			positions[0] = 0.0
+
+		if positions[-1] == null:
+			positions[-1] = 1.0
+
+		# CSS input positions cannot move backwards.
+		var last_explicit := float(positions[0])
+
+		for i in range(1, positions.size()):
+			if positions[i] != null:
+				positions[i] = maxf(
+					float(positions[i]),
+					last_explicit,
+				)
+				last_explicit = float(positions[i])
+
+		# Evenly distribute each run of omitted positions.
+		var start := 0
+
+		while start < positions.size() - 1:
+			var end := start + 1
+
+			while end < positions.size() and positions[end] == null:
+				end += 1
+
+			if end >= positions.size():
+				break
+
+			var missing := end - start - 1
+
+			if missing > 0:
+				var x0 := float(positions[start])
+				var x1 := float(positions[end])
+
+				for j in range(1, missing + 1):
+					positions[start + j] = lerpf(
+						x0,
+						x1,
+						float(j) / float(missing + 1),
+					)
+
+			start = end
+
+
+
+
+
 
 
 class Power:

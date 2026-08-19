@@ -44,5 +44,9 @@ func _disable_plugin() -> void:
 func _on_resource_saved(resource: Resource) -> void:
 	if resource is not EasingCurve:
 		return
-	if resource.trans_type != EasingCurve.TRANS.CUSTOM:
+
+	if (
+		resource.curve_mode == EasingCurve.CurveMode.BEZIER
+		and resource.trans_type != EasingCurve.TRANS.CUSTOM
+	):
 		resource.trans_type = EasingCurve.TRANS.CUSTOM

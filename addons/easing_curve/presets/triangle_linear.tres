@@ -24,7 +24,7 @@ _point_1/locked = Dictionary[String, bool]({
 })
 _point_2/position = Vector2(1, 0)
 _point_2/left_control_point = Vector2(1, 0)
-_point_2/right_control_point = Vector2(1, 0)
+_point_2/right_control_point = Vector2(1.1, 0)
 _point_2/locked = Dictionary[String, bool]({
 "left_control_point": false,
 "position": false,

@@ -24,6 +24,7 @@ _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/size/always_on_top=true
+window/stretch/mode="canvas_items"
 
 [editor_plugins]
 

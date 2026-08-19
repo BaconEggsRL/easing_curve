@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EasingCurve" format=3 uid="uid://dcoivx3d6wmpq"]
+
+[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="1_qn4uq"]
+
+[resource]
+script = ExtResource("1_qn4uq")
+ease_type = 2
+trans_type = 17
+curve_mode = 1
+function_callable = Callable()
+stiffness = 1000.0
+damping = 4.5
+mass = 1.1
+velocity = 30.0
+_css_linear_points = PackedVector2Array(0, 0, 1, 1)
+_point_count = 0
+metadata/_custom_type_script = "uid://c10cjby72qngf"

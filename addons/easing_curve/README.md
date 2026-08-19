@@ -1,4 +1,4 @@
-# <img src="https://raw.githubusercontent.com/BaconEggsRL/easing_curve/refs/heads/master/media/Curve.svg" width="64" height="64"> Easing Curve
+# <img src="https://raw.githubusercontent.com/BaconEggsRL/easing_curve/refs/heads/master/media/icon_32x32.png"> Easing Curve
 GDScript curve editor for easing functions.
 
 Designed for parity with Godot's Tween system and easing equations.
@@ -11,7 +11,7 @@ Designed for parity with Godot's Tween system and easing equations.
 
 <!--- ![easing_curve.png](https://github.com/BaconEggsRL/easing_curve/blob/master/media/easing_curve.png) --->
 
-![preset_example.gif](https://github.com/BaconEggsRL/easing_curve/blob/master/media/preset_example.gif)
+![preset_example.gif](https://raw.githubusercontent.com/BaconEggsRL/easing_curve/refs/heads/master/media/preset_example.gif)
 
 **&nbsp;**
 
@@ -34,9 +34,8 @@ Designed for parity with Godot's Tween system and easing equations.
 
 **&nbsp;**
 
-<ul>
 
-### Select a Curve Preset:
+Select a Curve Preset:
 ---
 
 * Select the **Ease** and **Trans** option buttons to choose from a variety of pre-made curve presets.
@@ -52,7 +51,7 @@ Designed for parity with Godot's Tween system and easing equations.
 
 **&nbsp;**
 
-### Adjust your curve using the Curve Editor:
+Adjust your curve using the Curve Editor:
 ---
 
 Bézier-backed presets, including multi-segment presets, expose all points and handles in the curve editor.
@@ -81,14 +80,17 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 **&nbsp;**
 
-</ul>
-
 ### Save your custom EasingCurve:
 
 * The curve editor allows you to start from a basic preset and modify to suit your needs.
 * When you're happy with your custom curve, you can save the resource to use wherever you want.
 * Use the "Make Unique" option on saved resources to avoid modifying the original resource.
 * Refer to the presets folder for some examples and try them out in the provided test scene.
+
+### Resource Autosaving
+
+* Godot automatically saves changes made to saved resources. This is the same behavior as the built-in `Curve` resource.
+* If you edit an Easing Curve that has been saved as a resource, those changes will persist. Only modify a saved resource when you intend to keep the changes; otherwise, you may need to undo them.
 
 ### Runtime updates:
 

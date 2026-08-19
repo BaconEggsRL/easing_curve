@@ -47,9 +47,85 @@ Remove-Item $OutputZip -Force -ErrorAction SilentlyContinue
 # addons/
 # └── easing_curve/
 #
-Compress-Archive `
-    -Path "$BuildPath\addons" `
-    -DestinationPath $OutputZip
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+# Resolve staging path to an absolute path.
+$BuildPathFull = (Resolve-Path $BuildPath).Path.TrimEnd('\')
+
+$Zip = [System.IO.Compression.ZipFile]::Open(
+    $OutputZip,
+    [System.IO.Compression.ZipArchiveMode]::Create
+)
+
+try {
+    Get-ChildItem "$BuildPathFull\addons" -File -Recurse | ForEach-Object {
+        # Make the archive path relative to _staging.
+        $RelativePath = $_.FullName.Substring(
+            $BuildPathFull.Length + 1
+        )
+
+        # ZIP paths must use forward slashes for macOS/Linux compatibility.
+        $EntryPath = $RelativePath.Replace('\', '/')
+
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $Zip,
+            $_.FullName,
+            $EntryPath,
+            [System.IO.Compression.CompressionLevel]::Optimal
+        ) | Out-Null
+    }
+}
+finally {
+    $Zip.Dispose()
+}
+
+# Verify ZIP structure and cross-platform paths.
+Write-Host ""
+Write-Host "Verifying ZIP..."
+
+$VerifyZip = [System.IO.Compression.ZipFile]::OpenRead(
+    (Resolve-Path $OutputZip).Path
+)
+
+$VerificationFailed = $false
+
+try {
+    foreach ($Entry in $VerifyZip.Entries) {
+        $EntryPath = $Entry.FullName
+
+        # ZIP entries must use forward slashes, never Windows backslashes.
+        if ($EntryPath.Contains('\')) {
+            Write-Host "  [FAIL] Windows-style path: $EntryPath" -ForegroundColor Red
+            $VerificationFailed = $true
+            continue
+        }
+
+        # Every file must be under addons/easing_curve/.
+        if (-not $EntryPath.StartsWith("addons/easing_curve/")) {
+            Write-Host "  [FAIL] Invalid root path: $EntryPath" -ForegroundColor Red
+            $VerificationFailed = $true
+            continue
+        }
+
+        Write-Host "  [OK]   $EntryPath" -ForegroundColor DarkGray
+    }
+}
+finally {
+    $VerifyZip.Dispose()
+}
+
+Write-Host ""
+
+if ($VerificationFailed) {
+    throw "ZIP verification FAILED. Do not upload this archive."
+}
+
+Write-Host "ZIP verification PASSED." -ForegroundColor Green
+Write-Host "  [OK] Root is addons/easing_curve/" -ForegroundColor Green
+Write-Host "  [OK] All ZIP paths use forward slashes (/)" -ForegroundColor Green
+Write-Host "  [OK] No Windows-style backslashes found" -ForegroundColor Green
+Write-Host "  [OK] Archive is safe for Windows, macOS, and Linux" -ForegroundColor Green
 
 # Clean staging directory.
 Remove-Item $BuildPath -Recurse -Force

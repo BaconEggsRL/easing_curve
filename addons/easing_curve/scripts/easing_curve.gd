@@ -33,7 +33,115 @@ enum TRANS {
 	ELASTIC,
 	BOUNCE,
 	SPRING,
+	PHYSICS_SPRING,
+	CSS_LINEAR,
 	SINE,
+}
+
+# List of functions (non-bezier presets)
+const FUNCTION_TRANSITIONS := [
+	TRANS.JITTER,
+	TRANS.IRREGULAR,
+	TRANS.STEP,
+	TRANS.POWER,
+	TRANS.ELASTIC,
+	TRANS.BOUNCE,
+	TRANS.SPRING,
+	TRANS.PHYSICS_SPRING,
+	TRANS.CSS_LINEAR,
+]
+
+# Normal function implementations.
+const FUNCTION_CLASSES := {
+	TRANS.STEP: {
+		"class": EASING_LIBRARY.Step,
+		"extended": false,
+	},
+	TRANS.POWER: {
+		"class": EASING_LIBRARY.Power,
+		"extended": false,
+	},
+	TRANS.ELASTIC: {
+		"class": EASING_LIBRARY.Elastic,
+		"extended": true,
+	},
+	TRANS.BOUNCE: {
+		"class": EASING_LIBRARY.Bounce,
+		"extended": false,
+	},
+	TRANS.SPRING: {
+		"class": EASING_LIBRARY.Spring,
+		"extended": true,
+	},
+	TRANS.PHYSICS_SPRING: {
+		"class": EASING_LIBRARY.PhysicsSpring,
+		"extended": true,
+	},
+	TRANS.CSS_LINEAR: {
+		"class": EASING_LIBRARY.CSSLinear,
+		"extended": true,
+	},
+}
+
+
+# Editable values passed to function implementations.
+# These are exported properties; see "FUNCTION PARAMETERS" section below.
+const FUNCTION_PARAMETERS := {
+	TRANS.JITTER: [
+		&"num_points",
+		&"randomness",
+	],
+	TRANS.IRREGULAR: [
+		&"num_points",
+		&"randomness",
+	],
+	TRANS.STEP: [
+		&"steps",
+		&"from_start",
+		&"y_offset",
+	],
+	TRANS.POWER: [
+		&"power",
+	],
+	TRANS.ELASTIC: [
+		&"amplitude",
+		&"period",
+	],
+	TRANS.SPRING: [
+		&"frequency",
+		&"decay",
+	],
+	TRANS.PHYSICS_SPRING: [
+		&"stiffness",
+		&"damping",
+		&"mass",
+		&"velocity",
+	],
+}
+
+# Non-deferred parameters (no slider--bools for example.)
+const NON_DEFERRED_FUNCTION_PARAMETERS := [
+	&"from_start",
+]
+
+# Functions that use generated internal data instead of directly
+# passing FUNCTION_PARAMETERS to their Callable.
+const GENERATED_FUNCTION_TRANSITIONS := [
+	TRANS.JITTER,
+	TRANS.IRREGULAR,
+]
+
+# Extra inspector controls associated with the function
+const FUNCTION_EDITOR_PROPERTIES := {
+	TRANS.JITTER: [
+		&"generate_tool_button",
+	],
+	TRANS.IRREGULAR: [
+		&"generate_tool_button",
+	],
+	TRANS.CSS_LINEAR: [
+		&"css_linear",
+	],
 }
 
 const ZOOM_MIN := 0.1
@@ -56,15 +164,6 @@ const POINT_PROPERTIES: Array[StringName] = [
 	&"left_control_point",
 	&"right_control_point",
 	&"locked",
-]
-const DEFERRED_PARAMETER_PROPERTIES: Array[StringName] = [
-	&"num_points",
-	&"randomness",
-	&"steps",
-	&"y_offset",
-	&"power",
-	&"amplitude",
-	&"period",
 ]
 
 ## Zoom slider variables
@@ -98,7 +197,10 @@ var ease_type: EASE = EASE.IN:
 		ease_type = value
 		if _applying_editor_state_snapshot:
 			return
-		_update_preset()
+		if curve_mode == CurveMode.FUNCTION:
+			_init_function()
+		else:
+			_update_preset()
 		if _change_revision == revision_before:
 			_notify_curve_changed(false, true)
 ## Option button to select Trans type
@@ -164,10 +266,7 @@ var points: Array[EasingCurvePoint]:
 		if num_points == value:
 			return
 		num_points = value
-		if _applying_function_snapshot:
-			_notify_parameter_changed()
-		else:
-			_generate_irregular()
+		_update_irregular_parameter()
 ## Controls the amplitude of random variations.
 ## Higher values create more dramatic jumps between steps (default: 1).
 @export_range(0.0, 4.0, 0.1) var randomness: float = 3.5:
@@ -175,10 +274,7 @@ var points: Array[EasingCurvePoint]:
 		if randomness == value:
 			return
 		randomness = value
-		if _applying_function_snapshot:
-			_notify_parameter_changed()
-		else:
-			_generate_irregular()
+		_update_irregular_parameter()
 ## Used to regenerate the random points
 @export_tool_button("Generate", "Callable")
 var generate_tool_button = generate_irregular
@@ -191,7 +287,6 @@ var _irregular_points_x: Array[float] = []:
 			return
 		_irregular_points_x = value
 		_notify_parameter_changed()
-		# print(_irregular_points_x)
 
 ## Y positions of irregular points
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
@@ -201,7 +296,6 @@ var _irregular_points_y: Array[float] = []:
 			return
 		_irregular_points_y = value
 		_notify_parameter_changed()
-		# print("_irregular_points_y: ", _irregular_points_y)
 
 ####################
 # STEP
@@ -210,54 +304,113 @@ var _irregular_points_y: Array[float] = []:
 ## Must be a positive integer.
 @export_range(0, 100, 1) var steps: int = 4:
 	set(value):
-		if steps == value:
-			return
-		steps = value
-		_notify_parameter_changed()
+		if steps != value:
+			steps = value
+			_notify_parameter_changed()
 ## When true, the change happens at the start of each step.
 ## When false, the change happens at the end of each step.
 @export var from_start: bool = false:
 	set(value):
-		if from_start == value:
-			return
-		from_start = value
-		if _applying_editor_state_snapshot:
-			return
-		emit_changed()
+		if from_start != value:
+			from_start = value
+			_notify_parameter_changed()
 ## Adds a constant y_offset. The step function is clamped to a range of [0,1].
 ## When the number of steps is zero, this converges to the constant function (y = y_offset).
 @export_range(0, 1, 0.001) var y_offset: float = 0.0:
 	set(value):
-		if y_offset == value:
-			return
-		y_offset = value
-		_notify_parameter_changed()
+		if y_offset != value:
+			y_offset = value
+			_notify_parameter_changed()
 
 ####################
 # POWER
 ####################
 @export_range(0.001, 1000.0, 0.001, "exp") var power: float = 2.0:
 	set(value):
-		if power == value:
-			return
-		power = value
-		_notify_parameter_changed()
+		if power != value:
+			power = value
+			_notify_parameter_changed()
 
 ####################
 # ELASTIC
 ####################
 @export_range(0.0, 5.0, 0.01) var amplitude: float = 1.0:
 	set(value):
-		if amplitude == value:
-			return
-		amplitude = value
-		_notify_parameter_changed()
+		if amplitude != value:
+			amplitude = value
+			_notify_parameter_changed()
 @export_range(0.01, 1.0, 0.01) var period: float = 0.3:
 	set(value):
-		if period == value:
+		if period != value:
+			period = value
+			_notify_parameter_changed()
+
+####################
+# SPRING
+####################
+@export_range(0.0, 10.0, 0.01) var frequency: float = 2.5:
+	set(value):
+		if frequency != value:
+			frequency = value
+			_notify_parameter_changed()
+@export_range(0.1, 10.0, 0.01) var decay: float = 2.2:
+	set(value):
+		if decay != value:
+			decay = value
+			_notify_parameter_changed()
+
+####################
+# PHYSICS_SPRING
+####################
+@export_range(0.0, 1000.0, 0.1) var stiffness: float = 100.0:
+	set(value):
+		if stiffness != value:
+			stiffness = value
+			_notify_parameter_changed()
+@export_range(1.0, 100.0, 0.1) var damping: float = 10.0:
+	set(value):
+		if damping != value:
+			damping = value
+			_notify_parameter_changed()
+@export_range(1.0, 10.0, 0.1) var mass: float = 1.0:
+	set(value):
+		if mass != value:
+			mass = value
+			_notify_parameter_changed()
+@export_range(-30.0, 30.0, 0.1) var velocity: float = 0.0:
+	set(value):
+		if velocity != value:
+			velocity = value
+			_notify_parameter_changed()
+
+####################
+# CSS_LINEAR
+####################
+@export var css_linear: String = "linear(0, 1)":
+	set(value):
+		if css_linear == value:
 			return
-		period = value
+
+		css_linear = value
+
+		var parsed := EASING_LIBRARY.CSSLinear.parse(value)
+		if parsed.is_empty():
+			return
+
+		_css_linear_points = parsed
 		_notify_parameter_changed()
+
+
+@export_custom(
+	PROPERTY_HINT_NONE,
+	"",
+	PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_NO_EDITOR,
+)
+var _css_linear_points: PackedVector2Array = PackedVector2Array([
+	Vector2(0.0, 0.0),
+	Vector2(1.0, 1.0),
+])
+
 
 ######################################################
 # INIT
@@ -392,45 +545,109 @@ func _parse_point_storage_name(property: StringName) -> Dictionary:
 	return {"index": parts[0].to_int(), "name": property_name}
 
 
-func _validate_property(property: Dictionary):
-	if property.name == "points":
+func _property_belongs_to_transition(
+		property_name: StringName,
+		transition: TRANS,
+) -> bool:
+	return (
+		property_name in FUNCTION_PARAMETERS.get(transition, [])
+		or property_name in FUNCTION_EDITOR_PROPERTIES.get(transition, [])
+	)
+
+
+func _is_function_property(property_name: StringName) -> bool:
+	for properties in FUNCTION_PARAMETERS.values():
+		if property_name in properties:
+			return true
+
+	for properties in FUNCTION_EDITOR_PROPERTIES.values():
+		if property_name in properties:
+			return true
+
+	return false
+
+
+static func is_function_transition(transition: TRANS) -> bool:
+	return (
+		FUNCTION_CLASSES.has(transition)
+		or transition in GENERATED_FUNCTION_TRANSITIONS
+	)
+
+
+static func get_all_function_parameters() -> Array[StringName]:
+	var result: Array[StringName] = []
+
+	for parameters in FUNCTION_PARAMETERS.values():
+		for property_name: StringName in parameters:
+			if property_name not in result:
+				result.append(property_name)
+
+	return result
+
+
+static func has_function_parameter_default(
+		property_name: StringName,
+) -> bool:
+	return property_name in get_all_function_parameters()
+
+
+static var _default_instance: EasingCurve
+static func get_function_parameter_default(
+		property_name: StringName,
+) -> Variant:
+	if _default_instance == null:
+		_default_instance = EasingCurve.new()
+	return _default_instance.get(property_name)
+
+
+static func is_deferred_function_parameter(
+		property_name: StringName,
+) -> bool:
+	return (
+		property_name in get_all_function_parameters()
+		and property_name not in NON_DEFERRED_FUNCTION_PARAMETERS
+	)
+
+
+static func uses_generated_function_data(
+		transition: TRANS,
+) -> bool:
+	return transition in GENERATED_FUNCTION_TRANSITIONS
+
+
+func _update_irregular_parameter() -> void:
+	if _applying_function_snapshot:
+		_notify_parameter_changed()
+	else:
+		_generate_irregular()
+
+
+func _update_curve_mode() -> void:
+	curve_mode = (
+		CurveMode.FUNCTION
+		if is_function_transition(trans_type)
+		else CurveMode.BEZIER
+	)
+
+
+func _validate_property(property: Dictionary) -> void:
+	var property_name := StringName(property.name)
+
+	# Points are exposed to the editor but serialized separately.
+	if property_name == &"points":
 		property.usage |= PROPERTY_USAGE_EDITOR
 		property.usage &= ~PROPERTY_USAGE_STORAGE
 		return
 
-	if property.name in ["num_points", "randomness", "generate_tool_button"]:
-		if trans_type in [TRANS.JITTER, TRANS.IRREGULAR]:
-			# enable property
+	# Function-specific properties are only visible for
+	# the transition that owns them.
+	if _is_function_property(property_name):
+		if _property_belongs_to_transition(
+			property_name,
+			trans_type,
+		):
 			property.usage |= PROPERTY_USAGE_EDITOR
 		else:
-			# disable property
-			property.usage &= ~PROPERTY_USAGE_EDITOR
-		return
-
-	if property.name in ["steps", "from_start", "y_offset"]:
-		if trans_type == TRANS.STEP:
-			# enable property
-			property.usage |= PROPERTY_USAGE_EDITOR
-		else:
-			# disable property
-			property.usage &= ~PROPERTY_USAGE_EDITOR
-		return
-
-	if property.name in ["power"]:
-		if trans_type == TRANS.POWER:
-			# enable property
-			property.usage |= PROPERTY_USAGE_EDITOR
-		else:
-			# disable property
-			property.usage &= ~PROPERTY_USAGE_EDITOR
-		return
-
-	if property.name in ["amplitude", "period"]:
-		if trans_type == TRANS.ELASTIC:
-			# enable property
-			property.usage |= PROPERTY_USAGE_EDITOR
-		else:
-			# disable property
 			property.usage &= ~PROPERTY_USAGE_EDITOR
 		return
 
@@ -475,19 +692,60 @@ func get_canonical_preset_point_snapshot() -> Dictionary:
 	return preset.get_point_snapshot()
 
 
-## A modified built-in keeps its Transition/Ease origin. Explicit Custom and
-## function-backed transitions are separate modes and never report this state.
-func is_selected_preset_modified(tolerance: float = PRESET_GEOMETRY_TOLERANCE) -> bool:
+## A modified built-in keeps its Transition/Ease origin.
+## Handles both Bezier and Function presets. Custom curves are not reported.
+func is_selected_preset_modified(
+		tolerance: float = PRESET_GEOMETRY_TOLERANCE,
+) -> bool:
+	if curve_mode == CurveMode.FUNCTION:
+		var default_curve := EasingCurve.new()
+
+		for property_name in FUNCTION_PARAMETERS.get(trans_type, []):
+			if get(property_name) != default_curve.get(property_name):
+				return true
+
+		for property_name in FUNCTION_EDITOR_PROPERTIES.get(trans_type, []):
+			if property_name == &"generate_tool_button":
+				continue
+			if get(property_name) != default_curve.get(property_name):
+				return true
+
+		return false
+
 	if not has_builtin_bezier_preset():
 		return false
-	if curve_mode != CurveMode.BEZIER:
-		return true
-	return not _point_snapshot_matches(get_canonical_preset_point_snapshot(), maxf(tolerance, 0.0))
+
+	return not _point_snapshot_matches(
+		get_canonical_preset_point_snapshot(),
+		maxf(tolerance, 0.0),
+	)
 
 
 func reset_selected_preset() -> bool:
 	if not is_selected_preset_modified():
 		return false
+
+	if curve_mode == CurveMode.FUNCTION:
+		var default_curve := EasingCurve.new()
+
+		_parameter_update_depth += 1
+
+		for property_name in FUNCTION_PARAMETERS.get(trans_type, []):
+			set(property_name, default_curve.get(property_name))
+
+		for property_name in FUNCTION_EDITOR_PROPERTIES.get(trans_type, []):
+			if property_name == &"generate_tool_button":
+				continue
+			set(property_name, default_curve.get(property_name))
+
+		_parameter_update_depth -= 1
+
+		if _parameter_update_change_pending:
+			_parameter_update_change_pending = false
+			_notify_parameter_changed()
+
+		return true
+
 	_update_preset()
 	return true
 
@@ -783,60 +1041,94 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	_notify_curve_changed(point_data_changed, property_list_changed)
 
 
-func get_function_snapshot() -> Dictionary:
+func _get_generated_function_snapshot() -> Dictionary:
 	return {
-		"num_points": num_points,
-		"randomness": randomness,
-		"steps": steps,
-		"y_offset": y_offset,
-		"power": power,
-		"amplitude": amplitude,
-		"period": period,
-		"generated_points_x": PackedFloat64Array(_irregular_points_x),
-		"generated_points_y": PackedFloat64Array(_irregular_points_y),
+		"generated_points_x": PackedFloat64Array(
+			_irregular_points_x
+		),
+		"generated_points_y": PackedFloat64Array(
+			_irregular_points_y
+		),
+	}
+
+func get_function_snapshot() -> Dictionary:
+	var snapshot := {}
+
+	for property_name in get_all_function_parameters():
+		snapshot[property_name] = get(property_name)
+
+	snapshot.merge(
+		_get_generated_function_snapshot()
+	)
+
+	return snapshot
+
+
+func _parse_generated_function_snapshot(
+		snapshot: Dictionary,
+) -> Dictionary:
+	return {
+		"points_x": _function_snapshot_float_array(
+			snapshot.get(
+				"generated_points_x",
+				PackedFloat64Array(_irregular_points_x),
+			),
+		),
+		"points_y": _function_snapshot_float_array(
+			snapshot.get(
+				"generated_points_y",
+				PackedFloat64Array(_irregular_points_y),
+			),
+		),
 	}
 
 
 func set_function_snapshot(snapshot: Dictionary) -> void:
-	var snapshot_num_points := int(snapshot.get("num_points", num_points))
-	var snapshot_randomness := float(snapshot.get("randomness", randomness))
-	var snapshot_steps := int(snapshot.get("steps", steps))
-	var snapshot_y_offset := float(snapshot.get("y_offset", y_offset))
-	var snapshot_power := float(snapshot.get("power", power))
-	var snapshot_amplitude := float(snapshot.get("amplitude", amplitude))
-	var snapshot_period := float(snapshot.get("period", period))
-	var snapshot_points_x := _function_snapshot_float_array(
-		snapshot.get("generated_points_x", PackedFloat64Array(_irregular_points_x)),
-	)
-	var snapshot_points_y := _function_snapshot_float_array(
-		snapshot.get("generated_points_y", PackedFloat64Array(_irregular_points_y)),
-	)
+	var generated := _parse_generated_function_snapshot(snapshot)
+	var snapshot_points_x: Array[float] = generated["points_x"]
+	var snapshot_points_y: Array[float] = generated["points_y"]
+
 	var force_notify := bool(snapshot.get("force_notify", false))
-	var changed := (
-		num_points != snapshot_num_points
-		or not is_equal_approx(randomness, snapshot_randomness)
-		or steps != snapshot_steps
-		or not is_equal_approx(y_offset, snapshot_y_offset)
-		or not is_equal_approx(power, snapshot_power)
-		or not is_equal_approx(amplitude, snapshot_amplitude)
-		or not is_equal_approx(period, snapshot_period)
-		or _irregular_points_x != snapshot_points_x
-		or _irregular_points_y != snapshot_points_y
-	)
+	var changed := false
+
+	for property_name in get_all_function_parameters():
+		if not snapshot.has(property_name):
+			continue
+		var current_value: Variant = get(property_name)
+		var snapshot_value: Variant = snapshot[property_name]
+		if current_value is float:
+			if not is_equal_approx(
+				float(current_value),
+				float(snapshot_value),
+			):
+				changed = true
+				break
+		elif current_value != snapshot_value:
+			changed = true
+			break
+
+	if (
+		not changed
+		and (
+			_irregular_points_x != snapshot_points_x
+			or _irregular_points_y != snapshot_points_y
+		)
+	):
+		changed = true
+
 	if not changed and not force_notify:
 		return
 
 	_parameter_edit_depth += 1
 	_applying_function_snapshot = true
-	num_points = snapshot_num_points
-	randomness = snapshot_randomness
-	steps = snapshot_steps
-	y_offset = snapshot_y_offset
-	power = snapshot_power
-	amplitude = snapshot_amplitude
-	period = snapshot_period
+
+	for property_name in get_all_function_parameters():
+		if snapshot.has(property_name):
+			set(property_name, snapshot[property_name])
+
 	_irregular_points_x = snapshot_points_x
 	_irregular_points_y = snapshot_points_y
+
 	_applying_function_snapshot = false
 	_parameter_edit_depth -= 1
 	_notify_parameter_changed()
@@ -1066,6 +1358,26 @@ func set_function(func_ref: Callable):
 	_notify_curve_changed(false, true)
 
 
+func _get_function_arguments(offset: float) -> Array:
+	var args: Array = [
+		offset,
+		0.0,
+		1.0,
+		1.0,
+	]
+
+	if uses_generated_function_data(trans_type):
+		args.append(_irregular_points_x)
+		args.append(_irregular_points_y)
+	elif trans_type == TRANS.CSS_LINEAR:
+		args.append(_css_linear_points)
+	else:
+		for property_name in FUNCTION_PARAMETERS.get(trans_type, []):
+			args.append(get(property_name))
+
+	return args
+
+
 ## Sample the curve, calculating f(t) given x
 func sample(offset: float) -> float:
 	if _synchronize_point_connections():
@@ -1075,17 +1387,7 @@ func sample(offset: float) -> float:
 	if curve_mode == CurveMode.FUNCTION:
 		if not function_callable.is_valid():
 			_init_function()
-
-		if trans_type in [TRANS.JITTER, TRANS.IRREGULAR]:
-			return function_callable.call(offset, 0.0, 1.0, 1.0, _irregular_points_x, _irregular_points_y)
-		elif trans_type == TRANS.STEP:
-			return function_callable.call(offset, 0.0, 1.0, 1.0, steps, from_start, y_offset)
-		elif trans_type == TRANS.ELASTIC:
-			return function_callable.call(offset, 0.0, 1.0, 1.0, amplitude, period)
-		elif trans_type == TRANS.POWER:
-			return function_callable.call(offset, 0.0, 1.0, 1.0, power)
-		else:
-			return function_callable.call(offset, 0.0, 1.0, 1.0)
+		return function_callable.callv(_get_function_arguments(offset))
 
 	if points.size() < 2:
 		return 0.0
@@ -1252,86 +1554,76 @@ func _generate_irregular() -> Dictionary:
 	return result
 
 
+func _set_easing_class_function(
+		easing_class,
+		use_extended: bool,
+) -> void:
+	var method_name := ""
+
+	match ease_type:
+		EASE.IN:
+			method_name = "easeIn"
+		EASE.OUT:
+			method_name = "easeOut"
+		EASE.IN_OUT:
+			method_name = "easeInOut"
+		EASE.OUT_IN:
+			method_name = "easeOutIn"
+
+	if use_extended:
+		method_name += "Ex"
+
+	set_function(Callable(easing_class, method_name))
+
+
 func _init_function() -> void:
-	match trans_type:
-		TRANS.JITTER:
-			if _irregular_points_x.size() != num_points + 1 or _irregular_points_y.size() != num_points + 1:
-				_generate_irregular()
-			match ease_type:
-				EASE.IN:
-					set_function(EASING_LIBRARY.Irregular.easeIn)
-				EASE.OUT:
-					set_function(EASING_LIBRARY.Irregular.easeOut)
-				EASE.IN_OUT:
-					set_function(EASING_LIBRARY.Irregular.easeInOut)
-				EASE.OUT_IN:
-					set_function(EASING_LIBRARY.Irregular.easeOutIn)
-		TRANS.IRREGULAR:
-			if _irregular_points_x.size() != num_points or _irregular_points_y.size() != num_points:
-				_generate_irregular()
-			match ease_type:
-				EASE.IN:
-					set_function(EASING_LIBRARY.Irregular.easeIn)
-				EASE.OUT:
-					set_function(EASING_LIBRARY.Irregular.easeOut)
-				EASE.IN_OUT:
-					set_function(EASING_LIBRARY.Irregular.easeInOut)
-				EASE.OUT_IN:
-					set_function(EASING_LIBRARY.Irregular.easeOutIn)
-		TRANS.STEP:
-			match ease_type:
-				EASE.IN:
-					set_function(EASING_LIBRARY.Step.easeIn)
-				EASE.OUT:
-					set_function(EASING_LIBRARY.Step.easeOut)
-				EASE.IN_OUT:
-					set_function(EASING_LIBRARY.Step.easeInOut)
-				EASE.OUT_IN:
-					set_function(EASING_LIBRARY.Step.easeOutIn)
-		TRANS.POWER:
-			match ease_type:
-				EASE.IN:
-					set_function(EASING_LIBRARY.Power.easeIn)
-				EASE.OUT:
-					set_function(EASING_LIBRARY.Power.easeOut)
-				EASE.IN_OUT:
-					set_function(EASING_LIBRARY.Power.easeInOut)
-				EASE.OUT_IN:
-					set_function(EASING_LIBRARY.Power.easeOutIn)
-		TRANS.ELASTIC:
-			match ease_type:
-				EASE.IN:
-					set_function(EASING_LIBRARY.Elastic.easeInEx)
-				EASE.OUT:
-					set_function(EASING_LIBRARY.Elastic.easeOutEx)
-				EASE.IN_OUT:
-					set_function(EASING_LIBRARY.Elastic.easeInOutEx)
-				EASE.OUT_IN:
-					set_function(EASING_LIBRARY.Elastic.easeOutInEx)
-		TRANS.BOUNCE:
-			match ease_type:
-				EASE.IN:
-					set_function(EASING_LIBRARY.Bounce.easeIn)
-				EASE.OUT:
-					set_function(EASING_LIBRARY.Bounce.easeOut)
-				EASE.IN_OUT:
-					set_function(EASING_LIBRARY.Bounce.easeInOut)
-				EASE.OUT_IN:
-					set_function(EASING_LIBRARY.Bounce.easeOutIn)
-		TRANS.SPRING:
-			match ease_type:
-				EASE.IN:
-					set_function(EASING_LIBRARY.Spring.easeIn)
-				EASE.OUT:
-					set_function(EASING_LIBRARY.Spring.easeOut)
-				EASE.IN_OUT:
-					set_function(EASING_LIBRARY.Spring.easeInOut)
-				EASE.OUT_IN:
-					set_function(EASING_LIBRARY.Spring.easeOutIn)
+	if trans_type == TRANS.JITTER:
+		if (
+			_irregular_points_x.size() != num_points + 1
+			or _irregular_points_y.size() != num_points + 1
+		):
+			_generate_irregular()
+
+		_set_easing_class_function(
+			EASING_LIBRARY.Irregular,
+			false,
+		)
+		return
+
+	if trans_type == TRANS.IRREGULAR:
+		if (
+			_irregular_points_x.size() != num_points
+			or _irregular_points_y.size() != num_points
+		):
+			_generate_irregular()
+
+		_set_easing_class_function(
+			EASING_LIBRARY.Irregular,
+			false,
+		)
+		return
+
+	var config: Dictionary = FUNCTION_CLASSES.get(
+		trans_type,
+		{},
+	)
+
+	if config.is_empty():
+		return
+
+	_set_easing_class_function(
+		config["class"],
+		config["extended"],
+	)
 
 
 func _update_preset() -> void:
 	clear_function()
+	_update_curve_mode()
+
+	if curve_mode == CurveMode.FUNCTION:
+		_init_function()
+		return
 
 	match trans_type:
 		TRANS.CUSTOM:
@@ -1409,20 +1701,6 @@ func _update_preset() -> void:
 						Vector4(1.0 / 3.0, 1.0 + 1.70158 / 3.0, 2.0 / 3.0, 1),
 						Vector4(1.0 / 3.0, 0, 2.0 / 3.0, -1.70158 / 3.0),
 					)
-		TRANS.JITTER:
-			_init_function()
-		TRANS.IRREGULAR:
-			_init_function()
-		TRANS.STEP:
-			_init_function()
-		TRANS.POWER:
-			_init_function()
-		TRANS.ELASTIC:
-			_init_function()
-		TRANS.BOUNCE:
-			_init_function()
-		TRANS.SPRING:
-			_init_function()
 
 
 func _on_point_changed() -> void:
