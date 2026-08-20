@@ -128,3 +128,18 @@ AI-assisted coding was used during development for implementation, debugging, re
 
 ### License:
 Released under the [MIT License](LICENSE.md).
+
+
+---
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=BaconEggsRL%2Feasing_curve&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=BaconEggsRL/easing_curve&type=date&theme=dark&legend=top-left&sealed_token=nRCgB2qxeEZVuTnXUrEG2QDyqIe13lbLuZpAr-G3LQ1bI1ePPeXCqFTMQLOMrcLJOt51N_U5Z1TwHPwpXhce4XuNB4g4ryA4xsPFDi9VS7DFDTVH412M0efFVQpEoq6IotFCRdS21ATJ4SvrEu6p4JY23FgCvQWg9ST4142oJhs7baKam4lmHB8fOguf" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=BaconEggsRL/easing_curve&type=date&legend=top-left&sealed_token=nRCgB2qxeEZVuTnXUrEG2QDyqIe13lbLuZpAr-G3LQ1bI1ePPeXCqFTMQLOMrcLJOt51N_U5Z1TwHPwpXhce4XuNB4g4ryA4xsPFDi9VS7DFDTVH412M0efFVQpEoq6IotFCRdS21ATJ4SvrEu6p4JY23FgCvQWg9ST4142oJhs7baKam4lmHB8fOguf" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=BaconEggsRL/easing_curve&type=date&legend=top-left&sealed_token=nRCgB2qxeEZVuTnXUrEG2QDyqIe13lbLuZpAr-G3LQ1bI1ePPeXCqFTMQLOMrcLJOt51N_U5Z1TwHPwpXhce4XuNB4g4ryA4xsPFDi9VS7DFDTVH412M0efFVQpEoq6IotFCRdS21ATJ4SvrEu6p4JY23FgCvQWg9ST4142oJhs7baKam4lmHB8fOguf" />
+ </picture>
+</a>
+
+

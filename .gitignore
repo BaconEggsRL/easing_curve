@@ -3,3 +3,8 @@
 /android/
 /_exports/
 /_media/
+
+# Local secrets
+.env
+.env.*
+!.env.example
