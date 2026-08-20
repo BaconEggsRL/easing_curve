@@ -932,6 +932,11 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 			_create_vector2_property(point, i, "position", "Position"),
 		)
 
+		# Handle Mode
+		point_panel_vbox.add_child(
+			_create_handle_mode_property(point, i),
+		)
+
 		# Control Points
 		var point_count = curve.points.size()
 
@@ -1755,6 +1760,47 @@ func _on_curve_editor_point_remove_requested(point: EasingCurvePoint) -> void:
 	_remove_point(point)
 
 
+func _create_handle_mode_property(
+	point: EasingCurvePoint,
+	i: int,
+) -> Control:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", _compact_separation())
+
+	var label := Label.new()
+	label.text = "Handle Mode"
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+
+	var option := OptionButton.new()
+	option.fit_to_longest_item = false
+	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	option.add_item("Free", EasingCurvePoint.HandleMode.FREE)
+	option.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
+	option.add_item("Balanced", EasingCurvePoint.HandleMode.BALANCED)
+	option.add_item("Mirrored", EasingCurvePoint.HandleMode.MIRRORED)
+
+	for index in range(option.item_count):
+		if option.get_item_id(index) == point.handle_mode:
+			option.select(index)
+			break
+
+	option.item_selected.connect(
+		func(index: int):
+			_apply_point_property_change(
+				i,
+				&"handle_mode",
+				option.get_item_id(index),
+			)
+	)
+
+	row.add_child(option)
+
+	return row
+
+
 func _apply_point_property_change(i: int, property_name: StringName, value: Variant, changing: bool = false) -> void:
 	if i < 0 or i >= curve.points.size():
 		return
@@ -1770,6 +1816,10 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 			var values: PackedVector2Array = snapshot[snapshot_key]
 			values[i] = value
 			snapshot[snapshot_key] = values
+		&"handle_mode":
+			var handle_modes: PackedInt32Array = snapshot["handle_modes"]
+			handle_modes[i] = int(value)
+			snapshot["handle_modes"] = handle_modes
 		&"locked":
 			var locks: Array = snapshot["locks"]
 			locks[i] = value.duplicate(true)
@@ -1795,6 +1845,8 @@ func _point_action_name(property_name: StringName) -> String:
 			return "Move Easing Curve Point"
 		&"left_control_point", &"right_control_point":
 			return "Move Easing Curve Handle"
+		&"handle_mode":
+			return "Change Easing Curve Handle Mode"
 		&"locked":
 			return "Change Easing Curve Point Lock"
 	return "Edit Easing Curve Point"
