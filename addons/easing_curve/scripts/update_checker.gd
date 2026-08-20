@@ -5,6 +5,8 @@ extends Node
 
 const DEBUG_UPDATE_CHECKER := false
 
+const SETTING_IGNORE_VERSION := "easing_curve/update_checker/ignored_version"
+const SETTING_ENABLED := "easing_curve/update_checker/enabled"
 
 const LATEST_RELEASE_URL := (
 	"https://api.github.com/repos/BaconEggsRL/easing_curve/releases/latest"
@@ -22,6 +24,12 @@ var _request: HTTPRequest
 
 
 func check(current_version: String) -> void:
+	var settings := EditorInterface.get_editor_settings()
+
+	if settings.has_setting(SETTING_ENABLED):
+		if not settings.get_setting(SETTING_ENABLED):
+			return
+
 	if _request != null:
 		return
 
@@ -109,6 +117,17 @@ func _on_request_completed(
 		return
 
 	if _is_newer_version(latest_version, current_version):
+		var settings := EditorInterface.get_editor_settings()
+		var ignored_version := str(
+			settings.get_setting(SETTING_IGNORE_VERSION)
+			if settings.has_setting(SETTING_IGNORE_VERSION)
+			else ""
+		)
+
+		if latest_version == ignored_version:
+			_cleanup()
+			return
+
 		if DEBUG_UPDATE_CHECKER:
 			print("Easing Curve update check: update available.")
 		update_available.emit(

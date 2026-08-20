@@ -32,6 +32,13 @@ func _enter_tree() -> void:
 	update_checker.update_available.connect(_on_update_available)
 	update_checker.check(get_plugin_version())
 
+	add_tool_menu_item(
+		"Easing Curve: Disable Update Checks"
+		if _update_checks_enabled()
+		else "Easing Curve: Enable Update Checks",
+		_toggle_update_checks
+	)
+
 
 func _exit_tree() -> void:
 	resource_saved.disconnect(_on_resource_saved)
@@ -41,6 +48,12 @@ func _exit_tree() -> void:
 
 	if update_checker:
 		update_checker.queue_free()
+
+	remove_tool_menu_item(
+		"Easing Curve: Disable Update Checks"
+		if _update_checks_enabled()
+		else "Easing Curve: Enable Update Checks"
+	)
 
 
 func _enable_plugin() -> void:
@@ -78,12 +91,69 @@ func _on_update_available(
 	dialog.cancel_button_text = "Later"
 	dialog.exclusive = false
 
+	var ignore_button := dialog.add_button(
+		"Ignore This Version",
+		true,
+		"ignore_version"
+	)
+
+	dialog.custom_action.connect(
+		func(action: StringName):
+			if action != "ignore_version":
+				return
+
+			EditorInterface.get_editor_settings().set_setting(
+				EasingCurveUpdateChecker.SETTING_IGNORE_VERSION,
+				latest_version
+			)
+
+			dialog.queue_free()
+	)
+
 	dialog.confirmed.connect(
 		func():
 			OS.shell_open(release_url)
 			dialog.queue_free()
 	)
+
 	dialog.canceled.connect(dialog.queue_free)
 
 	EditorInterface.get_base_control().add_child(dialog)
 	dialog.popup_centered()
+
+
+
+func _update_checks_enabled() -> bool:
+	var settings := EditorInterface.get_editor_settings()
+
+	if not settings.has_setting(
+		EasingCurveUpdateChecker.SETTING_ENABLED
+	):
+		return true
+
+	return settings.get_setting(
+		EasingCurveUpdateChecker.SETTING_ENABLED
+	)
+
+
+
+func _toggle_update_checks() -> void:
+	var enabled := _update_checks_enabled()
+
+	EditorInterface.get_editor_settings().set_setting(
+		EasingCurveUpdateChecker.SETTING_ENABLED,
+		not enabled
+	)
+
+	remove_tool_menu_item(
+		"Easing Curve: Disable Update Checks"
+		if enabled
+		else "Easing Curve: Enable Update Checks"
+	)
+
+	add_tool_menu_item(
+		"Easing Curve: Enable Update Checks"
+		if enabled
+		else "Easing Curve: Disable Update Checks",
+		_toggle_update_checks
+	)
