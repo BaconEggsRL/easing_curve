@@ -33,17 +33,55 @@ const LATEST_RELEASE_URL := (
 	"https://api.github.com/repos/BaconEggsRL/easing_curve/releases/latest"
 )
 
-
+## Emitted when a newer, non-ignored Easing Curve release is available.
 signal update_available(
 	current_version: String,
 	latest_version: String,
 	release_url: String
 )
 
-
 var _request: HTTPRequest
 
 
+## Registers the update checker preferences in Editor Settings.
+## This should be called before check().
+func setup_editor_settings() -> void:
+	var settings := EditorInterface.get_editor_settings()
+
+	if not settings.has_setting(SETTING_ENABLED):
+		settings.set_setting(SETTING_ENABLED, true)
+
+	settings.set_initial_value(
+		SETTING_ENABLED,
+		true,
+		false
+	)
+
+	settings.add_property_info({
+		"name": SETTING_ENABLED,
+		"type": TYPE_BOOL,
+	})
+
+	if not settings.has_setting(SETTING_IGNORED_VERSIONS):
+		settings.set_setting(
+			SETTING_IGNORED_VERSIONS,
+			PackedStringArray()
+		)
+
+	settings.set_initial_value(
+		SETTING_IGNORED_VERSIONS,
+		PackedStringArray(),
+		false
+	)
+
+	settings.add_property_info({
+		"name": SETTING_IGNORED_VERSIONS,
+		"type": TYPE_PACKED_STRING_ARRAY,
+	})
+
+
+## Checks GitHub for the latest Easing Curve release.
+## Does nothing when automatic update checks are disabled.
 func check(current_version: String) -> void:
 	var settings := EditorInterface.get_editor_settings()
 
@@ -203,39 +241,3 @@ func _parse_version(version: String) -> Array[int]:
 		parts[i] = int(raw_parts[i])
 
 	return parts
-
-
-
-func setup_editor_settings() -> void:
-	var settings := EditorInterface.get_editor_settings()
-
-	if not settings.has_setting(SETTING_ENABLED):
-		settings.set_setting(SETTING_ENABLED, true)
-
-	settings.set_initial_value(
-		SETTING_ENABLED,
-		true,
-		false
-	)
-
-	settings.add_property_info({
-		"name": SETTING_ENABLED,
-		"type": TYPE_BOOL,
-	})
-
-	if not settings.has_setting(SETTING_IGNORED_VERSIONS):
-		settings.set_setting(
-			SETTING_IGNORED_VERSIONS,
-			PackedStringArray()
-		)
-
-	settings.set_initial_value(
-		SETTING_IGNORED_VERSIONS,
-		PackedStringArray(),
-		false
-	)
-
-	settings.add_property_info({
-		"name": SETTING_IGNORED_VERSIONS,
-		"type": TYPE_PACKED_STRING_ARRAY,
-	})
