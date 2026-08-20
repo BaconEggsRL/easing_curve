@@ -1,12 +1,33 @@
 @tool
 class_name EasingCurveUpdateChecker
 extends Node
-
+## Checks GitHub for newer Easing Curve releases when the editor plugin loads.
+##
+## Update checks can be enabled or disabled from:
+## Project >> Tools >> Easing Curve: Enable/Disable Update Checks
+##
+## Update checker settings can also be viewed or edited from:
+## Editor >> Editor Settings >> Easing Curve >> Update Checker
+##
+## Settings:
+## - Enabled:
+##   Controls whether Easing Curve checks GitHub for updates automatically.
+##
+## - Ignored Versions:
+##   Release versions that should not trigger an update notification.
+##   Ignoring a version only suppresses that specific release; newer releases
+##   can still trigger an update notification.
+##
+## When a newer release is found, update_available is emitted with the
+## installed version, latest version, and GitHub release URL.
+##
+## Network, HTTP, and JSON failures are reported as warnings/errors but do not
+## prevent the plugin itself from loading.
 
 const DEBUG_UPDATE_CHECKER := false
 
-const SETTING_IGNORE_VERSION := "easing_curve/update_checker/ignored_version"
 const SETTING_ENABLED := "easing_curve/update_checker/enabled"
+const SETTING_IGNORED_VERSIONS := "easing_curve/update_checker/ignored_versions"
 
 const LATEST_RELEASE_URL := (
 	"https://api.github.com/repos/BaconEggsRL/easing_curve/releases/latest"
@@ -118,13 +139,18 @@ func _on_request_completed(
 
 	if _is_newer_version(latest_version, current_version):
 		var settings := EditorInterface.get_editor_settings()
-		var ignored_version := str(
-			settings.get_setting(SETTING_IGNORE_VERSION)
-			if settings.has_setting(SETTING_IGNORE_VERSION)
-			else ""
+
+		var ignored_versions: PackedStringArray = settings.get_setting(
+			SETTING_IGNORED_VERSIONS
 		)
 
-		if latest_version == ignored_version:
+		if ignored_versions.has(latest_version):
+			if DEBUG_UPDATE_CHECKER:
+				print(
+					"Easing Curve update check: %s is ignored."
+					% latest_version
+				)
+
 			_cleanup()
 			return
 
@@ -177,3 +203,39 @@ func _parse_version(version: String) -> Array[int]:
 		parts[i] = int(raw_parts[i])
 
 	return parts
+
+
+
+func setup_editor_settings() -> void:
+	var settings := EditorInterface.get_editor_settings()
+
+	if not settings.has_setting(SETTING_ENABLED):
+		settings.set_setting(SETTING_ENABLED, true)
+
+	settings.set_initial_value(
+		SETTING_ENABLED,
+		true,
+		false
+	)
+
+	settings.add_property_info({
+		"name": SETTING_ENABLED,
+		"type": TYPE_BOOL,
+	})
+
+	if not settings.has_setting(SETTING_IGNORED_VERSIONS):
+		settings.set_setting(
+			SETTING_IGNORED_VERSIONS,
+			PackedStringArray()
+		)
+
+	settings.set_initial_value(
+		SETTING_IGNORED_VERSIONS,
+		PackedStringArray(),
+		false
+	)
+
+	settings.add_property_info({
+		"name": SETTING_IGNORED_VERSIONS,
+		"type": TYPE_PACKED_STRING_ARRAY,
+	})

@@ -29,6 +29,7 @@ func _enter_tree() -> void:
 
 	update_checker = EasingCurveUpdateChecker.new()
 	add_child(update_checker)
+	update_checker.setup_editor_settings()
 	update_checker.update_available.connect(_on_update_available)
 	update_checker.check(get_plugin_version())
 
@@ -102,9 +103,18 @@ func _on_update_available(
 			if action != "ignore_version":
 				return
 
-			EditorInterface.get_editor_settings().set_setting(
-				EasingCurveUpdateChecker.SETTING_IGNORE_VERSION,
-				latest_version
+			var settings := EditorInterface.get_editor_settings()
+
+			var ignored_versions: PackedStringArray = settings.get_setting(
+				EasingCurveUpdateChecker.SETTING_IGNORED_VERSIONS
+			)
+
+			if not ignored_versions.has(latest_version):
+				ignored_versions.append(latest_version)
+
+			settings.set_setting(
+				EasingCurveUpdateChecker.SETTING_IGNORED_VERSIONS,
+				ignored_versions
 			)
 
 			dialog.queue_free()
