@@ -12,6 +12,7 @@ const EasingCurveUpdateChecker = preload(
 	"res://addons/easing_curve/scripts/update_checker.gd"
 )
 
+const PLUGIN_CONFIG_PATH := "res://addons/easing_curve/plugin.cfg"
 const UPDATE_CHECKS_ENABLE_MENU := "Easing Curve: Enable Update Checks"
 const UPDATE_CHECKS_DISABLE_MENU := "Easing Curve: Disable Update Checks"
 
@@ -28,7 +29,7 @@ func _on_editor_settings_changed() -> void:
 
 	if enabled and not _last_update_checks_enabled:
 		if update_checker:
-			update_checker.check(get_plugin_version())
+			update_checker.check(_get_current_plugin_version())
 
 	_last_update_checks_enabled = enabled
 	_refresh_update_checker_menu()
@@ -47,7 +48,7 @@ func _enter_tree() -> void:
 	update_checker.setup_editor_settings()
 	_last_update_checks_enabled = _update_checks_enabled()
 	update_checker.update_available.connect(_on_update_available)
-	update_checker.check(get_plugin_version())
+	update_checker.check(_get_current_plugin_version())
 
 	var editor_settings := EditorInterface.get_editor_settings()
 	if not editor_settings.settings_changed.is_connected(
@@ -184,7 +185,7 @@ func _toggle_update_checks() -> void:
 	_refresh_update_checker_menu()
 
 	if enabled and update_checker:
-		update_checker.check(get_plugin_version())
+		update_checker.check(_get_current_plugin_version())
 
 
 func _refresh_update_checker_menu() -> void:
@@ -196,4 +197,23 @@ func _refresh_update_checker_menu() -> void:
 		if _update_checks_enabled()
 		else UPDATE_CHECKS_ENABLE_MENU,
 		_toggle_update_checks
+	)
+
+
+func _get_current_plugin_version() -> String:
+	var config := ConfigFile.new()
+	var error := config.load(PLUGIN_CONFIG_PATH)
+
+	if error != OK:
+		push_warning(
+			"Easing Curve update check: Failed to read plugin.cfg."
+		)
+		return get_plugin_version()
+
+	return str(
+		config.get_value(
+			"plugin",
+			"version",
+			get_plugin_version()
+		)
 	)
