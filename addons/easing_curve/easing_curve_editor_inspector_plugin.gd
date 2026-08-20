@@ -1811,23 +1811,51 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 		_point_edit_action_name = _point_action_name(property_name)
 	var snapshot := curve.get_point_snapshot()
 	match property_name:
-		&"position", &"left_control_point", &"right_control_point":
-			var snapshot_key := String(property_name) + "s" if property_name != &"position" else "positions"
-			var values: PackedVector2Array = snapshot[snapshot_key]
-			values[i] = value
-			snapshot[snapshot_key] = values
+		&"position":
+			var positions: PackedVector2Array = snapshot["positions"]
+			positions[i] = value
+			snapshot["positions"] = positions
+
+		&"left_control_point", &"right_control_point":
+			var point := curve.points[i]
+
+			var side := (
+				EasingCurvePoint.ControlSide.LEFT
+				if property_name == &"left_control_point"
+				else EasingCurvePoint.ControlSide.RIGHT
+			)
+
+			var pair := point.get_control_point_pair(side, value)
+
+			var left_control_points: PackedVector2Array = snapshot[
+				"left_control_points"
+			]
+			var right_control_points: PackedVector2Array = snapshot[
+				"right_control_points"
+			]
+
+			left_control_points[i] = pair["left"]
+			right_control_points[i] = pair["right"]
+
+			snapshot["left_control_points"] = left_control_points
+			snapshot["right_control_points"] = right_control_points
+
 		&"handle_mode":
 			var handle_modes: PackedInt32Array = snapshot["handle_modes"]
 			handle_modes[i] = int(value)
 			snapshot["handle_modes"] = handle_modes
+
 		&"locked":
 			var locks: Array = snapshot["locks"]
 			locks[i] = value.duplicate(true)
 			snapshot["locks"] = locks
+
 		_:
 			return
+
 	snapshot["changing"] = changing
 	curve.set_point_snapshot(snapshot)
+
 	if not changing:
 		EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 			editor_undo_redo,

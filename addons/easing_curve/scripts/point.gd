@@ -122,75 +122,81 @@ func _update_control_point_inputs(property_name: String) -> void:
 	_set_input_value(property_name, "y", value.y)
 
 
-func _set_control_point(side: ControlSide, value: Vector2) -> void:
+func get_control_point_pair(
+	side: ControlSide,
+	value: Vector2,
+) -> Dictionary:
+	var left := _left_control_point
+	var right := _right_control_point
+
 	if handle_mode == HandleMode.LINEAR:
-		value = position
-
-	var current := (
-		_left_control_point
-		if side == ControlSide.LEFT
-		else _right_control_point
-	)
-
-	if current == value:
-		return
+		return {
+			"left": position,
+			"right": position,
+		}
 
 	if side == ControlSide.LEFT:
-		_left_control_point = value
+		left = value
 	else:
-		_right_control_point = value
+		right = value
 
 	match handle_mode:
 		HandleMode.BALANCED:
-			_set_balanced_opposite(side, value)
+			var opposite := (
+				_right_control_point
+				if side == ControlSide.LEFT
+				else _left_control_point
+			)
+			var opposite_length := opposite.distance_to(position)
+			var direction := position - value
+
+			if not direction.is_zero_approx():
+				var balanced := (
+					position
+					+ direction.normalized() * opposite_length
+				)
+
+				if side == ControlSide.LEFT:
+					right = balanced
+				else:
+					left = balanced
 
 		HandleMode.MIRRORED:
-			_set_mirrored_opposite(side, value)
+			var mirrored := position + (position - value)
+
+			if side == ControlSide.LEFT:
+				right = mirrored
+			else:
+				left = mirrored
+
+	return {
+		"left": left,
+		"right": right,
+	}
+
+
+func _set_control_point(
+	side: ControlSide,
+	value: Vector2,
+) -> void:
+	var pair := get_control_point_pair(side, value)
+
+	var left: Vector2 = pair["left"]
+	var right: Vector2 = pair["right"]
+
+	if (
+		_left_control_point == left
+		and _right_control_point == right
+	):
+		return
+
+	_left_control_point = left
+	_right_control_point = right
 
 	_update_control_point_inputs("left_control_point")
 	_update_control_point_inputs("right_control_point")
 
 	emit_changed()
-
-
-func _set_balanced_opposite(
-	side: ControlSide,
-	value: Vector2
-) -> void:
-	var opposite := (
-		_right_control_point
-		if side == ControlSide.LEFT
-		else _left_control_point
-	)
-
-	var opposite_length := opposite.distance_to(position)
-	var direction := position - value
-
-	if direction.is_zero_approx():
-		return
-
-	var balanced_value := (
-		position
-		+ direction.normalized() * opposite_length
-	)
-
-	if side == ControlSide.LEFT:
-		_right_control_point = balanced_value
-	else:
-		_left_control_point = balanced_value
-
-
-func _set_mirrored_opposite(
-	side: ControlSide,
-	value: Vector2
-) -> void:
-	var mirrored_value := position + (position - value)
-
-	if side == ControlSide.LEFT:
-		_right_control_point = mirrored_value
-	else:
-		_left_control_point = mirrored_value
-
 
 
 func set_input_control(property_name: String, axis: String, control: Object) -> void:
