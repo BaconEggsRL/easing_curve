@@ -20,9 +20,17 @@ var update_checker: EasingCurveUpdateChecker
 var editor_undo_redo: EditorUndoRedoManager = get_undo_redo()
 
 var _pending_update := {}
+var _last_update_checks_enabled := true
 
 
 func _on_editor_settings_changed() -> void:
+	var enabled := _update_checks_enabled()
+
+	if enabled and not _last_update_checks_enabled:
+		if update_checker:
+			update_checker.check(get_plugin_version())
+
+	_last_update_checks_enabled = enabled
 	_refresh_update_checker_menu()
 
 
@@ -37,6 +45,7 @@ func _enter_tree() -> void:
 	update_checker = EasingCurveUpdateChecker.new()
 	add_child(update_checker)
 	update_checker.setup_editor_settings()
+	_last_update_checks_enabled = _update_checks_enabled()
 	update_checker.update_available.connect(_on_update_available)
 	update_checker.check(get_plugin_version())
 
@@ -164,13 +173,18 @@ func _update_checks_enabled() -> bool:
 
 func _toggle_update_checks() -> void:
 	var settings := EditorInterface.get_editor_settings()
+	var was_enabled := _update_checks_enabled()
+	var enabled := not was_enabled
 
 	settings.set_setting(
 		EasingCurveUpdateChecker.SETTING_ENABLED,
-		not _update_checks_enabled()
+		enabled
 	)
 
 	_refresh_update_checker_menu()
+
+	if enabled and update_checker:
+		update_checker.check(get_plugin_version())
 
 
 func _refresh_update_checker_menu() -> void:
