@@ -12,11 +12,18 @@ const EasingCurveUpdateChecker = preload(
 	"res://addons/easing_curve/scripts/update_checker.gd"
 )
 
+const UPDATE_CHECKS_ENABLE_MENU := "Easing Curve: Enable Update Checks"
+const UPDATE_CHECKS_DISABLE_MENU := "Easing Curve: Disable Update Checks"
+
 var easing_curve_editor_inspector_plugin
 var update_checker: EasingCurveUpdateChecker
 var editor_undo_redo: EditorUndoRedoManager = get_undo_redo()
 
 var _pending_update := {}
+
+
+func _on_editor_settings_changed() -> void:
+	_refresh_update_checker_menu()
 
 
 func _enter_tree() -> void:
@@ -33,16 +40,28 @@ func _enter_tree() -> void:
 	update_checker.update_available.connect(_on_update_available)
 	update_checker.check(get_plugin_version())
 
-	add_tool_menu_item(
-		"Easing Curve: Disable Update Checks"
-		if _update_checks_enabled()
-		else "Easing Curve: Enable Update Checks",
-		_toggle_update_checks
-	)
+	var editor_settings := EditorInterface.get_editor_settings()
+	if not editor_settings.settings_changed.is_connected(
+		_on_editor_settings_changed
+	):
+		editor_settings.settings_changed.connect(
+			_on_editor_settings_changed
+		)
+
+	_refresh_update_checker_menu()
 
 
 func _exit_tree() -> void:
 	resource_saved.disconnect(_on_resource_saved)
+
+	var editor_settings := EditorInterface.get_editor_settings()
+
+	if editor_settings.settings_changed.is_connected(
+		_on_editor_settings_changed
+	):
+		editor_settings.settings_changed.disconnect(
+			_on_editor_settings_changed
+	)
 
 	if easing_curve_editor_inspector_plugin:
 		remove_inspector_plugin(easing_curve_editor_inspector_plugin)
@@ -50,11 +69,8 @@ func _exit_tree() -> void:
 	if update_checker:
 		update_checker.queue_free()
 
-	remove_tool_menu_item(
-		"Easing Curve: Disable Update Checks"
-		if _update_checks_enabled()
-		else "Easing Curve: Enable Update Checks"
-	)
+	remove_tool_menu_item(UPDATE_CHECKS_ENABLE_MENU)
+	remove_tool_menu_item(UPDATE_CHECKS_DISABLE_MENU)
 
 
 func _enable_plugin() -> void:
@@ -146,24 +162,24 @@ func _update_checks_enabled() -> bool:
 	)
 
 
-
 func _toggle_update_checks() -> void:
-	var enabled := _update_checks_enabled()
+	var settings := EditorInterface.get_editor_settings()
 
-	EditorInterface.get_editor_settings().set_setting(
+	settings.set_setting(
 		EasingCurveUpdateChecker.SETTING_ENABLED,
-		not enabled
+		not _update_checks_enabled()
 	)
 
-	remove_tool_menu_item(
-		"Easing Curve: Disable Update Checks"
-		if enabled
-		else "Easing Curve: Enable Update Checks"
-	)
+	_refresh_update_checker_menu()
+
+
+func _refresh_update_checker_menu() -> void:
+	remove_tool_menu_item(UPDATE_CHECKS_ENABLE_MENU)
+	remove_tool_menu_item(UPDATE_CHECKS_DISABLE_MENU)
 
 	add_tool_menu_item(
-		"Easing Curve: Enable Update Checks"
-		if enabled
-		else "Easing Curve: Disable Update Checks",
+		UPDATE_CHECKS_DISABLE_MENU
+		if _update_checks_enabled()
+		else UPDATE_CHECKS_ENABLE_MENU,
 		_toggle_update_checks
 	)

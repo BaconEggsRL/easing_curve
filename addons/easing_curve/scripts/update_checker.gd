@@ -29,6 +29,9 @@ const DEBUG_UPDATE_CHECKER := false
 const SETTING_ENABLED := "easing_curve/update_checker/enabled"
 const SETTING_IGNORED_VERSIONS := "easing_curve/update_checker/ignored_versions"
 
+const UPDATE_CHECKS_ENABLE_MENU := "Easing Curve: Enable Update Checks"
+const UPDATE_CHECKS_DISABLE_MENU := "Easing Curve: Disable Update Checks"
+
 const LATEST_RELEASE_URL := (
 	"https://api.github.com/repos/BaconEggsRL/easing_curve/releases/latest"
 )
