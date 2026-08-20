@@ -4,14 +4,28 @@ extends Resource
 ## Point class for cubic bezier curves.
 ##
 ## Contains data for point position, left control and right control handles.
-## Future state will also include handle modes for each point (free, linear, etc.)
+## Supports Free, Linear, Balanced, and Mirrored handle modes.
 
 ## Stores the locked state of each Vector2 property and conveys back to the editor plugin.
 signal lock_changed(property_name: String, locked: bool)
 
+enum HandleMode {
+	FREE,
+	LINEAR,
+	BALANCED,
+	MIRRORED,
+}
+
+enum ControlSide {
+	LEFT,
+	RIGHT,
+}
+
 @export var position: Vector2 = Vector2.ZERO: set = set_position
 @export var left_control_point: Vector2 = Vector2.ZERO: set = set_left_control_point
 @export var right_control_point: Vector2 = Vector2.ZERO: set = set_right_control_point
+
+@export var handle_mode: HandleMode = HandleMode.FREE: set = set_handle_mode
 
 ## Stores editor-only Vector2 input sliders outside the resource property graph.
 static var _input_controls: Dictionary[int, Dictionary] = {}
@@ -68,21 +82,89 @@ func set_position(value: Vector2) -> void:
 
 
 func set_left_control_point(value: Vector2) -> void:
-	if left_control_point == value:
-		return
-	_set_input_value("left_control_point", "x", value.x)
-	_set_input_value("left_control_point", "y", value.y)
-	left_control_point = value
-	emit_changed()
+	_set_control_point(ControlSide.LEFT, value)
 
 
 func set_right_control_point(value: Vector2) -> void:
-	if right_control_point == value:
+	_set_control_point(ControlSide.RIGHT, value)
+
+
+func _set_control_point(side: ControlSide, value: Vector2) -> void:
+	if handle_mode == HandleMode.LINEAR:
+		value = position
+
+	var current := (
+		left_control_point
+		if side == ControlSide.LEFT
+		else right_control_point
+	)
+
+	if current == value:
 		return
-	_set_input_value("right_control_point", "x", value.x)
-	_set_input_value("right_control_point", "y", value.y)
-	right_control_point = value
+
+	if side == ControlSide.LEFT:
+		left_control_point = value
+	else:
+		right_control_point = value
+
+	match handle_mode:
+		HandleMode.BALANCED:
+			_set_balanced_opposite(side, value)
+
+		HandleMode.MIRRORED:
+			_set_mirrored_opposite(side, value)
+
+	_update_control_point_inputs("left_control_point")
+	_update_control_point_inputs("right_control_point")
+
 	emit_changed()
+
+
+func _set_balanced_opposite(
+	side: ControlSide,
+	value: Vector2
+) -> void:
+	var opposite := (
+		right_control_point
+		if side == ControlSide.LEFT
+		else left_control_point
+	)
+
+	var opposite_length := opposite.distance_to(position)
+	var direction := position - value
+
+	if direction.is_zero_approx():
+		return
+
+	var balanced_value := (
+		position
+		+ direction.normalized() * opposite_length
+	)
+
+	if side == ControlSide.LEFT:
+		right_control_point = balanced_value
+	else:
+		left_control_point = balanced_value
+
+
+func _set_mirrored_opposite(
+	side: ControlSide,
+	value: Vector2
+) -> void:
+	var mirrored_value := position + (position - value)
+
+	if side == ControlSide.LEFT:
+		right_control_point = mirrored_value
+	else:
+		left_control_point = mirrored_value
+
+
+func _update_control_point_inputs(property_name: String) -> void:
+	var value: Vector2 = get(property_name)
+
+	_set_input_value(property_name, "x", value.x)
+	_set_input_value(property_name, "y", value.y)
+
 
 
 func set_input_control(property_name: String, axis: String, control: Object) -> void:
@@ -101,3 +183,16 @@ func _set_input_value(property_name: String, axis: String, value: float) -> void
 	var input := _get_input(property_name, axis)
 	if input != null and input.has_method("set_value_no_signal"):
 		input.call("set_value_no_signal", value)
+
+
+func set_handle_mode(value: HandleMode) -> void:
+	if handle_mode == value:
+		return
+
+	handle_mode = value
+
+	if handle_mode == HandleMode.LINEAR:
+		left_control_point = position
+		right_control_point = position
+
+	emit_changed()
