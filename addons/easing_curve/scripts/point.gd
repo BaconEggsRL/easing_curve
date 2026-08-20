@@ -88,9 +88,19 @@ func set_locks(value: Dictionary[String, bool]) -> void:
 func set_position(value: Vector2) -> void:
 	if position == value:
 		return
+
+	var delta := value - position
+
+	_left_control_point += delta
+	_right_control_point += delta
+
+	position = value
+
 	_set_input_value("position", "x", value.x)
 	_set_input_value("position", "y", value.y)
-	position = value
+	_update_control_point_inputs("left_control_point")
+	_update_control_point_inputs("right_control_point")
+
 	emit_changed()
 
 
