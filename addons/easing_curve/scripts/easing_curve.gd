@@ -36,6 +36,7 @@ enum TRANS {
 	PHYSICS_SPRING,
 	CSS_LINEAR,
 	SINE,
+	CSS_CUBIC_BEZIER,
 }
 
 # List of functions (non-bezier presets)
@@ -49,6 +50,7 @@ const FUNCTION_TRANSITIONS := [
 	TRANS.SPRING,
 	TRANS.PHYSICS_SPRING,
 	TRANS.CSS_LINEAR,
+	TRANS.CSS_CUBIC_BEZIER,
 ]
 
 # Normal function implementations.
@@ -67,7 +69,7 @@ const FUNCTION_CLASSES := {
 	},
 	TRANS.BOUNCE: {
 		"class": EASING_LIBRARY.Bounce,
-		"extended": false,
+		"extended": true,
 	},
 	TRANS.SPRING: {
 		"class": EASING_LIBRARY.Spring,
@@ -81,6 +83,22 @@ const FUNCTION_CLASSES := {
 		"class": EASING_LIBRARY.CSSLinear,
 		"extended": true,
 	},
+	TRANS.CSS_CUBIC_BEZIER: {
+		"class": EASING_LIBRARY.CSSCubicBezier,
+		"extended": true,
+	},
+}
+
+
+# Editable values passed to Bezier curve implementations.
+# These are exported properties; see "BEZIER PARAMETERS" section below.
+const BEZIER_PARAMETERS := {
+	TRANS.CONSTANT: [
+		&"constant_value",
+	],
+	TRANS.BACK: [
+		&"overshoot",
+	],
 }
 
 
@@ -106,6 +124,10 @@ const FUNCTION_PARAMETERS := {
 	TRANS.ELASTIC: [
 		&"amplitude",
 		&"period",
+	],
+	TRANS.BOUNCE: [
+		&"num_bounces",
+		&"bounce_damping",
 	],
 	TRANS.SPRING: [
 		&"frequency",
@@ -141,6 +163,9 @@ const FUNCTION_EDITOR_PROPERTIES := {
 	],
 	TRANS.CSS_LINEAR: [
 		&"css_linear",
+	],
+	TRANS.CSS_CUBIC_BEZIER: [
+		&"css_cubic_bezier",
 	],
 }
 
@@ -184,9 +209,9 @@ var _parameter_update_change_pending := false
 var _applying_function_snapshot := false
 var _applying_editor_state_snapshot := false
 
-######################################################
+# ------------------
 # EXPORTED OPTIONS
-######################################################
+# ------------------
 ## Option button to select Ease type
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
 var ease_type: EASE = EASE.IN:
@@ -239,11 +264,80 @@ var function_callable: Callable:
 			return
 		emit_changed()
 
-######################################################
+# ------------------
 # CURVE EDITOR
-######################################################
+# ------------------
 ## Placeholder for the curve editor (replaced by the editor plugin script.)
 @export var easing_curve_editor: bool
+
+
+######################################################
+# TRANSITION PARAMETERS
+######################################################
+
+@export_group("Transition Parameters")
+# Transition parameters
+
+######################################################
+# BEZIER PARAMETERS
+######################################################
+## Parameters for specific CurveMode.BEZIER
+
+# ------------------
+# CONSTANT VALUE
+# ------------------
+## Controls the output value of the Constant preset.
+@export_range(0.0, 1.0, 0.01) var constant_value: float = 0.5:
+	set(value):
+		if constant_value == value:
+			return
+
+		constant_value = value
+
+		if _applying_editor_state_snapshot:
+			return
+
+		if trans_type == TRANS.CONSTANT:
+			var revision_before := _change_revision
+			var snapshot := get_canonical_preset_point_snapshot()
+
+			if _parameter_edit_depth > 0:
+				snapshot["changing"] = true
+
+			set_point_snapshot(snapshot)
+
+			if _change_revision == revision_before:
+				_notify_parameter_changed()
+		else:
+			_notify_parameter_changed()
+
+
+# ------------------
+# BACK OVERSHOOT
+# ------------------
+## Controls how far the curve overshoots its target.[br]
+## Higher values create a stronger overshoot; lower values make it more subtle.
+@export_range(0.0, 5.0, 0.001) var overshoot: float = 1.70158:
+	set(value):
+		if overshoot == value:
+			return
+		overshoot = value
+		if _applying_editor_state_snapshot:
+			return
+		if trans_type == TRANS.BACK:
+			var revision_before := _change_revision
+			var snapshot := get_canonical_preset_point_snapshot()
+			if _parameter_edit_depth > 0:
+				snapshot["changing"] = true
+			set_point_snapshot(snapshot)
+			if _change_revision == revision_before:
+				_notify_parameter_changed()
+		else:
+			_notify_parameter_changed()
+
+# ------------------
+# POINTS
+# ------------------
 ## Runtime point API. Point data is serialized through primitive properties so live
 ## updates do not depend on Godot's Array[Resource] change propagation.
 var points: Array[EasingCurvePoint]:
@@ -256,9 +350,10 @@ var points: Array[EasingCurvePoint]:
 # FUNCTION PARAMETERS
 ######################################################
 ## Parameters for specific CurveMode.FUNCTION
-####################
+
+# ------------------
 # IRREGULAR
-####################
+# ------------------
 ## Represents the number of random points to generate. Must be a positive integer >= 2.
 ## Irregular mode converges to a linear equation for num_points == 2, no matter how high the randomness is.
 @export_range(2, 100, 1) var num_points: int = 3:
@@ -297,9 +392,9 @@ var _irregular_points_y: Array[float] = []:
 		_irregular_points_y = value
 		_notify_parameter_changed()
 
-####################
+# ------------------
 # STEP
-####################
+# ------------------
 ## Represents the number of equal steps to divide the animation into.
 ## Must be a positive integer.
 @export_range(0, 100, 1) var steps: int = 4:
@@ -322,70 +417,113 @@ var _irregular_points_y: Array[float] = []:
 			y_offset = value
 			_notify_parameter_changed()
 
-####################
+
+# ------------------
 # POWER
-####################
+# ------------------
+## Controls the exponent used by the Power easing function.[br]
+## 1.0 is linear; 2.0 is Quad, 3.0 is Cubic, and so on. Fractional exponents are also allowed.
 @export_range(0.001, 1000.0, 0.001, "exp") var power: float = 2.0:
 	set(value):
 		if power != value:
 			power = value
 			_notify_parameter_changed()
 
-####################
+
+# ------------------
 # ELASTIC
-####################
+# ------------------
+## Controls the amplitude of oscillation.[br]
+## Higher values produce larger overshoots and wider motion.
 @export_range(0.0, 5.0, 0.01) var amplitude: float = 1.0:
 	set(value):
 		if amplitude != value:
 			amplitude = value
 			_notify_parameter_changed()
+
+## Controls the period of oscillation.[br]
+## Lower the period to produce faster, more frequent oscillations.[br]
+## Increase the period to produce slower, wider oscillations.
 @export_range(0.01, 1.0, 0.01) var period: float = 0.3:
 	set(value):
 		if period != value:
 			period = value
 			_notify_parameter_changed()
 
-####################
+
+# ------------------
+# BOUNCE
+# ------------------
+## The number of bounces before settling.
+@export_range(1, 10, 1) var num_bounces: int = 3:
+	set(value):
+		if num_bounces != value:
+			num_bounces = value
+			_notify_parameter_changed()
+
+## The amount of damping to apply to each bounce.
+@export_range(0.0, 100.0, 0.1) var bounce_damping: float = 75.0:
+	set(value):
+		if bounce_damping != value:
+			bounce_damping = value
+			_notify_parameter_changed()
+
+# ------------------
 # SPRING
-####################
+# ------------------
+## The frequency of oscillation.
 @export_range(0.0, 10.0, 0.01) var frequency: float = 2.5:
 	set(value):
 		if frequency != value:
 			frequency = value
 			_notify_parameter_changed()
+## The amount of oscillation decay.
 @export_range(0.1, 10.0, 0.01) var decay: float = 2.2:
 	set(value):
 		if decay != value:
 			decay = value
 			_notify_parameter_changed()
 
-####################
+# ------------------
 # PHYSICS_SPRING
-####################
+# ------------------
+## The stiffness of the spring.
 @export_range(0.0, 1000.0, 0.1) var stiffness: float = 100.0:
 	set(value):
 		if stiffness != value:
 			stiffness = value
 			_notify_parameter_changed()
+## The spring damping value.
 @export_range(1.0, 100.0, 0.1) var damping: float = 10.0:
 	set(value):
 		if damping != value:
 			damping = value
 			_notify_parameter_changed()
+## The mass of the object attached to the spring.
 @export_range(1.0, 10.0, 0.1) var mass: float = 1.0:
 	set(value):
 		if mass != value:
 			mass = value
 			_notify_parameter_changed()
+## The initial velocity of the spring.
 @export_range(-30.0, 30.0, 0.1) var velocity: float = 0.0:
 	set(value):
 		if velocity != value:
 			velocity = value
 			_notify_parameter_changed()
 
-####################
+# ------------------
 # CSS_LINEAR
-####################
+# ------------------
+## CSS linear easing function.[br]
+## String format: linear(y1, y2, y3...)[br]
+## Each y value defines the easing progress at that point.[br]
+## By default the progress is evenly distributed in x.[br]
+## Optional x% can specify where a value occurs: y x%.[br]
+## Example: linear(0, 0.75 25%, 1) vs. linear(0, 0.75, 1)[br]
+## Percentages must be in the [0%, 100%] range and appear in ascending order.[br]
+## Y values can have any range (positive or negative.)[br]
+## Example: linear(0, -0.25 25%, 1.1 75%, 1)
 @export var css_linear: String = "linear(0, 1)":
 	set(value):
 		if css_linear == value:
@@ -401,6 +539,7 @@ var _irregular_points_y: Array[float] = []:
 		_notify_parameter_changed()
 
 
+
 @export_custom(
 	PROPERTY_HINT_NONE,
 	"",
@@ -410,6 +549,92 @@ var _css_linear_points: PackedVector2Array = PackedVector2Array([
 	Vector2(0.0, 0.0),
 	Vector2(1.0, 1.0),
 ])
+
+# ------------------
+# CSS_CUBIC_BEZIER
+# ------------------
+## CSS cubic-bezier easing function.[br]
+## String format: cubic-bezier(x1, y1, x2, y2)[br]
+## (x1, y1): First control point.[br]
+## (x2, y2): Second control point.[br]
+## x controls timing; x values must be in the [0, 1] range.[br]
+## y controls progress; y values can have any range.[br]
+## Example: cubic-bezier(0.333, 0, 0.667, -0.567) for a "Back" style curve.
+@export var css_cubic_bezier: String = "cubic-bezier(0.25, 0.1, 0.25, 1)":
+	set(value):
+		if css_cubic_bezier == value:
+			return
+
+		css_cubic_bezier = value
+
+		var parsed := EASING_LIBRARY.CSSCubicBezier.parse(value)
+		if parsed.is_empty():
+			return
+
+		_css_cubic_bezier_controls = parsed
+		_notify_parameter_changed()
+
+
+@export_custom(
+	PROPERTY_HINT_NONE,
+	"",
+	PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_NO_EDITOR,
+)
+var _css_cubic_bezier_controls := PackedFloat64Array([
+	0.25,
+	0.1,
+	0.25,
+	1.0,
+])
+
+
+######################################################
+# GLOBAL TRANSFORM
+######################################################
+
+@export_group("Global Transform")
+
+## Flips the curve horizontally.[br]
+## The transform remains active when switching presets.
+@export var reverse: bool = false:
+	set(value):
+		if reverse == value:
+			return
+
+		reverse = value
+
+		if _applying_editor_state_snapshot:
+			return
+
+		if curve_mode == CurveMode.BEZIER:
+			var snapshot := _reverse_point_snapshot(
+				get_point_snapshot()
+			)
+			set_point_snapshot(snapshot)
+			return
+
+		_notify_parameter_changed()
+
+## Flips the curve vertically.[br]
+## The transform remains active when switching presets.
+@export var invert: bool = false:
+	set(value):
+		if invert == value:
+			return
+
+		invert = value
+
+		if _applying_editor_state_snapshot:
+			return
+
+		if curve_mode == CurveMode.BEZIER:
+			var snapshot := _invert_point_snapshot(
+				get_point_snapshot()
+			)
+			set_point_snapshot(snapshot)
+			return
+
+		_notify_parameter_changed()
 
 
 ######################################################
@@ -550,9 +775,18 @@ func _property_belongs_to_transition(
 		transition: TRANS,
 ) -> bool:
 	return (
-		property_name in FUNCTION_PARAMETERS.get(transition, [])
+		property_name in BEZIER_PARAMETERS.get(transition, [])
+		or property_name in FUNCTION_PARAMETERS.get(transition, [])
 		or property_name in FUNCTION_EDITOR_PROPERTIES.get(transition, [])
 	)
+
+
+func _is_bezier_property(property_name: StringName) -> bool:
+	for properties in BEZIER_PARAMETERS.values():
+		if property_name in properties:
+			return true
+
+	return false
 
 
 func _is_function_property(property_name: StringName) -> bool:
@@ -585,10 +819,35 @@ static func get_all_function_parameters() -> Array[StringName]:
 	return result
 
 
+static func get_all_bezier_parameters() -> Array[StringName]:
+	var result: Array[StringName] = []
+
+	for parameters in BEZIER_PARAMETERS.values():
+		for property_name: StringName in parameters:
+			if property_name not in result:
+				result.append(property_name)
+
+	return result
+
+
+static func get_all_parameters() -> Array[StringName]:
+	var result := get_all_function_parameters()
+
+	for property_name in get_all_bezier_parameters():
+		if property_name not in result:
+			result.append(property_name)
+
+	return result
+
+
 static func has_function_parameter_default(
 		property_name: StringName,
 ) -> bool:
 	return property_name in get_all_function_parameters()
+
+
+static func has_parameter_default(property_name: StringName) -> bool:
+	return property_name in get_all_parameters()
 
 
 static var _default_instance: EasingCurve
@@ -600,11 +859,24 @@ static func get_function_parameter_default(
 	return _default_instance.get(property_name)
 
 
+static func get_parameter_default(property_name: StringName) -> Variant:
+	if _default_instance == null:
+		_default_instance = EasingCurve.new()
+	return _default_instance.get(property_name)
+
+
 static func is_deferred_function_parameter(
 		property_name: StringName,
 ) -> bool:
 	return (
 		property_name in get_all_function_parameters()
+		and property_name not in NON_DEFERRED_FUNCTION_PARAMETERS
+	)
+
+
+static func is_deferred_parameter(property_name: StringName) -> bool:
+	return (
+		property_name in get_all_parameters()
 		and property_name not in NON_DEFERRED_FUNCTION_PARAMETERS
 	)
 
@@ -639,6 +911,15 @@ func _validate_property(property: Dictionary) -> void:
 		property.usage &= ~PROPERTY_USAGE_STORAGE
 		return
 
+	# Bezier-specific properties are only visible for
+	# the transition that owns them.
+	if _is_bezier_property(property_name):
+		if _property_belongs_to_transition(property_name, trans_type):
+			property.usage |= PROPERTY_USAGE_EDITOR
+		else:
+			property.usage &= ~PROPERTY_USAGE_EDITOR
+		return
+
 	# Function-specific properties are only visible for
 	# the transition that owns them.
 	if _is_function_property(property_name):
@@ -657,10 +938,7 @@ func generate_irregular() -> void:
 
 
 func get_default_for_property(i: int, property_name: String) -> Vector2:
-	var temp := EasingCurve.new()
-	temp.set_ease(ease_type)
-	temp.set_trans(trans_type)
-	temp._update_preset()
+	var temp := _create_canonical_preset()
 
 	if i < 0 or i >= temp.points.size():
 		return Vector2.ZERO
@@ -683,13 +961,29 @@ func has_builtin_bezier_preset() -> bool:
 	]
 
 
+func _create_canonical_preset() -> EasingCurve:
+	var preset := EasingCurve.new()
+	for property_name in BEZIER_PARAMETERS.get(trans_type, []):
+		preset.set(property_name, get(property_name))
+	preset.set_ease(ease_type)
+	preset.set_trans(trans_type)
+	return preset
+
+
 func get_canonical_preset_point_snapshot() -> Dictionary:
 	if not has_builtin_bezier_preset():
 		return {}
-	var preset := EasingCurve.new()
-	preset.set_ease(ease_type)
-	preset.set_trans(trans_type)
-	return preset.get_point_snapshot()
+
+	var preset := _create_canonical_preset()
+	var snapshot := preset.get_point_snapshot()
+
+	if reverse:
+		snapshot = _reverse_point_snapshot(snapshot)
+
+	if invert:
+		snapshot = _invert_point_snapshot(snapshot)
+
+	return snapshot
 
 
 ## A modified built-in keeps its Transition/Ease origin.
@@ -916,6 +1210,109 @@ func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 	}
 
 
+func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
+	var result := snapshot.duplicate(true)
+
+	var positions: PackedVector2Array = snapshot.get(
+		"positions",
+		PackedVector2Array(),
+	)
+	var left_controls: PackedVector2Array = snapshot.get(
+		"left_control_points",
+		PackedVector2Array(),
+	)
+	var right_controls: PackedVector2Array = snapshot.get(
+		"right_control_points",
+		PackedVector2Array(),
+	)
+	var locks: Array = snapshot.get("locks", [])
+
+	var reversed_positions := PackedVector2Array()
+	var reversed_left_controls := PackedVector2Array()
+	var reversed_right_controls := PackedVector2Array()
+	var reversed_locks: Array[Dictionary] = []
+
+	for i in range(positions.size() - 1, -1, -1):
+		var position := positions[i]
+		position.x = 1.0 - position.x
+		reversed_positions.append(position)
+
+		# Horizontal reversal swaps left/right handle roles.
+		var left_control := right_controls[i]
+		left_control.x = 1.0 - left_control.x
+		reversed_left_controls.append(left_control)
+
+		var right_control := left_controls[i]
+		right_control.x = 1.0 - right_control.x
+		reversed_right_controls.append(right_control)
+
+		var lock_values: Dictionary = (
+			locks[i]
+			if i < locks.size() and locks[i] is Dictionary
+			else {}
+		)
+
+		# Handle locks swap for the same reason as the handles.
+		reversed_locks.append({
+			"position": bool(lock_values.get("position", false)),
+			"left_control_point": bool(
+				lock_values.get("right_control_point", false)
+			),
+			"right_control_point": bool(
+				lock_values.get("left_control_point", false)
+			),
+		})
+
+	result["positions"] = reversed_positions
+	result["left_control_points"] = reversed_left_controls
+	result["right_control_points"] = reversed_right_controls
+	result["locks"] = reversed_locks
+
+	return result
+
+
+func _invert_point_snapshot(snapshot: Dictionary) -> Dictionary:
+	var result := snapshot.duplicate(true)
+
+	var positions: PackedVector2Array = snapshot.get(
+		"positions",
+		PackedVector2Array(),
+	)
+	var left_controls: PackedVector2Array = snapshot.get(
+		"left_control_points",
+		PackedVector2Array(),
+	)
+	var right_controls: PackedVector2Array = snapshot.get(
+		"right_control_points",
+		PackedVector2Array(),
+	)
+
+	var inverted_positions := PackedVector2Array()
+	var inverted_left_controls := PackedVector2Array()
+	var inverted_right_controls := PackedVector2Array()
+
+	for position in positions:
+		var transformed := position
+		transformed.y = 1.0 - transformed.y
+		inverted_positions.append(transformed)
+
+	for control in left_controls:
+		var transformed := control
+		transformed.y = 1.0 - transformed.y
+		inverted_left_controls.append(transformed)
+
+	for control in right_controls:
+		var transformed := control
+		transformed.y = 1.0 - transformed.y
+		inverted_right_controls.append(transformed)
+
+	result["positions"] = inverted_positions
+	result["left_control_points"] = inverted_left_controls
+	result["right_control_points"] = inverted_right_controls
+
+	return result
+
+
 func set_point_snapshot(snapshot: Dictionary) -> void:
 	var positions: PackedVector2Array = snapshot.get("positions", PackedVector2Array())
 	var left_control_points: PackedVector2Array = snapshot.get("left_control_points", PackedVector2Array())
@@ -984,9 +1381,21 @@ func get_editor_state_snapshot() -> Dictionary:
 		"trans_type": trans_type,
 		"curve_mode": curve_mode,
 		"from_start": from_start,
+		"reverse": reverse,
+		"invert": invert,
+		"bezier_parameter_snapshot": _get_bezier_parameter_snapshot(),
 		"point_snapshot": get_point_snapshot(),
 		"function_snapshot": get_function_snapshot(),
 	}
+
+
+func _get_bezier_parameter_snapshot() -> Dictionary:
+	var snapshot := {}
+
+	for property_name in get_all_bezier_parameters():
+		snapshot[property_name] = get(property_name)
+
+	return snapshot
 
 
 func set_editor_state_snapshot(snapshot: Dictionary) -> void:
@@ -994,6 +1403,12 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	var snapshot_trans := int(snapshot.get("trans_type", trans_type))
 	var snapshot_mode := int(snapshot.get("curve_mode", curve_mode))
 	var snapshot_from_start := bool(snapshot.get("from_start", from_start))
+	var snapshot_reverse := bool(snapshot.get("reverse", reverse))
+	var snapshot_invert := bool(snapshot.get("invert", invert))
+	var bezier_parameter_snapshot: Dictionary = snapshot.get(
+		"bezier_parameter_snapshot",
+		_get_bezier_parameter_snapshot(),
+	)
 	var point_snapshot: Dictionary = snapshot.get("point_snapshot", get_point_snapshot())
 	var function_snapshot: Dictionary = snapshot.get("function_snapshot", get_function_snapshot())
 
@@ -1009,12 +1424,18 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 		locks,
 	)
 	var locks_changed := _point_snapshot_locks_differ(locks)
+	var bezier_parameters_changed := (
+		_get_bezier_parameter_snapshot() != bezier_parameter_snapshot
+	)
 	var function_changed := get_function_snapshot() != function_snapshot
 	var scalar_changed := (
 		ease_type != snapshot_ease
 		or trans_type != snapshot_trans
 		or curve_mode != snapshot_mode
 		or from_start != snapshot_from_start
+		or reverse != snapshot_reverse
+		or invert != snapshot_invert
+		or bezier_parameters_changed
 	)
 	if not point_data_changed and not function_changed and not scalar_changed:
 		return
@@ -1033,6 +1454,11 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	curve_mode = snapshot_mode
 	function_callable = Callable()
 	from_start = snapshot_from_start
+	reverse = snapshot_reverse
+	invert = snapshot_invert
+	for property_name in get_all_bezier_parameters():
+		if bezier_parameter_snapshot.has(property_name):
+			set(property_name, bezier_parameter_snapshot[property_name])
 	set_function_snapshot(function_snapshot)
 	set_point_snapshot(point_snapshot)
 	if curve_mode == CurveMode.FUNCTION and trans_type != TRANS.CUSTOM:
@@ -1310,12 +1736,25 @@ func _cancel_editor_parameter_edit() -> void:
 	if _parameter_edit_depth <= 0:
 		return
 	_parameter_edit_depth -= 1
+	if _parameter_edit_depth == 0:
+		_point_snapshot_change_pending = false
+		_point_snapshot_property_list_pending = false
 
 
 func _finish_editor_parameter_edit() -> void:
 	if _parameter_edit_depth <= 0:
 		return
 	_parameter_edit_depth -= 1
+	if _parameter_edit_depth == 0 and (
+		_point_snapshot_change_pending
+		or _point_snapshot_property_list_pending
+	):
+		var point_data_changed := _point_snapshot_change_pending
+		var property_list_changed := _point_snapshot_property_list_pending
+		_point_snapshot_change_pending = false
+		_point_snapshot_property_list_pending = false
+		_notify_curve_changed(point_data_changed, property_list_changed)
+		return
 	_notify_parameter_changed()
 
 
@@ -1346,6 +1785,7 @@ func clear_function() -> void:
 				add_point(EasingCurvePoint.new(Vector2.ONE))
 		return
 	curve_mode = CurveMode.BEZIER
+	function_callable = Callable()
 	_clear_points()
 
 
@@ -1371,6 +1811,8 @@ func _get_function_arguments(offset: float) -> Array:
 		args.append(_irregular_points_y)
 	elif trans_type == TRANS.CSS_LINEAR:
 		args.append(_css_linear_points)
+	elif trans_type == TRANS.CSS_CUBIC_BEZIER:
+		args.append(_css_cubic_bezier_controls)
 	else:
 		for property_name in FUNCTION_PARAMETERS.get(trans_type, []):
 			args.append(get(property_name))
@@ -1378,16 +1820,17 @@ func _get_function_arguments(offset: float) -> Array:
 	return args
 
 
-## Sample the curve, calculating f(t) given x
-func sample(offset: float) -> float:
+
+func _sample_raw(offset: float) -> float:
 	if _synchronize_point_connections():
 		_notify_curve_changed(true, true)
-	offset = clamp(offset, 0.0, 1.0)
 
 	if curve_mode == CurveMode.FUNCTION:
 		if not function_callable.is_valid():
 			_init_function()
-		return function_callable.callv(_get_function_arguments(offset))
+		return function_callable.callv(
+			_get_function_arguments(offset)
+		)
 
 	if points.size() < 2:
 		return 0.0
@@ -1396,7 +1839,6 @@ func sample(offset: float) -> float:
 		var a = points[i]
 		var b = points[i + 1]
 
-		# Quick rejection: skip segment if offset not in its X bounds
 		var min_x = min(a.position.x, b.position.x)
 		var max_x = max(a.position.x, b.position.x)
 
@@ -1405,7 +1847,6 @@ func sample(offset: float) -> float:
 
 		var t = _solve_for_t(offset, a, b)
 
-		# Validate solution
 		if t >= 0.0 and t <= 1.0:
 			return _bezier_interpolate(
 				a.position.y,
@@ -1415,8 +1856,28 @@ func sample(offset: float) -> float:
 				t,
 			)
 
-	# Fallback (should not happen if curve monotonic)
 	return 0.0
+
+
+## Sample the curve, calculating f(t) given x.
+func sample(offset: float) -> float:
+	offset = clampf(offset, 0.0, 1.0)
+
+	# Function transforms are applied at sample time because functions have no
+	# editable geometry. Bézier transforms are already baked into their points,
+	# so applying them here would transform the curve twice.
+	if curve_mode == CurveMode.FUNCTION:
+		if reverse:
+			offset = 1.0 - offset
+
+		var result := _sample_raw(offset)
+
+		if invert:
+			result = 1.0 - result
+
+		return result
+
+	return _sample_raw(offset)
 
 
 ##########################################################
@@ -1629,8 +2090,8 @@ func _update_preset() -> void:
 		TRANS.CUSTOM:
 			return
 		TRANS.CONSTANT:
-			add_point(EasingCurvePoint.new(Vector2(0, .5)))
-			add_point(EasingCurvePoint.new(Vector2(1, .5)))
+			add_point(EasingCurvePoint.new(Vector2(0, constant_value)))
+			add_point(EasingCurvePoint.new(Vector2(1, constant_value)))
 		TRANS.LINEAR:
 			add_point(EasingCurvePoint.new(Vector2(0, 0)))
 			add_point(EasingCurvePoint.new(Vector2(1, 1)))
@@ -1687,20 +2148,32 @@ func _update_preset() -> void:
 			# Back is cubic; combined modes are exact pieces, with Godot's larger IN_OUT overshoot.
 			match ease_type:
 				EASE.IN:
-					cubic_bezier(1.0 / 3.0, 0, 2.0 / 3.0, -1.70158 / 3.0)
+					cubic_bezier(1.0 / 3.0, 0, 2.0 / 3.0, -overshoot / 3.0)
 				EASE.OUT:
-					cubic_bezier(1.0 / 3.0, 1.0 + 1.70158 / 3.0, 2.0 / 3.0, 1)
+					cubic_bezier(1.0 / 3.0, 1.0 + overshoot / 3.0, 2.0 / 3.0, 1)
 				EASE.IN_OUT:
-					var in_out_overshoot := 1.70158 * 1.525
+					var in_out_overshoot := overshoot * 1.525
 					cubic_bezier_pair(
 						Vector4(1.0 / 3.0, 0, 2.0 / 3.0, -in_out_overshoot / 3.0),
 						Vector4(1.0 / 3.0, 1.0 + in_out_overshoot / 3.0, 2.0 / 3.0, 1),
 					)
 				EASE.OUT_IN:
 					cubic_bezier_pair(
-						Vector4(1.0 / 3.0, 1.0 + 1.70158 / 3.0, 2.0 / 3.0, 1),
-						Vector4(1.0 / 3.0, 0, 2.0 / 3.0, -1.70158 / 3.0),
+						Vector4(1.0 / 3.0, 1.0 + overshoot / 3.0, 2.0 / 3.0, 1),
+						Vector4(1.0 / 3.0, 0, 2.0 / 3.0, -overshoot / 3.0),
 					)
+
+	# Apply persistent global transforms to newly generated Bézier presets.
+	if reverse or invert:
+		var snapshot := get_point_snapshot()
+
+		if reverse:
+			snapshot = _reverse_point_snapshot(snapshot)
+
+		if invert:
+			snapshot = _invert_point_snapshot(snapshot)
+
+		set_point_snapshot(snapshot)
 
 
 func _on_point_changed() -> void:

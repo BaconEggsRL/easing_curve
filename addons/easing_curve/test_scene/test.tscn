@@ -3,9 +3,10 @@
 [ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/test_scene/test.gd" id="1_37kl0"]
 [ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="2_6iudh"]
 
-[sub_resource type="Resource" id="Resource_6wlcs"]
+[sub_resource type="Resource" id="Resource_gjjud"]
 script = ExtResource("2_6iudh")
 _css_linear_points = PackedVector2Array(0, 0, 1, 1)
+_css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.25, 1)
 _point_count = 2
 _point_0/position = Vector2(0, 0)
 _point_0/left_control_point = Vector2(0, 0)
@@ -34,7 +35,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_37kl0")
-easing_curve = SubResource("Resource_6wlcs")
+easing_curve = SubResource("Resource_gjjud")
 
 [node name="NodeContainer" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)

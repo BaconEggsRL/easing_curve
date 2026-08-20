@@ -29,6 +29,69 @@ const DRAGGING_META := &"_easing_curve_dragging"
 const POINT_MENU_COPY_VALUE := 0
 const POINT_MENU_PASTE_VALUE := 1
 const POINT_MENU_COPY_PATH := 2
+# modified preset indicator
+const SHOW_MODIFIED_ASTERISK := true
+
+
+const TRANSITION_GROUPS := [
+	{
+		"name": "Basic",
+		"items": [
+			EasingCurve.TRANS.LINEAR,
+			EasingCurve.TRANS.CONSTANT,
+		],
+	},
+	{
+		"name": "Polynomial",
+		"items": [
+			EasingCurve.TRANS.QUAD,
+			EasingCurve.TRANS.CUBIC,
+			EasingCurve.TRANS.QUART,
+			EasingCurve.TRANS.QUINT,
+			EasingCurve.TRANS.POWER,
+		],
+	},
+	{
+		"name": "Smooth",
+		"items": [
+			EasingCurve.TRANS.SINE,
+			EasingCurve.TRANS.CIRC,
+			EasingCurve.TRANS.EXPO,
+		],
+	},
+	{
+		"name": "Springy",
+		"items": [
+			EasingCurve.TRANS.BACK,
+			EasingCurve.TRANS.ELASTIC,
+			EasingCurve.TRANS.BOUNCE,
+			EasingCurve.TRANS.SPRING,
+			EasingCurve.TRANS.PHYSICS_SPRING,
+		],
+	},
+	{
+		"name": "Discrete",
+		"items": [
+			EasingCurve.TRANS.STEP,
+			EasingCurve.TRANS.JITTER,
+			EasingCurve.TRANS.IRREGULAR,
+		],
+	},
+	{
+		"name": "CSS",
+		"items": [
+			EasingCurve.TRANS.CSS_CUBIC_BEZIER,
+			EasingCurve.TRANS.CSS_LINEAR,
+		],
+	},
+	{
+		"name": "Custom",
+		"items": [
+			EasingCurve.TRANS.CUSTOM,
+		],
+	},
+]
+
 
 
 func _parse_begin(object: Object) -> void:
@@ -253,11 +316,11 @@ class DeferredParameterEditorProperty:
 		var object := get_edited_object() as EasingCurve
 		if (
 			object == null
-			or not EasingCurve.has_function_parameter_default(property_name)
+			or not EasingCurve.has_parameter_default(property_name)
 		):
 			return
 
-		var default_value := EasingCurve.get_function_parameter_default(
+		var default_value := EasingCurve.get_parameter_default(
 			property_name
 		)
 
@@ -275,11 +338,11 @@ class DeferredParameterEditorProperty:
 	func _update_reset_button(value: Variant) -> void:
 		if (
 			reset_button == null
-			or not EasingCurve.has_function_parameter_default(property_name)
+			or not EasingCurve.has_parameter_default(property_name)
 		):
 			return
 		var default_value: Variant = (
-			EasingCurve.get_function_parameter_default(property_name)
+			EasingCurve.get_parameter_default(property_name)
 		)
 		reset_button.visible = value != default_value
 
@@ -440,18 +503,121 @@ class PointsEditorProperty:
 class PointsListContainer:
 	extends VBoxContainer
 
-	var drop_index := -1
+	signal point_swap_requested(from_index: int, to_index: int)
 
-	func set_drop_index(value: int) -> void:
-		if drop_index == value:
+	var drop_index := -1
+	var drop_after := false
+
+	func enable_drop_forwarding(control: Control) -> void:
+		control.set_drag_forwarding(
+			Callable(),
+			_forward_can_drop_data,
+			_forward_drop_data
+		)
+
+		for child in control.get_children():
+			if child is Control:
+				enable_drop_forwarding(child)
+
+
+	func _forward_can_drop_data(_position: Vector2, data) -> bool:
+		return _can_drop_data(get_local_mouse_position(), data)
+
+
+	func _forward_drop_data(_position: Vector2, data) -> void:
+		_drop_data(get_local_mouse_position(), data)
+
+
+	func _get_drop_target_index(mouse_y: float, point_panels: Array[Control]) -> int:
+		for i in point_panels.size():
+			var panel := point_panels[i]
+			var top := panel.position.y
+			var bottom := panel.position.y + panel.size.y
+
+			if mouse_y >= top and mouse_y <= bottom:
+				return i
+
+			if i < point_panels.size() - 1:
+				var next_panel := point_panels[i + 1]
+				var gap_midpoint := (bottom + next_panel.position.y) * 0.5
+
+				if mouse_y > bottom and mouse_y < gap_midpoint:
+					return i
+
+				if mouse_y >= gap_midpoint and mouse_y < next_panel.position.y:
+					return i + 1
+
+		return -1
+
+
+	func _can_drop_data(position: Vector2, data) -> bool:
+		if not data.has("index") or not data.has("point"):
+			return false
+
+		var point_panels: Array[Control] = []
+
+		for child in get_children():
+			if child is PanelContainer:
+				point_panels.append(child)
+
+		if point_panels.is_empty():
+			return false
+
+		var from_index: int = data["index"]
+		var to_index := _get_drop_target_index(position.y, point_panels)
+
+		if to_index < 0:
+			return false
+
+		var target := point_panels[to_index]
+		var mouse_y := position.y
+		var midpoint := target.position.y + target.size.y * 0.5
+		var dead_zone := 3.0
+
+		var after: bool
+
+		if drop_index != to_index:
+			after = mouse_y >= midpoint
+		elif mouse_y < midpoint - dead_zone:
+			after = false
+		elif mouse_y > midpoint + dead_zone:
+			after = true
+		else:
+			after = drop_after
+
+		set_drop_index(to_index, after)
+		return true
+
+
+	func _drop_data(position: Vector2, data) -> void:
+		var point_panels: Array[Control] = []
+
+		for child in get_children():
+			if child is PanelContainer:
+				point_panels.append(child)
+
+		var from_index: int = data["index"]
+		var to_index := _get_drop_target_index(position.y, point_panels)
+
+		clear_drop_index()
+
+		if to_index >= 0 and from_index != to_index:
+			point_swap_requested.emit(from_index, to_index)
+
+
+	func set_drop_index(to_index: int, after: bool) -> void:
+		if drop_index == to_index and drop_after == after:
 			return
-		drop_index = value
+		drop_index = to_index
+		drop_after = after
 		queue_redraw()
+
 
 	func clear_drop_index() -> void:
 		if drop_index == -1:
 			return
 		drop_index = -1
+		drop_after = false
 		queue_redraw()
 
 	func _draw() -> void:
@@ -468,18 +634,24 @@ class PointsListContainer:
 			return
 
 		var target := point_panels[drop_index]
-		var y := target.position.y
+		var y := target.position.y + target.size.y if drop_after else target.position.y
 
 		var editor_theme := EditorInterface.get_editor_theme()
 		var color := editor_theme.get_color(&"accent_color", &"Editor")
+
+		var line_width := 4.0
+
+		if drop_after:
+			y += line_width * 0.5
+		else:
+			y -= line_width * 0.5
 
 		draw_line(
 			Vector2(0.0, y),
 			Vector2(size.x, y),
 			color,
-			2.0
+			line_width
 		)
-
 
 class PointsFoldableSection:
 	extends VBoxContainer
@@ -543,6 +715,18 @@ class PointsFoldableSection:
 		if not event.pressed or event.echo:
 			return
 
+		var focus_owner := get_viewport().gui_get_focus_owner()
+		# Let external text editors handle their own copy/paste.
+		if (
+			focus_owner != null
+			and not is_ancestor_of(focus_owner)
+			and (
+				focus_owner is TextEdit
+				or focus_owner is LineEdit
+			)
+		):
+			return
+
 		if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_C:
 			if copy_path_callback.is_valid():
 				copy_path_callback.call()
@@ -587,9 +771,9 @@ class PointsFoldableSection:
 				var style := _native_section.get_theme_stylebox(style_name).duplicate()
 				if style is StyleBoxFlat:
 					style.bg_color.a = 0.0
-				style.content_margin_top = 0.0
+				style.content_margin_top = 4.0
 				style.content_margin_left = 2.0
-				style.content_margin_bottom = 0.0
+				style.content_margin_bottom = 4.0
 				_native_section.add_theme_stylebox_override(style_name, style)
 
 			_native_section.add_theme_stylebox_override(
@@ -702,9 +886,12 @@ func _clear_point_property_selection() -> void:
 
 
 func handle_points(curve: EasingCurve) -> VBoxContainer:
-	# var point_list = VBoxContainer.new() # contains the list of points
+	# Contains the list of points
 	var point_list = PointsListContainer.new()
-	point_list.add_spacer(true) # add a gap between "Points" header label and the list of points.
+	point_list.point_swap_requested.connect(_move_point)
+
+	# Add a gap between "Points" header label and the list of points.
+	point_list.add_spacer(true)
 	point_list.add_theme_constant_override("separation", _point_separation())
 
 	# Show list of points
@@ -760,6 +947,7 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 
 		# IMPORTANT: add panel to list
 		point_list.add_child(point_panel)
+		point_list.enable_drop_forwarding(point_panel)
 
 	# Add Point button
 	if curve.curve_mode == curve.CurveMode.BEZIER:
@@ -769,6 +957,9 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 		add_point_btn.text = "Add Point"
 		add_point_btn.pressed.connect(_on_add_point_btn_pressed)
 		point_list.add_child(add_point_btn)
+
+	# Add a gap below the Points contents.
+	# point_list.add_spacer(true)
 
 	return point_list
 
@@ -793,7 +984,9 @@ func handle_easing_curve_editor(object) -> Control:
 		var ease_reset_button := _create_reserved_reset_button("Reset Ease to In")
 		preset_reset_button = _create_reserved_reset_button("Restore selected preset geometry")
 		ease_option = _create_option(EasingCurve.EASE, object.ease_type)
-		trans_option = _create_option(EasingCurve.TRANS, object.trans_type)
+		var trans_option := _create_transition_option(
+			object.trans_type
+		)
 
 		# A fixed three-column grid aligns both dropdowns and both trailing reset slots.
 		_toolbar.add_child(_create_option_label("Ease"))
@@ -951,7 +1144,7 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 		return true
 	if (
 		object is EasingCurve
-		and EasingCurve.is_deferred_function_parameter(
+		and EasingCurve.is_deferred_parameter(
 			StringName(name)
 		)
 	):
@@ -1049,15 +1242,25 @@ func _on_y_input_value_changed(value: float, i: int, y_input: EditorSpinSlider, 
 
 
 func _move_point_up(i: int) -> void:
-	if i > 0 == false:
+	var point_count := curve.points.size()
+	if point_count < 2:
 		return
-	_move_point(i, i - 1)
+
+	_move_point(
+		i,
+		wrapi(i - 1, 0, point_count),
+	)
 
 
 func _move_point_down(i: int) -> void:
-	if i < curve.points.size() - 1 == false:
+	var point_count := curve.points.size()
+	if point_count < 2:
 		return
-	_move_point(i, i + 1)
+
+	_move_point(
+		i,
+		wrapi(i + 1, 0, point_count),
+	)
 
 
 func _move_point(from_index: int, to_index: int) -> void:
@@ -1098,7 +1301,6 @@ func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: Pan
 	triple_bar.point_list = point_list
 	triple_bar.curve = curve
 	triple_bar.easing_curve_editor = easing_curve_editor
-	triple_bar.point_swap_requested.connect(_move_point)
 
 	side_vbox.add_child(triple_bar)
 
@@ -1720,19 +1922,36 @@ static func _transition_supports_ease(transition: EasingCurve.TRANS) -> bool:
 		EasingCurve.TRANS.LINEAR,
 		EasingCurve.TRANS.STEP,
 		EasingCurve.TRANS.CSS_LINEAR,
+		EasingCurve.TRANS.CSS_CUBIC_BEZIER,
 	]
 
 
 static func _set_transition_display(
-		trans_control: OptionButton,
-		selected_transition: EasingCurve.TRANS,
-		modified: bool,
+	trans_control: OptionButton,
+	selected_transition: EasingCurve.TRANS,
+	modified: bool,
 ) -> void:
-	for i in range(trans_control.item_count):
-		var transition := trans_control.get_item_id(i)
-		var display := String(EasingCurve.TRANS.keys()[transition]).to_lower().capitalize().replace("_", " ")
-		if transition == selected_transition and modified:
+	var popup := trans_control.get_popup()
+
+	for i in range(popup.item_count):
+		if popup.is_item_separator(i):
+			continue
+
+		var transition := popup.get_item_id(i)
+		var display := (
+			String(EasingCurve.TRANS.keys()[transition])
+			.to_lower()
+			.capitalize()
+			.replace("_", " ")
+		)
+
+		if (
+			SHOW_MODIFIED_ASTERISK
+			and transition == selected_transition
+			and modified
+		):
 			display += " *"
+
 		trans_control.set_item_text(i, display)
 
 
@@ -1757,10 +1976,38 @@ func _undo_source_property() -> EditorProperty:
 	return null
 
 
+static func _create_transition_option(
+	selected_value: int,
+) -> OptionButton:
+	var option := OptionButton.new()
+	_configure_compact_option(option)
+
+	var popup := option.get_popup()
+
+	for group in TRANSITION_GROUPS:
+		popup.add_separator(group["name"])
+
+		for transition in group["items"]:
+			var display := (
+				String(EasingCurve.TRANS.keys()[transition])
+				.to_lower()
+				.capitalize()
+				.replace("_", " ")
+			)
+
+			option.add_item(display, transition)
+
+	option.select(option.get_item_index(selected_value))
+	return option
+
+
 static func _create_option(enum_dict: Dictionary, selected_value: int) -> OptionButton:
 	var option := OptionButton.new()
 	_configure_compact_option(option)
 	var keys = enum_dict.keys()
+	if keys.has("CSS_LINEAR") and keys.has("CSS_CUBIC_BEZIER"):
+		keys.erase("CSS_CUBIC_BEZIER")
+		keys.insert(keys.find("CSS_LINEAR") + 1, "CSS_CUBIC_BEZIER")
 	for key in keys:
 		var display = key.to_lower().capitalize().replace("_", " ")
 		option.add_item(display, enum_dict[key]) # store enum value as ID

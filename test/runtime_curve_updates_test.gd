@@ -1,16 +1,10 @@
 extends SceneTree
 
+const EASING_LIBRARY = preload("res://addons/easing_curve/scripts/easing.gd")
 const ROUND_TRIP_PATH := "res://test/_runtime_curve_round_trip.tres"
 const GENERATED_ROUND_TRIP_PATH := "res://test/_generated_curve_round_trip.tres"
-const FUNCTION_TRANSITIONS := [
-	EasingCurve.TRANS.JITTER,
-	EasingCurve.TRANS.IRREGULAR,
-	EasingCurve.TRANS.STEP,
-	EasingCurve.TRANS.POWER,
-	EasingCurve.TRANS.ELASTIC,
-	EasingCurve.TRANS.BOUNCE,
-	EasingCurve.TRANS.SPRING,
-]
+const BACK_ROUND_TRIP_PATH := "res://test/_back_overshoot_round_trip.tres"
+const CSS_CUBIC_ROUND_TRIP_PATH := "res://test/_css_cubic_bezier_round_trip.tres"
 
 var _failures := 0
 var _checks := 0
@@ -23,6 +17,11 @@ func _init() -> void:
 	_test_handle_control_signal_suppression()
 	_test_resource_free_point_snapshots()
 	_test_parameter_drag_transactions()
+	_test_back_overshoot_contract()
+	_test_back_overshoot_geometry()
+	_test_back_overshoot_runtime_updates()
+	_test_back_overshoot_round_trip()
+	_test_css_cubic_bezier()
 	_test_flat_storage_and_round_trip()
 	_test_generated_curve_round_trip()
 	_test_function_parameters()
@@ -282,6 +281,315 @@ func _test_parameter_drag_transactions() -> void:
 		mode_counts.changed = 0
 
 
+func _test_back_overshoot_contract() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.BACK
+	var property_names: Array[StringName] = []
+	for property: Dictionary in curve.get_property_list():
+		property_names.append(StringName(property.name))
+	var overshoot_index := property_names.find(&"overshoot")
+	var points_index := property_names.find(&"points")
+	_expect(
+		overshoot_index >= 0 and points_index >= 0 and overshoot_index < points_index,
+		"Back Overshoot is not displayed above the Points section",
+	)
+	_expect(is_equal_approx(curve.overshoot, 1.70158), "Back Overshoot lost its legacy default")
+	_expect(
+		EasingCurve.BEZIER_PARAMETERS.get(EasingCurve.TRANS.BACK, []) == [&"overshoot"],
+		"Back Overshoot is not registered as a Bezier parameter",
+	)
+	_expect(EasingCurve.TRANS.BACK not in EasingCurve.FUNCTION_TRANSITIONS, "Back was added to FUNCTION_TRANSITIONS")
+	_expect(not EasingCurve.FUNCTION_CLASSES.has(EasingCurve.TRANS.BACK), "Back was added to FUNCTION_CLASSES")
+	_expect(not EasingCurve.FUNCTION_PARAMETERS.has(EasingCurve.TRANS.BACK), "Back was added to FUNCTION_PARAMETERS")
+	_expect(not EasingCurve.is_function_transition(EasingCurve.TRANS.BACK), "Back was classified as a function transition")
+	_expect(not curve.get_function_snapshot().has(&"overshoot"), "Back Overshoot leaked into the function snapshot")
+	_expect(EasingCurve.has_parameter_default(&"overshoot"), "Overshoot is missing its Inspector reset default")
+	_expect(
+		is_equal_approx(float(EasingCurve.get_parameter_default(&"overshoot")), 1.70158),
+		"Overshoot Inspector reset default changed",
+	)
+	_expect(EasingCurve.is_deferred_parameter(&"overshoot"), "Overshoot does not use deferred parameter editing")
+	_expect(not EasingCurve.is_deferred_function_parameter(&"overshoot"), "Overshoot was treated as a function parameter")
+
+	for transition: EasingCurve.TRANS in EasingCurve.TRANS.values():
+		curve.trans_type = transition
+		var found := false
+		var visible := false
+		for property: Dictionary in curve.get_property_list():
+			if StringName(property.name) != &"overshoot":
+				continue
+			found = true
+			visible = bool(property.usage & PROPERTY_USAGE_EDITOR)
+			if transition == EasingCurve.TRANS.BACK:
+				_expect(property.hint == PROPERTY_HINT_RANGE, "Overshoot lost its range hint")
+				var range_parts := String(property.hint_string).split(",")
+				_expect(
+					range_parts.size() >= 3
+					and is_equal_approx(range_parts[0].to_float(), 0.0)
+					and is_equal_approx(range_parts[1].to_float(), 5.0)
+					and is_equal_approx(range_parts[2].to_float(), 0.001),
+					"Overshoot range is not 0.0-5.0 with a 0.001 step",
+				)
+			break
+		_expect(found, "Overshoot is missing from the property list")
+		_expect(
+			visible == (transition == EasingCurve.TRANS.BACK),
+			"Overshoot visibility is wrong for %s" % EasingCurve.TRANS.keys()[transition],
+		)
+
+	curve.trans_type = EasingCurve.TRANS.BACK
+	_expect(curve.curve_mode == EasingCurve.CurveMode.BEZIER, "Back did not remain Bezier-backed")
+
+
+func _test_back_overshoot_geometry() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.BACK
+	var strengths: Array[float] = [0.0, 0.5, 1.70158, 3.0, 5.0]
+
+	for ease: EasingCurve.EASE in EasingCurve.EASE.values():
+		curve.ease_type = ease
+		for strength in strengths:
+			curve.overshoot = strength
+			_validate_back_geometry(curve, ease, strength)
+			_expect(
+				not curve.is_selected_preset_modified(),
+				"Changing Back/%s Overshoot to %.5f marked the preset modified"
+				% [EasingCurve.EASE.keys()[ease], strength],
+			)
+
+		curve.overshoot = 0.5
+		var low_first := curve.sample(0.25 if ease in [EasingCurve.EASE.IN_OUT, EasingCurve.EASE.OUT_IN] else 0.5)
+		var low_second := curve.sample(0.75)
+		curve.overshoot = 4.0
+		var high_first := curve.sample(0.25 if ease in [EasingCurve.EASE.IN_OUT, EasingCurve.EASE.OUT_IN] else 0.5)
+		var high_second := curve.sample(0.75)
+		match ease:
+			EasingCurve.EASE.IN:
+				_expect(high_first < low_first, "Higher Back/In Overshoot did not strengthen the undershoot")
+			EasingCurve.EASE.OUT:
+				_expect(high_first > low_first, "Higher Back/Out Overshoot did not strengthen the overshoot")
+			EasingCurve.EASE.IN_OUT:
+				_expect(high_first < low_first and high_second > low_second, "Higher Back/In Out Overshoot did not strengthen both halves")
+			EasingCurve.EASE.OUT_IN:
+				_expect(high_first > low_first and high_second < low_second, "Higher Back/Out In Overshoot did not strengthen both halves")
+
+
+func _validate_back_geometry(curve: EasingCurve, ease: EasingCurve.EASE, strength: float) -> void:
+	var label := "Back/%s %.5f" % [EasingCurve.EASE.keys()[ease], strength]
+	var expected_count := 2 if ease in [EasingCurve.EASE.IN, EasingCurve.EASE.OUT] else 3
+	_expect(curve.points.size() == expected_count, "%s has the wrong point count" % label)
+	if curve.points.size() != expected_count:
+		return
+
+	_expect(curve.points[0].position.is_equal_approx(Vector2.ZERO), "%s has the wrong start point" % label)
+	_expect(curve.points[-1].position.is_equal_approx(Vector2.ONE), "%s has the wrong end point" % label)
+	match ease:
+		EasingCurve.EASE.IN:
+			_expect(curve.points[0].right_control_point.is_equal_approx(Vector2(1.0 / 3.0, 0.0)), "%s has the wrong outgoing handle" % label)
+			_expect(curve.points[1].left_control_point.is_equal_approx(Vector2(2.0 / 3.0, -strength / 3.0)), "%s has the wrong incoming handle" % label)
+		EasingCurve.EASE.OUT:
+			_expect(curve.points[0].right_control_point.is_equal_approx(Vector2(1.0 / 3.0, 1.0 + strength / 3.0)), "%s has the wrong outgoing handle" % label)
+			_expect(curve.points[1].left_control_point.is_equal_approx(Vector2(2.0 / 3.0, 1.0)), "%s has the wrong incoming handle" % label)
+		EasingCurve.EASE.IN_OUT:
+			var combined_strength := strength * 1.525
+			_expect(curve.points[1].position.is_equal_approx(Vector2(0.5, 0.5)), "%s has the wrong midpoint" % label)
+			_expect(curve.points[0].right_control_point.is_equal_approx(Vector2(1.0 / 6.0, 0.0)), "%s has the wrong first handle" % label)
+			_expect(curve.points[1].left_control_point.is_equal_approx(Vector2(1.0 / 3.0, -combined_strength / 6.0)), "%s did not apply the 1.525 incoming multiplier" % label)
+			_expect(curve.points[1].right_control_point.is_equal_approx(Vector2(2.0 / 3.0, 1.0 + combined_strength / 6.0)), "%s did not apply the 1.525 outgoing multiplier" % label)
+			_expect(curve.points[2].left_control_point.is_equal_approx(Vector2(5.0 / 6.0, 1.0)), "%s has the wrong final handle" % label)
+		EasingCurve.EASE.OUT_IN:
+			_expect(curve.points[1].position.is_equal_approx(Vector2(0.5, 0.5)), "%s has the wrong midpoint" % label)
+			_expect(curve.points[0].right_control_point.is_equal_approx(Vector2(1.0 / 6.0, 0.5 + strength / 6.0)), "%s has the wrong first handle" % label)
+			_expect(curve.points[1].left_control_point.is_equal_approx(Vector2(1.0 / 3.0, 0.5)), "%s has the wrong incoming midpoint handle" % label)
+			_expect(curve.points[1].right_control_point.is_equal_approx(Vector2(2.0 / 3.0, 0.5)), "%s has the wrong outgoing midpoint handle" % label)
+			_expect(curve.points[2].left_control_point.is_equal_approx(Vector2(5.0 / 6.0, 0.5 - strength / 6.0)), "%s has the wrong final handle" % label)
+
+
+func _test_back_overshoot_runtime_updates() -> void:
+	var curve := EasingCurve.new()
+	curve.ease_type = EasingCurve.EASE.IN_OUT
+	curve.trans_type = EasingCurve.TRANS.BACK
+	var counts := _signal_counts(curve)
+	var before_sample := curve.sample(0.25)
+	curve.overshoot = 3.25
+	_expect(not is_equal_approx(curve.sample(0.25), before_sample), "Back Overshoot did not immediately change sampled output")
+	_expect(counts.changed > 0 and counts.points > 0, "Back Overshoot did not immediately publish regenerated geometry")
+	_expect(curve.get_point_snapshot() == curve.get_canonical_preset_point_snapshot(), "Back Overshoot did not generate canonical geometry")
+	_expect(not curve.is_selected_preset_modified(), "Changing Back Overshoot alone produced Back *")
+
+	curve.points[1].left_control_point += Vector2(0.0, 0.1)
+	_expect(curve.is_selected_preset_modified(), "Manually editing a generated Back handle did not produce Back *")
+	curve.overshoot = 4.0
+	_expect(not curve.is_selected_preset_modified(), "Changing Back Overshoot did not replace manually modified geometry")
+	_expect(curve.get_point_snapshot() == curve.get_canonical_preset_point_snapshot(), "Back regeneration did not use the current Overshoot")
+
+	curve.trans_type = EasingCurve.TRANS.SINE
+	var sine_snapshot := curve.get_point_snapshot()
+	var sine_points: Array[EasingCurvePoint] = curve.points.duplicate()
+	counts.changed = 0
+	counts.points = 0
+	curve.overshoot = 2.75
+	_expect(curve.get_point_snapshot() == sine_snapshot, "Changing Overshoot rebuilt a non-Back preset")
+	_expect(curve.points == sine_points, "Changing Overshoot replaced non-Back point resources")
+	_expect(counts.points == 0, "Changing Overshoot emitted non-Back point changes")
+	curve.trans_type = EasingCurve.TRANS.BACK
+	_validate_back_geometry(curve, EasingCurve.EASE.IN_OUT, 2.75)
+
+	var deferred_curve := EasingCurve.new()
+	deferred_curve.ease_type = EasingCurve.EASE.OUT_IN
+	deferred_curve.trans_type = EasingCurve.TRANS.BACK
+	var running_curve := deferred_curve.duplicate() as EasingCurve
+	var deferred_counts := _signal_counts(deferred_curve)
+	var running_counts := _signal_counts(running_curve)
+	deferred_curve._begin_editor_parameter_edit()
+	deferred_curve.overshoot = 2.0
+	var first_drag_sample := deferred_curve.sample(0.25)
+	deferred_curve.overshoot = 3.5
+	_expect(not is_equal_approx(deferred_curve.sample(0.25), first_drag_sample), "Deferred Back drag did not update authoring geometry immediately")
+	_expect(deferred_counts.changed == 0 and deferred_counts.points == 0, "Deferred Back drag emitted restart signals before release")
+	var final_snapshot := deferred_curve.get_editor_state_snapshot()
+	deferred_curve._finish_editor_parameter_edit()
+	_expect(deferred_counts.changed == 1 and deferred_counts.points == 1, "Deferred Back release did not publish one geometry update")
+	running_curve.set(EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY, final_snapshot)
+	_expect(is_equal_approx(running_curve.overshoot, 3.5), "Runtime snapshot lost Back Overshoot")
+	_expect(running_curve.get_point_snapshot() == deferred_curve.get_point_snapshot(), "Runtime snapshot applied different Back geometry")
+	_expect(running_counts.changed == 1 and running_counts.points == 1, "Runtime snapshot did not publish one Back update")
+
+
+func _test_back_overshoot_round_trip() -> void:
+	var default_curve := EasingCurve.new()
+	default_curve.ease_type = EasingCurve.EASE.IN_OUT
+	default_curve.trans_type = EasingCurve.TRANS.BACK
+	var save_error := ResourceSaver.save(default_curve, BACK_ROUND_TRIP_PATH)
+	_expect(save_error == OK, "Default Back curve could not be saved")
+	if save_error == OK:
+		var saved_text := FileAccess.get_file_as_string(BACK_ROUND_TRIP_PATH)
+		_expect("overshoot =" not in saved_text, "Default Back Overshoot was unnecessarily serialized")
+		var loaded_default := ResourceLoader.load(BACK_ROUND_TRIP_PATH, "", ResourceLoader.CACHE_MODE_IGNORE) as EasingCurve
+		_expect(loaded_default != null, "Back resource without a stored Overshoot could not be loaded")
+		if loaded_default != null:
+			_expect(is_equal_approx(loaded_default.overshoot, 1.70158), "Back resource without a stored Overshoot lost the legacy default")
+			_expect(not loaded_default.is_selected_preset_modified(), "Default Back geometry changed after save/load")
+
+	var custom_curve := EasingCurve.new()
+	custom_curve.ease_type = EasingCurve.EASE.OUT_IN
+	custom_curve.trans_type = EasingCurve.TRANS.BACK
+	custom_curve.overshoot = 3.25
+	var custom_samples := PackedFloat64Array([
+		custom_curve.sample(0.17),
+		custom_curve.sample(0.4),
+		custom_curve.sample(0.83),
+	])
+	save_error = ResourceSaver.save(custom_curve, BACK_ROUND_TRIP_PATH)
+	_expect(save_error == OK, "Parameterized Back curve could not be saved")
+	if save_error == OK:
+		var saved_text := FileAccess.get_file_as_string(BACK_ROUND_TRIP_PATH)
+		_expect("overshoot = 3.25" in saved_text, "Non-default Back Overshoot was not serialized")
+		var loaded_custom := ResourceLoader.load(BACK_ROUND_TRIP_PATH, "", ResourceLoader.CACHE_MODE_IGNORE) as EasingCurve
+		_expect(loaded_custom != null, "Parameterized Back curve could not be loaded")
+		if loaded_custom != null:
+			_expect(is_equal_approx(loaded_custom.overshoot, 3.25), "Back Overshoot changed after save/load")
+			_expect(loaded_custom.curve_mode == EasingCurve.CurveMode.BEZIER, "Parameterized Back loaded outside Bezier mode")
+			_expect(not loaded_custom.is_selected_preset_modified(), "Parameterized Back geometry changed after save/load")
+			_expect(
+				_float_arrays_equal_approx(
+					PackedFloat64Array([loaded_custom.sample(0.17), loaded_custom.sample(0.4), loaded_custom.sample(0.83)]),
+					custom_samples,
+				),
+				"Parameterized Back samples changed after save/load",
+			)
+
+	if FileAccess.file_exists(BACK_ROUND_TRIP_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(BACK_ROUND_TRIP_PATH))
+
+
+func _test_css_cubic_bezier() -> void:
+	_expect(EasingCurve.TRANS.SINE == 19, "Adding CSS Cubic Bezier changed the serialized Sine transition ID")
+	_expect(EasingCurve.TRANS.CSS_CUBIC_BEZIER == 20, "CSS Cubic Bezier did not use the next serialized transition ID")
+	_expect(
+		EasingCurve.is_function_transition(EasingCurve.TRANS.CSS_CUBIC_BEZIER),
+		"CSS Cubic Bezier was not registered as a function transition",
+	)
+
+	var source := "cubic-bezier(0.8, -0.4, 0.5, 1)"
+	var expected_controls := PackedFloat64Array([0.8, -0.4, 0.5, 1.0])
+	_expect(
+		_float_arrays_equal_approx(EASING_LIBRARY.CSSCubicBezier.parse(source), expected_controls),
+		"CSS Cubic Bezier did not parse valid CSS controls",
+	)
+	_expect(
+		_float_arrays_equal_approx(
+			EASING_LIBRARY.CSSCubicBezier.parse("CUBIC-BEZIER(0.8, -0.4, 0.5, 1)"),
+			expected_controls,
+		),
+		"CSS Cubic Bezier did not accept CSS function-name casing",
+	)
+	for invalid_source in [
+		"cubic-bezier(0.8, -0.4, 0.5)",
+		"cubic-bezier(0.8, -0.4, 0.5, 1,)",
+		"cubic-bezier(1.2, 0, 0.5, 1)",
+		"cubic-bezier(0.8, 0, -0.1, 1)",
+	]:
+		_expect(
+			EASING_LIBRARY.CSSCubicBezier.parse(invalid_source).is_empty(),
+			"CSS Cubic Bezier accepted invalid input: %s" % invalid_source,
+		)
+
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CSS_CUBIC_BEZIER
+	_expect(curve.curve_mode == EasingCurve.CurveMode.FUNCTION, "CSS Cubic Bezier selected the wrong curve mode")
+	_expect(curve.function_callable.is_valid(), "CSS Cubic Bezier did not initialize its runtime callable")
+	var css_property_visible := false
+	var css_linear_property_visible := false
+	for property: Dictionary in curve.get_property_list():
+		if StringName(property.name) == &"css_cubic_bezier":
+			css_property_visible = bool(property.usage & PROPERTY_USAGE_EDITOR)
+		elif StringName(property.name) == &"css_linear":
+			css_linear_property_visible = bool(property.usage & PROPERTY_USAGE_EDITOR)
+	_expect(css_property_visible, "CSS Cubic Bezier input is hidden for its transition")
+	_expect(not css_linear_property_visible, "CSS Linear input remained visible for CSS Cubic Bezier")
+
+	var before := curve.sample(0.5)
+	var counts := _signal_counts(curve)
+	curve.css_cubic_bezier = source
+	_expect(counts.changed == 1, "Changing CSS Cubic Bezier did not publish one immediate update")
+	_expect(not is_equal_approx(curve.sample(0.5), before), "Changing CSS Cubic Bezier did not update the curve")
+	var expected_samples := PackedFloat64Array([
+		0.0,
+		-0.04283762349101638,
+		-0.07186802022414875,
+		0.07564250168800712,
+		0.7980103905238238,
+		0.9776273520112461,
+		1.0,
+	])
+	var offsets := PackedFloat64Array([0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0])
+	for ease: EasingCurve.EASE in EasingCurve.EASE.values():
+		curve.ease_type = ease
+		for i in offsets.size():
+			_expect(
+				absf(curve.sample(offsets[i]) - expected_samples[i]) <= 0.000001,
+				"CSS Cubic Bezier %s sample changed at %.2f" % [EasingCurve.EASE.keys()[ease], offsets[i]],
+			)
+
+	var save_error := ResourceSaver.save(curve, CSS_CUBIC_ROUND_TRIP_PATH)
+	_expect(save_error == OK, "CSS Cubic Bezier curve could not be saved")
+	if save_error == OK:
+		var loaded := ResourceLoader.load(
+			CSS_CUBIC_ROUND_TRIP_PATH,
+			"",
+			ResourceLoader.CACHE_MODE_IGNORE,
+		) as EasingCurve
+		_expect(loaded != null, "CSS Cubic Bezier curve could not be loaded")
+		if loaded != null:
+			_expect(loaded.trans_type == EasingCurve.TRANS.CSS_CUBIC_BEZIER, "CSS Cubic Bezier transition changed after save/load")
+			_expect(loaded.css_cubic_bezier == source, "CSS Cubic Bezier input changed after save/load")
+			_expect(is_equal_approx(loaded.sample(0.5), curve.sample(0.5)), "CSS Cubic Bezier output changed after save/load")
+
+	if FileAccess.file_exists(CSS_CUBIC_ROUND_TRIP_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(CSS_CUBIC_ROUND_TRIP_PATH))
+
+
 func _test_flat_storage_and_round_trip() -> void:
 	var curve := EasingCurve.new()
 	curve.set_trans(EasingCurve.TRANS.CUSTOM)
@@ -430,7 +738,7 @@ func _test_every_transition_and_runtime_switching() -> void:
 			curve.ease_type = ease
 			var expected_mode := (
 				EasingCurve.CurveMode.FUNCTION
-				if transition in FUNCTION_TRANSITIONS
+				if EasingCurve.is_function_transition(transition)
 				else EasingCurve.CurveMode.BEZIER
 			)
 			_expect(curve.curve_mode == expected_mode, "%s/%s selected the wrong runtime mode" % [EasingCurve.TRANS.keys()[transition], EasingCurve.EASE.keys()[ease]])
@@ -441,10 +749,14 @@ func _test_every_transition_and_runtime_switching() -> void:
 			for offset in [0.0, 0.17, 0.5, 0.83, 1.0]:
 				_expect(_is_finite(curve.sample(offset)), "%s/%s produced invalid runtime output" % [EasingCurve.TRANS.keys()[transition], EasingCurve.EASE.keys()[ease]])
 
+	curve.ease_type = EasingCurve.EASE.IN
 	curve.trans_type = EasingCurve.TRANS.POWER
 	_expect(curve.curve_mode == EasingCurve.CurveMode.FUNCTION, "Bezier-to-function runtime switch failed")
+	_expect(curve.function_callable.is_valid(), "Function transition did not initialize its runtime callable")
 	curve.trans_type = EasingCurve.TRANS.QUAD
 	_expect(curve.curve_mode == EasingCurve.CurveMode.BEZIER and curve.points.size() >= 2, "Function-to-Bezier runtime switch failed")
+	_expect(not curve.function_callable.is_valid(), "Function-to-Bezier switch retained a stale runtime callable")
+	_expect(is_equal_approx(curve.sample(0.5), 0.25), "Function-to-Bezier switch changed Bézier sampling")
 	curve.trans_type = EasingCurve.TRANS.IRREGULAR
 	curve.trans_type = EasingCurve.TRANS.CUSTOM
 	_expect(curve.curve_mode == EasingCurve.CurveMode.BEZIER and curve.points.size() >= 2, "Function-to-custom runtime switch failed")

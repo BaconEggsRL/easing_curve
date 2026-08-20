@@ -20,7 +20,12 @@ func _init() -> void:
 	_test_point_reorder()
 	_test_preset_changes()
 	_test_preset_modified_detection()
+	_test_back_overshoot_undo_redo()
+	_test_back_overshoot_property_reset()
+	_test_back_modified_reset_uses_current_overshoot()
+	_test_back_point_property_defaults()
 	_test_preset_reset_layout_stability()
+	_test_css_cubic_bezier_dropdown_order()
 	_test_points_foldable_section()
 	_test_responsive_graph_layout()
 	_test_three_point_preset_modified_detection()
@@ -407,6 +412,26 @@ func _test_preset_reset_layout_stability() -> void:
 	row.free()
 
 
+func _test_css_cubic_bezier_dropdown_order() -> void:
+	var transition_option := INSPECTOR_PLUGIN._create_option(
+		EasingCurve.TRANS,
+		EasingCurve.TRANS.CSS_CUBIC_BEZIER,
+	)
+	var linear_index := transition_option.get_item_index(EasingCurve.TRANS.CSS_LINEAR)
+	var cubic_index := transition_option.get_item_index(EasingCurve.TRANS.CSS_CUBIC_BEZIER)
+	_expect(linear_index >= 0, "CSS Linear is missing from the Transition dropdown")
+	_expect(cubic_index == linear_index + 1, "CSS Cubic Bezier is not directly below CSS Linear")
+	_expect(
+		transition_option.get_selected_id() == EasingCurve.TRANS.CSS_CUBIC_BEZIER,
+		"CSS Cubic Bezier could not be selected in the Transition dropdown",
+	)
+	_expect(
+		not INSPECTOR_PLUGIN._transition_supports_ease(EasingCurve.TRANS.CSS_CUBIC_BEZIER),
+		"CSS Cubic Bezier unexpectedly enables the Ease dropdown",
+	)
+	transition_option.free()
+
+
 func _test_responsive_graph_layout() -> void:
 	var editor := EasingCurveEditor.new()
 	var sizes_by_width := {}
@@ -580,6 +605,164 @@ func _test_preset_reset_undo_redo() -> void:
 	_expect(curve.get_point_snapshot() == canonical, "Redo reset did not restore exact canonical geometry")
 	_expect(not curve.is_selected_preset_modified(), "Redo reset did not clear modified state")
 	_dispose_history(history)
+
+
+func _test_back_overshoot_undo_redo() -> void:
+	var curve := EasingCurve.new()
+	curve.ease_type = EasingCurve.EASE.OUT_IN
+	curve.trans_type = EasingCurve.TRANS.BACK
+	var history := UndoRedo.new()
+	var before := EDITOR_UNDO.capture_state(curve)
+	var before_geometry := curve.get_point_snapshot()
+
+	curve._begin_editor_parameter_edit()
+	curve.overshoot = 3.25
+	var after := EDITOR_UNDO.capture_state(curve)
+	var after_geometry := curve.get_point_snapshot()
+	curve._finish_editor_parameter_edit()
+
+	_expect(is_equal_approx(curve.overshoot, 3.25), "Back Overshoot edit lost its scalar value")
+	_expect(after_geometry != before_geometry, "Back Overshoot edit did not regenerate Bezier geometry")
+	_expect(not curve.is_selected_preset_modified(), "Changing Back Overshoot alone produced Back *")
+	_expect(
+		EDITOR_UNDO.commit_applied_action(
+			history,
+			curve,
+			"Change Easing Curve Overshoot",
+			before,
+			after,
+		),
+		"Back Overshoot action was not committed",
+	)
+	_expect(history.has_undo(), "Back Overshoot did not create an Undo action")
+
+	history.undo()
+	_expect(is_equal_approx(curve.overshoot, 1.70158), "Back Overshoot Undo did not restore the scalar")
+	_expect(curve.get_point_snapshot() == before_geometry, "Back Overshoot Undo did not restore geometry")
+	_expect(not curve.is_selected_preset_modified(), "Back Overshoot Undo produced Back *")
+	_expect(not history.has_undo() and history.has_redo(), "Back Overshoot created more than one history action")
+
+	history.redo()
+	_expect(is_equal_approx(curve.overshoot, 3.25), "Back Overshoot Redo did not restore the scalar")
+	_expect(curve.get_point_snapshot() == after_geometry, "Back Overshoot Redo did not restore geometry")
+	_expect(curve.get_editor_state_snapshot() == after, "Back Overshoot Redo lost editor state")
+	_expect(not curve.is_selected_preset_modified(), "Back Overshoot Redo produced Back *")
+	_dispose_history(history)
+
+
+func _test_back_overshoot_property_reset() -> void:
+	var curve := EasingCurve.new()
+	curve.ease_type = EasingCurve.EASE.OUT
+	curve.trans_type = EasingCurve.TRANS.BACK
+	curve.overshoot = 4.25
+	var changed_geometry := curve.get_point_snapshot()
+	var before := EDITOR_UNDO.capture_state(curve)
+	var history := UndoRedo.new()
+
+	curve._begin_editor_parameter_edit()
+	curve.overshoot = 1.70158
+	var after := EDITOR_UNDO.capture_state(curve)
+	curve._finish_editor_parameter_edit()
+	_expect(
+		EDITOR_UNDO.commit_applied_action(
+			history,
+			curve,
+			"Reset Easing Curve Overshoot",
+			before,
+			after,
+		),
+		"Back Overshoot reset action was not committed",
+	)
+
+	var default_curve := EasingCurve.new()
+	default_curve.ease_type = EasingCurve.EASE.OUT
+	default_curve.trans_type = EasingCurve.TRANS.BACK
+	_expect(is_equal_approx(curve.overshoot, 1.70158), "Back Overshoot reset did not restore 1.70158")
+	_expect(curve.get_point_snapshot() != changed_geometry, "Back Overshoot reset did not regenerate geometry")
+	_expect(
+		curve.get_point_snapshot() == default_curve.get_point_snapshot(),
+		"Back Overshoot reset did not restore default Back geometry",
+	)
+	_expect(not curve.is_selected_preset_modified(), "Back Overshoot reset produced Back *")
+	_verify_single_action(history, curve, before, after, "Back Overshoot reset", 2)
+	_dispose_history(history)
+
+
+func _test_back_modified_reset_uses_current_overshoot() -> void:
+	var curve := EasingCurve.new()
+	curve.ease_type = EasingCurve.EASE.IN_OUT
+	curve.trans_type = EasingCurve.TRANS.BACK
+	curve.overshoot = 2.75
+	var canonical := curve.get_canonical_preset_point_snapshot()
+	var transition_option := INSPECTOR_PLUGIN._create_option(
+		EasingCurve.TRANS,
+		EasingCurve.TRANS.BACK,
+	)
+	var transition_index := transition_option.get_item_index(EasingCurve.TRANS.BACK)
+
+	INSPECTOR_PLUGIN._set_transition_display(
+		transition_option,
+		curve.trans_type,
+		curve.is_selected_preset_modified(),
+	)
+	_expect(transition_option.get_item_text(transition_index) == "Back", "Parameterized Back displayed as Back *")
+
+	curve.points[1].left_control_point += Vector2(0.02, -0.03)
+	var modified := EDITOR_UNDO.capture_state(curve)
+	_expect(curve.is_selected_preset_modified(), "Manual Back handle edit did not produce Back *")
+	INSPECTOR_PLUGIN._set_transition_display(
+		transition_option,
+		curve.trans_type,
+		curve.is_selected_preset_modified(),
+	)
+	_expect(transition_option.get_item_text(transition_index) == "Back *", "Modified Back label omitted its asterisk")
+
+	var history := UndoRedo.new()
+	_expect(curve.reset_selected_preset(), "Modified Back refused to reset")
+	var reset_state := _commit_applied(history, curve, "Reset Easing Curve Preset", modified)
+	_expect(is_equal_approx(curve.overshoot, 2.75), "Back * reset changed Overshoot")
+	_expect(curve.get_point_snapshot() == canonical, "Back * reset ignored the current Overshoot")
+	_expect(not curve.is_selected_preset_modified(), "Reset Back still reported modified")
+	INSPECTOR_PLUGIN._set_transition_display(
+		transition_option,
+		curve.trans_type,
+		curve.is_selected_preset_modified(),
+	)
+	_expect(transition_option.get_item_text(transition_index) == "Back", "Reset Back retained its asterisk")
+
+	history.undo()
+	_expect(is_equal_approx(curve.overshoot, 2.75), "Undo Back * reset changed Overshoot")
+	_expect(curve.is_selected_preset_modified(), "Undo Back * reset did not restore modified geometry")
+	history.redo()
+	_expect(curve.get_editor_state_snapshot() == reset_state, "Redo Back * reset lost canonical state")
+	_expect(is_equal_approx(curve.overshoot, 2.75), "Redo Back * reset changed Overshoot")
+	_expect(curve.get_point_snapshot() == canonical, "Redo Back * reset lost current-Overshoot geometry")
+	_dispose_history(history)
+	transition_option.free()
+
+
+func _test_back_point_property_defaults() -> void:
+	var curve := EasingCurve.new()
+	curve.ease_type = EasingCurve.EASE.IN_OUT
+	curve.trans_type = EasingCurve.TRANS.BACK
+	curve.overshoot = 3.2
+	var in_out_overshoot := curve.overshoot * 1.525
+	var expected_left := Vector2(1.0 / 3.0, -in_out_overshoot / 6.0)
+	var expected_right := Vector2(2.0 / 3.0, 1.0 + in_out_overshoot / 6.0)
+
+	_expect(
+		curve.get_default_for_property(1, "left_control_point").is_equal_approx(expected_left),
+		"Back midpoint left-handle reset default ignored current Overshoot",
+	)
+	_expect(
+		curve.get_default_for_property(1, "right_control_point").is_equal_approx(expected_right),
+		"Back midpoint right-handle reset default ignored current Overshoot",
+	)
+	curve.points[1].left_control_point += Vector2(0.01, 0.02)
+	_expect(
+		curve.get_default_for_property(1, "left_control_point").is_equal_approx(expected_left),
+		"Modified Back changed its current-Overshoot point reset default",
+	)
 
 
 func _test_function_parameter_changes() -> void:

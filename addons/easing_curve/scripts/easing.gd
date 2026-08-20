@@ -415,6 +415,7 @@ class Circ:
 		return easeIn(t * 2 - d, b + h, h, d)
 
 
+
 class Bounce:
 	static func easeIn(t, b, c, d):
 		if b is Vector2:
@@ -438,19 +439,322 @@ class Bounce:
 	static func easeInOut(t, b, c, d):
 		if b is Vector2:
 			if (t < (d / 2)):
-				return easeIn (t * 2, Vector2.ZERO, c, d) * 0.5 + b
+				return easeIn(t * 2, Vector2.ZERO, c, d) * 0.5 + b
 			else:
-				return easeOut (t * 2 - d, Vector2.ZERO, c, d) * 0.5 + c * 0.5 + b
+				return easeOut(t * 2 - d, Vector2.ZERO, c, d) * 0.5 + c * 0.5 + b
 		if (t < (d / 2)):
-			return easeIn (t * 2, 0, c, d) * 0.5 + b
+			return easeIn(t * 2, 0, c, d) * 0.5 + b
 		else:
-			return easeOut (t * 2 - d, 0, c, d) * 0.5 + c * 0.5 + b
+			return easeOut(t * 2 - d, 0, c, d) * 0.5 + c * 0.5 + b
 
 	static func easeOutIn(t, b, c, d):
 		if (t < d / 2):
 			return easeOut(t * 2, b, c / 2, d)
 		var h = c / 2
 		return easeIn(t * 2 - d, b + h, h, d)
+
+
+	# ------------------
+	# EXTENDED
+	# ------------------
+
+	static func easeInEx(
+		t,
+		b,
+		c,
+		d,
+		num_bounces: int = 3,
+		bounce_damping: float = 75.0
+	):
+
+		return _easeInEx(
+			t,
+			b,
+			c,
+			d,
+			num_bounces,
+			bounce_damping
+		)
+
+
+	static func easeOutEx(
+		t,
+		b,
+		c,
+		d,
+		num_bounces: int = 3,
+		bounce_damping: float = 75.0
+	):
+
+		return _easeOutEx(
+			t,
+			b,
+			c,
+			d,
+			num_bounces,
+			bounce_damping
+		)
+
+
+	static func easeInOutEx(
+		t,
+		b,
+		c,
+		d,
+		num_bounces: int = 3,
+		bounce_damping: float = 75.0
+	):
+
+		return _easeInOutEx(
+			t,
+			b,
+			c,
+			d,
+			num_bounces,
+			bounce_damping
+		)
+
+
+	static func easeOutInEx(
+		t,
+		b,
+		c,
+		d,
+		num_bounces: int = 3,
+		bounce_damping: float = 75.0
+	):
+
+		return _easeOutInEx(
+			t,
+			b,
+			c,
+			d,
+			num_bounces,
+			bounce_damping
+		)
+
+
+	# ------------------
+	# EXTENDED INTERNAL
+	# ------------------
+
+	static func _easeInEx(
+		t,
+		b,
+		c,
+		d,
+		num_bounces: int,
+		bounce_damping: float
+	):
+		if b is Vector2:
+			return (
+				c
+				- _easeOutEx(
+					d - t,
+					Vector2.ZERO,
+					c,
+					d,
+					num_bounces,
+					bounce_damping
+				)
+				+ b
+			)
+
+		return (
+			c
+			- _easeOutEx(
+				d - t,
+				0,
+				c,
+				d,
+				num_bounces,
+				bounce_damping
+			)
+			+ b
+		)
+
+
+	static func _easeOutEx(
+		t,
+		b,
+		c,
+		d,
+		num_bounces: int,
+		bounce_damping: float
+	):
+		if d == 0:
+			return b + c
+
+		num_bounces = maxi(num_bounces, 1)
+
+		var retention := clampf(
+			1.0 - bounce_damping / 100.0,
+			0.0,
+			1.0
+		)
+
+		var duration_retention := sqrt(retention)
+
+		# Calculate the total relative duration:
+		#
+		# initial fall = 1
+		# bounce 1    = 1
+		# bounce 2    = duration_retention
+		# bounce 3    = duration_retention^2
+		# ...
+		var total_duration := 1.0
+		var bounce_duration := 1.0
+
+		for _i in range(num_bounces):
+			total_duration += bounce_duration
+			bounce_duration *= duration_retention
+
+		var progress := clampf(
+			float(t) / float(d),
+			0.0,
+			1.0
+		)
+
+		var scaled_t := progress * total_duration
+
+		# Initial fall.
+		if scaled_t < 1.0:
+			return c * scaled_t * scaled_t + b
+
+		# Successive bounces.
+		var bounce_start := 1.0
+		bounce_duration = 1.0
+		var bounce_amplitude := retention
+
+		for i in range(num_bounces):
+			var bounce_end := bounce_start + bounce_duration
+
+			if scaled_t <= bounce_end or i == num_bounces - 1:
+				if is_zero_approx(bounce_duration):
+					return b + c
+
+				var local_t := clampf(
+					(scaled_t - bounce_start) / bounce_duration,
+					0.0,
+					1.0
+				)
+
+				# -1 -> 0 -> +1 across the bounce.
+				var parabola_t := local_t * 2.0 - 1.0
+
+				# Starts at the target, falls away by bounce_amplitude,
+				# then returns to the target.
+				var value := (
+					1.0
+					- bounce_amplitude
+					+ bounce_amplitude * parabola_t * parabola_t
+				)
+
+				return c * value + b
+
+			bounce_start = bounce_end
+			bounce_duration *= duration_retention
+			bounce_amplitude *= retention
+
+		return b + c
+
+
+	static func _easeInOutEx(
+		t,
+		b,
+		c,
+		d,
+		num_bounces: int,
+		bounce_damping: float
+	):
+		if b is Vector2:
+			if t < d / 2:
+				return (
+					_easeInEx(
+						t * 2,
+						Vector2.ZERO,
+						c,
+						d,
+						num_bounces,
+						bounce_damping
+					)
+					* 0.5
+					+ b
+				)
+
+			return (
+				_easeOutEx(
+					t * 2 - d,
+					Vector2.ZERO,
+					c,
+					d,
+					num_bounces,
+					bounce_damping
+				)
+				* 0.5
+				+ c * 0.5
+				+ b
+			)
+
+		if t < d / 2:
+			return (
+				_easeInEx(
+					t * 2,
+					0,
+					c,
+					d,
+					num_bounces,
+					bounce_damping
+				)
+				* 0.5
+				+ b
+			)
+
+		return (
+			_easeOutEx(
+				t * 2 - d,
+				0,
+				c,
+				d,
+				num_bounces,
+				bounce_damping
+			)
+			* 0.5
+			+ c * 0.5
+			+ b
+		)
+
+
+	static func _easeOutInEx(
+		t,
+		b,
+		c,
+		d,
+		num_bounces: int,
+		bounce_damping: float
+	):
+		if t < d / 2:
+			return _easeOutEx(
+				t * 2,
+				b,
+				c / 2,
+				d,
+				num_bounces,
+				bounce_damping
+			)
+
+		var h = c / 2
+
+		return _easeInEx(
+			t * 2 - d,
+			b + h,
+			h,
+			d,
+			num_bounces,
+			bounce_damping
+		)
+
+
 
 
 class Back:
@@ -1042,6 +1346,127 @@ class CSSLinear:
 
 
 
+
+
+class CSSCubicBezier:
+	static func easeInEx(
+		t: float,
+		b: float,
+		c: float,
+		d: float,
+		controls: PackedFloat64Array
+	) -> float:
+		if controls.size() != 4 or is_zero_approx(d):
+			return b
+
+		var x := clampf(t / d, 0.0, 1.0)
+		var y := sample(x, controls)
+
+		return b + c * y
+
+
+	static func easeOutEx(
+		t: float,
+		b: float,
+		c: float,
+		d: float,
+		controls: PackedFloat64Array
+	) -> float:
+		return easeInEx(t, b, c, d, controls)
+
+
+	static func easeInOutEx(
+		t: float,
+		b: float,
+		c: float,
+		d: float,
+		controls: PackedFloat64Array
+	) -> float:
+		return easeInEx(t, b, c, d, controls)
+
+
+	static func easeOutInEx(
+		t: float,
+		b: float,
+		c: float,
+		d: float,
+		controls: PackedFloat64Array
+	) -> float:
+		return easeInEx(t, b, c, d, controls)
+
+
+	static func sample(
+		x: float,
+		controls: PackedFloat64Array,
+	) -> float:
+		if controls.size() != 4:
+			return x
+		if x <= 0.0:
+			return 0.0
+		if x >= 1.0:
+			return 1.0
+
+		var lower := 0.0
+		var upper := 1.0
+
+		for _iteration in range(32):
+			var parameter := (lower + upper) * 0.5
+			if _cubic_coordinate(parameter, controls[0], controls[2]) < x:
+				lower = parameter
+			else:
+				upper = parameter
+
+		return _cubic_coordinate(
+			(lower + upper) * 0.5,
+			controls[1],
+			controls[3],
+		)
+
+
+	static func parse(source: String) -> PackedFloat64Array:
+		var text := source.strip_edges()
+
+		if not text.to_lower().begins_with("cubic-bezier(") or not text.ends_with(")"):
+			return PackedFloat64Array()
+
+		text = text.substr(13, text.length() - 14)
+		var entries := text.split(",", true)
+		if entries.size() != 4:
+			return PackedFloat64Array()
+
+		var controls := PackedFloat64Array()
+		for entry in entries:
+			var token := entry.strip_edges()
+			if not token.is_valid_float():
+				return PackedFloat64Array()
+
+			var value := float(token)
+			if is_nan(value) or is_inf(value):
+				return PackedFloat64Array()
+			controls.append(value)
+
+		if (
+			controls[0] < 0.0
+			or controls[0] > 1.0
+			or controls[2] < 0.0
+			or controls[2] > 1.0
+		):
+			return PackedFloat64Array()
+
+		return controls
+
+
+	static func _cubic_coordinate(
+		parameter: float,
+		control_1: float,
+		control_2: float,
+	) -> float:
+		var inverse := 1.0 - parameter
+		return (
+			3.0 * inverse * inverse * parameter * control_1
+			+ 3.0 * inverse * parameter * parameter * control_2
+			+ parameter * parameter * parameter
+		)
 
 
 class Power:

@@ -5,6 +5,8 @@
 [resource]
 script = ExtResource("2_yp14b")
 trans_type = 0
+_css_linear_points = PackedVector2Array(0, 0, 1, 1)
+_css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.25, 1)
 _point_count = 3
 _point_0/position = Vector2(0, 0)
 _point_0/left_control_point = Vector2(0, 0)

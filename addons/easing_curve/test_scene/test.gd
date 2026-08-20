@@ -32,6 +32,9 @@ const DROPDOWN_MAX_WIDTH := 120.0
 @export var easing_curve: EasingCurve = EasingCurve.new():
 	set = set_easing_curve
 
+@export var debug_curve: Curve = Curve.new()
+
+
 var points: Array[EasingCurvePoint] = []:
 	set = set_points
 var curve_tween: Tween
@@ -44,6 +47,10 @@ var _debug_tween_speed: float = 0.0
 var _debug_offset: float = 0.0
 var _debug_curve_value: float = 0.0
 var _debug_last_t: float = 0.0
+
+func _init() -> void:
+	if easing_curve != null and not easing_curve.changed.is_connected(_on_easing_curve_changed):
+		easing_curve.changed.connect(_on_easing_curve_changed)
 
 # Nodes for Tween interpolation
 @onready var tween_start_marker: Marker2D = %TweenStartMarker
