@@ -105,7 +105,6 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 ---
 
 * Handle mode support akin to AnimationPlayer (Free, Linear, Balanced, Mirrored)
-* Additional function options (CSS linear(), Back overshoot parameter, Spring stiffness & damping)
 
 **&nbsp;**
 
