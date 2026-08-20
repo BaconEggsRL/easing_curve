@@ -22,8 +22,21 @@ enum ControlSide {
 }
 
 @export var position: Vector2 = Vector2.ZERO: set = set_position
-@export var left_control_point: Vector2 = Vector2.ZERO: set = set_left_control_point
-@export var right_control_point: Vector2 = Vector2.ZERO: set = set_right_control_point
+
+var _left_control_point := Vector2.ZERO
+var _right_control_point := Vector2.ZERO
+
+@export var left_control_point: Vector2:
+	get:
+		return _left_control_point
+	set(value):
+		set_left_control_point(value)
+
+@export var right_control_point: Vector2:
+	get:
+		return _right_control_point
+	set(value):
+		set_right_control_point(value)
 
 @export var handle_mode: HandleMode = HandleMode.FREE: set = set_handle_mode
 
@@ -89,23 +102,33 @@ func set_right_control_point(value: Vector2) -> void:
 	_set_control_point(ControlSide.RIGHT, value)
 
 
+func _update_control_point_inputs(property_name: String) -> void:
+	var value := (
+		_left_control_point
+		if property_name == "left_control_point"
+		else _right_control_point
+	)
+	_set_input_value(property_name, "x", value.x)
+	_set_input_value(property_name, "y", value.y)
+
+
 func _set_control_point(side: ControlSide, value: Vector2) -> void:
 	if handle_mode == HandleMode.LINEAR:
 		value = position
 
 	var current := (
-		left_control_point
+		_left_control_point
 		if side == ControlSide.LEFT
-		else right_control_point
+		else _right_control_point
 	)
 
 	if current == value:
 		return
 
 	if side == ControlSide.LEFT:
-		left_control_point = value
+		_left_control_point = value
 	else:
-		right_control_point = value
+		_right_control_point = value
 
 	match handle_mode:
 		HandleMode.BALANCED:
@@ -125,9 +148,9 @@ func _set_balanced_opposite(
 	value: Vector2
 ) -> void:
 	var opposite := (
-		right_control_point
+		_right_control_point
 		if side == ControlSide.LEFT
-		else left_control_point
+		else _left_control_point
 	)
 
 	var opposite_length := opposite.distance_to(position)
@@ -142,9 +165,9 @@ func _set_balanced_opposite(
 	)
 
 	if side == ControlSide.LEFT:
-		right_control_point = balanced_value
+		_right_control_point = balanced_value
 	else:
-		left_control_point = balanced_value
+		_left_control_point = balanced_value
 
 
 func _set_mirrored_opposite(
@@ -154,16 +177,9 @@ func _set_mirrored_opposite(
 	var mirrored_value := position + (position - value)
 
 	if side == ControlSide.LEFT:
-		right_control_point = mirrored_value
+		_right_control_point = mirrored_value
 	else:
-		left_control_point = mirrored_value
-
-
-func _update_control_point_inputs(property_name: String) -> void:
-	var value: Vector2 = get(property_name)
-
-	_set_input_value(property_name, "x", value.x)
-	_set_input_value(property_name, "y", value.y)
+		_left_control_point = mirrored_value
 
 
 
@@ -192,7 +208,10 @@ func set_handle_mode(value: HandleMode) -> void:
 	handle_mode = value
 
 	if handle_mode == HandleMode.LINEAR:
-		left_control_point = position
-		right_control_point = position
+		_left_control_point = position
+		_right_control_point = position
+
+		_update_control_point_inputs("left_control_point")
+		_update_control_point_inputs("right_control_point")
 
 	emit_changed()
