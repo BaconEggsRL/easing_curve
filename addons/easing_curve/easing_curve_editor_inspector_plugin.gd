@@ -1143,10 +1143,12 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 	if object is EasingCurve and name == EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY:
 		return true
 	if object is EasingCurve and name == EasingCurve.FUNCTION_SNAPSHOT_PROPERTY:
+		return true
+	if object is EasingCurve and name == "generate_tool_button":
 		if EasingCurve.uses_generated_function_data(object.trans_type):
 			var property_editor := GenerateFunctionEditorProperty.new()
 			property_editor.setup(easing_curve_editor, editor_undo_redo)
-			add_property_editor(name, property_editor)
+			add_custom_control(property_editor)
 		return true
 	if object is EasingCurve and name == "generate_tool_button":
 		return true
