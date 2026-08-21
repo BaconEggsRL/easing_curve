@@ -189,6 +189,7 @@ const POINT_PROPERTIES: Array[StringName] = [
 	&"left_control_point",
 	&"right_control_point",
 	&"locked",
+	&"handle_mode",
 ]
 
 ## Zoom slider variables
@@ -674,10 +675,18 @@ func _get_property_list() -> Array[Dictionary]:
 
 	for i in range(_points.size()):
 		for property_name in POINT_PROPERTIES:
+			var property_type := TYPE_VECTOR2
+
+			match property_name:
+				&"locked":
+					property_type = TYPE_DICTIONARY
+				&"handle_mode":
+					property_type = TYPE_INT
+
 			properties.append(
 				{
 					"name": _get_point_storage_name(i, property_name),
-					"type": TYPE_DICTIONARY if property_name == &"locked" else TYPE_VECTOR2,
+					"type": property_type,
 					"usage": PROPERTY_USAGE_STORAGE,
 				},
 			)
@@ -1233,11 +1242,16 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 		PackedVector2Array(),
 	)
 	var locks: Array = snapshot.get("locks", [])
+	var handle_modes: PackedInt32Array = snapshot.get(
+		"handle_modes",
+		PackedInt32Array(),
+	)
 
 	var reversed_positions := PackedVector2Array()
 	var reversed_left_controls := PackedVector2Array()
 	var reversed_right_controls := PackedVector2Array()
 	var reversed_locks: Array[Dictionary] = []
+	var reversed_handle_modes := PackedInt32Array()
 
 	for i in range(positions.size() - 1, -1, -1):
 		var position := positions[i]
@@ -1259,6 +1273,9 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 			else {}
 		)
 
+		if i < handle_modes.size():
+			reversed_handle_modes.append(handle_modes[i])
+
 		# Handle locks swap for the same reason as the handles.
 		reversed_locks.append({
 			"position": bool(lock_values.get("position", false)),
@@ -1274,6 +1291,7 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 	result["left_control_points"] = reversed_left_controls
 	result["right_control_points"] = reversed_right_controls
 	result["locks"] = reversed_locks
+	result["handle_modes"] = reversed_handle_modes
 
 	return result
 

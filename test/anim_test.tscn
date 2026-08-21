@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://lai3jg4apk8m"]
 
-[ext_resource type="Animation" uid="uid://bu7npk7dfjsrs" path="res://test/TestAnimation.res" id="1_p7ucw"]
+[ext_resource type="Animation" uid="uid://bu7npk7dfjsrs" path="res://test/presets/TestAnimation.res" id="1_p7ucw"]
 [ext_resource type="Texture2D" uid="uid://coucrkolyfdo8" path="res://icon.svg" id="1_ttyv3"]
 
 [sub_resource type="Animation" id="Animation_p7ucw"]
