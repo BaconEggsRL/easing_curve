@@ -218,18 +218,21 @@ func get_control_point_pair(
 				else _left_control_point
 			)
 			var opposite_length := opposite.distance_to(position)
-			var direction := position - value
 
-			if not direction.is_zero_approx():
-				var balanced := (
-					position
-					+ direction.normalized() * opposite_length
-				)
+			var direction := _get_safe_direction(
+				position - value,
+			)
 
-				if side == ControlSide.LEFT:
-					right = balanced
-				else:
-					left = balanced
+			var balanced := (
+				position
+				+ direction * opposite_length
+			)
+
+			if side == ControlSide.LEFT:
+				right = balanced
+			else:
+				left = balanced
+
 
 		HandleMode.MIRRORED:
 			var mirrored := position + (position - value)
@@ -414,10 +417,7 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 				else right - position
 			)
 
-			if direction.is_zero_approx():
-				direction = Vector2.RIGHT
-
-			direction = direction.normalized()
+			direction = _get_safe_direction(direction)
 
 			left = position - direction * left_length
 			right = position + direction * right_length
@@ -437,10 +437,7 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 				else right - position
 			)
 
-			if direction.is_zero_approx():
-				direction = Vector2.RIGHT
-
-			direction = direction.normalized()
+			direction = _get_safe_direction(direction)
 
 			var length := (
 				maxf(left_length, right_length)
@@ -586,3 +583,26 @@ func _get_linked_handle_position(
 	# Right wins when lengths are equal, or whenever
 	# LONGEST_HANDLE_WINS is false.
 	return left if use_left else right
+
+
+func _get_safe_direction(
+	direction: Vector2,
+	fallback := Vector2.RIGHT,
+) -> Vector2:
+	if not direction.is_finite():
+		return fallback
+
+	var length_squared := direction.length_squared()
+
+	if (
+		not is_finite(length_squared)
+		or is_zero_approx(length_squared)
+	):
+		return fallback
+
+	return direction / sqrt(length_squared)
+
+
+func _get_safe_length(from: Vector2, to: Vector2) -> float:
+	var length := from.distance_to(to)
+	return length if is_finite(length) else 0.0

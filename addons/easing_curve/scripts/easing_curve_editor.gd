@@ -586,8 +586,8 @@ func update_view_transform() -> void:
 		toolbar_height + margin,
 	)
 	var view_size := Vector2(
-		size.x - margin * 2.0,
-		size.y - toolbar_height - margin * 2.0,
+		maxf(size.x - margin * 2.0, 1.0),
+		maxf(size.y - toolbar_height - margin * 2.0, 1.0),
 	)
 	var view_scale = view_size / world_rect.size
 
@@ -606,6 +606,12 @@ func get_view_pos(world_pos: Vector2) -> Vector2:
 
 
 func get_world_pos(view_pos: Vector2) -> Vector2:
+	if (
+		not _world_to_view.is_finite()
+		or is_zero_approx(_world_to_view.determinant())
+	):
+		return Vector2(NAN, NAN)
+
 	return _world_to_view.affine_inverse() * (view_pos - pan_offset)
 
 
