@@ -1978,6 +1978,21 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 
 			var handles := point.get_handles_for_mode_change(new_mode)
 
+			if new_mode == EasingCurvePoint.HandleMode.LINKED:
+				var locks: Array = snapshot["locks"]
+				var point_locks: Dictionary = locks[i].duplicate(true)
+
+				var shared_locked := (
+					bool(point_locks.get("left_control_point", false))
+					or bool(point_locks.get("right_control_point", false))
+				)
+
+				point_locks["left_control_point"] = shared_locked
+				point_locks["right_control_point"] = shared_locked
+
+				locks[i] = point_locks
+				snapshot["locks"] = locks
+
 			if new_mode == EasingCurvePoint.HandleMode.FREE:
 				var left_force_linear: PackedByteArray = snapshot[
 					"left_force_linear"
