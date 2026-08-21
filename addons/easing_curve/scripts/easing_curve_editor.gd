@@ -6,6 +6,8 @@ extends Control
 ## Main script for editing the EasingCurve resource.
 ## More info here to come.
 
+const SELECTION_TOOLBAR_HEIGHT := 32.0
+
 static var _selected_index_by_curve: Dictionary[int, int] = {}
 
 signal point_changed
@@ -82,6 +84,7 @@ var _slider: EasingCurveZoomSliderContainer:
 var _world_to_view: Transform2D
 var _editor_scale: float = 1.0
 
+var _point_toolbar_panel: PanelContainer
 var _point_toolbar: HBoxContainer
 var _point_label: Label
 var _point_handle_mode: OptionButton
@@ -553,7 +556,8 @@ func get_curve() -> EasingCurve:
 
 
 func update_view_transform() -> void:
-	var margin = 4 * _editor_scale
+	var margin := 4.0 * _editor_scale
+	var toolbar_height := SELECTION_TOOLBAR_HEIGHT * _editor_scale
 
 	var auto_range = _compute_auto_y_range()
 	var auto_min_y = auto_range.x
@@ -575,8 +579,14 @@ func update_view_transform() -> void:
 
 	# Get world rect
 	var world_rect = Rect2(Vector2(min_x, min_y), Vector2(max_x - min_x, max_y - min_y))
-	var view_margin = Vector2(margin, margin)
-	var view_size = size - view_margin * 2
+	var view_origin := Vector2(
+		margin,
+		toolbar_height + margin,
+	)
+	var view_size := Vector2(
+		size.x - margin * 2.0,
+		size.y - toolbar_height - margin * 2.0,
+	)
 	var view_scale = view_size / world_rect.size
 
 	var world_trans: Transform2D
@@ -584,7 +594,7 @@ func update_view_transform() -> void:
 	world_trans = world_trans.scaled(Vector2(view_scale.x, -view_scale.y))
 
 	var view_trans: Transform2D
-	view_trans = view_trans.translated_local(view_margin)
+	view_trans = view_trans.translated_local(view_origin)
 
 	_world_to_view = view_trans * world_trans
 
@@ -688,7 +698,15 @@ func _on_curve_changed() -> void:
 
 
 func _get_minimum_size() -> Vector2:
-	return Vector2(64.0, maxf(MIN_GRAPH_HEIGHT, size.x * ASPECT_RATIO)) * _editor_scale
+	var graph_height := maxf(
+		MIN_GRAPH_HEIGHT,
+		size.x * ASPECT_RATIO,
+	)
+
+	return Vector2(
+		64.0,
+		graph_height + SELECTION_TOOLBAR_HEIGHT,
+	) * _editor_scale
 
 
 func _draw_bezier_segment(a: EasingCurvePoint, b: EasingCurvePoint) -> void:
@@ -779,16 +797,30 @@ func _draw_function_curve():
 
 
 func _create_point_toolbar() -> void:
+	_point_toolbar_panel = PanelContainer.new()
+	_point_toolbar_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	_point_toolbar_panel.set_anchors_and_offsets_preset(
+		Control.PRESET_TOP_WIDE
+	)
+
+	_point_toolbar_panel.custom_minimum_size.y = (
+		SELECTION_TOOLBAR_HEIGHT * _editor_scale
+	)
+
+	add_child(_point_toolbar_panel)
+
 	_point_toolbar = HBoxContainer.new()
-	_point_toolbar.position = Vector2(8, 8) * _editor_scale
+	_point_toolbar.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_point_toolbar.add_theme_constant_override(
 		"separation",
-		int(4 * _editor_scale),
+		int(6 * _editor_scale),
 	)
-	add_child(_point_toolbar)
+
+	_point_toolbar_panel.add_child(_point_toolbar)
 
 	_point_label = Label.new()
-	_point_label.text = "Point 0"
+	_point_label.text = "No Selection"
 	_point_toolbar.add_child(_point_label)
 
 	_point_handle_mode = OptionButton.new()
@@ -822,6 +854,8 @@ func _create_point_toolbar() -> void:
 	_point_toolbar.add_child(_point_handle_mode)
 
 
+
+
 func _update_point_toolbar() -> void:
 	if _point_toolbar == null:
 		return
@@ -832,14 +866,19 @@ func _update_point_toolbar() -> void:
 		and selected_index < _curve.points.size()
 	)
 
-	_point_toolbar.visible = valid_selection
+	_point_toolbar.visible = true
 
 	if not valid_selection:
+		_point_label.text = "No Selection"
+		_point_label.modulate.a = 0.6
+		_point_handle_mode.visible = false
 		return
 
 	var point := _curve.points[selected_index]
 
 	_point_label.text = "Point %d" % selected_index
+	_point_label.modulate.a = 1.0
+	_point_handle_mode.visible = true
 
 	_updating_point_toolbar = true
 
