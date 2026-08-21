@@ -266,7 +266,10 @@ class DeferredParameterEditorProperty:
 		row.add_child(input)
 		add_focusable(input)
 
-		input.deferred_drag_mode = false
+		# Added in Godot 4.7 -- defers property update to end of slider drag.
+		if input.has_method("set_deferred_drag_mode_enabled"):
+			input.set_deferred_drag_mode_enabled(false)
+
 		input.grabbed.connect(_on_grabbed)
 		input.ungrabbed.connect(_on_ungrabbed)
 		input.value_focus_entered.connect(_on_value_focus_entered)
@@ -932,6 +935,11 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 			_create_vector2_property(point, i, "position", "Position"),
 		)
 
+		# Handle Mode
+		point_panel_vbox.add_child(
+			_create_handle_mode_property(point, i),
+		)
+
 		# Control Points
 		var point_count = curve.points.size()
 
@@ -1135,10 +1143,12 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 	if object is EasingCurve and name == EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY:
 		return true
 	if object is EasingCurve and name == EasingCurve.FUNCTION_SNAPSHOT_PROPERTY:
+		return true
+	if object is EasingCurve and name == "generate_tool_button":
 		if EasingCurve.uses_generated_function_data(object.trans_type):
 			var property_editor := GenerateFunctionEditorProperty.new()
 			property_editor.setup(easing_curve_editor, editor_undo_redo)
-			add_property_editor(name, property_editor)
+			add_custom_control(property_editor)
 		return true
 	if object is EasingCurve and name == "generate_tool_button":
 		return true
@@ -1755,6 +1765,47 @@ func _on_curve_editor_point_remove_requested(point: EasingCurvePoint) -> void:
 	_remove_point(point)
 
 
+func _create_handle_mode_property(
+	point: EasingCurvePoint,
+	i: int,
+) -> Control:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", _compact_separation())
+
+	var label := Label.new()
+	label.text = "Handle Mode"
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+
+	var option := OptionButton.new()
+	option.fit_to_longest_item = false
+	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	option.add_item("Free", EasingCurvePoint.HandleMode.FREE)
+	option.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
+	option.add_item("Balanced", EasingCurvePoint.HandleMode.BALANCED)
+	option.add_item("Mirrored", EasingCurvePoint.HandleMode.MIRRORED)
+
+	for index in range(option.item_count):
+		if option.get_item_id(index) == point.handle_mode:
+			option.select(index)
+			break
+
+	option.item_selected.connect(
+		func(index: int):
+			_apply_point_property_change(
+				i,
+				&"handle_mode",
+				option.get_item_id(index),
+			)
+	)
+
+	row.add_child(option)
+
+	return row
+
+
 func _apply_point_property_change(i: int, property_name: StringName, value: Variant, changing: bool = false) -> void:
 	if i < 0 or i >= curve.points.size():
 		return
@@ -1765,19 +1816,68 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 		_point_edit_action_name = _point_action_name(property_name)
 	var snapshot := curve.get_point_snapshot()
 	match property_name:
-		&"position", &"left_control_point", &"right_control_point":
-			var snapshot_key := String(property_name) + "s" if property_name != &"position" else "positions"
-			var values: PackedVector2Array = snapshot[snapshot_key]
-			values[i] = value
-			snapshot[snapshot_key] = values
+		&"position":
+			var positions: PackedVector2Array = snapshot["positions"]
+			positions[i] = value
+			snapshot["positions"] = positions
+
+		&"left_control_point", &"right_control_point":
+			var point := curve.points[i]
+
+			var side := (
+				EasingCurvePoint.ControlSide.LEFT
+				if property_name == &"left_control_point"
+				else EasingCurvePoint.ControlSide.RIGHT
+			)
+
+			var pair := point.get_control_point_pair(side, value)
+
+			var left_control_points: PackedVector2Array = snapshot[
+				"left_control_points"
+			]
+			var right_control_points: PackedVector2Array = snapshot[
+				"right_control_points"
+			]
+
+			left_control_points[i] = pair["left"]
+			right_control_points[i] = pair["right"]
+
+			snapshot["left_control_points"] = left_control_points
+			snapshot["right_control_points"] = right_control_points
+
+		&"handle_mode":
+			var point := curve.points[i]
+			var new_mode := int(value)
+
+			var handles := point.get_handles_for_mode_change(new_mode)
+
+			var handle_modes: PackedInt32Array = snapshot["handle_modes"]
+			var left_control_points: PackedVector2Array = snapshot[
+				"left_control_points"
+			]
+			var right_control_points: PackedVector2Array = snapshot[
+				"right_control_points"
+			]
+
+			handle_modes[i] = new_mode
+			left_control_points[i] = handles["left"]
+			right_control_points[i] = handles["right"]
+
+			snapshot["handle_modes"] = handle_modes
+			snapshot["left_control_points"] = left_control_points
+			snapshot["right_control_points"] = right_control_points
+
 		&"locked":
 			var locks: Array = snapshot["locks"]
 			locks[i] = value.duplicate(true)
 			snapshot["locks"] = locks
+
 		_:
 			return
+
 	snapshot["changing"] = changing
 	curve.set_point_snapshot(snapshot)
+
 	if not changing:
 		EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 			editor_undo_redo,
@@ -1795,6 +1895,8 @@ func _point_action_name(property_name: StringName) -> String:
 			return "Move Easing Curve Point"
 		&"left_control_point", &"right_control_point":
 			return "Move Easing Curve Handle"
+		&"handle_mode":
+			return "Change Easing Curve Handle Mode"
 		&"locked":
 			return "Change Easing Curve Point Lock"
 	return "Edit Easing Curve Point"

@@ -189,6 +189,7 @@ const POINT_PROPERTIES: Array[StringName] = [
 	&"left_control_point",
 	&"right_control_point",
 	&"locked",
+	&"handle_mode",
 ]
 
 ## Zoom slider variables
@@ -674,10 +675,18 @@ func _get_property_list() -> Array[Dictionary]:
 
 	for i in range(_points.size()):
 		for property_name in POINT_PROPERTIES:
+			var property_type := TYPE_VECTOR2
+
+			match property_name:
+				&"locked":
+					property_type = TYPE_DICTIONARY
+				&"handle_mode":
+					property_type = TYPE_INT
+
 			properties.append(
 				{
 					"name": _get_point_storage_name(i, property_name),
-					"type": TYPE_DICTIONARY if property_name == &"locked" else TYPE_VECTOR2,
+					"type": property_type,
 					"usage": PROPERTY_USAGE_STORAGE,
 				},
 			)
@@ -1190,22 +1199,29 @@ func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 	var positions := PackedVector2Array()
 	var left_control_points := PackedVector2Array()
 	var right_control_points := PackedVector2Array()
+	var handle_modes := PackedInt32Array()
 	var locks: Array[Dictionary] = []
+
 	for point in point_values:
 		if point == null:
 			positions.append(Vector2.ZERO)
 			left_control_points.append(Vector2.ZERO)
 			right_control_points.append(Vector2.ZERO)
+			handle_modes.append(EasingCurvePoint.HandleMode.FREE)
 			locks.append({})
 			continue
+
 		positions.append(point.position)
 		left_control_points.append(point.left_control_point)
 		right_control_points.append(point.right_control_point)
+		handle_modes.append(point.handle_mode)
 		locks.append(point.locked.duplicate())
+
 	return {
 		"positions": positions,
 		"left_control_points": left_control_points,
 		"right_control_points": right_control_points,
+		"handle_modes": handle_modes,
 		"locks": locks,
 	}
 
@@ -1226,11 +1242,16 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 		PackedVector2Array(),
 	)
 	var locks: Array = snapshot.get("locks", [])
+	var handle_modes: PackedInt32Array = snapshot.get(
+		"handle_modes",
+		PackedInt32Array(),
+	)
 
 	var reversed_positions := PackedVector2Array()
 	var reversed_left_controls := PackedVector2Array()
 	var reversed_right_controls := PackedVector2Array()
 	var reversed_locks: Array[Dictionary] = []
+	var reversed_handle_modes := PackedInt32Array()
 
 	for i in range(positions.size() - 1, -1, -1):
 		var position := positions[i]
@@ -1252,6 +1273,9 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 			else {}
 		)
 
+		if i < handle_modes.size():
+			reversed_handle_modes.append(handle_modes[i])
+
 		# Handle locks swap for the same reason as the handles.
 		reversed_locks.append({
 			"position": bool(lock_values.get("position", false)),
@@ -1267,6 +1291,7 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 	result["left_control_points"] = reversed_left_controls
 	result["right_control_points"] = reversed_right_controls
 	result["locks"] = reversed_locks
+	result["handle_modes"] = reversed_handle_modes
 
 	return result
 
@@ -1317,18 +1342,31 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 	var positions: PackedVector2Array = snapshot.get("positions", PackedVector2Array())
 	var left_control_points: PackedVector2Array = snapshot.get("left_control_points", PackedVector2Array())
 	var right_control_points: PackedVector2Array = snapshot.get("right_control_points", PackedVector2Array())
+	var handle_modes: PackedInt32Array = snapshot.get("handle_modes", PackedInt32Array())
 	var locks: Array = snapshot.get("locks", [])
 	var changing := bool(snapshot.get("changing", false))
 	var topology_changed := positions.size() != _points.size() or _points.has(null)
-	var point_data_changed := _point_snapshot_differs(positions, left_control_points, right_control_points, locks)
+	var point_data_changed := _point_snapshot_differs(
+		positions,
+		left_control_points,
+		right_control_points,
+		handle_modes,
+		locks,
+	)
 	_suppress_point_notifications += 1
 	if not topology_changed:
 		for i in range(positions.size()):
-			_points[i].position = positions[i]
+			var point := _points[i]
+			# Temporarily use Free so restoring one handle does not
+			# modify the opposite handle.
+			point.handle_mode = EasingCurvePoint.HandleMode.FREE
+			point.position = positions[i]
 			if i < left_control_points.size():
 				_points[i].left_control_point = left_control_points[i]
 			if i < right_control_points.size():
 				_points[i].right_control_point = right_control_points[i]
+			if i < handle_modes.size():
+				point.handle_mode = handle_modes[i]
 			if i < locks.size() and locks[i] is Dictionary:
 				var lock_values: Dictionary = locks[i]
 				_points[i].locked = {
@@ -1344,6 +1382,8 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 				point.left_control_point = left_control_points[i]
 			if i < right_control_points.size():
 				point.right_control_point = right_control_points[i]
+			if i < handle_modes.size():
+				point.handle_mode = handle_modes[i]
 			if i < locks.size() and locks[i] is Dictionary:
 				var lock_values: Dictionary = locks[i]
 				point.locked = {
@@ -1415,12 +1455,14 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	var positions: PackedVector2Array = point_snapshot.get("positions", PackedVector2Array())
 	var left_control_points: PackedVector2Array = point_snapshot.get("left_control_points", PackedVector2Array())
 	var right_control_points: PackedVector2Array = point_snapshot.get("right_control_points", PackedVector2Array())
+	var handle_modes: PackedInt32Array = point_snapshot.get("handle_modes", PackedInt32Array())
 	var locks: Array = point_snapshot.get("locks", [])
 	var topology_changed := positions.size() != _points.size() or _points.has(null)
 	var point_data_changed := _point_snapshot_differs(
 		positions,
 		left_control_points,
 		right_control_points,
+		handle_modes,
 		locks,
 	)
 	var locks_changed := _point_snapshot_locks_differ(locks)
@@ -1572,6 +1614,7 @@ func _point_snapshot_differs(
 		positions: PackedVector2Array,
 		left_control_points: PackedVector2Array,
 		right_control_points: PackedVector2Array,
+		handle_modes: PackedInt32Array,
 		locks: Array,
 ) -> bool:
 	if positions.size() != _points.size() or _points.has(null):
@@ -1583,6 +1626,8 @@ func _point_snapshot_differs(
 		if i < left_control_points.size() and point.left_control_point != left_control_points[i]:
 			return true
 		if i < right_control_points.size() and point.right_control_point != right_control_points[i]:
+			return true
+		if i < handle_modes.size() and point.handle_mode != handle_modes[i]:
 			return true
 		if i < locks.size() and locks[i] is Dictionary:
 			var lock_values: Dictionary = locks[i]

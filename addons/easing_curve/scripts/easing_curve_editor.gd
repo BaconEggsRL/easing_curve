@@ -211,6 +211,14 @@ func _gui_input(event: InputEvent) -> void:
 			var control = get_control_at(event.position)
 			var point_idx = get_point_at(event.position)
 
+			if (
+				control[0] != -1
+				and _curve.points[control[0]].handle_mode
+					== EasingCurvePoint.HandleMode.LINEAR
+			):
+				point_idx = control[0]
+				control = [-1, ControlIndex.NONE]
+
 			# --- If we hit a control ---
 			if control[0] != -1:
 				var p = _curve.points[control[0]]

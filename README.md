@@ -24,13 +24,34 @@ Designed for parity with Godot's Tween system and easing equations.
 
 ### Installation:
 
+#### Godot Asset Library / Asset Store
+
+**Godot 4.7 and newer:**
+* Install **Easing Curve** normally through the Asset Store.
+* The plugin should be installed to `res://addons/easing_curve/`.
+
+**Godot 4.4–4.6:**
+* Download **Easing Curve** through the Asset Library.
+* In the **Configure Asset Before Installing** window, make sure **Ignore asset root** is **unchecked** before installing.
+* Confirm that the installation preview shows the plugin under:
+  `res://addons/easing_curve/`
+* Complete the installation.
+
+#### Manual Installation
+
 * Copy `addons/easing_curve/` into your project's `addons/` folder.
-* Enable **Easing Curve** through **Project > Project Settings > Plugins**.
+* The resulting path should be:
+  `res://addons/easing_curve/`
+
+#### Enable the Plugin
+
+* Open **Project > Project Settings > Plugins**.
+* Enable **Easing Curve**.
 
 ### Create a new EasingCurve:
 
  * Export a variable of type EasingCurve, and create a new EasingCurve resource.
-  * The resource will pre-populate with a linear cubic_bezier curve
+  * The resource will pre-populate with a linear cubic_bezier curve.
 
 **&nbsp;**
 
@@ -104,8 +125,10 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 ---
 
-* Handle mode support akin to AnimationPlayer (Free, Linear, Balanced, Mirrored)
-* Additional function options (CSS linear(), Back overshoot parameter, Spring stiffness & damping)
+* TBD — open to suggestions!
+* Found a bug? Please open a [Bug Report](https://github.com/BaconEggsRL/easing_curve/issues/new?template=bug_report.yml).
+* Have an idea for a new feature or improvement? Open a [Feature Request](https://github.com/BaconEggsRL/easing_curve/issues/new?template=feature_request.yml).
+* Contributions are welcome! Feel free to open a [Pull Request](https://github.com/BaconEggsRL/easing_curve/pulls).
 
 **&nbsp;**
 
@@ -117,7 +140,8 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 Thank you for using the EasingCurve plugin.
 Please support the development by sharing, starring or commenting if you found it useful.
 
-This is my first plugin, so please feel free to submit an issue or PR if you find anything that needs fixing.
+This is my first plugin, so feedback and contributions are always welcome.
+See the links above to report bugs, suggest features, or contribute changes.
 
 You can find all my addons on my [GitHub profile page](https://github.com/BaconEggsRL/).
 
@@ -129,3 +153,16 @@ AI-assisted coding was used during development for implementation, debugging, re
 
 ### License:
 Released under the [MIT License](LICENSE.md).
+
+
+---
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=BaconEggsRL%2Feasing_curve&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=BaconEggsRL/easing_curve&type=date&theme=dark&legend=top-left&sealed_token=nRCgB2qxeEZVuTnXUrEG2QDyqIe13lbLuZpAr-G3LQ1bI1ePPeXCqFTMQLOMrcLJOt51N_U5Z1TwHPwpXhce4XuNB4g4ryA4xsPFDi9VS7DFDTVH412M0efFVQpEoq6IotFCRdS21ATJ4SvrEu6p4JY23FgCvQWg9ST4142oJhs7baKam4lmHB8fOguf" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=BaconEggsRL/easing_curve&type=date&legend=top-left&sealed_token=nRCgB2qxeEZVuTnXUrEG2QDyqIe13lbLuZpAr-G3LQ1bI1ePPeXCqFTMQLOMrcLJOt51N_U5Z1TwHPwpXhce4XuNB4g4ryA4xsPFDi9VS7DFDTVH412M0efFVQpEoq6IotFCRdS21ATJ4SvrEu6p4JY23FgCvQWg9ST4142oJhs7baKam4lmHB8fOguf" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=BaconEggsRL/easing_curve&type=date&legend=top-left&sealed_token=nRCgB2qxeEZVuTnXUrEG2QDyqIe13lbLuZpAr-G3LQ1bI1ePPeXCqFTMQLOMrcLJOt51N_U5Z1TwHPwpXhce4XuNB4g4ryA4xsPFDi9VS7DFDTVH412M0efFVQpEoq6IotFCRdS21ATJ4SvrEu6p4JY23FgCvQWg9ST4142oJhs7baKam4lmHB8fOguf" />
+ </picture>
+</a>
