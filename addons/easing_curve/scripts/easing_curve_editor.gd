@@ -6,6 +6,8 @@ extends Control
 ## Main script for editing the EasingCurve resource.
 ## More info here to come.
 
+static var _selected_index_by_curve: Dictionary[int, int] = {}
+
 signal point_changed
 signal point_property_change_requested(index: int, property_name: StringName, value: Variant, changing: bool)
 signal point_add_requested(point: EasingCurvePoint)
@@ -50,7 +52,15 @@ var hover_radius: int = BASE_HOVER_RADIUS
 var control_radius: int = BASE_CONTROL_RADIUS
 var control_hover_radius: int = BASE_CONTROL_HOVER_RADIUS
 var control_length: int = BASE_CONTROL_LENGTH
-var selected_index: int = -1
+
+var selected_index: int = -1:
+	set(value):
+		selected_index = value
+		if _curve != null:
+			_selected_index_by_curve[_curve.get_instance_id()] = value
+		_update_point_toolbar()
+		queue_redraw()
+
 var hovered_index: int = -1
 var selected_control_index: ControlIndex = ControlIndex.NONE
 var hovered_control_index: ControlIndex = ControlIndex.NONE
@@ -240,7 +250,6 @@ func _gui_input(event: InputEvent) -> void:
 
 				# Always select the point
 				selected_index = control[0]
-				_update_point_toolbar()
 
 				# Only allow dragging if the control is not locked
 				if can_drag_control:
@@ -262,7 +271,6 @@ func _gui_input(event: InputEvent) -> void:
 					dragging_point = point_idx
 					dragging_control = ControlIndex.NONE
 				selected_index = point_idx
-				_update_point_toolbar()
 				queue_redraw()
 				return
 
@@ -273,28 +281,44 @@ func _gui_input(event: InputEvent) -> void:
 			new_point.position = clamped_pos
 			new_point.left_control_point = clamped_pos + Vector2(-0.1, 0)
 			new_point.right_control_point = clamped_pos + Vector2(0.1, 0)
-			# _curve.add_point(new_point)
+
 			_request_point_add(new_point)
+
 			selected_index = -1
 			for i in range(_curve.points.size()):
 				if _curve.points[i].position == clamped_pos:
 					selected_index = i
 					break
-			_update_point_toolbar()
+
+			if selected_index != -1:
+				dragging_point = selected_index
+				dragging_control = ControlIndex.NONE
+
+			queue_redraw()
+			return
+
 
 		# --- RIGHT CLICK ---
 		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 			var point_idx = get_point_at(event.position)
+
 			if point_idx != -1:
-				# _curve.remove_point(_curve.points[point_idx])
 				_request_point_remove(_curve.points[point_idx])
+
 				if selected_index == point_idx:
 					selected_index = -1
 				elif selected_index > point_idx:
 					selected_index -= 1
-				_update_point_toolbar()
+
 				queue_redraw()
 				return
+
+			# Right-clicking empty graph space clears the point selection.
+			selected_index = -1
+			selected_control_index = ControlIndex.NONE
+			queue_redraw()
+			return
+
 
 		# Reset dragging state when mouse button released
 		elif not event.pressed:
@@ -508,10 +532,19 @@ func set_curve(easing_curve: EasingCurve):
 	if _curve != easing_curve:
 		if _curve != null:
 			_curve.changed.disconnect(_on_curve_changed)
+
 		_curve = easing_curve
+
 		if _curve != null:
 			_curve.changed.connect(_on_curve_changed)
-		_update_point_toolbar()
+
+			selected_index = _selected_index_by_curve.get(
+				_curve.get_instance_id(),
+				-1,
+			)
+		else:
+			selected_index = -1
+
 		queue_redraw()
 
 
