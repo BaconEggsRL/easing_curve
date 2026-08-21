@@ -24,13 +24,34 @@ Designed for parity with Godot's Tween system and easing equations.
 
 ### Installation:
 
+#### Godot Asset Library / Asset Store
+
+**Godot 4.7 and newer:**
+* Install **Easing Curve** normally through the Asset Store.
+* The plugin should be installed to `res://addons/easing_curve/`.
+
+**Godot 4.4–4.6:**
+* Download **Easing Curve** through the Asset Library.
+* In the **Configure Asset Before Installing** window, make sure **Ignore asset root** is **unchecked** before installing.
+* Confirm that the installation preview shows the plugin under:
+  `res://addons/easing_curve/`
+* Complete the installation.
+
+#### Manual Installation
+
 * Copy `addons/easing_curve/` into your project's `addons/` folder.
-* Enable **Easing Curve** through **Project > Project Settings > Plugins**.
+* The resulting path should be:
+  `res://addons/easing_curve/`
+
+#### Enable the Plugin
+
+* Open **Project > Project Settings > Plugins**.
+* Enable **Easing Curve**.
 
 ### Create a new EasingCurve:
 
  * Export a variable of type EasingCurve, and create a new EasingCurve resource.
-  * The resource will pre-populate with a linear cubic_bezier curve
+  * The resource will pre-populate with a linear cubic_bezier curve.
 
 **&nbsp;**
 
@@ -104,7 +125,10 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 ---
 
-* Handle mode support akin to AnimationPlayer (Free, Linear, Balanced, Mirrored)
+* TBD — open to suggestions!
+* Found a bug? Please open a [Bug Report](https://github.com/BaconEggsRL/easing_curve/issues/new/choose).
+* Have an idea for a new feature or improvement? Open a [Feature Request](https://github.com/BaconEggsRL/easing_curve/issues/new/choose).
+* Contributions are welcome! Feel free to open a [Pull Request](https://github.com/BaconEggsRL/easing_curve/pulls).
 
 **&nbsp;**
 
