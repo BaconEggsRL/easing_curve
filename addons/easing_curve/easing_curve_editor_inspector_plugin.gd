@@ -1645,7 +1645,6 @@ func _create_vector2_property(
 	lock_btn.add_theme_color_override("icon_pressed_color", pressed_color)
 	lock_btn.add_theme_color_override("icon_hover_pressed_color", pressed_color)
 
-	# var toggled_on := lock_btn.button_pressed
 	var locked := point.locked[property_name]
 	lock_btn.button_pressed = locked
 	var toggled_on := lock_btn.button_pressed
