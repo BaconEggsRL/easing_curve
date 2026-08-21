@@ -579,13 +579,23 @@ func get_control_at(pos: Vector2) -> Array: # [point_index, ControlIndex]
 		var p = _curve.points[i]
 
 		# LEFT (only if not first and not locked)
-		if i != 0: # and not p.locked["left_control_point"]:
+		if (
+			i != 0
+			and not p.is_control_force_linear_active(
+				EasingCurvePoint.ControlSide.LEFT
+			)
+		):
 			var left_view = get_view_pos(p.left_control_point)
 			if left_view.distance_squared_to(pos) < control_hover_radius * control_hover_radius:
 				return [i, ControlIndex.LEFT]
 
 		# RIGHT (only if not last and not locked)
-		if i != _curve.points.size() - 1: # and not p.locked["right_control_point"]:
+		if (
+			i != _curve.points.size() - 1
+			and not p.is_control_force_linear_active(
+				EasingCurvePoint.ControlSide.RIGHT
+			)
+		):
 			var right_view = get_view_pos(p.right_control_point)
 			if right_view.distance_squared_to(pos) < control_hover_radius * control_hover_radius:
 				return [i, ControlIndex.RIGHT]

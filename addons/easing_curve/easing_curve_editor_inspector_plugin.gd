@@ -1925,6 +1925,20 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 
 			var handles := point.get_handles_for_mode_change(new_mode)
 
+			if new_mode == EasingCurvePoint.HandleMode.FREE:
+				var left_force_linear: PackedByteArray = snapshot[
+					"left_force_linear"
+				]
+				var right_force_linear: PackedByteArray = snapshot[
+					"right_force_linear"
+				]
+
+				if bool(left_force_linear[i]):
+					handles["left"] = point.position
+
+				if bool(right_force_linear[i]):
+					handles["right"] = point.position
+
 			var handle_modes: PackedInt32Array = snapshot["handle_modes"]
 			var left_control_points: PackedVector2Array = snapshot[
 				"left_control_points"
