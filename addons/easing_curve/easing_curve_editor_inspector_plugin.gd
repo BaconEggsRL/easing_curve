@@ -1593,7 +1593,11 @@ func _create_vector2_property(
 		)
 
 		force_linear_btn.tooltip_text = (
-			"Force Linear — Collapse this handle to the point"
+			(
+				"Unforce Linear — Handle returns to Free default"
+				if force_linear
+				else "Force Linear — Collapse this handle to the point"
+			)
 			if point.handle_mode == EasingCurvePoint.HandleMode.FREE
 			else "Force Linear — Available in Free handle mode"
 		)
