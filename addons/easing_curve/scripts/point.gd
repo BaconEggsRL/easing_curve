@@ -217,7 +217,10 @@ func get_control_point_pair(
 				if side == ControlSide.LEFT
 				else _left_control_point
 			)
-			var opposite_length := opposite.distance_to(position)
+			var opposite_length := _get_safe_length(
+				opposite,
+				position,
+			)
 
 			var direction := _get_safe_direction(
 				position - value,
@@ -266,6 +269,9 @@ func _set_control_point(
 
 	var left: Vector2 = pair["left"]
 	var right: Vector2 = pair["right"]
+
+	if not left.is_finite() or not right.is_finite():
+		return
 
 	if (
 		_left_control_point == left
@@ -403,8 +409,14 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 			pass
 
 		HandleMode.BALANCED:
-			var left_length := left.distance_to(position)
-			var right_length := right.distance_to(position)
+			var left_length := _get_safe_length(
+				left,
+				position,
+			)
+			var right_length := _get_safe_length(
+				right,
+				position,
+			)
 
 			var use_left := (
 				LONGEST_HANDLE_WINS
@@ -423,8 +435,14 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 			right = position + direction * right_length
 
 		HandleMode.MIRRORED:
-			var left_length := left.distance_to(position)
-			var right_length := right.distance_to(position)
+			var left_length := _get_safe_length(
+				left,
+				position,
+			)
+			var right_length := _get_safe_length(
+				right,
+				position,
+			)
 
 			var use_left := (
 				LONGEST_HANDLE_WINS
@@ -572,8 +590,14 @@ func _get_linked_handle_position(
 	left: Vector2,
 	right: Vector2,
 ) -> Vector2:
-	var left_length := left.distance_to(position)
-	var right_length := right.distance_to(position)
+	var left_length := _get_safe_length(
+		left,
+		position,
+	)
+	var right_length := _get_safe_length(
+		right,
+		position,
+	)
 
 	var use_left := (
 		LONGEST_HANDLE_WINS
