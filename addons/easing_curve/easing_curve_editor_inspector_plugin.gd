@@ -266,7 +266,10 @@ class DeferredParameterEditorProperty:
 		row.add_child(input)
 		add_focusable(input)
 
-		input.deferred_drag_mode = false
+		# Added in Godot 4.7 -- defers property update to end of slider drag.
+		if input.has_method("set_deferred_drag_mode_enabled"):
+			input.set_deferred_drag_mode_enabled(false)
+
 		input.grabbed.connect(_on_grabbed)
 		input.ungrabbed.connect(_on_ungrabbed)
 		input.value_focus_entered.connect(_on_value_focus_entered)
