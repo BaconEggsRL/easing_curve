@@ -248,3 +248,25 @@ func _initialize_default_handles() -> void:
 		position
 		+ Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
 	)
+
+
+func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
+	if (
+		handle_mode == HandleMode.LINEAR
+		and value != HandleMode.LINEAR
+	):
+		return {
+			"left": position + Vector2.LEFT * DEFAULT_HANDLE_LENGTH,
+			"right": position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH,
+		}
+
+	if value == HandleMode.LINEAR:
+		return {
+			"left": position,
+			"right": position,
+		}
+
+	return {
+		"left": left_control_point,
+		"right": right_control_point,
+	}

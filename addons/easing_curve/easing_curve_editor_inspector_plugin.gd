@@ -1841,9 +1841,26 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 			snapshot["right_control_points"] = right_control_points
 
 		&"handle_mode":
+			var point := curve.points[i]
+			var new_mode := int(value)
+
+			var handles := point.get_handles_for_mode_change(new_mode)
+
 			var handle_modes: PackedInt32Array = snapshot["handle_modes"]
-			handle_modes[i] = int(value)
+			var left_control_points: PackedVector2Array = snapshot[
+				"left_control_points"
+			]
+			var right_control_points: PackedVector2Array = snapshot[
+				"right_control_points"
+			]
+
+			handle_modes[i] = new_mode
+			left_control_points[i] = handles["left"]
+			right_control_points[i] = handles["right"]
+
 			snapshot["handle_modes"] = handle_modes
+			snapshot["left_control_points"] = left_control_points
+			snapshot["right_control_points"] = right_control_points
 
 		&"locked":
 			var locks: Array = snapshot["locks"]
