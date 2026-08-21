@@ -54,6 +54,23 @@ var _right_control_point := Vector2.ZERO
 
 @export var handle_mode: HandleMode = HandleMode.FREE: set = set_handle_mode
 
+var _left_force_linear := false
+var _right_force_linear := false
+
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
+var left_force_linear: bool:
+	get:
+		return _left_force_linear
+	set(value):
+		set_left_force_linear(value)
+
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
+var right_force_linear: bool:
+	get:
+		return _right_force_linear
+	set(value):
+		set_right_force_linear(value)
+
 ## Stores editor-only Vector2 input sliders outside the resource property graph.
 static var _input_controls: Dictionary[int, Dictionary] = {}
 
@@ -219,6 +236,9 @@ func _set_control_point(
 	side: ControlSide,
 	value: Vector2,
 ) -> void:
+	if is_control_force_linear_active(side):
+		value = position
+
 	var pair := get_control_point_pair(side, value)
 
 	var left: Vector2 = pair["left"]
@@ -271,6 +291,8 @@ func set_handle_mode(value: HandleMode) -> void:
 	elif previous_mode == HandleMode.LINEAR:
 		_initialize_default_handles()
 
+	_apply_free_force_linear_state()
+
 	_update_control_point_inputs("left_control_point")
 	_update_control_point_inputs("right_control_point")
 
@@ -279,17 +301,6 @@ func set_handle_mode(value: HandleMode) -> void:
 	_update_input_lock_state("right_control_point")
 
 	emit_changed()
-
-
-func _initialize_default_handles() -> void:
-	_left_control_point = (
-		position
-		+ Vector2.LEFT * DEFAULT_HANDLE_LENGTH
-	)
-	_right_control_point = (
-		position
-		+ Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
-	)
 
 
 #Any -> Linear
@@ -401,3 +412,89 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 		"left": left,
 		"right": right,
 	}
+
+
+
+func is_control_forced_linear(side: ControlSide) -> bool:
+	return (
+		left_force_linear
+		if side == ControlSide.LEFT
+		else right_force_linear
+	)
+
+
+func is_control_force_linear_active(side: ControlSide) -> bool:
+	return (
+		handle_mode == HandleMode.FREE
+		and is_control_forced_linear(side)
+	)
+
+
+func set_left_force_linear(value: bool) -> void:
+	_set_control_force_linear(ControlSide.LEFT, value)
+
+
+func set_right_force_linear(value: bool) -> void:
+	_set_control_force_linear(ControlSide.RIGHT, value)
+
+
+func _set_control_force_linear(
+	side: ControlSide,
+	enabled: bool,
+) -> void:
+	if is_control_forced_linear(side) == enabled:
+		return
+
+	if side == ControlSide.LEFT:
+		_left_force_linear = enabled
+	else:
+		_right_force_linear = enabled
+
+	if handle_mode == HandleMode.FREE:
+		if enabled:
+			_set_control_point_direct(side, position)
+		else:
+			_initialize_default_handle(side)
+
+	emit_changed()
+
+
+func _set_control_point_direct(
+	side: ControlSide,
+	value: Vector2,
+) -> void:
+	if side == ControlSide.LEFT:
+		_left_control_point = value
+		_update_control_point_inputs("left_control_point")
+	else:
+		_right_control_point = value
+		_update_control_point_inputs("right_control_point")
+
+
+func _initialize_default_handle(side: ControlSide) -> void:
+	var offset := (
+		Vector2.LEFT
+		if side == ControlSide.LEFT
+		else Vector2.RIGHT
+	)
+
+	_set_control_point_direct(
+		side,
+		position + offset * DEFAULT_HANDLE_LENGTH,
+	)
+
+
+func _initialize_default_handles() -> void:
+	_initialize_default_handle(ControlSide.LEFT)
+	_initialize_default_handle(ControlSide.RIGHT)
+
+
+func _apply_free_force_linear_state() -> void:
+	if handle_mode != HandleMode.FREE:
+		return
+
+	if _left_force_linear:
+		_set_control_point_direct(ControlSide.LEFT, position)
+
+	if _right_force_linear:
+		_set_control_point_direct(ControlSide.RIGHT, position)
