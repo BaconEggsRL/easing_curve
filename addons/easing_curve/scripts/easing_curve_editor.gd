@@ -72,6 +72,11 @@ var _slider: EasingCurveZoomSliderContainer:
 var _world_to_view: Transform2D
 var _editor_scale: float = 1.0
 
+var _point_toolbar: HBoxContainer
+var _point_label: Label
+var _point_handle_mode: OptionButton
+var _updating_point_toolbar := false
+
 
 func _ready() -> void:
 	custom_minimum_size = Vector2.ZERO
@@ -86,6 +91,9 @@ func _ready() -> void:
 		_curve = EasingCurve.new()
 		# _curve.range_changed.connect(_on_curve_changed)
 		_curve.changed.connect(_on_curve_changed)
+
+	_create_point_toolbar()
+	_update_point_toolbar()
 
 
 # =========================
@@ -232,6 +240,7 @@ func _gui_input(event: InputEvent) -> void:
 
 				# Always select the point
 				selected_index = control[0]
+				_update_point_toolbar()
 
 				# Only allow dragging if the control is not locked
 				if can_drag_control:
@@ -253,6 +262,7 @@ func _gui_input(event: InputEvent) -> void:
 					dragging_point = point_idx
 					dragging_control = ControlIndex.NONE
 				selected_index = point_idx
+				_update_point_toolbar()
 				queue_redraw()
 				return
 
@@ -270,6 +280,7 @@ func _gui_input(event: InputEvent) -> void:
 				if _curve.points[i].position == clamped_pos:
 					selected_index = i
 					break
+			_update_point_toolbar()
 
 		# --- RIGHT CLICK ---
 		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
@@ -281,6 +292,7 @@ func _gui_input(event: InputEvent) -> void:
 					selected_index = -1
 				elif selected_index > point_idx:
 					selected_index -= 1
+				_update_point_toolbar()
 				queue_redraw()
 				return
 
@@ -499,6 +511,7 @@ func set_curve(easing_curve: EasingCurve):
 		_curve = easing_curve
 		if _curve != null:
 			_curve.changed.connect(_on_curve_changed)
+		_update_point_toolbar()
 		queue_redraw()
 
 
@@ -637,6 +650,7 @@ func _on_curve_changed() -> void:
 	if dragging_point >= point_count:
 		dragging_point = -1
 		dragging_control = ControlIndex.NONE
+	_update_point_toolbar()
 	queue_redraw()
 
 
@@ -729,3 +743,97 @@ func _draw_function_curve():
 			draw_line(prev, pt, LINE_COLOR, 2)
 
 		prev = pt
+
+
+func _create_point_toolbar() -> void:
+	_point_toolbar = HBoxContainer.new()
+	_point_toolbar.position = Vector2(8, 8) * _editor_scale
+	_point_toolbar.add_theme_constant_override(
+		"separation",
+		int(4 * _editor_scale),
+	)
+	add_child(_point_toolbar)
+
+	_point_label = Label.new()
+	_point_label.text = "Point 0"
+	_point_toolbar.add_child(_point_label)
+
+	_point_handle_mode = OptionButton.new()
+	_point_handle_mode.fit_to_longest_item = false
+
+	_point_handle_mode.add_item(
+		"Free",
+		EasingCurvePoint.HandleMode.FREE,
+	)
+	_point_handle_mode.add_item(
+		"Linear",
+		EasingCurvePoint.HandleMode.LINEAR,
+	)
+	_point_handle_mode.add_item(
+		"Balanced",
+		EasingCurvePoint.HandleMode.BALANCED,
+	)
+	_point_handle_mode.add_item(
+		"Mirrored",
+		EasingCurvePoint.HandleMode.MIRRORED,
+	)
+	_point_handle_mode.add_item(
+		"Linked",
+		EasingCurvePoint.HandleMode.LINKED,
+	)
+
+	_point_handle_mode.item_selected.connect(
+		_on_point_toolbar_handle_mode_selected
+	)
+
+	_point_toolbar.add_child(_point_handle_mode)
+
+
+func _update_point_toolbar() -> void:
+	if _point_toolbar == null:
+		return
+
+	var valid_selection := (
+		_curve != null
+		and selected_index >= 0
+		and selected_index < _curve.points.size()
+	)
+
+	_point_toolbar.visible = valid_selection
+
+	if not valid_selection:
+		return
+
+	var point := _curve.points[selected_index]
+
+	_point_label.text = "Point %d" % selected_index
+
+	_updating_point_toolbar = true
+
+	for index in range(_point_handle_mode.item_count):
+		if (
+			_point_handle_mode.get_item_id(index)
+			== point.handle_mode
+		):
+			_point_handle_mode.select(index)
+			break
+
+	_updating_point_toolbar = false
+
+
+func _on_point_toolbar_handle_mode_selected(index: int) -> void:
+	if _updating_point_toolbar:
+		return
+
+	if (
+		_curve == null
+		or selected_index < 0
+		or selected_index >= _curve.points.size()
+	):
+		return
+
+	_request_point_property_change(
+		selected_index,
+		&"handle_mode",
+		_point_handle_mode.get_item_id(index),
+	)
