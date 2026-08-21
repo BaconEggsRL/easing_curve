@@ -78,16 +78,36 @@ func _init(pos: Vector2 = Vector2.ZERO) -> void:
 	emit_changed()
 
 
+func is_lock_active(property_name: StringName) -> bool:
+	if property_name == &"position":
+		return locked.get(String(property_name), false)
+
+	if handle_mode != HandleMode.FREE:
+		return false
+
+	return locked.get(String(property_name), false)
+
+
+func _update_input_lock_state(property_name: String) -> void:
+	var read_only := is_lock_active(StringName(property_name))
+
+	var x_input := _get_input(property_name, "x")
+	var y_input := _get_input(property_name, "y")
+
+	if x_input:
+		x_input.read_only = read_only
+
+	if y_input:
+		y_input.read_only = read_only
+
+
 func set_locked(property_name: String, toggled_on: bool) -> void:
 	if locked.get(property_name, false) == toggled_on:
 		return
-	var x_input = _get_input(property_name, "x")
-	var y_input = _get_input(property_name, "y")
-	if x_input:
-		x_input.read_only = toggled_on
-	if y_input:
-		y_input.read_only = toggled_on
+
 	locked[property_name] = toggled_on
+	_update_input_lock_state(property_name)
+
 	lock_changed.emit(property_name, toggled_on)
 	emit_changed()
 
@@ -95,7 +115,13 @@ func set_locked(property_name: String, toggled_on: bool) -> void:
 func set_locks(value: Dictionary[String, bool]) -> void:
 	if locked == value:
 		return
+
 	locked = value
+
+	_update_input_lock_state("position")
+	_update_input_lock_state("left_control_point")
+	_update_input_lock_state("right_control_point")
+
 	emit_changed()
 
 
@@ -247,6 +273,10 @@ func set_handle_mode(value: HandleMode) -> void:
 
 	_update_control_point_inputs("left_control_point")
 	_update_control_point_inputs("right_control_point")
+
+	_update_input_lock_state("position")
+	_update_input_lock_state("left_control_point")
+	_update_input_lock_state("right_control_point")
 
 	emit_changed()
 
