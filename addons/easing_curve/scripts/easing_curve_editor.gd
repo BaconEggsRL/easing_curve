@@ -7,6 +7,8 @@ extends Control
 ## More info here to come.
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
+var _drag_auto_range := Vector2.ZERO
+var _has_drag_auto_range := false
 
 static var _selected_index_by_curve: Dictionary[int, int] = {}
 
@@ -260,6 +262,8 @@ func _gui_input(event: InputEvent) -> void:
 				if can_drag_control:
 					dragging_point = control[0]
 					dragging_control = control[1]
+					_drag_auto_range = _compute_auto_y_range()
+					_has_drag_auto_range = true
 				else:
 					# Try dragging main point if under cursor
 					if point_idx != -1 and not _curve.points[point_idx].is_lock_active(&"position"):
@@ -275,6 +279,8 @@ func _gui_input(event: InputEvent) -> void:
 				if not p.is_lock_active(&"position"):
 					dragging_point = point_idx
 					dragging_control = ControlIndex.NONE
+					_drag_auto_range = _compute_auto_y_range()
+					_has_drag_auto_range = true
 				selected_index = point_idx
 				queue_redraw()
 				return
@@ -298,6 +304,8 @@ func _gui_input(event: InputEvent) -> void:
 			if selected_index != -1:
 				dragging_point = selected_index
 				dragging_control = ControlIndex.NONE
+				_drag_auto_range = _compute_auto_y_range()
+				_has_drag_auto_range = true
 
 			queue_redraw()
 			return
@@ -329,8 +337,12 @@ func _gui_input(event: InputEvent) -> void:
 		elif not event.pressed:
 			if dragging_point != -1:
 				point_edit_finished.emit()
+
 			dragging_point = -1
 			dragging_control = ControlIndex.NONE
+
+			_has_drag_auto_range = false
+			queue_redraw()
 
 
 func _request_point_property_change(index: int, property_name: StringName, value: Variant, changing: bool = false) -> void:
@@ -561,7 +573,15 @@ func update_view_transform() -> void:
 	var margin := 4.0 * _editor_scale
 	var toolbar_height := SELECTION_TOOLBAR_HEIGHT * _editor_scale
 
-	var auto_range = _compute_auto_y_range()
+	# Auto range looks kinda bad; turning off for now
+	#var auto_range = _compute_auto_y_range()
+	var auto_range := Vector2(0.0, 1.0)
+	#var auto_range := (
+		#_drag_auto_range
+		#if _has_drag_auto_range
+		#else _compute_auto_y_range()
+	#)
+
 	var auto_min_y = auto_range.x
 	var auto_max_y = auto_range.y
 	var auto_height = auto_max_y - auto_min_y

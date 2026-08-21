@@ -231,6 +231,16 @@ func get_control_point_pair(
 				+ direction * opposite_length
 			)
 
+			if not balanced.is_finite():
+				print(
+					"BALANCED OVERFLOW",
+					"\n  dragged value: ", value,
+					"\n  opposite: ", opposite,
+					"\n  opposite length: ", opposite_length,
+					"\n  direction: ", direction,
+					"\n  result: ", balanced,
+				)
+
 			if side == ControlSide.LEFT:
 				right = balanced
 			else:
@@ -239,6 +249,14 @@ func get_control_point_pair(
 
 		HandleMode.MIRRORED:
 			var mirrored := position + (position - value)
+
+			if not mirrored.is_finite():
+				print(
+					"MIRRORED OVERFLOW",
+					"\n  position: ", position,
+					"\n  dragged value: ", value,
+					"\n  mirrored: ", mirrored,
+				)
 
 			if side == ControlSide.LEFT:
 				right = mirrored
@@ -260,6 +278,11 @@ func _set_control_point(
 	value: Vector2,
 ) -> void:
 	if not value.is_finite():
+		print(
+			"CONTROL REJECTED - INPUT NON-FINITE",
+			" side=", side,
+			" value=", value,
+		)
 		return
 
 	if is_control_force_linear_active(side):
@@ -271,6 +294,16 @@ func _set_control_point(
 	var right: Vector2 = pair["right"]
 
 	if not left.is_finite() or not right.is_finite():
+		print(
+			"CONTROL REJECTED - GENERATED NON-FINITE",
+			"\n  mode: ", HandleMode.keys()[handle_mode],
+			"\n  side: ", ControlSide.keys()[side],
+			"\n  input: ", value,
+			"\n  current left: ", _left_control_point,
+			"\n  current right: ", _right_control_point,
+			"\n  generated left: ", left,
+			"\n  generated right: ", right,
+		)
 		return
 
 	if (
@@ -616,17 +649,49 @@ func _get_safe_direction(
 	if not direction.is_finite():
 		return fallback
 
-	var length_squared := direction.length_squared()
+	var max_component := maxf(
+		absf(direction.x),
+		absf(direction.y),
+	)
+
+	if is_zero_approx(max_component):
+		return fallback
+
+	var scaled := direction / max_component
+	var scaled_length := sqrt(
+		scaled.x * scaled.x
+		+ scaled.y * scaled.y
+	)
 
 	if (
-		not is_finite(length_squared)
-		or is_zero_approx(length_squared)
+		not is_finite(scaled_length)
+		or is_zero_approx(scaled_length)
 	):
 		return fallback
 
-	return direction / sqrt(length_squared)
+	return scaled / scaled_length
 
 
 func _get_safe_length(from: Vector2, to: Vector2) -> float:
-	var length := from.distance_to(to)
-	return length if is_finite(length) else 0.0
+	var delta := from - to
+
+	if not delta.is_finite():
+		return 0.0
+
+	var max_component := maxf(
+		absf(delta.x),
+		absf(delta.y),
+	)
+
+	if is_zero_approx(max_component):
+		return 0.0
+
+	var scaled := delta / max_component
+
+	return (
+		max_component
+		* sqrt(
+			scaled.x * scaled.x
+			+ scaled.y * scaled.y
+		)
+	)
