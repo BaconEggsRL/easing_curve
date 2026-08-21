@@ -147,6 +147,9 @@ func set_locks(value: Dictionary[String, bool]) -> void:
 
 
 func set_position(value: Vector2) -> void:
+	if not value.is_finite():
+		return
+
 	if position == value:
 		return
 
@@ -250,6 +253,9 @@ func _set_control_point(
 	side: ControlSide,
 	value: Vector2,
 ) -> void:
+	if not value.is_finite():
+		return
+
 	if is_control_force_linear_active(side):
 		value = position
 

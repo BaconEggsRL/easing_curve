@@ -147,6 +147,8 @@ func _gui_input(event: InputEvent) -> void:
 		if dragging_point != -1:
 			var p = _curve.points[dragging_point]
 			var world_pos = get_world_pos(event.position)
+			if not world_pos.is_finite():
+				return
 
 			# Block main point movement
 			if dragging_control == ControlIndex.NONE and p.is_lock_active(&"position"):
