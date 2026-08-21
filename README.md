@@ -137,7 +137,8 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
     * **Linear** -- Keeps the handles aligned with the neighboring points, creating straight-line segments through the point.
     * **Balanced** -- Keeps both handles aligned in opposite directions while allowing each handle to have a different length.
     * **Mirrored** -- Keeps both handles aligned in opposite directions and at the same length. Moving one handle mirrors the other across the point.
-
+    * Note that handle locks only apply in Free mode, and lock state is preserved when switching handle modes.
+  
 * **Zoom and Pan**
   * Zoom and pan can be used to see points outside the grid box. The grid box represents an x_range and y_range of 0 to 1.
   * Use the zoom slider or scroll wheel to adjust the zoom level. The arrow box to the right of the zoom slider will reset the zoom.

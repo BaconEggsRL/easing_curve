@@ -1,6 +1,45 @@
 [gd_scene format=3 uid="uid://qviblxegxd23"]
 
 [ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/test_scene/test.gd" id="1_37kl0"]
+[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="2_6iudh"]
+
+[sub_resource type="Resource" id="Resource_qrbeo"]
+script = ExtResource("2_6iudh")
+_css_linear_points = PackedVector2Array(0, 0, 1, 1)
+_css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.25, 1)
+_point_count = 3
+_point_0/position = Vector2(0, 0)
+_point_0/left_control_point = Vector2(0, 0)
+_point_0/right_control_point = Vector2(0, 0)
+_point_0/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_0/handle_mode = 0
+_point_1/position = Vector2(0.38038698, 0.36376077)
+_point_1/left_control_point = Vector2(0.287182, 0.7766074)
+_point_1/right_control_point = Vector2(0.4860193, 0.2233929)
+_point_1/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_1/handle_mode = 0
+_point_2/position = Vector2(1, 1)
+_point_2/left_control_point = Vector2(1, 1)
+_point_2/right_control_point = Vector2(1, 1)
+_point_2/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_2/handle_mode = 0
+metadata/_custom_type_script = "uid://c10cjby72qngf"
+
+[sub_resource type="Curve" id="Curve_ndb8m"]
+_data = [Vector2(0.3240741, 0.36799997), 0.0, 0.9350138, 0, 0, Vector2(0.60493827, 0.768), 1.4241761, -2.5919998, 1, 0, Vector2(1, 1), 0.58725, 0.0, 1, 0]
+point_count = 3
 
 [node name="TestScene" type="Control" unique_id=198225181]
 layout_mode = 3
@@ -11,6 +50,8 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_37kl0")
+easing_curve = SubResource("Resource_qrbeo")
+debug_curve = SubResource("Curve_ndb8m")
 
 [node name="NodeContainer" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)
