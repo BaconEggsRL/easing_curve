@@ -13,6 +13,10 @@ const BTN_NORMAL = preload("uid://c6hb75fm8lwht")
 const GUI_TREE_ARROW_RIGHT = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowRight.svg")
 const GUI_TREE_ARROW_DOWN = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowDown.svg")
 const ZOOM_SLIDER_CONTAINER = preload("uid://r1ymwr6nae")
+
+const FORCE_LINEAR_ICON_ON = preload("res://addons/easing_curve/assets/icons/Instance.svg")
+const FORCE_LINEAR_ICON_OFF = preload("res://addons/easing_curve/assets/icons/Unlinked.svg")
+
 const RELOAD = preload("res://addons/easing_curve/assets/icons/Reload.svg")
 const REMOVE = preload("res://addons/easing_curve/assets/icons/Remove.svg")
 const ADD = preload("res://addons/easing_curve/assets/icons/Add.svg")
@@ -1580,17 +1584,18 @@ func _create_vector2_property(
 		force_linear_btn.button_pressed = force_linear
 
 		var editor_theme := EditorInterface.get_editor_theme()
-		var force_linear_icon := editor_theme.get_icon(
+		var anchor_icon := editor_theme.get_icon(
 			&"Anchor",
 			&"EditorIcons",
 		)
 
-		force_linear_btn.icon = force_linear_icon
-		force_linear_btn.modulate.a = (
-			1.0
+		force_linear_btn.icon = (
+			FORCE_LINEAR_ICON_ON
 			if force_linear
-			else 0.5
+			else FORCE_LINEAR_ICON_OFF
 		)
+
+		force_linear_btn.modulate.a = 1.0
 
 		force_linear_btn.tooltip_text = (
 			(
@@ -1602,23 +1607,27 @@ func _create_vector2_property(
 			else "Force Linear — Available in Free handle mode"
 		)
 
-		force_linear_btn.disabled = (
-			point.handle_mode != EasingCurvePoint.HandleMode.FREE
+		var force_linear_available := (
+			point.handle_mode == EasingCurvePoint.HandleMode.FREE
 		)
 
-		force_linear_btn.modulate.a = (
-			1.0
-			if force_linear
-			else 0.5
-		)
+		force_linear_btn.disabled = not force_linear_available
+
+		if not force_linear_available:
+			force_linear_btn.modulate.a = 0.25
+		else:
+			force_linear_btn.modulate.a = 1.0
 
 		force_linear_btn.toggled.connect(
 			func(toggled_on: bool):
-				force_linear_btn.modulate.a = (
-					1.0
+
+				force_linear_btn.icon = (
+					FORCE_LINEAR_ICON_ON
 					if toggled_on
-					else 0.5
+					else FORCE_LINEAR_ICON_OFF
 				)
+
+				force_linear_btn.modulate.a = 1.0
 
 				_apply_point_property_change(
 					i,
