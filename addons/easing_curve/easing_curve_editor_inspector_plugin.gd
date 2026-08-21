@@ -1560,6 +1560,16 @@ func _create_vector2_property(
 		force_linear_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		force_linear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
+		var pressed_color := Color.WHITE
+		force_linear_btn.add_theme_color_override(
+			"icon_pressed_color",
+			pressed_color,
+		)
+		force_linear_btn.add_theme_color_override(
+			"icon_hover_pressed_color",
+			pressed_color,
+		)
+
 		var force_property := (
 			&"left_force_linear"
 			if property_name == "left_control_point"
@@ -1630,7 +1640,6 @@ func _create_vector2_property(
 	lock_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	lock_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
-	var normal_color := lock_btn.get_theme_color("icon_normal_color")
 	var pressed_color := Color.WHITE
 	lock_btn.add_theme_color_override("icon_pressed_color", pressed_color)
 	lock_btn.add_theme_color_override("icon_hover_pressed_color", pressed_color)
@@ -1961,36 +1970,110 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 			force_values[i] = int(value)
 			snapshot[property_name] = force_values
 
-			var handle_property := (
+			var control_property := (
 				&"left_control_points"
 				if property_name == &"left_force_linear"
 				else &"right_control_points"
 			)
 
+			var lock_property := (
+				&"left_control_point"
+				if property_name == &"left_force_linear"
+				else &"right_control_point"
+			)
+
+			var offset := (
+				Vector2.LEFT
+				if property_name == &"left_force_linear"
+				else Vector2.RIGHT
+			)
+
 			var control_points: PackedVector2Array = snapshot[
-				handle_property
+				control_property
 			]
 
 			if value:
-				control_points[i] = curve.points[i].position
-			else:
-				var offset := (
-					Vector2.LEFT
-					if property_name == &"left_force_linear"
-					else Vector2.RIGHT
-				)
+				# Force Linear wins over Lock.
+				var locks: Array = snapshot["locks"]
+				var point_locks: Dictionary = locks[i].duplicate(true)
+				point_locks[lock_property] = false
+				locks[i] = point_locks
+				snapshot["locks"] = locks
 
+				control_points[i] = curve.points[i].position
+
+			else:
 				control_points[i] = (
 					curve.points[i].position
 					+ offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
 				)
 
-			snapshot[handle_property] = control_points
+			snapshot[control_property] = control_points
 
 
 		&"locked":
 			var locks: Array = snapshot["locks"]
-			locks[i] = value.duplicate(true)
+			var previous_locks: Dictionary = locks[i]
+			var new_locks: Dictionary = value.duplicate(true)
+
+			for control_property in [
+				&"left_control_point",
+				&"right_control_point",
+			]:
+				var was_locked := bool(
+					previous_locks.get(control_property, false)
+				)
+				var is_locked := bool(
+					new_locks.get(control_property, false)
+				)
+
+				# Only react when this handle is being locked.
+				if was_locked or not is_locked:
+					continue
+
+				var force_property := (
+					&"left_force_linear"
+					if control_property == &"left_control_point"
+					else &"right_force_linear"
+				)
+
+				var force_values: PackedByteArray = snapshot[
+					force_property
+				]
+
+				if not bool(force_values[i]):
+					continue
+
+				# Lock wins over Force Linear.
+				force_values[i] = 0
+				snapshot[force_property] = force_values
+
+				var control_array_name := (
+					&"left_control_points"
+					if control_property == &"left_control_point"
+					else &"right_control_points"
+				)
+
+				var offset := (
+					Vector2.LEFT
+					if control_property == &"left_control_point"
+					else Vector2.RIGHT
+				)
+
+				var control_points: PackedVector2Array = snapshot[
+					control_array_name
+				]
+
+				# Leaving Force Linear restores the default handle
+				# before locking it.
+				control_points[i] = (
+					curve.points[i].position
+					+ offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+				)
+
+				snapshot[control_array_name] = control_points
+
+			locks[i] = new_locks
 			snapshot["locks"] = locks
 
 		_:
