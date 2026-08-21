@@ -1649,8 +1649,29 @@ func _create_vector2_property(
 	lock_btn.button_pressed = locked
 	var toggled_on := lock_btn.button_pressed
 
+	var lock_available := (
+		property_name == "position"
+		or point.handle_mode == EasingCurvePoint.HandleMode.FREE
+	)
+
+	lock_btn.disabled = not lock_available
+
+	lock_btn.tooltip_text = (
+		(
+			"Unlock — Allow this property to be edited"
+			if locked
+			else "Lock — Prevent this property from being edited"
+		)
+		if lock_available
+		else "Lock — Available in Free handle mode"
+	)
+
 	lock_btn.icon = LOCK if toggled_on else UNLOCK
-	lock_btn.modulate.a = 1.0 if toggled_on else 0.5
+
+	if not lock_available:
+		lock_btn.modulate.a = 0.25
+	else:
+		lock_btn.modulate.a = 1.0 if toggled_on else 0.5
 
 	lock_btn.toggled.connect(
 		func(toggled_on: bool):
