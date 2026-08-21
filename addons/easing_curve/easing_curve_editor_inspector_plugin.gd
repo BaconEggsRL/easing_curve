@@ -1660,7 +1660,10 @@ func _create_vector2_property(
 
 	var lock_available := (
 		property_name == "position"
-		or point.handle_mode == EasingCurvePoint.HandleMode.FREE
+		or point.handle_mode in [
+			EasingCurvePoint.HandleMode.FREE,
+			EasingCurvePoint.HandleMode.LINKED,
+		]
 	)
 
 	lock_btn.disabled = not lock_available
@@ -1672,7 +1675,7 @@ func _create_vector2_property(
 			else "Lock — Prevent this property from being edited"
 		)
 		if lock_available
-		else "Lock — Available in Free handle mode"
+		else "Lock — Available in Free or Linked handle mode"
 	)
 
 	lock_btn.icon = LOCK if toggled_on else UNLOCK
@@ -1693,11 +1696,21 @@ func _create_vector2_property(
 
 			lock_btn.icon = LOCK if toggled_on else UNLOCK
 			lock_btn.modulate.a = 1.0 if toggled_on else 0.5
-			# 🔒 Disable editing when locked
-			# x_input.read_only = toggled_on
-			# y_input.read_only = toggled_on
+
 			var locks: Dictionary = curve.points[i].locked.duplicate()
-			locks[property_name] = toggled_on
+
+			if (
+				point.handle_mode == EasingCurvePoint.HandleMode.LINKED
+				and property_name in [
+					"left_control_point",
+					"right_control_point",
+				]
+			):
+				locks["left_control_point"] = toggled_on
+				locks["right_control_point"] = toggled_on
+			else:
+				locks[property_name] = toggled_on
+
 			_apply_point_property_change(i, &"locked", locks)
 	)
 

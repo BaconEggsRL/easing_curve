@@ -149,8 +149,14 @@ func set_position(value: Vector2) -> void:
 
 	var delta := value - position
 
-	_left_control_point += delta
-	_right_control_point += delta
+	var left_locked := is_lock_active("left_control_point")
+	var right_locked := is_lock_active("right_control_point")
+
+	if not left_locked:
+		_left_control_point += delta
+
+	if not right_locked:
+		_right_control_point += delta
 
 	position = value
 
