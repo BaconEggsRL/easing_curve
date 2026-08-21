@@ -118,17 +118,25 @@ Adjust your curve using the Curve Editor:
 
 Bézier-backed presets, including multi-segment presets, expose all points and handles in the curve editor.
 
-* **Add and Remove Points**
+* **Adding and Removing Points**
   * Left click anywhere on the grid to add a new point, or click the "Add Point" button.
   * Right click a point to delete it, or click the trash button icon in the points list.
 
-* **Adjust the Control Points**
+* **Adjusting the Control Points**
   * You can adjust the bezier curve control points by dragging with the mouse or editing the points list.
   * Control handles can be moved outside the grid box, but point positions cannot.
 
 * **Locking Control Points**
   * Vector2 properties can be locked by clicking the lock icon.
   * Locked properties cannot be changed, except by copy-paste. This can be used to drag a point without affecting its control handles.
+  * Lockable properties include point position, left control position, and right control position.
+
+* **Handle Modes**
+  * Each point can use a handle mode to control how its left and right control handles behave:
+    * **Free** -- Each handle moves independently without affecting the other handle.
+    * **Linear** -- Keeps the handles aligned with the neighboring points, creating straight-line segments through the point.
+    * **Balanced** -- Keeps both handles aligned in opposite directions while allowing each handle to have a different length.
+    * **Mirrored** -- Keeps both handles aligned in opposite directions and at the same length. Moving one handle mirrors the other across the point.
 
 * **Zoom and Pan**
   * Zoom and pan can be used to see points outside the grid box. The grid box represents an x_range and y_range of 0 to 1.
