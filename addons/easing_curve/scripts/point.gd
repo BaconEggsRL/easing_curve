@@ -100,7 +100,10 @@ func is_lock_active(property_name: StringName) -> bool:
 	if property_name == &"position":
 		return locked.get(String(property_name), false)
 
-	if handle_mode != HandleMode.FREE:
+	if handle_mode not in [
+		HandleMode.FREE,
+		HandleMode.LINKED,
+	]:
 		return false
 
 	return locked.get(String(property_name), false)
