@@ -28,6 +28,7 @@ enum HandleMode {
 	LINEAR,
 	BALANCED,
 	MIRRORED,
+	LINKED,
 }
 
 enum ControlSide {
@@ -226,6 +227,10 @@ func get_control_point_pair(
 			else:
 				left = mirrored
 
+		HandleMode.LINKED:
+			left = value
+			right = value
+
 	return {
 		"left": left,
 		"right": right,
@@ -291,6 +296,22 @@ func set_handle_mode(value: HandleMode) -> void:
 	elif previous_mode == HandleMode.LINEAR:
 		_initialize_default_handles()
 
+		if handle_mode == HandleMode.LINKED:
+			var linked := _get_linked_handle_position(
+				_left_control_point,
+				_right_control_point,
+			)
+			_left_control_point = linked
+			_right_control_point = linked
+
+	elif handle_mode == HandleMode.LINKED:
+		var linked := _get_linked_handle_position(
+			_left_control_point,
+			_right_control_point,
+		)
+		_left_control_point = linked
+		_right_control_point = linked
+
 	_apply_free_force_linear_state()
 
 	_update_control_point_inputs("left_control_point")
@@ -344,9 +365,19 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 		}
 
 	if handle_mode == HandleMode.LINEAR:
+		left = position + Vector2.LEFT * DEFAULT_HANDLE_LENGTH
+		right = position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
+
+		if value == HandleMode.LINKED:
+			var linked := _get_linked_handle_position(left, right)
+			return {
+				"left": linked,
+				"right": linked,
+			}
+
 		return {
-			"left": position + Vector2.LEFT * DEFAULT_HANDLE_LENGTH,
-			"right": position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH,
+			"left": left,
+			"right": right,
 		}
 
 	match value:
@@ -407,6 +438,17 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 
 			left = position - direction * length
 			right = position + direction * length
+
+
+		HandleMode.LINKED:
+			var linked := _get_linked_handle_position(
+				left,
+				right,
+			)
+
+			left = linked
+			right = linked
+
 
 	return {
 		"left": left,
@@ -512,3 +554,20 @@ func set_force_linear_state(
 		_apply_free_force_linear_state()
 
 	emit_changed()
+
+
+func _get_linked_handle_position(
+	left: Vector2,
+	right: Vector2,
+) -> Vector2:
+	var left_length := left.distance_to(position)
+	var right_length := right.distance_to(position)
+
+	var use_left := (
+		LONGEST_HANDLE_WINS
+		and left_length > right_length
+	)
+
+	# Right wins when lengths are equal, or whenever
+	# LONGEST_HANDLE_WINS is false.
+	return left if use_left else right

@@ -1870,6 +1870,7 @@ func _create_handle_mode_property(
 	option.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
 	option.add_item("Balanced", EasingCurvePoint.HandleMode.BALANCED)
 	option.add_item("Mirrored", EasingCurvePoint.HandleMode.MIRRORED)
+	option.add_item("Linked", EasingCurvePoint.HandleMode.LINKED)
 
 	for index in range(option.item_count):
 		if option.get_item_id(index) == point.handle_mode:
