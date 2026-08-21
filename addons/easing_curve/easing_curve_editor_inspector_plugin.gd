@@ -1580,19 +1580,22 @@ func _create_vector2_property(
 		force_linear_btn.button_pressed = force_linear
 
 		var editor_theme := EditorInterface.get_editor_theme()
-		var linked_icon := editor_theme.get_icon(&"Instance", &"EditorIcons")
-		var unlinked_icon := editor_theme.get_icon(&"Unlinked", &"EditorIcons")
+		var force_linear_icon := editor_theme.get_icon(
+			&"Anchor",
+			&"EditorIcons",
+		)
 
-		force_linear_btn.icon = (
-			linked_icon
+		force_linear_btn.icon = force_linear_icon
+		force_linear_btn.modulate.a = (
+			1.0
 			if force_linear
-			else unlinked_icon
+			else 0.5
 		)
 
 		force_linear_btn.tooltip_text = (
-			"Force Linear"
+			"Force Linear — Collapse this handle to the point"
 			if point.handle_mode == EasingCurvePoint.HandleMode.FREE
-			else "Force Linear (available in Free handle mode)"
+			else "Force Linear — Available in Free handle mode"
 		)
 
 		force_linear_btn.disabled = (
@@ -1607,12 +1610,6 @@ func _create_vector2_property(
 
 		force_linear_btn.toggled.connect(
 			func(toggled_on: bool):
-				force_linear_btn.icon = (
-					linked_icon
-					if toggled_on
-					else unlinked_icon
-				)
-
 				force_linear_btn.modulate.a = (
 					1.0
 					if toggled_on
@@ -2048,6 +2045,7 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 				force_values[i] = 0
 				snapshot[force_property] = force_values
 
+				# Create default 0.1 handle
 				var control_array_name := (
 					&"left_control_points"
 					if control_property == &"left_control_point"
