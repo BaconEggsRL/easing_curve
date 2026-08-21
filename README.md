@@ -126,8 +126,8 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 ---
 
 * TBD — open to suggestions!
-* Found a bug? Please open a [Bug Report](https://github.com/BaconEggsRL/easing_curve/issues/new/choose).
-* Have an idea for a new feature or improvement? Open a [Feature Request](https://github.com/BaconEggsRL/easing_curve/issues/new/choose).
+* Found a bug? Please open a [Bug Report](https://github.com/BaconEggsRL/easing_curve/issues/new?template=bug_report.yml).
+* Have an idea for a new feature or improvement? Open a [Feature Request](https://github.com/BaconEggsRL/easing_curve/issues/new?template=feature_request.yml).
 * Contributions are welcome! Feel free to open a [Pull Request](https://github.com/BaconEggsRL/easing_curve/pulls).
 
 **&nbsp;**
@@ -140,7 +140,8 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 Thank you for using the EasingCurve plugin.
 Please support the development by sharing, starring or commenting if you found it useful.
 
-This is my first plugin, so please feel free to submit an issue or PR if you find anything that needs fixing.
+This is my first plugin, so feedback and contributions are always welcome.
+See the links above to report bugs, suggest features, or contribute changes.
 
 You can find all my addons on my [GitHub profile page](https://github.com/BaconEggsRL/).
 
