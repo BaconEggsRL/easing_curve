@@ -128,15 +128,15 @@ func _gui_input(event: InputEvent) -> void:
 			var world_pos = get_world_pos(event.position)
 
 			# Block main point movement
-			if dragging_control == ControlIndex.NONE and p.locked["position"]:
+			if dragging_control == ControlIndex.NONE and p.is_lock_active(&"position"):
 				return
 
 			# Block left control
-			if dragging_control == ControlIndex.LEFT and p.locked["left_control_point"]:
+			if dragging_control == ControlIndex.LEFT and p.is_lock_active(&"left_control_point"):
 				return
 
 			# Block right control
-			if dragging_control == ControlIndex.RIGHT and p.locked["right_control_point"]:
+			if dragging_control == ControlIndex.RIGHT and p.is_lock_active(&"right_control_point"):
 				return
 
 			match dragging_control:
@@ -155,10 +155,10 @@ func _gui_input(event: InputEvent) -> void:
 					_request_point_property_change(dragging_point, &"position", clamped_pos, true)
 
 					# Only move controls if they are NOT locked
-					if not p.locked["left_control_point"]:
+					if not p.is_lock_active(&"left_control_point"):
 						_request_point_property_change(dragging_point, &"left_control_point", left_control + delta, true)
 
-					if not p.locked["right_control_point"]:
+					if not p.is_lock_active(&"right_control_point"):
 						_request_point_property_change(dragging_point, &"right_control_point", right_control + delta, true)
 
 			point_changed.emit(dragging_point, p)
@@ -226,9 +226,9 @@ func _gui_input(event: InputEvent) -> void:
 
 				match control[1]:
 					ControlIndex.LEFT:
-						can_drag_control = not p.locked["left_control_point"]
+						can_drag_control = not p.is_lock_active(&"left_control_point")
 					ControlIndex.RIGHT:
-						can_drag_control = not p.locked["right_control_point"]
+						can_drag_control = not p.is_lock_active(&"right_control_point")
 
 				# Always select the point
 				selected_index = control[0]
@@ -239,7 +239,7 @@ func _gui_input(event: InputEvent) -> void:
 					dragging_control = control[1]
 				else:
 					# Try dragging main point if under cursor
-					if point_idx != -1 and not _curve.points[point_idx].locked["position"]:
+					if point_idx != -1 and not _curve.points[point_idx].is_lock_active(&"position"):
 						dragging_point = point_idx
 						dragging_control = ControlIndex.NONE
 
@@ -249,7 +249,7 @@ func _gui_input(event: InputEvent) -> void:
 			# --- If we hit only a main point ---
 			if point_idx != -1:
 				var p = _curve.points[point_idx]
-				if not p.locked["position"]:
+				if not p.is_lock_active(&"position"):
 					dragging_point = point_idx
 					dragging_control = ControlIndex.NONE
 				selected_index = point_idx
