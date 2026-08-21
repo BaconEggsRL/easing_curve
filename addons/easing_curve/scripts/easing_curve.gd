@@ -1405,6 +1405,26 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 	if not topology_changed:
 		for i in range(positions.size()):
 			var point := _points[i]
+
+			# Disable per-side force state while restoring exact geometry.
+			point.set_force_linear_state(false, false, false)
+
+			# Temporarily use Free so restoring one handle does not
+			# modify the opposite handle.
+			point.handle_mode = EasingCurvePoint.HandleMode.FREE
+
+			point.position = positions[i]
+
+			if i < left_control_points.size():
+				point.left_control_point = left_control_points[i]
+
+			if i < right_control_points.size():
+				point.right_control_point = right_control_points[i]
+
+			if i < handle_modes.size():
+				point.handle_mode = handle_modes[i]
+
+			# Restore the stored state without modifying restored geometry.
 			point.set_force_linear_state(
 				bool(left_force_linear[i])
 					if i < left_force_linear.size()
@@ -1414,16 +1434,7 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 					else false,
 				false,
 			)
-			# Temporarily use Free so restoring one handle does not
-			# modify the opposite handle.
-			point.handle_mode = EasingCurvePoint.HandleMode.FREE
-			point.position = positions[i]
-			if i < left_control_points.size():
-				_points[i].left_control_point = left_control_points[i]
-			if i < right_control_points.size():
-				_points[i].right_control_point = right_control_points[i]
-			if i < handle_modes.size():
-				point.handle_mode = handle_modes[i]
+
 			if i < locks.size() and locks[i] is Dictionary:
 				var lock_values: Dictionary = locks[i]
 				_points[i].locked = {
@@ -1435,6 +1446,18 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 		var new_points: Array[EasingCurvePoint] = []
 		for i in range(positions.size()):
 			var point := EasingCurvePoint.new(positions[i])
+
+			point.set_force_linear_state(false, false, false)
+
+			if i < left_control_points.size():
+				point.left_control_point = left_control_points[i]
+
+			if i < right_control_points.size():
+				point.right_control_point = right_control_points[i]
+
+			if i < handle_modes.size():
+				point.handle_mode = handle_modes[i]
+
 			point.set_force_linear_state(
 				bool(left_force_linear[i])
 					if i < left_force_linear.size()
@@ -1444,12 +1467,7 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 					else false,
 				false,
 			)
-			if i < left_control_points.size():
-				point.left_control_point = left_control_points[i]
-			if i < right_control_points.size():
-				point.right_control_point = right_control_points[i]
-			if i < handle_modes.size():
-				point.handle_mode = handle_modes[i]
+
 			if i < locks.size() and locks[i] is Dictionary:
 				var lock_values: Dictionary = locks[i]
 				point.locked = {
