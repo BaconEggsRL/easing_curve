@@ -11,6 +11,18 @@ signal lock_changed(property_name: String, locked: bool)
 
 const DEFAULT_HANDLE_LENGTH := 0.1
 
+# TRUE:
+# Free → Balanced: longer handle determines orientation; individual lengths remain unchanged.
+# Free → Mirrored: longer handle determines orientation and length.
+# Balanced → Mirrored: longer handle determines final mirrored length.
+#
+# FALSE:
+# Balanced: right handle always determines orientation.
+# Mirrored: right handle determines both orientation and final length.
+#
+# If the handles have equal lengths, the right handle wins in either mode.
+const LONGEST_HANDLE_WINS := true
+
 enum HandleMode {
 	FREE,
 	LINEAR,
@@ -250,15 +262,39 @@ func _initialize_default_handles() -> void:
 	)
 
 
+#Any -> Linear
+	#collapse both handles
+#
+#Linear -> Free
+	#create default horizontal handles
+#
+#Linear -> Balanced
+	#create default horizontal handles
+#
+#Linear -> Mirrored
+	#create default horizontal mirrored handles
+#
+#Free -> Balanced
+	#immediately align opposite rotations
+	#preserve each handle's current length
+#
+#Free -> Mirrored
+	#immediately mirror angle + length
+#
+#Balanced -> Free
+	#preserve geometry
+#
+#Balanced -> Mirrored
+	#immediately equalize lengths
+#
+#Mirrored -> Free
+	#preserve geometry
+#
+#Mirrored -> Balanced
+	#preserve geometry
 func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
-	if (
-		handle_mode == HandleMode.LINEAR
-		and value != HandleMode.LINEAR
-	):
-		return {
-			"left": position + Vector2.LEFT * DEFAULT_HANDLE_LENGTH,
-			"right": position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH,
-		}
+	var left := left_control_point
+	var right := right_control_point
 
 	if value == HandleMode.LINEAR:
 		return {
@@ -266,7 +302,72 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 			"right": position,
 		}
 
+	if handle_mode == HandleMode.LINEAR:
+		return {
+			"left": position + Vector2.LEFT * DEFAULT_HANDLE_LENGTH,
+			"right": position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH,
+		}
+
+	match value:
+		HandleMode.FREE:
+			pass
+
+		HandleMode.BALANCED:
+			var left_length := left.distance_to(position)
+			var right_length := right.distance_to(position)
+
+			var use_left := (
+				LONGEST_HANDLE_WINS
+				and left_length > right_length
+			)
+
+			var direction := (
+				position - left
+				if use_left
+				else right - position
+			)
+
+			if direction.is_zero_approx():
+				direction = Vector2.RIGHT
+
+			direction = direction.normalized()
+
+			left = position - direction * left_length
+			right = position + direction * right_length
+
+		HandleMode.MIRRORED:
+			var left_length := left.distance_to(position)
+			var right_length := right.distance_to(position)
+
+			var use_left := (
+				LONGEST_HANDLE_WINS
+				and left_length > right_length
+			)
+
+			var direction := (
+				position - left
+				if use_left
+				else right - position
+			)
+
+			if direction.is_zero_approx():
+				direction = Vector2.RIGHT
+
+			direction = direction.normalized()
+
+			var length := (
+				maxf(left_length, right_length)
+				if LONGEST_HANDLE_WINS
+				else right_length
+			)
+
+			if is_zero_approx(length):
+				length = DEFAULT_HANDLE_LENGTH
+
+			left = position - direction * length
+			right = position + direction * length
+
 	return {
-		"left": left_control_point,
-		"right": right_control_point,
+		"left": left,
+		"right": right,
 	}
