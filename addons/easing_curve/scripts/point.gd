@@ -9,6 +9,8 @@ extends Resource
 ## Stores the locked state of each Vector2 property and conveys back to the editor plugin.
 signal lock_changed(property_name: String, locked: bool)
 
+const DEFAULT_HANDLE_LENGTH := 0.1
+
 enum HandleMode {
 	FREE,
 	LINEAR,
@@ -221,13 +223,28 @@ func set_handle_mode(value: HandleMode) -> void:
 	if handle_mode == value:
 		return
 
+	var previous_mode := handle_mode
 	handle_mode = value
 
 	if handle_mode == HandleMode.LINEAR:
 		_left_control_point = position
 		_right_control_point = position
 
-		_update_control_point_inputs("left_control_point")
-		_update_control_point_inputs("right_control_point")
+	elif previous_mode == HandleMode.LINEAR:
+		_initialize_default_handles()
+
+	_update_control_point_inputs("left_control_point")
+	_update_control_point_inputs("right_control_point")
 
 	emit_changed()
+
+
+func _initialize_default_handles() -> void:
+	_left_control_point = (
+		position
+		+ Vector2.LEFT * DEFAULT_HANDLE_LENGTH
+	)
+	_right_control_point = (
+		position
+		+ Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
+	)

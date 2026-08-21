@@ -1,46 +1,6 @@
 [gd_scene format=3 uid="uid://qviblxegxd23"]
 
 [ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/test_scene/test.gd" id="1_37kl0"]
-[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="2_6iudh"]
-
-[sub_resource type="Resource" id="Resource_ucfbi"]
-script = ExtResource("2_6iudh")
-_css_linear_points = PackedVector2Array(0, 0, 1, 1)
-_css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.25, 1)
-_point_count = 4
-_point_0/position = Vector2(0, 0)
-_point_0/left_control_point = Vector2(0, 0)
-_point_0/right_control_point = Vector2(0, 0)
-_point_0/locked = Dictionary[String, bool]({
-"left_control_point": false,
-"position": false,
-"right_control_point": false
-})
-_point_1/position = Vector2(0.29028884, 0.7683505)
-_point_1/left_control_point = Vector2(0.15048134, 0.53715634)
-_point_1/right_control_point = Vector2(0.43009633, 0.9995446)
-_point_1/locked = Dictionary[String, bool]({
-"left_control_point": false,
-"position": false,
-"right_control_point": false
-})
-_point_2/position = Vector2(0.6382541, 0.46284395)
-_point_2/left_control_point = Vector2(0.40213484, 0.38853157)
-_point_2/right_control_point = Vector2(0.8743734, 0.53715634)
-_point_2/locked = Dictionary[String, bool]({
-"left_control_point": false,
-"position": false,
-"right_control_point": false
-})
-_point_3/position = Vector2(1, 1)
-_point_3/left_control_point = Vector2(1, 1)
-_point_3/right_control_point = Vector2(1, 1)
-_point_3/locked = Dictionary[String, bool]({
-"left_control_point": false,
-"position": false,
-"right_control_point": false
-})
-metadata/_custom_type_script = "uid://c10cjby72qngf"
 
 [node name="TestScene" type="Control" unique_id=198225181]
 layout_mode = 3
@@ -51,7 +11,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_37kl0")
-easing_curve = SubResource("Resource_ucfbi")
 
 [node name="NodeContainer" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)
