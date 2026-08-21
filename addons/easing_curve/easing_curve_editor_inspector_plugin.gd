@@ -1548,6 +1548,80 @@ func _create_vector2_property(
 	value_vbox.add_theme_constant_override("separation", 0)
 	value_hbox.add_child(value_vbox)
 
+
+	##############################################
+	# Force Linear button (control handles only)
+	var force_linear_btn: Button
+
+	if property_name in ["left_control_point", "right_control_point"]:
+		force_linear_btn = Button.new()
+		force_linear_btn.flat = true
+		force_linear_btn.toggle_mode = true
+		force_linear_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		force_linear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+		var force_property := (
+			&"left_force_linear"
+			if property_name == "left_control_point"
+			else &"right_force_linear"
+		)
+
+		var force_linear := bool(point.get(force_property))
+		force_linear_btn.button_pressed = force_linear
+
+		var editor_theme := EditorInterface.get_editor_theme()
+		var linked_icon := editor_theme.get_icon(&"Instance", &"EditorIcons")
+		var unlinked_icon := editor_theme.get_icon(&"Unlinked", &"EditorIcons")
+
+		force_linear_btn.icon = (
+			linked_icon
+			if force_linear
+			else unlinked_icon
+		)
+
+		force_linear_btn.tooltip_text = (
+			"Force Linear"
+			if point.handle_mode == EasingCurvePoint.HandleMode.FREE
+			else "Force Linear (available in Free handle mode)"
+		)
+
+		force_linear_btn.disabled = (
+			point.handle_mode != EasingCurvePoint.HandleMode.FREE
+		)
+
+		force_linear_btn.modulate.a = (
+			1.0
+			if force_linear
+			else 0.5
+		)
+
+		force_linear_btn.toggled.connect(
+			func(toggled_on: bool):
+				force_linear_btn.icon = (
+					linked_icon
+					if toggled_on
+					else unlinked_icon
+				)
+
+				force_linear_btn.modulate.a = (
+					1.0
+					if toggled_on
+					else 0.5
+				)
+
+				_apply_point_property_change(
+					i,
+					force_property,
+					toggled_on,
+				)
+
+				easing_curve_editor.queue_redraw()
+		)
+
+		value_hbox.add_child(force_linear_btn)
+	##############################################
+
+
 	# Right side (lock button)
 	var lock_btn := Button.new()
 	lock_btn.icon = LOCK
@@ -1867,6 +1941,39 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 			snapshot["left_control_points"] = left_control_points
 			snapshot["right_control_points"] = right_control_points
 
+
+		&"left_force_linear", &"right_force_linear":
+			var force_values: PackedByteArray = snapshot[property_name]
+			force_values[i] = int(value)
+			snapshot[property_name] = force_values
+
+			var handle_property := (
+				&"left_control_points"
+				if property_name == &"left_force_linear"
+				else &"right_control_points"
+			)
+
+			var control_points: PackedVector2Array = snapshot[
+				handle_property
+			]
+
+			if value:
+				control_points[i] = curve.points[i].position
+			else:
+				var offset := (
+					Vector2.LEFT
+					if property_name == &"left_force_linear"
+					else Vector2.RIGHT
+				)
+
+				control_points[i] = (
+					curve.points[i].position
+					+ offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+				)
+
+			snapshot[handle_property] = control_points
+
+
 		&"locked":
 			var locks: Array = snapshot["locks"]
 			locks[i] = value.duplicate(true)
@@ -1899,6 +2006,8 @@ func _point_action_name(property_name: StringName) -> String:
 			return "Change Easing Curve Handle Mode"
 		&"locked":
 			return "Change Easing Curve Point Lock"
+		&"left_force_linear", &"right_force_linear":
+			return "Change Easing Curve Handle Force Linear State"
 	return "Edit Easing Curve Point"
 
 
