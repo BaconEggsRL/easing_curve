@@ -1,8 +1,104 @@
 extends Node2D
 
 
+const TEST_PATH := "res://test/presets/test_force_linear_persistence.tres"
+
+
 func _ready() -> void:
-	_test_force_linear_snapshots()
+	#_test_force_linear_snapshots()
+	_test_free_persistence()
+	_test_balanced_persistence()
+
+
+func _test_free_persistence() -> void:
+	var curve := EasingCurve.new()
+	curve.set_trans(EasingCurve.TRANS.CUSTOM)
+
+	var point := EasingCurvePoint.new(Vector2(0.5, 0.5))
+	point.left_control_point = Vector2(0.3, 0.4)
+	point.right_control_point = Vector2(0.7, 0.6)
+	point.left_force_linear = true
+
+	curve.points = [point]
+
+	var error := ResourceSaver.save(curve, TEST_PATH)
+	assert(error == OK)
+
+	# Prevent ResourceLoader from returning the cached in-memory resource.
+	var loaded := ResourceLoader.load(
+		TEST_PATH,
+		"EasingCurve",
+		ResourceLoader.CACHE_MODE_IGNORE,
+	) as EasingCurve
+
+	assert(loaded != null)
+	assert(loaded.points.size() == 1)
+
+	var loaded_point := loaded.points[0]
+
+	print("TEST 5 - TRES FREE")
+	print("left force: ", loaded_point.left_force_linear)
+	print("right force: ", loaded_point.right_force_linear)
+	print("left: ", loaded_point.left_control_point)
+	print("position: ", loaded_point.position)
+
+	assert(loaded_point.left_force_linear == true)
+	assert(loaded_point.right_force_linear == false)
+	assert(loaded_point.left_control_point == loaded_point.position)
+
+	print("TEST 5 PASSED")
+
+
+func _test_balanced_persistence() -> void:
+	var curve := EasingCurve.new()
+	curve.set_trans(EasingCurve.TRANS.CUSTOM)
+
+	var point := EasingCurvePoint.new(Vector2(0.5, 0.5))
+
+	point.left_control_point = Vector2(0.3, 0.4)
+	point.right_control_point = Vector2(0.7, 0.6)
+	point.handle_mode = EasingCurvePoint.HandleMode.BALANCED
+
+	# Store the dormant flag without modifying Balanced geometry.
+	point.set_force_linear_state(true, false, false)
+
+	curve.points = [point]
+
+	var expected_left := point.left_control_point
+	var expected_right := point.right_control_point
+
+	var error := ResourceSaver.save(curve, TEST_PATH)
+	assert(error == OK)
+
+	var loaded := ResourceLoader.load(
+		TEST_PATH,
+		"EasingCurve",
+		ResourceLoader.CACHE_MODE_IGNORE,
+	) as EasingCurve
+
+	assert(loaded != null)
+	assert(loaded.points.size() == 1)
+
+	var loaded_point := loaded.points[0]
+
+	print("TEST 6 - TRES BALANCED")
+	print("mode: ", loaded_point.handle_mode)
+	print("left force: ", loaded_point.left_force_linear)
+	print("right force: ", loaded_point.right_force_linear)
+	print("left: ", loaded_point.left_control_point)
+	print("right: ", loaded_point.right_control_point)
+
+	assert(
+		loaded_point.handle_mode
+		== EasingCurvePoint.HandleMode.BALANCED
+	)
+	assert(loaded_point.left_force_linear == true)
+	assert(loaded_point.right_force_linear == false)
+	assert(loaded_point.left_control_point == expected_left)
+	assert(loaded_point.right_control_point == expected_right)
+
+	print("TEST 6 PASSED")
+
 
 
 func _test_force_linear_snapshots() -> void:
