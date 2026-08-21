@@ -190,6 +190,8 @@ const POINT_PROPERTIES: Array[StringName] = [
 	&"right_control_point",
 	&"locked",
 	&"handle_mode",
+	&"left_force_linear",
+	&"right_force_linear",
 ]
 
 ## Zoom slider variables
@@ -682,6 +684,10 @@ func _get_property_list() -> Array[Dictionary]:
 					property_type = TYPE_DICTIONARY
 				&"handle_mode":
 					property_type = TYPE_INT
+				&"left_force_linear":
+					property_type = TYPE_BOOL
+				&"right_force_linear":
+					property_type = TYPE_BOOL
 
 			properties.append(
 				{
@@ -1201,6 +1207,8 @@ func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 	var right_control_points := PackedVector2Array()
 	var handle_modes := PackedInt32Array()
 	var locks: Array[Dictionary] = []
+	var left_force_linear := PackedByteArray()
+	var right_force_linear := PackedByteArray()
 
 	for point in point_values:
 		if point == null:
@@ -1209,6 +1217,8 @@ func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 			right_control_points.append(Vector2.ZERO)
 			handle_modes.append(EasingCurvePoint.HandleMode.FREE)
 			locks.append({})
+			left_force_linear.append(0)
+			right_force_linear.append(0)
 			continue
 
 		positions.append(point.position)
@@ -1216,6 +1226,8 @@ func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 		right_control_points.append(point.right_control_point)
 		handle_modes.append(point.handle_mode)
 		locks.append(point.locked.duplicate())
+		left_force_linear.append(int(point.left_force_linear))
+		right_force_linear.append(int(point.right_force_linear))
 
 	return {
 		"positions": positions,
@@ -1223,6 +1235,8 @@ func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 		"right_control_points": right_control_points,
 		"handle_modes": handle_modes,
 		"locks": locks,
+		"left_force_linear": left_force_linear,
+		"right_force_linear": right_force_linear,
 	}
 
 
@@ -1246,12 +1260,22 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 		"handle_modes",
 		PackedInt32Array(),
 	)
+	var left_force_linear: PackedByteArray = snapshot.get(
+		"left_force_linear",
+		PackedByteArray(),
+	)
+	var right_force_linear: PackedByteArray = snapshot.get(
+		"right_force_linear",
+		PackedByteArray(),
+	)
 
 	var reversed_positions := PackedVector2Array()
 	var reversed_left_controls := PackedVector2Array()
 	var reversed_right_controls := PackedVector2Array()
 	var reversed_locks: Array[Dictionary] = []
 	var reversed_handle_modes := PackedInt32Array()
+	var reversed_left_force_linear := PackedByteArray()
+	var reversed_right_force_linear := PackedByteArray()
 
 	for i in range(positions.size() - 1, -1, -1):
 		var position := positions[i]
@@ -1276,6 +1300,18 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 		if i < handle_modes.size():
 			reversed_handle_modes.append(handle_modes[i])
 
+		reversed_left_force_linear.append(
+			right_force_linear[i]
+			if i < right_force_linear.size()
+			else 0
+		)
+
+		reversed_right_force_linear.append(
+			left_force_linear[i]
+			if i < left_force_linear.size()
+			else 0
+		)
+
 		# Handle locks swap for the same reason as the handles.
 		reversed_locks.append({
 			"position": bool(lock_values.get("position", false)),
@@ -1292,6 +1328,8 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 	result["right_control_points"] = reversed_right_controls
 	result["locks"] = reversed_locks
 	result["handle_modes"] = reversed_handle_modes
+	result["left_force_linear"] = reversed_left_force_linear
+	result["right_force_linear"] = reversed_right_force_linear
 
 	return result
 
@@ -1343,6 +1381,14 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 	var left_control_points: PackedVector2Array = snapshot.get("left_control_points", PackedVector2Array())
 	var right_control_points: PackedVector2Array = snapshot.get("right_control_points", PackedVector2Array())
 	var handle_modes: PackedInt32Array = snapshot.get("handle_modes", PackedInt32Array())
+	var left_force_linear: PackedByteArray = snapshot.get(
+		"left_force_linear",
+		PackedByteArray(),
+	)
+	var right_force_linear: PackedByteArray = snapshot.get(
+		"right_force_linear",
+		PackedByteArray(),
+	)
 	var locks: Array = snapshot.get("locks", [])
 	var changing := bool(snapshot.get("changing", false))
 	var topology_changed := positions.size() != _points.size() or _points.has(null)
@@ -1352,11 +1398,22 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 		right_control_points,
 		handle_modes,
 		locks,
+		left_force_linear,
+		right_force_linear,
 	)
 	_suppress_point_notifications += 1
 	if not topology_changed:
 		for i in range(positions.size()):
 			var point := _points[i]
+			point.set_force_linear_state(
+				bool(left_force_linear[i])
+					if i < left_force_linear.size()
+					else false,
+				bool(right_force_linear[i])
+					if i < right_force_linear.size()
+					else false,
+				false,
+			)
 			# Temporarily use Free so restoring one handle does not
 			# modify the opposite handle.
 			point.handle_mode = EasingCurvePoint.HandleMode.FREE
@@ -1378,6 +1435,15 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 		var new_points: Array[EasingCurvePoint] = []
 		for i in range(positions.size()):
 			var point := EasingCurvePoint.new(positions[i])
+			point.set_force_linear_state(
+				bool(left_force_linear[i])
+					if i < left_force_linear.size()
+					else false,
+				bool(right_force_linear[i])
+					if i < right_force_linear.size()
+					else false,
+				false,
+			)
 			if i < left_control_points.size():
 				point.left_control_point = left_control_points[i]
 			if i < right_control_points.size():
@@ -1457,6 +1523,8 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	var right_control_points: PackedVector2Array = point_snapshot.get("right_control_points", PackedVector2Array())
 	var handle_modes: PackedInt32Array = point_snapshot.get("handle_modes", PackedInt32Array())
 	var locks: Array = point_snapshot.get("locks", [])
+	var left_force_linear: PackedByteArray = point_snapshot.get("left_force_linear", PackedByteArray())
+	var right_force_linear: PackedByteArray = point_snapshot.get("right_force_linear", PackedByteArray())
 	var topology_changed := positions.size() != _points.size() or _points.has(null)
 	var point_data_changed := _point_snapshot_differs(
 		positions,
@@ -1464,6 +1532,8 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 		right_control_points,
 		handle_modes,
 		locks,
+		left_force_linear,
+		right_force_linear,
 	)
 	var locks_changed := _point_snapshot_locks_differ(locks)
 	var bezier_parameters_changed := (
@@ -1616,6 +1686,8 @@ func _point_snapshot_differs(
 		right_control_points: PackedVector2Array,
 		handle_modes: PackedInt32Array,
 		locks: Array,
+		left_force_linear: PackedByteArray,
+		right_force_linear: PackedByteArray,
 ) -> bool:
 	if positions.size() != _points.size() or _points.has(null):
 		return true
@@ -1634,6 +1706,20 @@ func _point_snapshot_differs(
 			for property_name in POINT_PROPERTIES.slice(0, 3):
 				if bool(point.locked.get(property_name, false)) != bool(lock_values.get(property_name, false)):
 					return true
+		var snapshot_left_force := (
+			bool(left_force_linear[i])
+			if i < left_force_linear.size()
+			else false
+		)
+		var snapshot_right_force := (
+			bool(right_force_linear[i])
+			if i < right_force_linear.size()
+			else false
+		)
+		if point.left_force_linear != snapshot_left_force:
+			return true
+		if point.right_force_linear != snapshot_right_force:
+			return true
 	return false
 
 

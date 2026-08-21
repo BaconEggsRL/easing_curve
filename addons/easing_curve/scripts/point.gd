@@ -498,3 +498,17 @@ func _apply_free_force_linear_state() -> void:
 
 	if _right_force_linear:
 		_set_control_point_direct(ControlSide.RIGHT, position)
+
+
+func set_force_linear_state(
+	left: bool,
+	right: bool,
+	apply_geometry := true,
+) -> void:
+	_left_force_linear = left
+	_right_force_linear = right
+
+	if apply_geometry:
+		_apply_free_force_linear_state()
+
+	emit_changed()
