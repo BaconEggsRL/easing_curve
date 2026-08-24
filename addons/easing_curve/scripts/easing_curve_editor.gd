@@ -220,16 +220,19 @@ func _gui_input(event: InputEvent) -> void:
 	# =========================
 	if event is InputEventMouseButton:
 		# --- Mouse Wheel Zoom ---
-		if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_zoom_step = clamp(_zoom_step + 1, 0, ZOOM_STEPS)
-			_apply_zoom_from_step()
-			queue_redraw()
+		if (
+			event.pressed
+			and event.button_index == MOUSE_BUTTON_WHEEL_UP
+		):
+			_zoom_at_view_pos(1, event.position)
 			accept_event()
 			return
-		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_zoom_step = clamp(_zoom_step - 1, 0, ZOOM_STEPS)
-			_apply_zoom_from_step()
-			queue_redraw()
+
+		elif (
+			event.pressed
+			and event.button_index == MOUSE_BUTTON_WHEEL_DOWN
+		):
+			_zoom_at_view_pos(-1, event.position)
 			accept_event()
 			return
 
@@ -338,8 +341,11 @@ func _gui_input(event: InputEvent) -> void:
 			return
 
 
-		# Reset dragging state when mouse button released
-		elif not event.pressed:
+		# Reset dragging state only when left mouse button is released.
+		elif (
+			not event.pressed
+			and event.button_index == MOUSE_BUTTON_LEFT
+		):
 			if dragging_point != -1:
 				point_edit_finished.emit()
 
@@ -690,6 +696,36 @@ func get_control_at(pos: Vector2) -> Array: # [point_index, ControlIndex]
 				return [i, ControlIndex.RIGHT]
 
 	return [-1, ControlIndex.NONE]
+
+
+func _zoom_at_view_pos(step_delta: int, view_pos: Vector2) -> void:
+	var world_before := get_world_pos(view_pos)
+
+	if not world_before.is_finite():
+		return
+
+	var new_step := clamp(
+		_zoom_step + step_delta,
+		0,
+		ZOOM_STEPS,
+	)
+
+	if new_step == _zoom_step:
+		return
+
+	_zoom_step = new_step
+	_apply_zoom_from_step()
+
+	# _apply_zoom_from_step() changes zoom values, but the transform
+	# normally isn't rebuilt until the next draw.
+	update_view_transform()
+
+	var view_after := get_view_pos(world_before)
+
+	pan_offset += view_pos - view_after
+
+	pan_changed.emit(pan_offset)
+	queue_redraw()
 
 
 func _on_autofit_pressed() -> void:
