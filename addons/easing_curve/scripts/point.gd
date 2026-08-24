@@ -10,6 +10,7 @@ extends Resource
 signal lock_changed(property_name: String, locked: bool)
 
 const DEFAULT_HANDLE_LENGTH := 0.1
+var balanced_display_scale := Vector2.ONE
 
 # TRUE:
 # Free → Balanced: longer handle determines orientation; individual lengths remain unchanged.
@@ -211,24 +212,33 @@ func get_control_point_pair(
 		right = value
 
 	match handle_mode:
+
 		HandleMode.BALANCED:
 			var opposite := (
 				_right_control_point
 				if side == ControlSide.LEFT
 				else _left_control_point
 			)
+
+			var moved_delta := value - position
+			var opposite_delta := opposite - position
+
+			var moved_display := moved_delta * balanced_display_scale
+			var opposite_display := opposite_delta * balanced_display_scale
+
 			var opposite_length := _get_safe_length(
-				opposite,
-				position,
+				opposite_display,
+				Vector2.ZERO,
 			)
 
 			var direction := _get_safe_direction(
-				position - value,
+				-moved_display,
 			)
 
+			var balanced_display := direction * opposite_length
 			var balanced := (
 				position
-				+ direction * opposite_length
+				+ balanced_display / balanced_display_scale
 			)
 
 			if not balanced.is_finite():
@@ -236,6 +246,7 @@ func get_control_point_pair(
 					"BALANCED OVERFLOW",
 					"\n  dragged value: ", value,
 					"\n  opposite: ", opposite,
+					"\n  display scale: ", balanced_display_scale,
 					"\n  opposite length: ", opposite_length,
 					"\n  direction: ", direction,
 					"\n  result: ", balanced,
@@ -694,4 +705,19 @@ func _get_safe_length(from: Vector2, to: Vector2) -> float:
 			scaled.x * scaled.x
 			+ scaled.y * scaled.y
 		)
+	)
+
+
+func set_balanced_display_scale(value: Vector2) -> void:
+	if not value.is_finite():
+		return
+	if is_zero_approx(value.x) or is_zero_approx(value.y):
+		return
+	balanced_display_scale = value.abs()
+
+
+func get_world_to_view_scale() -> Vector2:
+	return Vector2(
+		_world_to_view.x.length(),
+		_world_to_view.y.length()
 	)
