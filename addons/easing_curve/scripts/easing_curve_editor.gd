@@ -73,6 +73,7 @@ var hovered_control_index: ControlIndex = ControlIndex.NONE
 
 var dragging_point: int = -1
 var dragging_control: ControlIndex = ControlIndex.NONE
+var pending_add_point: EasingCurvePoint
 
 var grabbing: GrabMode = GrabMode.NONE
 var initial_grab_pos: Vector2
@@ -147,6 +148,23 @@ func _gui_input(event: InputEvent) -> void:
 	# =========================
 	if event is InputEventMouseMotion:
 		if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
+			return
+
+		if pending_add_point != null:
+			var world_pos := get_world_pos(event.position)
+
+			if not world_pos.is_finite():
+				return
+
+			var clamped_pos := world_pos.clamp(
+				Vector2(0, _curve.min_value),
+				Vector2(1.0, _curve.max_value),
+			)
+			var delta := clamped_pos - pending_add_point.position
+			pending_add_point.position = clamped_pos
+			pending_add_point.left_control_point += delta
+			pending_add_point.right_control_point += delta
+			queue_redraw()
 			return
 
 		# ----- DRAGGING -----
@@ -310,30 +328,15 @@ func _gui_input(event: InputEvent) -> void:
 			)
 
 			if use_pending_add:
-				var new_point := EasingCurvePoint.new()
+				pending_add_point = EasingCurvePoint.new()
 
-				new_point.position = clamped_pos
-				new_point.left_control_point = (
+				pending_add_point.position = clamped_pos
+				pending_add_point.left_control_point = (
 					clamped_pos + Vector2(-0.1, 0.0)
 				)
-				new_point.right_control_point = (
+				pending_add_point.right_control_point = (
 					clamped_pos + Vector2(0.1, 0.0)
 				)
-
-				_request_point_add(new_point)
-
-				selected_index = -1
-
-				for i in range(_curve.points.size()):
-					if _curve.points[i].position == clamped_pos:
-						selected_index = i
-						break
-
-				if selected_index != -1:
-					dragging_point = selected_index
-					dragging_control = ControlIndex.NONE
-					_drag_auto_range = _compute_auto_y_range()
-					_has_drag_auto_range = true
 
 				queue_redraw()
 				accept_event()
@@ -396,6 +399,23 @@ func _gui_input(event: InputEvent) -> void:
 			not event.pressed
 			and event.button_index == MOUSE_BUTTON_LEFT
 		):
+			if pending_add_point != null:
+				var point := pending_add_point
+				var point_position := point.position
+				pending_add_point = null
+				_request_point_add(point)
+
+				selected_index = -1
+				for i in range(_curve.points.size()):
+					if _curve.points[i].position == point_position:
+						selected_index = i
+						break
+
+				dragging_point = -1
+				dragging_control = ControlIndex.NONE
+				_has_drag_auto_range = false
+				queue_redraw()
+				return
 
 			if dragging_point != -1:
 				point_edit_finished.emit()
@@ -565,6 +585,23 @@ func _draw():
 
 			draw_line(pos_view, right_view, right_line_color)
 			draw_circle(right_view, right_radius, right_color)
+
+	if pending_add_point != null:
+		var pending_pos_view := get_view_pos(pending_add_point.position)
+		var pending_left_view := get_view_pos(pending_add_point.left_control_point)
+		var pending_right_view := get_view_pos(pending_add_point.right_control_point)
+		var pending_line_color := Color(
+			CONTROL_LINE_COLOR.r,
+			CONTROL_LINE_COLOR.g,
+			CONTROL_LINE_COLOR.b,
+			1.0,
+		)
+
+		draw_line(pending_pos_view, pending_left_view, pending_line_color)
+		draw_circle(pending_left_view, control_radius, Color(0, 1, 0))
+		draw_line(pending_pos_view, pending_right_view, pending_line_color)
+		draw_circle(pending_right_view, control_radius, Color(0, 0, 1))
+		draw_circle(pending_pos_view, point_radius, Color(1, 0.5, 0))
 
 
 func _notification(what: int) -> void:
