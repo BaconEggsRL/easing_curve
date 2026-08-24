@@ -93,8 +93,9 @@ var _world_to_view: Transform2D
 var _editor_scale: float = 1.0
 
 var _point_toolbar_panel: PanelContainer
-var _point_toolbar: HBoxContainer
+var _point_toolbar: GridContainer
 var _point_label: Label
+var _point_toolbar_controls: HBoxContainer
 var _point_handle_mode: OptionButton
 var _point_left_state_label: Label
 var _point_left_state: OptionButton
@@ -1021,24 +1022,36 @@ func _create_point_toolbar() -> void:
 
 	add_child(_point_toolbar_panel)
 
-	_point_toolbar = HBoxContainer.new()
-	_point_toolbar.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_point_toolbar = GridContainer.new()
+	_point_toolbar.columns = 3
 	_point_toolbar.add_theme_constant_override(
-		"separation",
-		int(4 * _editor_scale),
+		"h_separation",
+		maxi(1, roundi(2.0 * _editor_scale)),
 	)
+	_point_toolbar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	_point_toolbar_panel.add_child(_point_toolbar)
 
 	_point_label = Label.new()
 	_point_label.text = "No Selection"
+	_point_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_point_toolbar.add_child(_point_label)
+	_reserve_point_toolbar_label_column_width()
+
+	_point_toolbar_controls = HBoxContainer.new()
+	_point_toolbar_controls.add_theme_constant_override(
+		"separation",
+		maxi(1, roundi(2.0 * _editor_scale)),
+	)
+	_point_toolbar_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_point_toolbar.add_child(_point_toolbar_controls)
 
 	_point_handle_mode = OptionButton.new()
 	_point_handle_mode.fit_to_longest_item = false
 	_point_handle_mode.clip_text = true
 	_point_handle_mode.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_point_handle_mode.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_point_handle_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_point_handle_mode.size_flags_stretch_ratio = 1.2
 
 	_point_handle_mode.add_item(
 		"Free",
@@ -1065,23 +1078,23 @@ func _create_point_toolbar() -> void:
 		_on_point_toolbar_handle_mode_selected
 	)
 
-	_point_toolbar.add_child(_point_handle_mode)
+	_point_toolbar_controls.add_child(_point_handle_mode)
 
 	_point_left_state_label = Label.new()
 	_point_left_state_label.text = "L"
-	_point_toolbar.add_child(_point_left_state_label)
+	_point_toolbar_controls.add_child(_point_left_state_label)
 	_point_left_state = _create_point_toolbar_control_state_option(
 		EasingCurvePoint.ControlSide.LEFT
 	)
-	_point_toolbar.add_child(_point_left_state)
+	_point_toolbar_controls.add_child(_point_left_state)
 
 	_point_right_state_label = Label.new()
 	_point_right_state_label.text = "R"
-	_point_toolbar.add_child(_point_right_state_label)
+	_point_toolbar_controls.add_child(_point_right_state_label)
 	_point_right_state = _create_point_toolbar_control_state_option(
 		EasingCurvePoint.ControlSide.RIGHT
 	)
-	_point_toolbar.add_child(_point_right_state)
+	_point_toolbar_controls.add_child(_point_right_state)
 
 	_point_reset_button = Button.new()
 	_point_reset_button.icon = RELOAD_ICON
@@ -1090,6 +1103,22 @@ func _create_point_toolbar() -> void:
 	_point_reset_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_point_reset_button.pressed.connect(_on_point_toolbar_reset_pressed)
 	_point_toolbar.add_child(_point_reset_button)
+	_set_point_toolbar_reset_available(false)
+
+
+func _reserve_point_toolbar_label_column_width() -> void:
+	var original_text := _point_label.text
+	var label_column_width := 0.0
+
+	for label_text in ["Ease", "Trans"]:
+		_point_label.text = label_text
+		label_column_width = maxf(
+			label_column_width,
+			_point_label.get_combined_minimum_size().x,
+		)
+
+	_point_label.text = original_text
+	_point_label.custom_minimum_size.x = label_column_width
 
 
 func _create_point_toolbar_control_state_option(
@@ -1189,7 +1218,17 @@ func _set_point_toolbar_control_state_visible(
 
 
 func _set_point_toolbar_reset_available(available: bool) -> void:
-	_point_reset_button.visible = available
+	var tint := _point_reset_button.self_modulate
+	tint.a = 1.0 if available else 0.0
+	_point_reset_button.self_modulate = tint
+	_point_reset_button.mouse_filter = (
+		Control.MOUSE_FILTER_STOP
+		if available
+		else Control.MOUSE_FILTER_IGNORE
+	)
+	_point_reset_button.focus_mode = (
+		Control.FOCUS_ALL if available else Control.FOCUS_NONE
+	)
 	_point_reset_button.disabled = not available
 
 
