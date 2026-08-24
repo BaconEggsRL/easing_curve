@@ -1034,8 +1034,10 @@ func _create_point_toolbar() -> void:
 
 	_point_handle_mode = OptionButton.new()
 	_point_handle_mode.fit_to_longest_item = false
-	_point_handle_mode.custom_minimum_size.x = 56.0 * _editor_scale
+	_point_handle_mode.clip_text = true
 	_point_handle_mode.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_point_handle_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_point_handle_mode.size_flags_stretch_ratio = 1.4
 
 	_point_handle_mode.add_item(
 		"Free",
@@ -1086,8 +1088,10 @@ func _create_point_toolbar_control_state_option(
 ) -> OptionButton:
 	var option := OptionButton.new()
 	option.fit_to_longest_item = false
-	option.custom_minimum_size.x = 48.0 * _editor_scale
+	option.clip_text = true
 	option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	option.size_flags_stretch_ratio = 1.0
 	option.add_item("Free", EasingCurvePoint.ControlState.FREE)
 	option.add_item("Linear", EasingCurvePoint.ControlState.LINEAR)
 	option.add_item("Locked", EasingCurvePoint.ControlState.LOCKED)
