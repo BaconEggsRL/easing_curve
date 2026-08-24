@@ -160,10 +160,7 @@ func _gui_input(event: InputEvent) -> void:
 				Vector2(0, _curve.min_value),
 				Vector2(1.0, _curve.max_value),
 			)
-			var delta := clamped_pos - pending_add_point.position
 			pending_add_point.position = clamped_pos
-			pending_add_point.left_control_point += delta
-			pending_add_point.right_control_point += delta
 			queue_redraw()
 			return
 
