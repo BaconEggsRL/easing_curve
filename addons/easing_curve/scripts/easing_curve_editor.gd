@@ -10,7 +10,7 @@ const SELECTION_TOOLBAR_HEIGHT := 32.0
 var _drag_auto_range := Vector2.ZERO
 var _has_drag_auto_range := false
 
-var use_pending_add := true
+var use_pending_add := false
 
 static var _selected_index_by_curve: Dictionary[int, int] = {}
 
@@ -314,21 +314,51 @@ func _gui_input(event: InputEvent) -> void:
 				return
 
 
-			# --- If we hit nothing, begin adding a point ---
+			# --- If we hit nothing, add a new point ---
 			var world_pos := get_world_pos(event.position)
 
 			if not world_pos.is_finite():
 				return
 
-			pending_add_position = world_pos.clamp(
+			var clamped_pos := world_pos.clamp(
 				Vector2(0, _curve.min_value),
 				Vector2(1.0, _curve.max_value),
 			)
 
-			pending_add = true
+			if use_pending_add:
+				pending_add_position = clamped_pos
+				pending_add = true
+
+				queue_redraw()
+				accept_event()
+				return
+
+			var new_point := EasingCurvePoint.new()
+
+			new_point.position = clamped_pos
+			new_point.left_control_point = (
+				clamped_pos + Vector2(-0.1, 0.0)
+			)
+			new_point.right_control_point = (
+				clamped_pos + Vector2(0.1, 0.0)
+			)
+
+			_request_point_add(new_point)
+
+			selected_index = -1
+
+			for i in range(_curve.points.size()):
+				if _curve.points[i].position == clamped_pos:
+					selected_index = i
+					break
+
+			if selected_index != -1:
+				dragging_point = selected_index
+				dragging_control = ControlIndex.NONE
+				_drag_auto_range = _compute_auto_y_range()
+				_has_drag_auto_range = true
 
 			queue_redraw()
-			accept_event()
 			return
 
 
@@ -380,8 +410,10 @@ func _gui_input(event: InputEvent) -> void:
 
 				_request_point_add(new_point)
 
+				selected_index = -1
+
 				for i in range(_curve.points.size()):
-					if _curve.points[i] == new_point:
+					if _curve.points[i].position == pending_add_position:
 						selected_index = i
 						break
 
