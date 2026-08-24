@@ -1091,6 +1091,7 @@ func _create_point_toolbar() -> void:
 	_point_right_state_label = Label.new()
 	_point_right_state_label.text = "R"
 	_point_toolbar_controls.add_child(_point_right_state_label)
+	_reserve_point_toolbar_control_side_label_width()
 	_point_right_state = _create_point_toolbar_control_state_option(
 		EasingCurvePoint.ControlSide.RIGHT
 	)
@@ -1119,6 +1120,15 @@ func _reserve_point_toolbar_label_column_width() -> void:
 
 	_point_label.text = original_text
 	_point_label.custom_minimum_size.x = label_column_width
+
+
+func _reserve_point_toolbar_control_side_label_width() -> void:
+	var label_width := maxf(
+		_point_left_state_label.get_combined_minimum_size().x,
+		_point_right_state_label.get_combined_minimum_size().x,
+	)
+	_point_left_state_label.custom_minimum_size.x = label_width
+	_point_right_state_label.custom_minimum_size.x = label_width
 
 
 func _create_point_toolbar_control_state_option(
