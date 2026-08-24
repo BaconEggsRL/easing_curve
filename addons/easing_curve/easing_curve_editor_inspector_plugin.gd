@@ -1013,6 +1013,10 @@ func handle_easing_curve_editor(object) -> Control:
 		# Keep references
 		curve_section.add_child(_toolbar)
 
+		var point_toolbar_gap := Control.new()
+		point_toolbar_gap.custom_minimum_size.y = _compact_separation()
+		curve_section.add_child(point_toolbar_gap)
+
 		########################################
 		# Add curve editor
 		easing_curve_editor = EasingCurveEditor.new()
