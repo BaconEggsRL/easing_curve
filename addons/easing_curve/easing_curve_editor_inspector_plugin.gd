@@ -2172,7 +2172,7 @@ func _add_point(point: EasingCurvePoint) -> void:
 	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	var updated_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	updated_points.append(point)
-	updated_points.sort_custom(func(a: EasingCurvePoint, b: EasingCurvePoint) -> bool: return a.position.x < b.position.x)
+	EasingCurve.sort_point_list_by_x(updated_points)
 	curve.set_point_snapshot(curve.make_point_snapshot(updated_points))
 	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 		editor_undo_redo,

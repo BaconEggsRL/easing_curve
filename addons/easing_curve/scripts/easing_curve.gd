@@ -198,7 +198,6 @@ const POINT_PROPERTIES: Array[StringName] = [
 var _last_slider_value: float = DEFAULT_SLIDER_VALUE
 var _last_zoom := Vector2(1, 1)
 var _last_pan := Vector2.ZERO
-var _last_t := 0.0
 var _points: Array[EasingCurvePoint] = []
 var _connected_points: Array[EasingCurvePoint] = []
 var _point_topology: Array[EasingCurvePoint] = []
@@ -1116,7 +1115,7 @@ func printpoints():
 
 
 func sort_points() -> void:
-	_points.sort_custom(func(a, b): return a.position.x < b.position.x)
+	sort_point_list_by_x(_points)
 	_synchronize_point_connections()
 	_notify_curve_changed(true, true)
 
@@ -1159,7 +1158,7 @@ func add_point(p: EasingCurvePoint) -> void:
 	if p == null:
 		return
 	_points.append(p)
-	_points.sort_custom(func(a, b): return a.position.x < b.position.x)
+	sort_point_list_by_x(_points)
 	_synchronize_point_connections()
 	_notify_curve_changed(true, true)
 
@@ -1984,9 +1983,19 @@ func _sample_raw(offset: float) -> float:
 	if points.size() < 2:
 		return 0.0
 
-	for i in range(points.size() - 1):
-		var a = points[i]
-		var b = points[i + 1]
+	return sample_bezier_points(points, offset)
+
+
+static func sample_bezier_points(
+		point_list: Array[EasingCurvePoint],
+		offset: float,
+) -> float:
+	if point_list.size() < 2:
+		return 0.0
+
+	for i in range(point_list.size() - 1):
+		var a := point_list[i]
+		var b := point_list[i + 1]
 
 		var min_x = min(a.position.x, b.position.x)
 		var max_x = max(a.position.x, b.position.x)
@@ -2333,7 +2342,7 @@ func _on_point_changed() -> void:
 
 
 # Newton-Raphson solver with a binary-search fallback for flat handles.
-func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
+static func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
 	var segment_width := b.position.x - a.position.x
 	var t := clampf((x - a.position.x) / segment_width, 0.0, 1.0) if not is_zero_approx(segment_width) else 0.5
 
@@ -2347,7 +2356,6 @@ func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
 		)
 		var error := x_est - x
 		if absf(error) <= 0.00000001:
-			_last_t = t
 			return t
 
 		var dx := _bezier_derivative(
@@ -2367,11 +2375,10 @@ func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
 		t = next_t
 
 	t = _binary_search_t(x, a, b)
-	_last_t = t
 	return t
 
 
-func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
+static func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
 	var low := 0.0
 	var high := 1.0
 	var mid := 0.5
@@ -2397,13 +2404,17 @@ func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> flo
 	return mid
 
 
-func _bezier_derivative(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
+static func _bezier_derivative(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
 	var omt = 1.0 - t
 	return 3.0 * omt * omt * (p1 - p0) \
 	+ 6.0 * omt * t * (p2 - p1) \
 	+ 3.0 * t * t * (p3 - p2)
 
 
-func _bezier_interpolate(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
+static func _bezier_interpolate(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
 	var omt = 1.0 - t
 	return omt * omt * omt * p0 + 3 * omt * omt * t * p1 + 3 * omt * t * t * p2 + t * t * t * p3
+
+
+static func sort_point_list_by_x(point_list: Array[EasingCurvePoint]) -> void:
+	point_list.sort_custom(func(a: EasingCurvePoint, b: EasingCurvePoint) -> bool: return a.position.x < b.position.x)

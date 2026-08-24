@@ -513,25 +513,33 @@ func _draw():
 	if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
 		_draw_function_curve()
 
-	# --- Draw curve segments ---
-	for i in range(_curve.points.size() - 1):
-		var a = _curve.points[i]
-		var b = _curve.points[i + 1]
-		_draw_bezier_segment(a, b)
+	var display_points := _get_display_points()
+
+	# --- Draw curve using the same X-to-Y evaluation as EasingCurve.sample() ---
+	if _curve.curve_mode != EasingCurve.CurveMode.FUNCTION:
+		_draw_bezier_curve(display_points)
 
 	# --- Draw points and control points ---
-	for i in range(_curve.points.size()):
-		var p = _curve.points[i]
+	for i in range(display_points.size()):
+		var p := display_points[i]
 		var pos_view = get_view_pos(p.position)
 
-		# var is_selected = (i == selected_index)
-		var is_hovered = (i == hovered_index)
+		var is_selected := p == pending_add_point or (
+			selected_index >= 0
+			and selected_index < _curve.points.size()
+			and p == _curve.points[selected_index]
+		)
+		var is_hovered := (
+			hovered_index >= 0
+			and hovered_index < _curve.points.size()
+			and p == _curve.points[hovered_index]
+		)
 
 		# Slightly dim when not selected/hovered
 		var alpha := 1.0 if (is_hovered) else 0.5
 
 		# ----- Colors -----
-		var point_color = Color(1, 0.5, 0, alpha) if i == selected_index else Color(1, 0, 0, alpha)
+		var point_color = Color(1, 0.5, 0, alpha) if is_selected else Color(1, 0, 0, alpha)
 
 		# ----- Main Point -----
 		draw_circle(pos_view, point_radius, point_color)
@@ -542,7 +550,7 @@ func _draw():
 			var left_view = get_view_pos(p.left_control_point)
 
 			var left_hovered = (
-				i == hovered_index and
+				is_hovered and
 				hovered_control_index == ControlIndex.LEFT
 			)
 
@@ -561,11 +569,11 @@ func _draw():
 			draw_circle(left_view, left_radius, left_color)
 
 		# RIGHT
-		if i != _curve.points.size() - 1:
+		if i != display_points.size() - 1:
 			var right_view = get_view_pos(p.right_control_point)
 
 			var right_hovered = (
-				i == hovered_index and
+				is_hovered and
 				hovered_control_index == ControlIndex.RIGHT
 			)
 
@@ -582,24 +590,6 @@ func _draw():
 
 			draw_line(pos_view, right_view, right_line_color)
 			draw_circle(right_view, right_radius, right_color)
-
-	if pending_add_point != null:
-		var pending_pos_view := get_view_pos(pending_add_point.position)
-		var pending_left_view := get_view_pos(pending_add_point.left_control_point)
-		var pending_right_view := get_view_pos(pending_add_point.right_control_point)
-		var pending_line_color := Color(
-			CONTROL_LINE_COLOR.r,
-			CONTROL_LINE_COLOR.g,
-			CONTROL_LINE_COLOR.b,
-			1.0,
-		)
-
-		draw_line(pending_pos_view, pending_left_view, pending_line_color)
-		draw_circle(pending_left_view, control_radius, Color(0, 1, 0))
-		draw_line(pending_pos_view, pending_right_view, pending_line_color)
-		draw_circle(pending_right_view, control_radius, Color(0, 0, 1))
-		draw_circle(pending_pos_view, point_radius, Color(1, 0.5, 0))
-
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_FOCUS_ENTER:
@@ -863,15 +853,32 @@ func _get_minimum_size() -> Vector2:
 	) * _editor_scale
 
 
-func _draw_bezier_segment(a: EasingCurvePoint, b: EasingCurvePoint) -> void:
-	var steps = 20
-	var prev = get_view_pos(a.position)
-	for j in range(1, steps + 1):
-		var t = j / float(steps)
-		var pt = _bezier(a.position, a.right_control_point, b.left_control_point, b.position, t)
-		var pt_view = get_view_pos(pt)
-		draw_line(prev, pt_view, LINE_COLOR, 2)
-		prev = pt_view
+func _get_display_points() -> Array[EasingCurvePoint]:
+	var display_points: Array[EasingCurvePoint] = _curve.points.duplicate()
+
+	if pending_add_point != null:
+		display_points.append(pending_add_point)
+		EasingCurve.sort_point_list_by_x(display_points)
+
+	return display_points
+
+
+func _draw_bezier_curve(point_list: Array[EasingCurvePoint]) -> void:
+	if point_list.size() < 2:
+		return
+
+	var first_x := clampf(get_world_pos(Vector2.ZERO).x, 0.0, 1.0)
+	var last_x := clampf(get_world_pos(Vector2(size.x, 0.0)).x, 0.0, 1.0)
+	var min_x := minf(first_x, last_x)
+	var max_x := maxf(first_x, last_x)
+	var steps := max(1, ceili(size.x))
+	var previous := get_view_pos(Vector2(min_x, EasingCurve.sample_bezier_points(point_list, min_x)))
+
+	for i in range(1, steps + 1):
+		var x := lerpf(min_x, max_x, i / float(steps))
+		var current := get_view_pos(Vector2(x, EasingCurve.sample_bezier_points(point_list, x)))
+		draw_line(previous, current, LINE_COLOR, 2)
+		previous = current
 
 
 func _bezier(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
