@@ -68,8 +68,12 @@ var selected_index: int = -1:
 var hovered_index: int = -1
 var selected_control_index: ControlIndex = ControlIndex.NONE
 var hovered_control_index: ControlIndex = ControlIndex.NONE
+
 var dragging_point: int = -1
 var dragging_control: ControlIndex = ControlIndex.NONE
+var pending_add := false
+var pending_add_position := Vector2.ZERO
+
 var grabbing: GrabMode = GrabMode.NONE
 var initial_grab_pos: Vector2
 var initial_grab_index: int
