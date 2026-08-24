@@ -29,6 +29,7 @@ const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easi
 ## Vector2 slider step
 const SLIDER_INPUT_STEP = 0.001
 const DRAGGING_META := &"_easing_curve_dragging"
+const POSITION_X_EDITING_META := &"_easing_curve_position_x_editing"
 # copy functions
 const POINT_MENU_COPY_VALUE := 0
 const POINT_MENU_PASTE_VALUE := 1
@@ -890,6 +891,7 @@ func _clear_point_property_selection() -> void:
 	_selected_point_property_header = null
 	_selected_point_index = -1
 	_selected_point_property_name = StringName()
+	_selected_point_resource_id = 0
 
 
 func handle_points(curve: EasingCurve) -> VBoxContainer:
@@ -1215,18 +1217,28 @@ func _update_point_reset_btn(
 
 func _on_reset_btn_pressed(
 		i: int,
+		point: EasingCurvePoint,
 		_default: Vector2,
 		x_input: EditorSpinSlider,
 		y_input: EditorSpinSlider,
 		property_name: String,
 		reset_btn: Button,
 ) -> void:
+	i = _get_current_point_index(point)
+	if i == -1:
+		return
 	_preserve_point_selection_on_refresh = true
 	var new_default := curve.get_default_for_property(i, property_name)
 
 	x_input.set_value_no_signal(new_default.x)
 	y_input.set_value_no_signal(new_default.y)
-	_apply_point_property_change(i, property_name, new_default)
+	_apply_point_property_change(
+		i,
+		property_name,
+		new_default,
+		false,
+		point if property_name == &"position" else null,
+	)
 
 	reset_btn.visible = false
 
@@ -1235,19 +1247,31 @@ func _on_remove_btn_pressed(_point_list: VBoxContainer, _i: int, _point_panel: P
 	_remove_point(p)
 
 
-func _on_x_input_value_changed(value: float, i: int, x_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
+func _on_x_input_value_changed(value: float, i: int, point: EasingCurvePoint, x_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
 	# print("p%d x: %.3f" % [i, value])
-	var point := curve.points[i]
+	i = _get_current_point_index(point)
+	if i == -1:
+		return
 	var v: Vector2 = point.get(property_name)
 	v.x = value
-	_apply_point_property_change(i, property_name, v, x_input.has_meta(DRAGGING_META))
+	_apply_point_property_change(
+		i,
+		property_name,
+		v,
+		x_input.has_meta(DRAGGING_META)
+			or x_input.has_meta(POSITION_X_EDITING_META),
+		point if property_name == &"position" else null,
+	)
+	i = _get_current_point_index(point)
 	_update_point_reset_btn(reset_btn, i, property_name) # show reset if different
 	easing_curve_editor.queue_redraw()
 
 
-func _on_y_input_value_changed(value: float, i: int, y_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
+func _on_y_input_value_changed(value: float, i: int, point: EasingCurvePoint, y_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
 	# print("p%d y: %.3f" % [i, value])
-	var point := curve.points[i]
+	i = _get_current_point_index(point)
+	if i == -1:
+		return
 	var v: Vector2 = point.get(property_name)
 	v.y = value
 	_apply_point_property_change(i, property_name, v, y_input.has_meta(DRAGGING_META))
@@ -1364,8 +1388,38 @@ func _select_point_property(
 	_selected_point_property_header = property_header
 	_selected_point_index = point_index
 	_selected_point_property_name = property_name
+	_selected_point_resource_id = (
+		curve.points[point_index].get_instance_id()
+		if point_index >= 0 and point_index < curve.points.size()
+		else 0
+	)
 
 	_set_point_property_selected(property_header, true)
+
+
+func _select_point_property_for_point(
+	property_header: PanelContainer,
+	point: EasingCurvePoint,
+	property_name: StringName,
+) -> void:
+	var point_index := _get_current_point_index(point)
+	if point_index != -1:
+		_select_point_property(property_header, point_index, property_name)
+
+
+func _get_current_point_index(point: EasingCurvePoint) -> int:
+	return curve.points.find(point)
+
+
+func _reorder_position_edited_point(point: EasingCurvePoint) -> void:
+	curve.sort_points(false)
+	var point_index := curve.points.find(point)
+	if point_index == -1:
+		return
+
+	_selected_point_index = point_index
+	_selected_point_resource_id = point.get_instance_id()
+	easing_curve_editor.selected_index = point_index
 
 
 func _set_point_property_selected(
@@ -1742,10 +1796,17 @@ func _create_vector2_property(
 	x_input.value = vec.x
 	x_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	x_input.value_changed.connect(_on_x_input_value_changed.bind(i, x_input, reset_btn, default_vec.x, property_name))
+	x_input.value_changed.connect(_on_x_input_value_changed.bind(i, point, x_input, reset_btn, default_vec.x, property_name))
 	_connect_point_input_drag_signals(x_input)
-	x_input.grabbed.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
-	x_input.focus_entered.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
+	if property_name == "position":
+		x_input.value_focus_entered.connect(
+			_on_position_x_input_focus_entered.bind(x_input)
+		)
+		x_input.value_focus_exited.connect(
+			_on_position_x_input_focus_exited.bind(x_input)
+		)
+	x_input.grabbed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
+	x_input.focus_entered.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 	point.set_input_control(property_name, "x", x_input)
 	x_input.read_only = point.locked[property_name]
 	y_input.read_only = point.locked[property_name]
@@ -1775,14 +1836,14 @@ func _create_vector2_property(
 	y_input.value = vec.y
 	y_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	y_input.value_changed.connect(_on_y_input_value_changed.bind(i, y_input, reset_btn, default_vec.y, property_name))
+	y_input.value_changed.connect(_on_y_input_value_changed.bind(i, point, y_input, reset_btn, default_vec.y, property_name))
 	_connect_point_input_drag_signals(y_input)
-	y_input.grabbed.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
-	y_input.focus_entered.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
+	y_input.grabbed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
+	y_input.focus_entered.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 	point.set_input_control(property_name, "y", y_input)
 
-	reset_btn.pressed.connect(_on_reset_btn_pressed.bind(i, position, x_input, y_input, property_name, reset_btn))
-	reset_btn.pressed.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
+	reset_btn.pressed.connect(_on_reset_btn_pressed.bind(i, point, position, x_input, y_input, property_name, reset_btn))
+	reset_btn.pressed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 
 	y_row.add_child(y_label)
 	y_row.add_child(y_input)
@@ -1885,6 +1946,16 @@ func _on_point_input_focus_entered(input: EditorSpinSlider) -> void:
 		_commit_point_edit()
 
 
+func _on_position_x_input_focus_entered(input: EditorSpinSlider) -> void:
+	input.set_meta(POSITION_X_EDITING_META, true)
+
+
+func _on_position_x_input_focus_exited(input: EditorSpinSlider) -> void:
+	if input.has_meta(POSITION_X_EDITING_META):
+		input.remove_meta(POSITION_X_EDITING_META)
+		_commit_point_edit.call_deferred()
+
+
 func _on_curve_editor_point_add_requested(point: EasingCurvePoint) -> void:
 	_add_point(point)
 
@@ -1935,7 +2006,13 @@ func _create_handle_mode_property(
 	return row
 
 
-func _apply_point_property_change(i: int, property_name: StringName, value: Variant, changing: bool = false) -> void:
+func _apply_point_property_change(
+	i: int,
+	property_name: StringName,
+	value: Variant,
+	changing: bool = false,
+	position_reorder_point: EasingCurvePoint = null,
+) -> void:
 	if i < 0 or i >= curve.points.size():
 		return
 	_preserve_point_selection_on_refresh = true
@@ -1946,9 +2023,27 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 	var snapshot := curve.get_point_snapshot()
 	match property_name:
 		&"position":
+			var point := curve.points[i]
 			var positions: PackedVector2Array = snapshot["positions"]
-			positions[i] = value
+			var old_position := positions[i]
+			var new_position: Vector2 = value
+			positions[i] = new_position
 			snapshot["positions"] = positions
+
+			var delta := new_position - old_position
+			if not point.is_lock_active(&"left_control_point"):
+				var left_control_points: PackedVector2Array = snapshot[
+					"left_control_points"
+				]
+				left_control_points[i] += delta
+				snapshot["left_control_points"] = left_control_points
+
+			if not point.is_lock_active(&"right_control_point"):
+				var right_control_points: PackedVector2Array = snapshot[
+					"right_control_points"
+				]
+				right_control_points[i] += delta
+				snapshot["right_control_points"] = right_control_points
 
 		&"left_control_point", &"right_control_point":
 			var point := curve.points[i]
@@ -2141,8 +2236,13 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 		_:
 			return
 
-	snapshot["changing"] = changing
+	var defer_notification := position_reorder_point != null
+	snapshot["changing"] = changing or defer_notification
 	curve.set_point_snapshot(snapshot)
+	if position_reorder_point != null:
+		_reorder_position_edited_point(position_reorder_point)
+		if not changing:
+			curve.set_point_snapshot(curve.get_point_snapshot())
 
 	if not changing:
 		EASING_CURVE_EDITOR_UNDO.commit_applied_action(

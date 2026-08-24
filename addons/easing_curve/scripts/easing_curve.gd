@@ -1117,10 +1117,11 @@ func printpoints():
 		print(i, ": ", p.position, " L:", p.left_control_point, " R:", p.right_control_point)
 
 
-func sort_points() -> void:
+func sort_points(notify_change: bool = true) -> void:
 	sort_point_list_by_x(_points)
 	_synchronize_point_connections()
-	_notify_curve_changed(true, true)
+	if notify_change:
+		_notify_curve_changed(true, true)
 
 
 func swap_properties(p0: EasingCurvePoint, p1: EasingCurvePoint) -> void:
