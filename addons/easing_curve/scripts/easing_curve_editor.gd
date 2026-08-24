@@ -18,7 +18,7 @@ signal point_changed
 signal point_property_change_requested(index: int, property_name: StringName, value: Variant, changing: bool)
 signal point_add_requested(point: EasingCurvePoint)
 signal point_remove_requested(point: EasingCurvePoint)
-signal point_edit_finished
+signal point_edit_finished(point_order: Array[EasingCurvePoint])
 signal slider_changed
 signal zoom_changed
 signal pan_changed
@@ -414,13 +414,19 @@ func _gui_input(event: InputEvent) -> void:
 				queue_redraw()
 				return
 
-			if dragging_point != -1:
-				point_edit_finished.emit()
+			var finish_point_edit := dragging_point != -1
+			var point_order: Array[EasingCurvePoint] = []
+			if finish_point_edit and dragging_control == ControlIndex.NONE:
+				var dragged_point := _curve.points[dragging_point]
+				point_order = _get_display_points()
+				selected_index = point_order.find(dragged_point)
 
 			dragging_point = -1
 			dragging_control = ControlIndex.NONE
 
 			_has_drag_auto_range = false
+			if finish_point_edit:
+				point_edit_finished.emit(point_order)
 			queue_redraw()
 
 
@@ -856,8 +862,12 @@ func _get_minimum_size() -> Vector2:
 func _get_display_points() -> Array[EasingCurvePoint]:
 	var display_points: Array[EasingCurvePoint] = _curve.points.duplicate()
 
-	if pending_add_point != null:
-		display_points.append(pending_add_point)
+	if pending_add_point != null or (
+		dragging_point != -1
+		and dragging_control == ControlIndex.NONE
+	):
+		if pending_add_point != null:
+			display_points.append(pending_add_point)
 		EasingCurve.sort_point_list_by_x(display_points)
 
 	return display_points

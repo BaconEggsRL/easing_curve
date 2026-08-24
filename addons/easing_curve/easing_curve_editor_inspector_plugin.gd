@@ -1837,17 +1837,19 @@ func _on_curve_editor_point_property_change_requested(i: int, property_name: Str
 	_apply_point_property_change(i, property_name, value, changing)
 
 
-func _on_curve_editor_point_edit_finished() -> void:
-	_commit_point_edit()
+func _on_curve_editor_point_edit_finished(point_order: Array[EasingCurvePoint]) -> void:
+	_commit_point_edit(point_order)
 
 
-func _commit_point_edit() -> void:
+func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
 	if _point_edit_before_state.is_empty():
 		return
 	var before := _point_edit_before_state
 	var action_name := _point_edit_action_name
 	_point_edit_before_state = {}
 	_point_edit_action_name = "Edit Easing Curve Point"
+	if not point_order.is_empty() and curve.points != point_order:
+		curve.points = point_order
 	var after := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	# Flush the draft point notifications once at the drag boundary.
 	curve.set_point_snapshot(curve.get_point_snapshot())

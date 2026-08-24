@@ -494,7 +494,7 @@ func start_tween(tween_ref: Tween, end: Marker2D, node: Node2D, use_curve: bool)
 func tween_easing_curve(offset: float, _curve: EasingCurve) -> float:
 	_debug_offset = offset
 	_debug_curve_value = _curve.sample(offset)
-	_debug_last_t = _curve._last_t # store t from your sample()
+	_debug_last_t = _curve.get_last_solved_t()
 
 	return _debug_curve_value
 
