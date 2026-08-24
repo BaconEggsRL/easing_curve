@@ -149,7 +149,7 @@ func _gui_input(event: InputEvent) -> void:
 		if dragging_point != -1:
 			var p = _curve.points[dragging_point]
 			if dragging_control != ControlIndex.NONE:
-				p.set_balanced_display_scale(
+				p.set_handle_display_scale(
 					get_world_to_view_scale()
 				)
 			var world_pos = get_world_pos(event.position)

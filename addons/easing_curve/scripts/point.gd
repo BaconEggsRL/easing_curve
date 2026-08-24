@@ -10,7 +10,9 @@ extends Resource
 signal lock_changed(property_name: String, locked: bool)
 
 const DEFAULT_HANDLE_LENGTH := 0.1
-var balanced_display_scale := Vector2.ONE
+
+var use_display_space_handles := true
+var handle_display_scale := Vector2.ONE
 
 # TRUE:
 # Free → Balanced: longer handle determines orientation; individual lengths remain unchanged.
@@ -220,35 +222,36 @@ func get_control_point_pair(
 				else _left_control_point
 			)
 
-			var moved_delta := value - position
-			var opposite_delta := opposite - position
+			var moved_delta := _to_handle_space(
+				value - position
+			)
 
-			var moved_display := moved_delta * balanced_display_scale
-			var opposite_display := opposite_delta * balanced_display_scale
+			var opposite_delta := _to_handle_space(
+				opposite - position
+			)
 
 			var opposite_length := _get_safe_length(
-				opposite_display,
+				opposite_delta,
 				Vector2.ZERO,
 			)
 
 			var direction := _get_safe_direction(
-				-moved_display,
+				-moved_delta,
 			)
 
-			var balanced_display := direction * opposite_length
-			var balanced := (
-				position
-				+ balanced_display / balanced_display_scale
+			var balanced_delta := _from_handle_space(
+				direction * opposite_length
 			)
+
+			var balanced := position + balanced_delta
 
 			if not balanced.is_finite():
 				print(
 					"BALANCED OVERFLOW",
 					"\n  dragged value: ", value,
 					"\n  opposite: ", opposite,
-					"\n  display scale: ", balanced_display_scale,
-					"\n  opposite length: ", opposite_length,
-					"\n  direction: ", direction,
+					"\n  display-space handles: ", use_display_space_handles,
+					"\n  display scale: ", handle_display_scale,
 					"\n  result: ", balanced,
 				)
 
@@ -259,7 +262,14 @@ func get_control_point_pair(
 
 
 		HandleMode.MIRRORED:
-			var mirrored := position + (position - value)
+			var moved_delta := _to_handle_space(
+				value - position
+			)
+
+			var mirrored := (
+				position
+				+ _from_handle_space(-moved_delta)
+			)
 
 			if not mirrored.is_finite():
 				print(
@@ -274,9 +284,11 @@ func get_control_point_pair(
 			else:
 				left = mirrored
 
+
 		HandleMode.LINKED:
 			left = value
 			right = value
+
 
 	return {
 		"left": left,
@@ -453,13 +465,20 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 			pass
 
 		HandleMode.BALANCED:
+			var left_delta := _to_handle_space(
+				left - position
+			)
+			var right_delta := _to_handle_space(
+				right - position
+			)
+
 			var left_length := _get_safe_length(
-				left,
-				position,
+				left_delta,
+				Vector2.ZERO,
 			)
 			var right_length := _get_safe_length(
-				right,
-				position,
+				right_delta,
+				Vector2.ZERO,
 			)
 
 			var use_left := (
@@ -468,15 +487,26 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 			)
 
 			var direction := (
-				position - left
+				-left_delta
 				if use_left
-				else right - position
+				else right_delta
 			)
 
 			direction = _get_safe_direction(direction)
 
-			left = position - direction * left_length
-			right = position + direction * right_length
+			left = (
+				position
+				+ _from_handle_space(
+					-direction * left_length
+				)
+			)
+
+			right = (
+				position
+				+ _from_handle_space(
+					direction * right_length
+				)
+			)
 
 		HandleMode.MIRRORED:
 			var left_length := _get_safe_length(
@@ -708,9 +738,25 @@ func _get_safe_length(from: Vector2, to: Vector2) -> float:
 	)
 
 
-func set_balanced_display_scale(value: Vector2) -> void:
+func set_handle_display_scale(value: Vector2) -> void:
 	if not value.is_finite():
 		return
+
 	if is_zero_approx(value.x) or is_zero_approx(value.y):
 		return
-	balanced_display_scale = value.abs()
+
+	handle_display_scale = value.abs()
+
+
+func _to_handle_space(delta: Vector2) -> Vector2:
+	if not use_display_space_handles:
+		return delta
+
+	return delta * handle_display_scale
+
+
+func _from_handle_space(delta: Vector2) -> Vector2:
+	if not use_display_space_handles:
+		return delta
+
+	return delta / handle_display_scale
