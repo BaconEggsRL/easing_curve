@@ -73,8 +73,6 @@ var hovered_control_index: ControlIndex = ControlIndex.NONE
 
 var dragging_point: int = -1
 var dragging_control: ControlIndex = ControlIndex.NONE
-var pending_add := false
-var pending_add_position := Vector2.ZERO
 
 var grabbing: GrabMode = GrabMode.NONE
 var initial_grab_pos: Vector2
@@ -149,20 +147,6 @@ func _gui_input(event: InputEvent) -> void:
 	# =========================
 	if event is InputEventMouseMotion:
 		if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
-			return
-
-		if pending_add:
-			var world_pos := get_world_pos(event.position)
-
-			if not world_pos.is_finite():
-				return
-
-			pending_add_position = world_pos.clamp(
-				Vector2(0, _curve.min_value),
-				Vector2(1.0, _curve.max_value),
-			)
-
-			queue_redraw()
 			return
 
 		# ----- DRAGGING -----
@@ -326,8 +310,30 @@ func _gui_input(event: InputEvent) -> void:
 			)
 
 			if use_pending_add:
-				pending_add_position = clamped_pos
-				pending_add = true
+				var new_point := EasingCurvePoint.new()
+
+				new_point.position = clamped_pos
+				new_point.left_control_point = (
+					clamped_pos + Vector2(-0.1, 0.0)
+				)
+				new_point.right_control_point = (
+					clamped_pos + Vector2(0.1, 0.0)
+				)
+
+				_request_point_add(new_point)
+
+				selected_index = -1
+
+				for i in range(_curve.points.size()):
+					if _curve.points[i].position == clamped_pos:
+						selected_index = i
+						break
+
+				if selected_index != -1:
+					dragging_point = selected_index
+					dragging_control = ControlIndex.NONE
+					_drag_auto_range = _compute_auto_y_range()
+					_has_drag_auto_range = true
 
 				queue_redraw()
 				accept_event()
@@ -364,11 +370,6 @@ func _gui_input(event: InputEvent) -> void:
 
 		# --- RIGHT CLICK ---
 		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
-			if pending_add:
-				pending_add = false
-				queue_redraw()
-				accept_event()
-				return
 
 			var point_idx = get_point_at(event.position)
 
@@ -395,31 +396,6 @@ func _gui_input(event: InputEvent) -> void:
 			not event.pressed
 			and event.button_index == MOUSE_BUTTON_LEFT
 		):
-			if pending_add:
-				var new_point := EasingCurvePoint.new()
-
-				new_point.position = pending_add_position
-				new_point.left_control_point = (
-					pending_add_position + Vector2(-0.1, 0.0)
-				)
-				new_point.right_control_point = (
-					pending_add_position + Vector2(0.1, 0.0)
-				)
-
-				pending_add = false
-
-				_request_point_add(new_point)
-
-				selected_index = -1
-
-				for i in range(_curve.points.size()):
-					if _curve.points[i].position == pending_add_position:
-						selected_index = i
-						break
-
-				queue_redraw()
-				accept_event()
-				return
 
 			if dragging_point != -1:
 				point_edit_finished.emit()
@@ -519,18 +495,6 @@ func _draw():
 	# --- Draw function instead of bezier curve ---
 	if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
 		_draw_function_curve()
-
-
-	# --- Draw pending points ---
-	if pending_add:
-		var preview_pos := get_view_pos(pending_add_position)
-
-		draw_circle(
-			preview_pos,
-			point_radius,
-			Color(1.0, 0.5, 0.0, 0.65),
-		)
-
 
 	# --- Draw curve segments ---
 	for i in range(_curve.points.size() - 1):
