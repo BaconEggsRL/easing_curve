@@ -10,6 +10,8 @@ const SELECTION_TOOLBAR_HEIGHT := 32.0
 var _drag_auto_range := Vector2.ZERO
 var _has_drag_auto_range := false
 
+var use_pending_add := true
+
 static var _selected_index_by_curve: Dictionary[int, int] = {}
 
 signal point_changed
