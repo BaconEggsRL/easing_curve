@@ -2250,6 +2250,30 @@ func _apply_point_property_change(
 			snapshot["right_control_points"] = right_control_points
 
 
+		&"toolbar_options_reset":
+			var handle_modes: PackedInt32Array = snapshot["handle_modes"]
+			var left_force_linear: PackedByteArray = snapshot[
+				"left_force_linear"
+			]
+			var right_force_linear: PackedByteArray = snapshot[
+				"right_force_linear"
+			]
+			var locks: Array = snapshot["locks"]
+			var point_locks: Dictionary = locks[i].duplicate(true)
+
+			handle_modes[i] = EasingCurvePoint.HandleMode.FREE
+			left_force_linear[i] = 0
+			right_force_linear[i] = 0
+			point_locks["left_control_point"] = false
+			point_locks["right_control_point"] = false
+
+			locks[i] = point_locks
+			snapshot["handle_modes"] = handle_modes
+			snapshot["left_force_linear"] = left_force_linear
+			snapshot["right_force_linear"] = right_force_linear
+			snapshot["locks"] = locks
+
+
 		&"left_force_linear", &"right_force_linear":
 			var point := curve.points[i]
 			var linked := point.handle_mode == EasingCurvePoint.HandleMode.LINKED
@@ -2454,6 +2478,8 @@ func _point_action_name(property_name: StringName) -> String:
 			return "Move Easing Curve Handle"
 		&"left_control_state", &"right_control_state":
 			return "Change Easing Curve Handle State"
+		&"toolbar_options_reset":
+			return "Reset Easing Curve Point Options"
 		&"handle_mode":
 			return "Change Easing Curve Handle Mode"
 		&"locked":

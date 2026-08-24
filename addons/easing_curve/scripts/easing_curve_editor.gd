@@ -7,6 +7,7 @@ extends Control
 ## More info here to come.
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
+const RELOAD_ICON = preload("res://addons/easing_curve/assets/icons/Reload.svg")
 var _drag_auto_range := Vector2.ZERO
 var _has_drag_auto_range := false
 
@@ -99,6 +100,7 @@ var _point_left_state_label: Label
 var _point_left_state: OptionButton
 var _point_right_state_label: Label
 var _point_right_state: OptionButton
+var _point_reset_button: Button
 var _updating_point_toolbar := false
 
 
@@ -1036,8 +1038,7 @@ func _create_point_toolbar() -> void:
 	_point_handle_mode.fit_to_longest_item = false
 	_point_handle_mode.clip_text = true
 	_point_handle_mode.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_point_handle_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_point_handle_mode.size_flags_stretch_ratio = 1.4
+	_point_handle_mode.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 
 	_point_handle_mode.add_item(
 		"Free",
@@ -1082,6 +1083,14 @@ func _create_point_toolbar() -> void:
 	)
 	_point_toolbar.add_child(_point_right_state)
 
+	_point_reset_button = Button.new()
+	_point_reset_button.icon = RELOAD_ICON
+	_point_reset_button.flat = true
+	_point_reset_button.tooltip_text = "Reset Point Options"
+	_point_reset_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_point_reset_button.pressed.connect(_on_point_toolbar_reset_pressed)
+	_point_toolbar.add_child(_point_reset_button)
+
 
 func _create_point_toolbar_control_state_option(
 	side: EasingCurvePoint.ControlSide,
@@ -1117,6 +1126,7 @@ func _update_point_toolbar() -> void:
 		_point_label.text = "No Selection"
 		_point_label.modulate.a = 0.6
 		_point_handle_mode.visible = false
+		_set_point_toolbar_reset_available(false)
 		_set_point_toolbar_control_state_visible(
 			EasingCurvePoint.ControlSide.LEFT,
 			false,
@@ -1129,7 +1139,7 @@ func _update_point_toolbar() -> void:
 
 	var point := _curve.points[selected_index]
 
-	_point_label.text = "Point %d" % selected_index
+	_point_label.text = "P%d" % selected_index
 	_point_label.modulate.a = 1.0
 	_point_handle_mode.visible = true
 
@@ -1153,6 +1163,9 @@ func _update_point_toolbar() -> void:
 		EasingCurvePoint.ControlSide.RIGHT,
 		selected_index < _curve.points.size() - 1 and point.supports_control_state(),
 	)
+	_set_point_toolbar_reset_available(
+		not _point_toolbar_options_are_default(point)
+	)
 
 	_updating_point_toolbar = false
 
@@ -1173,6 +1186,21 @@ func _set_point_toolbar_control_state_visible(
 	)
 	label.visible = visible
 	option.visible = visible
+
+
+func _set_point_toolbar_reset_available(available: bool) -> void:
+	_point_reset_button.visible = available
+	_point_reset_button.disabled = not available
+
+
+func _point_toolbar_options_are_default(point: EasingCurvePoint) -> bool:
+	return (
+		point.handle_mode == EasingCurvePoint.HandleMode.FREE
+		and not point.left_force_linear
+		and not point.right_force_linear
+		and not point.locked.get(&"left_control_point", false)
+		and not point.locked.get(&"right_control_point", false)
+	)
 
 
 func _update_point_toolbar_control_state(
@@ -1268,6 +1296,21 @@ func _on_point_toolbar_control_state_selected(
 		selected_index,
 		property_name,
 		option.get_item_id(index),
+	)
+
+
+func _on_point_toolbar_reset_pressed() -> void:
+	if (
+		_curve == null
+		or selected_index < 0
+		or selected_index >= _curve.points.size()
+	):
+		return
+
+	_request_point_property_change(
+		selected_index,
+		&"toolbar_options_reset",
+		true,
 	)
 
 
