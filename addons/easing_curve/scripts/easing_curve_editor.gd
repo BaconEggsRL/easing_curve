@@ -92,7 +92,7 @@ var _slider: EasingCurveZoomSliderContainer:
 var _world_to_view: Transform2D
 var _editor_scale: float = 1.0
 
-var _point_toolbar_panel: PanelContainer
+var _point_toolbar_panel: VBoxContainer
 var _point_toolbar: GridContainer
 var _point_label: Label
 var _point_toolbar_controls: HBoxContainer
@@ -1009,7 +1009,7 @@ func _draw_function_curve():
 
 
 func _create_point_toolbar() -> void:
-	_point_toolbar_panel = PanelContainer.new()
+	_point_toolbar_panel = VBoxContainer.new()
 	_point_toolbar_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	_point_toolbar_panel.set_anchors_and_offsets_preset(
