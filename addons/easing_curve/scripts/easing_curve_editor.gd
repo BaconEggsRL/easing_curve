@@ -95,6 +95,10 @@ var _point_toolbar_panel: PanelContainer
 var _point_toolbar: HBoxContainer
 var _point_label: Label
 var _point_handle_mode: OptionButton
+var _point_left_state_label: Label
+var _point_left_state: OptionButton
+var _point_right_state_label: Label
+var _point_right_state: OptionButton
 var _updating_point_toolbar := false
 
 
@@ -1019,7 +1023,7 @@ func _create_point_toolbar() -> void:
 	_point_toolbar.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_point_toolbar.add_theme_constant_override(
 		"separation",
-		int(6 * _editor_scale),
+		int(4 * _editor_scale),
 	)
 
 	_point_toolbar_panel.add_child(_point_toolbar)
@@ -1030,6 +1034,8 @@ func _create_point_toolbar() -> void:
 
 	_point_handle_mode = OptionButton.new()
 	_point_handle_mode.fit_to_longest_item = false
+	_point_handle_mode.custom_minimum_size.x = 56.0 * _editor_scale
+	_point_handle_mode.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 
 	_point_handle_mode.add_item(
 		"Free",
@@ -1058,6 +1064,36 @@ func _create_point_toolbar() -> void:
 
 	_point_toolbar.add_child(_point_handle_mode)
 
+	_point_left_state_label = Label.new()
+	_point_left_state_label.text = "L"
+	_point_toolbar.add_child(_point_left_state_label)
+	_point_left_state = _create_point_toolbar_control_state_option(
+		EasingCurvePoint.ControlSide.LEFT
+	)
+	_point_toolbar.add_child(_point_left_state)
+
+	_point_right_state_label = Label.new()
+	_point_right_state_label.text = "R"
+	_point_toolbar.add_child(_point_right_state_label)
+	_point_right_state = _create_point_toolbar_control_state_option(
+		EasingCurvePoint.ControlSide.RIGHT
+	)
+	_point_toolbar.add_child(_point_right_state)
+
+
+func _create_point_toolbar_control_state_option(
+	side: EasingCurvePoint.ControlSide,
+) -> OptionButton:
+	var option := OptionButton.new()
+	option.fit_to_longest_item = false
+	option.custom_minimum_size.x = 48.0 * _editor_scale
+	option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	option.add_item("Free", EasingCurvePoint.ControlState.FREE)
+	option.add_item("Linear", EasingCurvePoint.ControlState.LINEAR)
+	option.add_item("Locked", EasingCurvePoint.ControlState.LOCKED)
+	option.item_selected.connect(_on_point_toolbar_control_state_selected.bind(side))
+	return option
+
 
 
 
@@ -1077,6 +1113,14 @@ func _update_point_toolbar() -> void:
 		_point_label.text = "No Selection"
 		_point_label.modulate.a = 0.6
 		_point_handle_mode.visible = false
+		_set_point_toolbar_control_state_visible(
+			EasingCurvePoint.ControlSide.LEFT,
+			false,
+		)
+		_set_point_toolbar_control_state_visible(
+			EasingCurvePoint.ControlSide.RIGHT,
+			false,
+		)
 		return
 
 	var point := _curve.points[selected_index]
@@ -1095,7 +1139,83 @@ func _update_point_toolbar() -> void:
 			_point_handle_mode.select(index)
 			break
 
+	_update_point_toolbar_control_state(
+		point,
+		EasingCurvePoint.ControlSide.LEFT,
+		selected_index > 0 and point.supports_control_state(),
+	)
+	_update_point_toolbar_control_state(
+		point,
+		EasingCurvePoint.ControlSide.RIGHT,
+		selected_index < _curve.points.size() - 1 and point.supports_control_state(),
+	)
+
 	_updating_point_toolbar = false
+
+
+func _set_point_toolbar_control_state_visible(
+	side: EasingCurvePoint.ControlSide,
+	visible: bool,
+) -> void:
+	var label := (
+		_point_left_state_label
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else _point_right_state_label
+	)
+	var option := (
+		_point_left_state
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else _point_right_state
+	)
+	label.visible = visible
+	option.visible = visible
+
+
+func _update_point_toolbar_control_state(
+	point: EasingCurvePoint,
+	side: EasingCurvePoint.ControlSide,
+	visible: bool,
+) -> void:
+	_set_point_toolbar_control_state_visible(side, visible)
+	if not visible:
+		return
+
+	var option := (
+		_point_left_state
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else _point_right_state
+	)
+	var control_state := _get_point_toolbar_control_state(point, side)
+	for index in range(option.item_count):
+		if option.get_item_id(index) == control_state:
+			option.select(index)
+			break
+
+
+func _get_point_toolbar_control_state(
+	point: EasingCurvePoint,
+	side: EasingCurvePoint.ControlSide,
+) -> EasingCurvePoint.ControlState:
+	if point.handle_mode == EasingCurvePoint.HandleMode.LINKED:
+		if (
+			point.locked.get(&"left_control_point", false)
+			or point.locked.get(&"right_control_point", false)
+		):
+			return EasingCurvePoint.ControlState.LOCKED
+		if point.is_control_force_linear_active(side):
+			return EasingCurvePoint.ControlState.LINEAR
+		return EasingCurvePoint.ControlState.FREE
+
+	var lock_property := (
+		&"left_control_point"
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else &"right_control_point"
+	)
+	if point.locked.get(lock_property, false):
+		return EasingCurvePoint.ControlState.LOCKED
+	if point.is_control_force_linear_active(side):
+		return EasingCurvePoint.ControlState.LINEAR
+	return EasingCurvePoint.ControlState.FREE
 
 
 func _on_point_toolbar_handle_mode_selected(index: int) -> void:
@@ -1113,6 +1233,37 @@ func _on_point_toolbar_handle_mode_selected(index: int) -> void:
 		selected_index,
 		&"handle_mode",
 		_point_handle_mode.get_item_id(index),
+	)
+
+
+func _on_point_toolbar_control_state_selected(
+	index: int,
+	side: EasingCurvePoint.ControlSide,
+) -> void:
+	if _updating_point_toolbar:
+		return
+
+	if (
+		_curve == null
+		or selected_index < 0
+		or selected_index >= _curve.points.size()
+	):
+		return
+
+	var property_name := (
+		&"left_control_state"
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else &"right_control_state"
+	)
+	var option := (
+		_point_left_state
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else _point_right_state
+	)
+	_request_point_property_change(
+		selected_index,
+		property_name,
+		option.get_item_id(index),
 	)
 
 

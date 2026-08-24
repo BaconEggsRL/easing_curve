@@ -39,6 +39,12 @@ enum ControlSide {
 	RIGHT,
 }
 
+enum ControlState {
+	FREE,
+	LINEAR,
+	LOCKED,
+}
+
 @export var position: Vector2 = Vector2.ZERO: set = set_position
 
 var _left_control_point := Vector2.ZERO
@@ -562,6 +568,8 @@ func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
 
 
 func is_control_forced_linear(side: ControlSide) -> bool:
+	if handle_mode == HandleMode.LINKED:
+		return left_force_linear or right_force_linear
 	return (
 		left_force_linear
 		if side == ControlSide.LEFT
@@ -569,9 +577,16 @@ func is_control_forced_linear(side: ControlSide) -> bool:
 	)
 
 
+func supports_control_state() -> bool:
+	return handle_mode in [
+		HandleMode.FREE,
+		HandleMode.LINKED,
+	]
+
+
 func is_control_force_linear_active(side: ControlSide) -> bool:
 	return (
-		handle_mode == HandleMode.FREE
+		supports_control_state()
 		and is_control_forced_linear(side)
 	)
 
@@ -596,7 +611,18 @@ func _set_control_force_linear(
 	else:
 		_right_force_linear = enabled
 
-	if handle_mode == HandleMode.FREE:
+	if handle_mode == HandleMode.LINKED:
+		if _left_force_linear or _right_force_linear:
+			_set_control_point_direct(ControlSide.LEFT, position)
+			_set_control_point_direct(ControlSide.RIGHT, position)
+		else:
+			var linked_default := (
+				position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
+			)
+			_set_control_point_direct(ControlSide.LEFT, linked_default)
+			_set_control_point_direct(ControlSide.RIGHT, linked_default)
+
+	elif handle_mode == HandleMode.FREE:
 		if enabled:
 			_set_control_point_direct(side, position)
 		else:
@@ -636,7 +662,13 @@ func _initialize_default_handles() -> void:
 
 
 func _apply_free_force_linear_state() -> void:
-	if handle_mode != HandleMode.FREE:
+	if not supports_control_state():
+		return
+
+	if handle_mode == HandleMode.LINKED:
+		if _left_force_linear or _right_force_linear:
+			_set_control_point_direct(ControlSide.LEFT, position)
+			_set_control_point_direct(ControlSide.RIGHT, position)
 		return
 
 	if _left_force_linear:
@@ -655,7 +687,14 @@ func set_force_linear_state(
 	_right_force_linear = right
 
 	if apply_geometry:
-		_apply_free_force_linear_state()
+		if handle_mode == HandleMode.LINKED and not left and not right:
+			var linked_default := (
+				position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
+			)
+			_set_control_point_direct(ControlSide.LEFT, linked_default)
+			_set_control_point_direct(ControlSide.RIGHT, linked_default)
+		else:
+			_apply_free_force_linear_state()
 
 	emit_changed()
 

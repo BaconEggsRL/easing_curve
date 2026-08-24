@@ -1634,7 +1634,11 @@ func _create_vector2_property(
 			else &"right_force_linear"
 		)
 
-		var force_linear := bool(point.get(force_property))
+		var force_linear := point.is_control_forced_linear(
+			EasingCurvePoint.ControlSide.LEFT
+			if property_name == "left_control_point"
+			else EasingCurvePoint.ControlSide.RIGHT
+		)
 		force_linear_btn.button_pressed = force_linear
 
 		var editor_theme := EditorInterface.get_editor_theme()
@@ -1657,13 +1661,11 @@ func _create_vector2_property(
 				if force_linear
 				else "Force Linear — Collapse this handle to the point"
 			)
-			if point.handle_mode == EasingCurvePoint.HandleMode.FREE
-			else "Force Linear — Available in Free handle mode"
+			if point.supports_control_state()
+			else "Force Linear — Available in Free or Linked handle mode"
 		)
 
-		var force_linear_available := (
-			point.handle_mode == EasingCurvePoint.HandleMode.FREE
-		)
+		var force_linear_available := point.supports_control_state()
 
 		force_linear_btn.disabled = not force_linear_available
 
@@ -1714,10 +1716,7 @@ func _create_vector2_property(
 
 	var lock_available := (
 		property_name == "position"
-		or point.handle_mode in [
-			EasingCurvePoint.HandleMode.FREE,
-			EasingCurvePoint.HandleMode.LINKED,
-		]
+		or point.supports_control_state()
 	)
 
 	lock_btn.disabled = not lock_available
@@ -2078,17 +2077,34 @@ func _apply_point_property_change(
 			if new_mode == EasingCurvePoint.HandleMode.LINKED:
 				var locks: Array = snapshot["locks"]
 				var point_locks: Dictionary = locks[i].duplicate(true)
+				var left_force_linear: PackedByteArray = snapshot[
+					"left_force_linear"
+				]
+				var right_force_linear: PackedByteArray = snapshot[
+					"right_force_linear"
+				]
 
 				var shared_locked := (
 					bool(point_locks.get("left_control_point", false))
 					or bool(point_locks.get("right_control_point", false))
 				)
+				var shared_force_linear := (
+					bool(left_force_linear[i])
+					or bool(right_force_linear[i])
+				)
 
 				point_locks["left_control_point"] = shared_locked
 				point_locks["right_control_point"] = shared_locked
+				left_force_linear[i] = int(shared_force_linear)
+				right_force_linear[i] = int(shared_force_linear)
 
 				locks[i] = point_locks
 				snapshot["locks"] = locks
+				snapshot["left_force_linear"] = left_force_linear
+				snapshot["right_force_linear"] = right_force_linear
+				if shared_force_linear:
+					handles["left"] = point.position
+					handles["right"] = point.position
 
 			if new_mode == EasingCurvePoint.HandleMode.FREE:
 				var left_force_linear: PackedByteArray = snapshot[
@@ -2121,7 +2137,122 @@ func _apply_point_property_change(
 			snapshot["right_control_points"] = right_control_points
 
 
+		&"left_control_state", &"right_control_state":
+			var point := curve.points[i]
+			if not point.supports_control_state():
+				return
+
+			var side := (
+				EasingCurvePoint.ControlSide.LEFT
+				if property_name == &"left_control_state"
+				else EasingCurvePoint.ControlSide.RIGHT
+			)
+			var control_state := int(value)
+			if control_state not in [
+				EasingCurvePoint.ControlState.FREE,
+				EasingCurvePoint.ControlState.LINEAR,
+				EasingCurvePoint.ControlState.LOCKED,
+			]:
+				return
+
+			var linked := point.handle_mode == EasingCurvePoint.HandleMode.LINKED
+			var sides: Array[EasingCurvePoint.ControlSide] = [side]
+			if linked:
+				sides = [
+					EasingCurvePoint.ControlSide.LEFT,
+					EasingCurvePoint.ControlSide.RIGHT,
+				]
+
+			var locks: Array = snapshot["locks"]
+			var point_locks: Dictionary = locks[i].duplicate(true)
+			var left_force_linear: PackedByteArray = snapshot[
+				"left_force_linear"
+			]
+			var right_force_linear: PackedByteArray = snapshot[
+				"right_force_linear"
+			]
+			var left_control_points: PackedVector2Array = snapshot[
+				"left_control_points"
+			]
+			var right_control_points: PackedVector2Array = snapshot[
+				"right_control_points"
+			]
+			var had_force_linear := (
+				bool(left_force_linear[i])
+				if linked
+				else (
+					bool(left_force_linear[i])
+					if side == EasingCurvePoint.ControlSide.LEFT
+					else bool(right_force_linear[i])
+				)
+			)
+
+			for control_side in sides:
+				var force_property := (
+					&"left_force_linear"
+					if control_side == EasingCurvePoint.ControlSide.LEFT
+					else &"right_force_linear"
+				)
+				var lock_property := (
+					&"left_control_point"
+					if control_side == EasingCurvePoint.ControlSide.LEFT
+					else &"right_control_point"
+				)
+				var offset := (
+					Vector2.LEFT
+					if control_side == EasingCurvePoint.ControlSide.LEFT
+					else Vector2.RIGHT
+				)
+
+				if force_property == &"left_force_linear":
+					left_force_linear[i] = int(
+						control_state == EasingCurvePoint.ControlState.LINEAR
+					)
+				else:
+					right_force_linear[i] = int(
+						control_state == EasingCurvePoint.ControlState.LINEAR
+					)
+
+				point_locks[lock_property] = (
+					control_state == EasingCurvePoint.ControlState.LOCKED
+				)
+
+				if control_state == EasingCurvePoint.ControlState.LINEAR:
+					if control_side == EasingCurvePoint.ControlSide.LEFT:
+						left_control_points[i] = point.position
+					else:
+						right_control_points[i] = point.position
+				elif had_force_linear:
+					if control_side == EasingCurvePoint.ControlSide.LEFT:
+						left_control_points[i] = (
+							point.position
+							+ offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+						)
+					else:
+						right_control_points[i] = (
+							point.position
+							+ offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+						)
+
+			if linked and control_state != EasingCurvePoint.ControlState.LINEAR and had_force_linear:
+				var linked_default := (
+					point.position
+					+ Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+				)
+				left_control_points[i] = linked_default
+				right_control_points[i] = linked_default
+
+			locks[i] = point_locks
+			snapshot["locks"] = locks
+			snapshot["left_force_linear"] = left_force_linear
+			snapshot["right_force_linear"] = right_force_linear
+			snapshot["left_control_points"] = left_control_points
+			snapshot["right_control_points"] = right_control_points
+
+
 		&"left_force_linear", &"right_force_linear":
+			var point := curve.points[i]
+			var linked := point.handle_mode == EasingCurvePoint.HandleMode.LINKED
 			var force_values: PackedByteArray = snapshot[property_name]
 			force_values[i] = int(value)
 			snapshot[property_name] = force_values
@@ -2148,7 +2279,45 @@ func _apply_point_property_change(
 				control_property
 			]
 
-			if value:
+			if linked:
+				var left_force_linear: PackedByteArray = snapshot[
+					"left_force_linear"
+				]
+				var right_force_linear: PackedByteArray = snapshot[
+					"right_force_linear"
+				]
+				var left_control_points: PackedVector2Array = snapshot[
+					"left_control_points"
+				]
+				var right_control_points: PackedVector2Array = snapshot[
+					"right_control_points"
+				]
+
+				left_force_linear[i] = int(value)
+				right_force_linear[i] = int(value)
+				if value:
+					var locks: Array = snapshot["locks"]
+					var point_locks: Dictionary = locks[i].duplicate(true)
+					point_locks["left_control_point"] = false
+					point_locks["right_control_point"] = false
+					locks[i] = point_locks
+					snapshot["locks"] = locks
+					left_control_points[i] = point.position
+					right_control_points[i] = point.position
+				else:
+					var linked_default := (
+						point.position
+						+ Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+					)
+					left_control_points[i] = linked_default
+					right_control_points[i] = linked_default
+
+				snapshot["left_force_linear"] = left_force_linear
+				snapshot["right_force_linear"] = right_force_linear
+				snapshot["left_control_points"] = left_control_points
+				snapshot["right_control_points"] = right_control_points
+
+			elif value:
 				# Force Linear wins over Lock.
 				var locks: Array = snapshot["locks"]
 				var point_locks: Dictionary = locks[i].duplicate(true)
@@ -2164,13 +2333,16 @@ func _apply_point_property_change(
 					+ offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
 				)
 
-			snapshot[control_property] = control_points
+			if not linked:
+				snapshot[control_property] = control_points
 
 
 		&"locked":
+			var point := curve.points[i]
 			var locks: Array = snapshot["locks"]
 			var previous_locks: Dictionary = locks[i]
 			var new_locks: Dictionary = value.duplicate(true)
+			var linked_force_linear_cleared := false
 
 			for control_property in [
 				&"left_control_point",
@@ -2203,6 +2375,9 @@ func _apply_point_property_change(
 				# Lock wins over Force Linear.
 				force_values[i] = 0
 				snapshot[force_property] = force_values
+				linked_force_linear_cleared = (
+					point.handle_mode == EasingCurvePoint.HandleMode.LINKED
+				)
 
 				# Create default 0.1 handle
 				var control_array_name := (
@@ -2233,6 +2408,22 @@ func _apply_point_property_change(
 			locks[i] = new_locks
 			snapshot["locks"] = locks
 
+			if linked_force_linear_cleared:
+				var linked_default := (
+					point.position
+					+ Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+				)
+				var left_control_points: PackedVector2Array = snapshot[
+					"left_control_points"
+				]
+				var right_control_points: PackedVector2Array = snapshot[
+					"right_control_points"
+				]
+				left_control_points[i] = linked_default
+				right_control_points[i] = linked_default
+				snapshot["left_control_points"] = left_control_points
+				snapshot["right_control_points"] = right_control_points
+
 		_:
 			return
 
@@ -2261,6 +2452,8 @@ func _point_action_name(property_name: StringName) -> String:
 			return "Move Easing Curve Point"
 		&"left_control_point", &"right_control_point":
 			return "Move Easing Curve Handle"
+		&"left_control_state", &"right_control_state":
+			return "Change Easing Curve Handle State"
 		&"handle_mode":
 			return "Change Easing Curve Handle Mode"
 		&"locked":
