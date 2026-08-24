@@ -148,8 +148,12 @@ func _gui_input(event: InputEvent) -> void:
 		# ----- DRAGGING -----
 		if dragging_point != -1:
 			var p = _curve.points[dragging_point]
-			p.set_balanced_display_scale(get_world_to_view_scale())
+			if dragging_control != ControlIndex.NONE:
+				p.set_balanced_display_scale(
+					get_world_to_view_scale()
+				)
 			var world_pos = get_world_pos(event.position)
+
 			if not world_pos.is_finite():
 				return
 
@@ -937,4 +941,11 @@ func _on_point_toolbar_handle_mode_selected(index: int) -> void:
 		selected_index,
 		&"handle_mode",
 		_point_handle_mode.get_item_id(index),
+	)
+
+
+func get_world_to_view_scale() -> Vector2:
+	return Vector2(
+		_world_to_view.x.length(),
+		_world_to_view.y.length()
 	)

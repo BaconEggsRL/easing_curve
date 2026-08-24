@@ -714,10 +714,3 @@ func set_balanced_display_scale(value: Vector2) -> void:
 	if is_zero_approx(value.x) or is_zero_approx(value.y):
 		return
 	balanced_display_scale = value.abs()
-
-
-func get_world_to_view_scale() -> Vector2:
-	return Vector2(
-		_world_to_view.x.length(),
-		_world_to_view.y.length()
-	)
