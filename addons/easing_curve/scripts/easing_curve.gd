@@ -174,6 +174,7 @@ const ZOOM_MAX := 10.0
 const ZOOM_FACTOR := 1.2 # same as wheel multiplier
 const PRESET_GEOMETRY_TOLERANCE := 0.000001
 const POINT_ORDER_EPSILON := 0.000001
+const SEGMENT_X_EPSILON := 0.000001
 const ZOOM_STEPS := int(round(log(ZOOM_MAX / ZOOM_MIN) / log(ZOOM_FACTOR)))
 const DEFAULT_SLIDER_VALUE := floor(ZOOM_STEPS / 2.0)
 const min_value := 0.0
@@ -1985,10 +1986,10 @@ func _sample_raw(offset: float) -> float:
 	if points.size() < 2:
 		return 0.0
 
-	var solve_result: Array[float] = []
+	var solve_result: Array[Dictionary] = []
 	var result := _sample_bezier_points(points, offset, solve_result)
 	if not solve_result.is_empty():
-		_last_solved_t = solve_result[0]
+		_last_solved_t = solve_result[0]["t"]
 	return result
 
 
@@ -2003,6 +2004,19 @@ static func sample_bezier_points(
 	return _sample_bezier_points(point_list, offset, null)
 
 
+static func sample_bezier_points_with_metadata(
+		point_list: Array[EasingCurvePoint],
+		offset: float,
+) -> Dictionary:
+	var solve_result: Array[Dictionary] = []
+	var value := _sample_bezier_points(point_list, offset, solve_result)
+	if solve_result.is_empty():
+		return {}
+	var result := solve_result[0]
+	result["value"] = value
+	return result
+
+
 static func _sample_bezier_points(
 		point_list: Array[EasingCurvePoint],
 		offset: float,
@@ -2014,6 +2028,8 @@ static func _sample_bezier_points(
 	for i in range(point_list.size() - 1):
 		var a := point_list[i]
 		var b := point_list[i + 1]
+		if absf(b.position.x - a.position.x) <= SEGMENT_X_EPSILON:
+			continue
 
 		var min_x = min(a.position.x, b.position.x)
 		var max_x = max(a.position.x, b.position.x)
@@ -2021,11 +2037,17 @@ static func _sample_bezier_points(
 		if offset < min_x or offset > max_x:
 			continue
 
-		var t = _solve_for_t(offset, a, b)
+		var solve_info := _solve_for_t(offset, a, b)
+		var t: float = solve_info["t"]
 
 		if t >= 0.0 and t <= 1.0:
 			if solve_result != null:
-				solve_result.append(t)
+				solve_result.append({
+					"segment": i,
+					"branch": solve_info["branch"],
+					"branch_count": solve_info["branch_count"],
+					"t": t,
+				})
 			return _bezier_interpolate(
 				a.position.y,
 				a.right_control_point.y,
@@ -2361,22 +2383,15 @@ func _on_point_changed() -> void:
 	_notify_curve_changed(true, false)
 
 
-# Newton-Raphson solver with a binary-search fallback for flat handles.
-static func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
+# Solve X-to-t across monotonic intervals, with Newton/binary fallback for numerical misses.
+static func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> Dictionary:
 	var segment_width := b.position.x - a.position.x
 	var seed := clampf((x - a.position.x) / segment_width, 0.0, 1.0) if not is_zero_approx(segment_width) else 0.5
 	var roots := _find_x_roots(x, a, b)
 
 	if not roots.is_empty():
-		# Preserve the previous endpoint-linear Newton seed as the branch policy.
-		var selected_t := roots[0]
-		var selected_distance := absf(selected_t - seed)
-		for root in roots:
-			var distance := absf(root - seed)
-			if distance < selected_distance:
-				selected_t = root
-				selected_distance = distance
-		return selected_t
+		# The first monotonic interval is the deterministic branch policy.
+		return roots[0]
 
 	var t := seed
 
@@ -2390,7 +2405,7 @@ static func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> 
 		)
 		var error := x_est - x
 		if absf(error) <= 0.00000001:
-			return t
+			return {"t": t, "branch": -1, "branch_count": 0}
 
 		var dx := _bezier_derivative(
 			a.position.x,
@@ -2409,14 +2424,14 @@ static func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> 
 		t = next_t
 
 	t = _binary_search_t(x, a, b)
-	return t
+	return {"t": t, "branch": -1, "branch_count": 0}
 
 
 static func _find_x_roots(
 		x: float,
 		a: EasingCurvePoint,
 		b: EasingCurvePoint,
-) -> Array[float]:
+) -> Array[Dictionary]:
 	var p0 := a.position.x
 	var p1 := a.right_control_point.x
 	var p2 := b.left_control_point.x
@@ -2439,7 +2454,8 @@ static func _find_x_roots(
 			_append_x_root_bound(bounds, (-derivative_b + root_delta) / (2.0 * derivative_a))
 
 	bounds.sort()
-	var roots: Array[float] = []
+	var roots: Array[Dictionary] = []
+	var branch_count := bounds.size() - 1
 	for i in range(bounds.size() - 1):
 		var low := bounds[i]
 		var high := bounds[i + 1]
@@ -2447,9 +2463,9 @@ static func _find_x_roots(
 		var high_error := _bezier_interpolate(p0, p1, p2, p3, high) - x
 
 		if absf(low_error) <= 0.00000001:
-			_append_x_root(roots, low)
+			_append_x_root(roots, low, i, branch_count)
 		if absf(high_error) <= 0.00000001:
-			_append_x_root(roots, high)
+			_append_x_root(roots, high, i, branch_count)
 		if low_error * high_error < 0.0:
 			for _iteration in range(40):
 				var middle := (low + high) * 0.5
@@ -2463,7 +2479,7 @@ static func _find_x_roots(
 				else:
 					low = middle
 					low_error = middle_error
-			_append_x_root(roots, (low + high) * 0.5)
+			_append_x_root(roots, (low + high) * 0.5, i, branch_count)
 
 	return roots
 
@@ -2473,11 +2489,20 @@ static func _append_x_root_bound(bounds: Array[float], value: float) -> void:
 		bounds.append(value)
 
 
-static func _append_x_root(roots: Array[float], value: float) -> void:
+static func _append_x_root(
+		roots: Array[Dictionary],
+		value: float,
+		branch: int,
+		branch_count: int,
+) -> void:
 	for root in roots:
-		if is_equal_approx(root, value):
+		if is_equal_approx(root["t"], value):
 			return
-	roots.append(value)
+	roots.append({
+		"t": value,
+		"branch": branch,
+		"branch_count": branch_count,
+	})
 
 
 static func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:

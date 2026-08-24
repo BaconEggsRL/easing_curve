@@ -882,13 +882,40 @@ func _draw_bezier_curve(point_list: Array[EasingCurvePoint]) -> void:
 	var min_x := minf(first_x, last_x)
 	var max_x := maxf(first_x, last_x)
 	var steps := max(1, ceili(size.x))
-	var previous := get_view_pos(Vector2(min_x, EasingCurve.sample_bezier_points(point_list, min_x)))
+	var previous_sample := EasingCurve.sample_bezier_points_with_metadata(point_list, min_x)
+	if previous_sample.is_empty():
+		return
+	var previous := get_view_pos(Vector2(min_x, previous_sample["value"]))
 
 	for i in range(1, steps + 1):
 		var x := lerpf(min_x, max_x, i / float(steps))
-		var current := get_view_pos(Vector2(x, EasingCurve.sample_bezier_points(point_list, x)))
-		draw_line(previous, current, LINE_COLOR, 2)
+		var current_sample := EasingCurve.sample_bezier_points_with_metadata(point_list, x)
+		if current_sample.is_empty():
+			previous_sample = {}
+			continue
+		var current := get_view_pos(Vector2(x, current_sample["value"]))
+		if _are_bezier_samples_continuous(previous_sample, current_sample):
+			draw_line(previous, current, LINE_COLOR, 2)
 		previous = current
+		previous_sample = current_sample
+
+
+func _are_bezier_samples_continuous(
+		previous_sample: Dictionary,
+		current_sample: Dictionary,
+) -> bool:
+	if previous_sample.is_empty() or current_sample.is_empty():
+		return false
+	if previous_sample["segment"] == current_sample["segment"]:
+		return previous_sample["branch"] == current_sample["branch"]
+	if current_sample["segment"] != previous_sample["segment"] + 1:
+		return false
+	if previous_sample["branch"] == -1 or current_sample["branch"] == -1:
+		return true
+	return (
+		previous_sample["branch"] == previous_sample["branch_count"] - 1
+		and current_sample["branch"] == 0
+	)
 
 
 func _bezier(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
