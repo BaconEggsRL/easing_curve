@@ -881,41 +881,48 @@ func _draw_bezier_curve(point_list: Array[EasingCurvePoint]) -> void:
 	var last_x := clampf(get_world_pos(Vector2(size.x, 0.0)).x, 0.0, 1.0)
 	var min_x := minf(first_x, last_x)
 	var max_x := maxf(first_x, last_x)
-	var steps := max(1, ceili(size.x))
-	var previous_sample := EasingCurve.sample_bezier_points_with_metadata(point_list, min_x)
-	if previous_sample.is_empty():
-		return
-	var previous := get_view_pos(Vector2(min_x, previous_sample["value"]))
 
-	for i in range(1, steps + 1):
-		var x := lerpf(min_x, max_x, i / float(steps))
-		var current_sample := EasingCurve.sample_bezier_points_with_metadata(point_list, x)
-		if current_sample.is_empty():
-			previous_sample = {}
-			continue
-		var current := get_view_pos(Vector2(x, current_sample["value"]))
-		if _are_bezier_samples_continuous(previous_sample, current_sample):
+	for i in range(point_list.size() - 1):
+		_draw_bezier_segment(point_list[i], point_list[i + 1], min_x, max_x)
+
+
+func _draw_bezier_segment(
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+		visible_min_x: float,
+		visible_max_x: float,
+) -> void:
+	var segment_width := b.position.x - a.position.x
+	if absf(segment_width) <= EasingCurve.SEGMENT_X_EPSILON:
+		if a.position.x >= visible_min_x and a.position.x <= visible_max_x:
+			draw_line(get_view_pos(a.position), get_view_pos(b.position), LINE_COLOR, 2)
+		return
+
+	var segment_min_x := minf(a.position.x, b.position.x)
+	var segment_max_x := maxf(a.position.x, b.position.x)
+	var start_x := maxf(segment_min_x, visible_min_x)
+	var end_x := minf(segment_max_x, visible_max_x)
+	if start_x > end_x:
+		return
+
+	var start_view_x := get_view_pos(Vector2(start_x, 0.0)).x
+	var end_view_x := get_view_pos(Vector2(end_x, 0.0)).x
+	var steps := max(1, ceili(absf(end_view_x - start_view_x)))
+	var previous := Vector2.ZERO
+
+	for i in range(steps + 1):
+		var x := lerpf(start_x, end_x, i / float(steps))
+		var y := (
+			a.position.y
+			if i == 0 and is_equal_approx(x, a.position.x)
+			else b.position.y
+			if i == steps and is_equal_approx(x, b.position.x)
+			else EasingCurve.sample_bezier_segment(a, b, x)
+		)
+		var current := get_view_pos(Vector2(x, y))
+		if i > 0:
 			draw_line(previous, current, LINE_COLOR, 2)
 		previous = current
-		previous_sample = current_sample
-
-
-func _are_bezier_samples_continuous(
-		previous_sample: Dictionary,
-		current_sample: Dictionary,
-) -> bool:
-	if previous_sample.is_empty() or current_sample.is_empty():
-		return false
-	if previous_sample["segment"] == current_sample["segment"]:
-		return previous_sample["branch"] == current_sample["branch"]
-	if current_sample["segment"] != previous_sample["segment"] + 1:
-		return false
-	if previous_sample["branch"] == -1 or current_sample["branch"] == -1:
-		return true
-	return (
-		previous_sample["branch"] == previous_sample["branch_count"] - 1
-		and current_sample["branch"] == 0
-	)
 
 
 func _bezier(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:

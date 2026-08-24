@@ -2004,19 +2004,6 @@ static func sample_bezier_points(
 	return _sample_bezier_points(point_list, offset, null)
 
 
-static func sample_bezier_points_with_metadata(
-		point_list: Array[EasingCurvePoint],
-		offset: float,
-) -> Dictionary:
-	var solve_result: Array[Dictionary] = []
-	var value := _sample_bezier_points(point_list, offset, solve_result)
-	if solve_result.is_empty():
-		return {}
-	var result := solve_result[0]
-	result["value"] = value
-	return result
-
-
 static func _sample_bezier_points(
 		point_list: Array[EasingCurvePoint],
 		offset: float,
@@ -2029,6 +2016,10 @@ static func _sample_bezier_points(
 		var a := point_list[i]
 		var b := point_list[i + 1]
 		if absf(b.position.x - a.position.x) <= SEGMENT_X_EPSILON:
+			if absf(offset - a.position.x) <= SEGMENT_X_EPSILON:
+				if solve_result != null:
+					solve_result.append({"t": 1.0})
+				return b.position.y
 			continue
 
 		var min_x = min(a.position.x, b.position.x)
@@ -2037,26 +2028,54 @@ static func _sample_bezier_points(
 		if offset < min_x or offset > max_x:
 			continue
 
-		var solve_info := _solve_for_t(offset, a, b)
-		var t: float = solve_info["t"]
-
-		if t >= 0.0 and t <= 1.0:
-			if solve_result != null:
-				solve_result.append({
-					"segment": i,
-					"branch": solve_info["branch"],
-					"branch_count": solve_info["branch_count"],
-					"t": t,
-				})
-			return _bezier_interpolate(
-				a.position.y,
-				a.right_control_point.y,
-				b.left_control_point.y,
-				b.position.y,
-				t,
-			)
+		return _sample_bezier_segment(a, b, offset, solve_result)
 
 	return 0.0
+
+
+static func sample_bezier_segment(
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+		offset: float,
+) -> float:
+	return _sample_bezier_segment(a, b, offset, null)
+
+
+static func _sample_bezier_segment(
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+		offset: float,
+		solve_result: Variant,
+) -> float:
+	var controls := _get_effective_segment_controls(a, b)
+	var solve_info := _solve_for_t(offset, a, b, controls[0], controls[1])
+	var t: float = solve_info["t"]
+	if solve_result != null:
+		solve_result.append({"t": t})
+	return _bezier_interpolate(
+		a.position.y,
+		controls[0].y,
+		controls[1].y,
+		b.position.y,
+		t,
+	)
+
+
+static func _get_effective_segment_controls(
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+) -> Array[Vector2]:
+	var out_control := a.right_control_point
+	var in_control := b.left_control_point
+	var min_x := minf(a.position.x, b.position.x)
+	var max_x := maxf(a.position.x, b.position.x)
+	out_control.x = clampf(out_control.x, min_x, max_x)
+	in_control.x = clampf(in_control.x, min_x, max_x)
+	if out_control.x > in_control.x:
+		var shared_x := (out_control.x + in_control.x) * 0.5
+		out_control.x = shared_x
+		in_control.x = shared_x
+	return [out_control, in_control]
 
 
 ## Sample the curve, calculating f(t) given x.
@@ -2384,10 +2403,16 @@ func _on_point_changed() -> void:
 
 
 # Solve X-to-t across monotonic intervals, with Newton/binary fallback for numerical misses.
-static func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> Dictionary:
+static func _solve_for_t(
+		x: float,
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+		out_control: Vector2,
+		in_control: Vector2,
+) -> Dictionary:
 	var segment_width := b.position.x - a.position.x
 	var seed := clampf((x - a.position.x) / segment_width, 0.0, 1.0) if not is_zero_approx(segment_width) else 0.5
-	var roots := _find_x_roots(x, a, b)
+	var roots := _find_x_roots(x, a.position.x, out_control.x, in_control.x, b.position.x)
 
 	if not roots.is_empty():
 		# The first monotonic interval is the deterministic branch policy.
@@ -2398,8 +2423,8 @@ static func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> 
 	for _iteration in range(12):
 		var x_est := _bezier_interpolate(
 			a.position.x,
-			a.right_control_point.x,
-			b.left_control_point.x,
+			out_control.x,
+			in_control.x,
 			b.position.x,
 			t,
 		)
@@ -2409,8 +2434,8 @@ static func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> 
 
 		var dx := _bezier_derivative(
 			a.position.x,
-			a.right_control_point.x,
-			b.left_control_point.x,
+			out_control.x,
+			in_control.x,
 			b.position.x,
 			t,
 		)
@@ -2423,19 +2448,17 @@ static func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> 
 			break
 		t = next_t
 
-	t = _binary_search_t(x, a, b)
+	t = _binary_search_t(x, a.position.x, out_control.x, in_control.x, b.position.x)
 	return {"t": t, "branch": -1, "branch_count": 0}
 
 
 static func _find_x_roots(
 		x: float,
-		a: EasingCurvePoint,
-		b: EasingCurvePoint,
+		p0: float,
+		p1: float,
+		p2: float,
+		p3: float,
 ) -> Array[Dictionary]:
-	var p0 := a.position.x
-	var p1 := a.right_control_point.x
-	var p2 := b.left_control_point.x
-	var p3 := b.position.x
 	var coefficient_a := -p0 + 3.0 * p1 - 3.0 * p2 + p3
 	var coefficient_b := 3.0 * p0 - 6.0 * p1 + 3.0 * p2
 	var coefficient_c := -3.0 * p0 + 3.0 * p1
@@ -2505,7 +2528,7 @@ static func _append_x_root(
 	})
 
 
-static func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
+static func _binary_search_t(x: float, p0: float, p1: float, p2: float, p3: float) -> float:
 	var low := 0.0
 	var high := 1.0
 	var mid := 0.5
@@ -2514,10 +2537,10 @@ static func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint)
 		mid = (low + high) * 0.5
 
 		var x_est = _bezier_interpolate(
-			a.position.x,
-			a.right_control_point.x,
-			b.left_control_point.x,
-			b.position.x,
+			p0,
+			p1,
+			p2,
+			p3,
 			mid,
 		)
 		if absf(x_est - x) <= 0.00000001:
