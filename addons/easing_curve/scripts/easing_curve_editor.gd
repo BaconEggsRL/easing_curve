@@ -136,6 +136,14 @@ func _gui_input(event: InputEvent) -> void:
 
 	# Middle mouse pressed → start panning
 	if event is InputEventMouseButton:
+		# Always end an RMB delete gesture before any later button branch can return.
+		if (
+			not event.pressed
+			and event.button_index == MOUSE_BUTTON_RIGHT
+		):
+			_set_right_delete_dragging(false)
+			return
+
 		if event.button_index == MOUSE_BUTTON_MIDDLE:
 			if event.pressed:
 				is_panning = true
@@ -162,8 +170,10 @@ func _gui_input(event: InputEvent) -> void:
 			return
 
 		if is_right_delete_dragging:
-			_try_remove_point_at(event.position)
-			return
+			if event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
+				_try_remove_point_at(event.position)
+				return
+			_set_right_delete_dragging(false)
 
 		if pending_add_point != null:
 			var world_pos := get_world_pos(event.position)
@@ -384,21 +394,17 @@ func _gui_input(event: InputEvent) -> void:
 
 
 		# --- RIGHT CLICK / DELETE DRAG ---
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			if event.pressed:
-				_right_delete_requires_exit = false
-				_set_right_delete_dragging(true)
+		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+			_right_delete_requires_exit = false
+			_set_right_delete_dragging(true)
 
-				if _try_remove_point_at(event.position):
-					return
-
-				# Right-clicking empty graph space clears the point selection.
-				selected_index = -1
-				selected_control_index = ControlIndex.NONE
-				queue_redraw()
+			if _try_remove_point_at(event.position):
 				return
 
-			_set_right_delete_dragging(false)
+			# Right-clicking empty graph space clears the point selection.
+			selected_index = -1
+			selected_control_index = ControlIndex.NONE
+			queue_redraw()
 			return
 
 
@@ -501,6 +507,7 @@ func _set_right_delete_dragging(enabled: bool) -> void:
 	is_right_delete_dragging = enabled
 	if not enabled:
 		_right_delete_requires_exit = false
+		_right_delete_blocked_position = Vector2.ZERO
 		if _curve != null:
 			_right_delete_drag_state_by_curve.erase(_curve.get_instance_id())
 		return
