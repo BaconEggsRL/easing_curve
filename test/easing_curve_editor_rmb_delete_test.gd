@@ -71,6 +71,7 @@ func _test_click_release_does_not_delete_next_point() -> void:
 	_expect(not curve.points.has(points[0]), "RMB click did not delete the initial point")
 	_expect(curve.points.has(points[1]), "Hover after RMB release deleted another point")
 	_expect(not editor.is_right_delete_dragging, "RMB release left delete-drag enabled")
+	editor.free()
 
 
 func _test_drag_delete_stops_on_release() -> void:
@@ -87,6 +88,7 @@ func _test_drag_delete_stops_on_release() -> void:
 	_expect(not curve.points.has(points[1]), "RMB drag did not delete point B")
 	_expect(not curve.points.has(points[2]), "RMB drag did not delete point C")
 	_expect(curve.points.has(points[3]), "Hover after RMB drag release deleted point D")
+	editor.free()
 
 
 func _test_empty_space_release_does_not_enable_delete() -> void:
@@ -101,6 +103,7 @@ func _test_empty_space_release_does_not_enable_delete() -> void:
 	editor._gui_input(_motion(_point_position(editor, points[0]), false))
 	_expect(curve.points.has(points[0]), "Empty-space RMB release enabled later point deletion")
 	_expect(not editor.is_right_delete_dragging, "Empty-space RMB release left delete-drag enabled")
+	editor.free()
 
 
 func _test_press_move_release_does_not_delete_next_point() -> void:
@@ -115,6 +118,7 @@ func _test_press_move_release_does_not_delete_next_point() -> void:
 	editor._gui_input(_motion(_point_position(editor, points[1]), false))
 	_expect(not curve.points.has(points[0]), "RMB press did not delete the initial point")
 	_expect(curve.points.has(points[1]), "Hover after press-move-release deleted another point")
+	editor.free()
 
 
 func _test_motion_without_rmb_mask_clears_stale_delete_state() -> void:
@@ -129,3 +133,4 @@ func _test_motion_without_rmb_mask_clears_stale_delete_state() -> void:
 	_expect(curve.points.has(points[1]), "Motion without RMB mask deleted a point")
 	_expect(not editor.is_right_delete_dragging, "Motion without RMB mask did not clear stale delete state")
 	_expect(not editor._right_delete_requires_exit, "Stale delete hit tracking was not reset")
+	editor.free()

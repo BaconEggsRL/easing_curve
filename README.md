@@ -120,7 +120,7 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 * **Adding and Removing Points**
   * Left click anywhere on the grid to add a new point, or click the "Add Point" button.
-  * Right click a point to delete it, or click the trash button icon in the points list.
+  * Right click a point to delete it, hold right click and drag across points to remove them, or click the trash button icon in the points list.
 
 * **Adjusting the Control Points**
   * You can adjust the bezier curve control points by dragging with the mouse or editing the points list.
@@ -128,8 +128,9 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 * **Locking Control Points**
   * Vector2 properties can be locked by clicking the lock icon.
-  * Locked properties cannot be changed, except by copy-paste. This can be used to drag a point without affecting its control handles.
+	* Locked properties cannot be changed, except by copy-paste. This can be used to drag a point without affecting its control handles.
   * Lockable properties include point position, left control position, and right control position.
+	* Force Linear and Lock control states are available in Free and Linked handle modes.
 
 * **Handle Modes**
   * Each point can use a handle mode to control how its left and right control handles behave:
@@ -137,7 +138,9 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
     * **Linear** -- Keeps the handles aligned with the neighboring points, creating straight-line segments through the point.
     * **Balanced** -- Keeps both handles aligned in opposite directions while allowing each handle to have a different length.
     * **Mirrored** -- Keeps both handles aligned in opposite directions and at the same length. Moving one handle mirrors the other across the point.
-    * Note that handle locks only apply in Free mode, and lock state is preserved when switching handle modes.
+    * **Linked** -- Keeps both controls at a shared position.
+    * Note that control states apply in Free and Linked modes, and are preserved when switching modes.
+  * The selected-point toolbar shows the point number, Handle Mode, L/R control state, and Reset controls.
 
 * **Zoom and Pan**
   * Zoom and pan can be used to see points outside the grid box. The grid box represents an x_range and y_range of 0 to 1.

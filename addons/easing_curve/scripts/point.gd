@@ -372,31 +372,10 @@ func set_handle_mode(value: HandleMode) -> void:
 	if handle_mode == value:
 		return
 
-	var previous_mode := handle_mode
+	var handles := get_handles_for_mode_change(value)
 	handle_mode = value
-
-	if handle_mode == HandleMode.LINEAR:
-		_left_control_point = position
-		_right_control_point = position
-
-	elif previous_mode == HandleMode.LINEAR:
-		_initialize_default_handles()
-
-		if handle_mode == HandleMode.LINKED:
-			var linked := _get_linked_handle_position(
-				_left_control_point,
-				_right_control_point,
-			)
-			_left_control_point = linked
-			_right_control_point = linked
-
-	elif handle_mode == HandleMode.LINKED:
-		var linked := _get_linked_handle_position(
-			_left_control_point,
-			_right_control_point,
-		)
-		_left_control_point = linked
-		_right_control_point = linked
+	_left_control_point = handles["left"]
+	_right_control_point = handles["right"]
 
 	_apply_free_force_linear_state()
 

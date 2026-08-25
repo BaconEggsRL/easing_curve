@@ -58,7 +58,7 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 * **Add and Remove Points**
   * Left click anywhere on the grid to add a new point, or click the "Add Point" button.
-  * Right click a point to delete it, or click the trash button icon in the points list.
+  * Right click a point to delete it, hold right click and drag across points to remove them, or click the trash button icon in the points list.
 
 * **Adjust the Control Points**
   * You can adjust the bezier curve control points by dragging with the mouse or editing the points list.
@@ -67,6 +67,11 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 * **Locking Control Points**
   * Vector2 properties can be locked by clicking the lock icon.
   * Locked properties cannot be changed, except by copy-paste. This can be used to drag a point without affecting its control handles.
+
+* **Handle Modes and Control States**
+  * Free, Linear, Balanced, Mirrored, and Linked modes control the relationship between the left and right handles.
+  * In Free and Linked modes, each control also supports Force Linear and Lock states.
+  * The selected-point toolbar shows the point number, Handle Mode, L/R control state, and Reset controls.
 
 * **Zoom and Pan**
   * Zoom and pan can be used to see points outside the grid box. The grid box represents an x_range and y_range of 0 to 1.
@@ -104,7 +109,7 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 ---
 
-* Handle mode support akin to AnimationPlayer (Free, Linear, Balanced, Mirrored)
+* TBD — open to suggestions!
 
 **&nbsp;**
 

@@ -1015,8 +1015,8 @@ func _draw_bezier_segment(
 ) -> void:
 	var segment_width := b.position.x - a.position.x
 	if absf(segment_width) <= EasingCurve.SEGMENT_X_EPSILON:
-		if a.position.x >= visible_min_x and a.position.x <= visible_max_x:
-			draw_line(get_view_pos(a.position), get_view_pos(b.position), LINE_COLOR, 2)
+		# Runtime resolves this degenerate segment to its later point rather
+		# than a vertical, multi-valued curve segment.
 		return
 
 	var segment_min_x := minf(a.position.x, b.position.x)
