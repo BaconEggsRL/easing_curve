@@ -9,6 +9,7 @@ var _checks := 0
 func _init() -> void:
 	_test_position_x_drag_defers_list_reorder()
 	_test_position_x_drag_crosses_multiple_points()
+	_test_position_x_drag_continues_through_backtracking()
 	_test_position_x_endpoint_takeover_is_previewed_until_commit()
 	_test_position_x_endpoint_takeover_commits_at_both_endpoints()
 
@@ -185,6 +186,46 @@ func _test_position_x_drag_crosses_multiple_points() -> void:
 	editor.free()
 
 
+func _test_position_x_drag_continues_through_backtracking() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	var points: Array[EasingCurvePoint] = []
+	for x in [0.1, 0.3, 0.5, 0.7, 0.9]:
+		points.append(EasingCurvePoint.new(Vector2(x, 0.5)))
+	curve.set_point_snapshot(curve.make_point_snapshot(points))
+	points = curve.points.duplicate()
+	var moved := points[1]
+	var editor := EasingCurveEditor.new()
+	editor.size = Vector2(600.0, 300.0)
+	editor.set_curve(curve)
+	editor.selected_index = 1
+	var inspector: EditorInspectorPlugin = INSPECTOR_PLUGIN.new()
+	inspector.set("curve", curve)
+	inspector.set("easing_curve_editor", editor)
+	var expected_orders := [
+		[points[0], moved, points[2], points[3], points[4]],
+		[points[0], moved, points[2], points[3], points[4]],
+		[points[0], points[2], moved, points[3], points[4]],
+		[points[0], points[2], points[3], moved, points[4]],
+		[points[0], moved, points[2], points[3], points[4]],
+		[points[0], moved, points[2], points[3], points[4]],
+	]
+	var before_state: Dictionary
+	for step in range([0.3, 0.45, 0.6, 0.8, 0.4, 0.2].size()):
+		_drag_position_x(inspector, curve, moved, [0.3, 0.45, 0.6, 0.8, 0.4, 0.2][step])
+		if step == 0:
+			before_state = inspector.get("_point_edit_before_state").duplicate(true)
+		else:
+			_expect(inspector.get("_point_edit_before_state") == before_state, "Position X backtracking started a second edit transaction")
+		_expect(curve.points == points, "Position X backtracking rebuilt the Points list before commit")
+		_expect(editor._get_display_points() == expected_orders[step], "Position X backtracking did not preserve the live graph preview at step %d" % step)
+		_expect(editor.selected_index == 1, "Position X backtracking changed selection before commit")
+	_finish_position_x(inspector, curve, moved, 0.2)
+	_expect(curve.points == expected_orders.back(), "Position X backtracking did not commit the final order")
+	_expect(editor.selected_index == 1 and curve.points[1] == moved, "Position X backtracking did not retain the logical selected point")
+	editor.free()
+
+
 func _test_position_x_endpoint_takeover_is_previewed_until_commit() -> void:
 	var fixture := _make_fixture(0.2, 1.0)
 	var curve: EasingCurve = fixture.curve
@@ -211,6 +252,23 @@ func _test_position_x_endpoint_takeover_is_previewed_until_commit() -> void:
 	inspector.call("_commit_point_edit")
 	_expect(curve.points == [left, moved, old_right_endpoint], "Position X commit changed endpoint takeover after moving back inward")
 	editor.free()
+
+	var left_fixture := _make_fixture(0.0, 0.8)
+	var left_curve: EasingCurve = left_fixture.curve
+	var left_editor: EasingCurveEditor = left_fixture.editor
+	var left_inspector: Object = left_fixture.inspector
+	var left_points: Array = left_fixture.points
+	var left_moved: EasingCurvePoint = left_points[1]
+	var old_left_endpoint: EasingCurvePoint = left_points[0]
+	_drag_position_x(left_inspector, left_curve, left_moved, 0.0)
+	_expect(left_curve.points.size() == 3, "Left endpoint takeover removed a point before Position X commit")
+	_expect(left_editor._get_display_points() == [left_moved, left_points[2]], "Left endpoint takeover was not reflected in the live graph preview")
+	_drag_position_x(left_inspector, left_curve, left_moved, 0.2)
+	_expect(left_curve.points.size() == 3 and left_curve.points.has(old_left_endpoint), "Moving back from the left endpoint changed source ordering during drag")
+	_expect(left_editor._get_display_points() == [old_left_endpoint, left_moved, left_points[2]], "Moving back from the left endpoint did not restore the graph preview")
+	left_inspector.call("_commit_point_edit")
+	_expect(left_curve.points == [old_left_endpoint, left_moved, left_points[2]], "Left endpoint commit changed takeover after moving back inward")
+	left_editor.free()
 
 
 func _test_position_x_endpoint_takeover_commits_at_both_endpoints() -> void:

@@ -13,6 +13,8 @@ func _init() -> void:
 	_test_endpoint_slots_are_swapped_without_takeover()
 	_test_multiple_swaps_and_undo_redo()
 	_test_reorder_selection_follows_logical_point()
+	_test_reorder_ignores_each_lock_combination()
+	_test_reorder_preserves_handle_modes_and_states()
 
 	if _failures == 0:
 		print("PASS: %d EasingCurve manual reorder checks" % _checks)
@@ -154,3 +156,52 @@ func _test_reorder_selection_follows_logical_point() -> void:
 	history.clear_history(false)
 	history.free()
 	curve_editor.free()
+
+
+func _test_reorder_ignores_each_lock_combination() -> void:
+	var lock_cases := [
+		{},
+		{"position": true},
+		{"left_control_point": true},
+		{"right_control_point": true},
+		{"left_control_point": true, "right_control_point": true},
+		{"position": true, "left_control_point": true, "right_control_point": true},
+	]
+	var expected_a_position := Vector2(0.7, 0.3)
+	var expected_a_left := Vector2(0.6, 0.2)
+	var expected_a_right := Vector2(0.85, 0.4)
+	for locks: Dictionary in lock_cases:
+		var a := _make_point(Vector2(0.2, 0.3), Vector2(0.1, 0.2), Vector2(0.35, 0.4))
+		var b := _make_point(Vector2(0.7, 0.8), Vector2(0.6, 0.7), Vector2(0.8, 0.9))
+		for property_name: String in locks:
+			a.set_locked(property_name, true)
+		var original_locks := a.locked.duplicate(true)
+		var curve := _make_curve([a, b])
+		curve.swap_points(a, b)
+		_expect_vector(a.position, expected_a_position, "Manual reorder respected %s position lock" % locks)
+		_expect_vector(a.left_control_point, expected_a_left, "Manual reorder respected %s left-control lock" % locks)
+		_expect_vector(a.right_control_point, expected_a_right, "Manual reorder respected %s right-control lock" % locks)
+		_expect(a.locked == original_locks, "Manual reorder changed %s lock state" % locks)
+
+
+func _test_reorder_preserves_handle_modes_and_states() -> void:
+	for handle_mode: EasingCurvePoint.HandleMode in EasingCurvePoint.HandleMode.values():
+		var a := _make_point(Vector2(0.2, 0.35), Vector2(0.05, 0.2), Vector2(0.4, 0.5))
+		var b := _make_point(Vector2(0.7, 0.8), Vector2(0.6, 0.7), Vector2(0.8, 0.9))
+		a.handle_mode = handle_mode
+		if handle_mode == EasingCurvePoint.HandleMode.FREE:
+			a.left_force_linear = true
+		a.set_locked("position", true)
+		var previous_position := a.position
+		var previous_left := a.left_control_point
+		var previous_right := a.right_control_point
+		var previous_locks := a.locked.duplicate(true)
+		var curve := _make_curve([a, b])
+		curve.swap_points(a, b)
+		var delta_x := a.position.x - previous_position.x
+		_expect(a.handle_mode == handle_mode, "Manual reorder changed %s handle mode" % EasingCurvePoint.HandleMode.keys()[handle_mode])
+		_expect_vector(a.left_control_point, previous_left + Vector2(delta_x, 0.0), "Manual reorder changed %s left-control offset" % EasingCurvePoint.HandleMode.keys()[handle_mode])
+		_expect_vector(a.right_control_point, previous_right + Vector2(delta_x, 0.0), "Manual reorder changed %s right-control offset" % EasingCurvePoint.HandleMode.keys()[handle_mode])
+		_expect(a.locked == previous_locks, "Manual reorder changed %s locks" % EasingCurvePoint.HandleMode.keys()[handle_mode])
+		if handle_mode == EasingCurvePoint.HandleMode.FREE:
+			_expect(a.left_force_linear and a.left_control_point == a.position, "Manual reorder changed Free Force Linear state")

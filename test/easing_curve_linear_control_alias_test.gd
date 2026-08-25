@@ -9,6 +9,7 @@ var _checks := 0
 
 func _init() -> void:
 	_test_linear_control_x_uses_position_reorder()
+	_test_linear_control_x_drag_crosses_multiple_points()
 	_test_linear_control_y_and_locks()
 	_test_linear_control_endpoint_takeover()
 	_test_force_linear_control_is_not_aliased()
@@ -131,6 +132,62 @@ func _test_linear_control_x_uses_position_reorder() -> void:
 	editor.free()
 
 
+func _test_linear_control_x_drag_crosses_multiple_points() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	var points: Array[EasingCurvePoint] = []
+	for x in [0.1, 0.3, 0.5, 0.7, 0.9]:
+		points.append(EasingCurvePoint.new(Vector2(x, 0.5)))
+	curve.set_point_snapshot(curve.make_point_snapshot(points))
+	points = curve.points.duplicate()
+	var moved := points[1]
+	moved.handle_mode = EasingCurvePoint.HandleMode.LINEAR
+	var editor := EasingCurveEditor.new()
+	editor.size = Vector2(600.0, 300.0)
+	editor.set_curve(curve)
+	editor.selected_index = 1
+	var inspector: EditorInspectorPlugin = INSPECTOR_PLUGIN.new()
+	inspector.set("curve", curve)
+	inspector.set("easing_curve_editor", editor)
+	var input := EditorSpinSlider.new()
+	var reset_btn := Button.new()
+	input.set_meta(DRAGGING_META, true)
+	var values := [0.3, 0.45, 0.6, 0.8, 0.4, 0.2]
+	var expected_orders := [
+		[points[0], moved, points[2], points[3], points[4]],
+		[points[0], moved, points[2], points[3], points[4]],
+		[points[0], points[2], moved, points[3], points[4]],
+		[points[0], points[2], points[3], moved, points[4]],
+		[points[0], moved, points[2], points[3], points[4]],
+		[points[0], moved, points[2], points[3], points[4]],
+	]
+	var before_state: Dictionary
+	for step in range(values.size()):
+		_send_x_edit(
+			inspector,
+			moved,
+			input,
+			reset_btn,
+			values[step],
+			"left_control_point" if step % 2 == 0 else "right_control_point",
+		)
+		if step == 0:
+			before_state = inspector.get("_point_edit_before_state").duplicate(true)
+		else:
+			_expect(inspector.get("_point_edit_before_state") == before_state, "Linear control X backtracking started a second edit transaction")
+		_expect_linear_point(moved, Vector2(values[step], 0.5), "Linear control X drag step %d" % step)
+		_expect(curve.points == points, "Linear control X drag rebuilt the Points list before commit")
+		_expect(editor._get_display_points() == expected_orders[step], "Linear control X drag did not preserve the live graph preview at step %d" % step)
+		_expect(editor.selected_index == 1, "Linear control X drag changed selection before commit")
+	input.remove_meta(DRAGGING_META)
+	inspector.call("_commit_point_edit")
+	_expect(curve.points == expected_orders.back(), "Linear control X drag did not commit the final order")
+	_expect(curve.points[1] == moved and editor.selected_index == 1, "Linear control X drag lost the logical selected point after commit")
+	input.free()
+	reset_btn.free()
+	editor.free()
+
+
 func _test_linear_control_y_and_locks() -> void:
 	var fixture := _make_fixture()
 	var editor: EasingCurveEditor = fixture.editor
@@ -141,10 +198,12 @@ func _test_linear_control_y_and_locks() -> void:
 
 	_send_y_edit(inspector, b, input, reset_btn, 0.25, "right_control_point")
 	_expect_linear_point(b, Vector2(0.4, 0.25), "Linear right Y edit")
+	_send_y_edit(inspector, b, input, reset_btn, 0.75, "left_control_point")
+	_expect_linear_point(b, Vector2(0.4, 0.75), "Linear left Y edit")
 
 	b.set_locked("left_control_point", true)
 	_send_x_edit(inspector, b, input, reset_btn, 0.9, "left_control_point")
-	_expect_linear_point(b, Vector2(0.4, 0.25), "Locked Linear control edit")
+	_expect_linear_point(b, Vector2(0.4, 0.75), "Locked Linear control edit")
 	input.free()
 	reset_btn.free()
 	editor.free()
