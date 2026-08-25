@@ -395,6 +395,11 @@ func _gui_input(event: InputEvent) -> void:
 
 		# --- RIGHT CLICK / DELETE DRAG ---
 		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+			if pending_add_point != null:
+				_cancel_pending_add()
+				accept_event()
+				return
+
 			_right_delete_requires_exit = false
 			_set_right_delete_dragging(true)
 
@@ -476,6 +481,12 @@ func _request_point_remove(point: EasingCurvePoint) -> void:
 			"Remove Easing Curve Point",
 			_curve.remove_point.bind(point),
 		)
+
+
+func _cancel_pending_add() -> void:
+	pending_add_point = null
+	_set_right_delete_dragging(false)
+	queue_redraw()
 
 
 func _try_remove_point_at(view_pos: Vector2) -> bool:

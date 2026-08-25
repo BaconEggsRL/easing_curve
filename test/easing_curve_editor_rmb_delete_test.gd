@@ -6,6 +6,7 @@ var _checks := 0
 
 func _init() -> void:
 	_test_click_release_does_not_delete_next_point()
+	_test_rmb_cancels_pending_add_without_deleting()
 	_test_drag_delete_stops_on_release()
 	_test_empty_space_release_does_not_enable_delete()
 	_test_press_move_release_does_not_delete_next_point()
@@ -48,6 +49,14 @@ func _right_button(position: Vector2, pressed: bool) -> InputEventMouseButton:
 	return event
 
 
+func _left_button(position: Vector2, pressed: bool) -> InputEventMouseButton:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = pressed
+	event.position = position
+	return event
+
+
 func _motion(position: Vector2, rmb_held: bool) -> InputEventMouseMotion:
 	var event := InputEventMouseMotion.new()
 	event.position = position
@@ -71,6 +80,27 @@ func _test_click_release_does_not_delete_next_point() -> void:
 	_expect(not curve.points.has(points[0]), "RMB click did not delete the initial point")
 	_expect(curve.points.has(points[1]), "Hover after RMB release deleted another point")
 	_expect(not editor.is_right_delete_dragging, "RMB release left delete-drag enabled")
+	editor.free()
+
+
+func _test_rmb_cancels_pending_add_without_deleting() -> void:
+	var fixture := _make_editor()
+	var editor: EasingCurveEditor = fixture.editor
+	var curve: EasingCurve = fixture.curve
+	var points: Array = fixture.points
+	var empty_pos := Vector2(580.0, 280.0)
+	editor._gui_input(_left_button(empty_pos, true))
+	_expect(editor.pending_add_point != null, "LMB press did not start pending add")
+	editor._gui_input(_motion(_point_position(editor, points[1]), false))
+	editor._gui_input(_right_button(_point_position(editor, points[1]), true))
+	_expect(editor.pending_add_point == null, "RMB did not cancel pending add")
+	_expect(curve.points.size() == 4 and curve.points.has(points[1]), "RMB pending-add cancel deleted an existing point")
+	_expect(not editor.is_right_delete_dragging, "RMB pending-add cancel started delete-drag")
+	editor._gui_input(_motion(_point_position(editor, points[2]), true))
+	_expect(curve.points.has(points[2]), "Held RMB after pending-add cancel deleted a point")
+	editor._gui_input(_right_button(empty_pos, false))
+	editor._gui_input(_left_button(empty_pos, false))
+	_expect(curve.points.size() == 4, "LMB release after pending-add cancel committed a point")
 	editor.free()
 
 
