@@ -1,6 +1,7 @@
 extends SceneTree
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
+const CURVE_EDITOR = preload("res://addons/easing_curve/scripts/easing_curve_editor.gd")
 
 var _failures := 0
 var _checks := 0
@@ -11,6 +12,7 @@ func _init() -> void:
 	_test_locked_points_and_handles_move_as_a_unit()
 	_test_endpoint_slots_are_swapped_without_takeover()
 	_test_multiple_swaps_and_undo_redo()
+	_test_reorder_selection_follows_logical_point()
 
 	if _failures == 0:
 		print("PASS: %d EasingCurve manual reorder checks" % _checks)
@@ -118,3 +120,37 @@ func _test_multiple_swaps_and_undo_redo() -> void:
 	_expect(curve.get_editor_state_snapshot() == after, "Manual reorder Redo did not restore geometry and order")
 	history.clear_history(false)
 	history.free()
+
+
+func _test_reorder_selection_follows_logical_point() -> void:
+	var a := _make_point(Vector2(0.1, 0.1), Vector2(0.0, 0.1), Vector2(0.2, 0.1))
+	var b := _make_point(Vector2(0.3, 0.7), Vector2(0.2, 0.6), Vector2(0.4, 0.8))
+	b.right_force_linear = true
+	var c := _make_point(Vector2(0.5, 0.3), Vector2(0.4, 0.3), Vector2(0.6, 0.3))
+	var d := _make_point(Vector2(0.7, 0.5), Vector2(0.6, 0.5), Vector2(0.8, 0.5))
+	var curve := _make_curve([a, b, c, d])
+	var curve_editor := CURVE_EDITOR.new()
+	curve_editor.set_curve(curve)
+	var before := EDITOR_UNDO.capture_state(curve)
+
+	curve_editor.selected_index = 1
+	curve.swap_points(1, 2)
+	curve_editor.select_point(b)
+	_expect(curve.points[2] == b and curve_editor.selected_index == 2, "Move Down did not select the moved logical point at P2")
+	_expect(b.right_force_linear and is_equal_approx(b.position.y, 0.7), "Move Down changed the moved point's toolbar state")
+	curve.swap_points(2, 3)
+	curve_editor.select_point(b)
+	_expect(curve.points[3] == b and curve_editor.selected_index == 3, "Repeated Move Down did not continue moving the selected logical point")
+	curve.swap_points(3, 2)
+	curve_editor.select_point(b)
+	_expect(curve.points[2] == b and curve_editor.selected_index == 2, "Move Up did not select the moved logical point at P2")
+	var after := EDITOR_UNDO.capture_state(curve)
+	var history := UndoRedo.new()
+	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Reorder Easing Curve Points", before, after), "Selection reorder test did not create an Undo action")
+	history.undo()
+	_expect(curve_editor.selected_index >= 0 and curve_editor.selected_index < curve.points.size(), "Undo left an invalid selected point index")
+	history.redo()
+	_expect(curve.points[curve_editor.selected_index] == b, "Redo toolbar selection did not resolve to the moved logical point")
+	history.clear_history(false)
+	history.free()
+	curve_editor.free()

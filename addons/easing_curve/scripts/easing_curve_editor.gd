@@ -754,6 +754,16 @@ func get_curve() -> EasingCurve:
 	return _curve
 
 
+func select_point(point: EasingCurvePoint) -> bool:
+	if _curve == null:
+		return false
+	var point_index := _curve.points.find(point)
+	if point_index == -1:
+		return false
+	selected_index = point_index
+	return true
+
+
 func update_view_transform() -> void:
 	var margin := 4.0 * _editor_scale
 	var toolbar_height := SELECTION_TOOLBAR_HEIGHT * _editor_scale

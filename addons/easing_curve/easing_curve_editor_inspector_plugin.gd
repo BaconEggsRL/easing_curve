@@ -1352,15 +1352,35 @@ func _move_point_down(i: int) -> void:
 
 
 func _move_point(from_index: int, to_index: int) -> void:
-	if from_index == to_index:
+	if (
+		from_index == to_index
+		or from_index < 0
+		or to_index < 0
+		or from_index >= curve.points.size()
+		or to_index >= curve.points.size()
+	):
 		return
+	var moved_point := curve.points[from_index]
 	EASING_CURVE_EDITOR_UNDO.apply_action(
 		editor_undo_redo,
 		curve,
 		"Reorder Easing Curve Points",
-		curve.swap_points.bind(from_index, to_index),
+		func():
+			curve.swap_points(from_index, to_index)
+			_select_reordered_point(moved_point),
 		_undo_source_property(),
 	)
+
+
+func _select_reordered_point(point: EasingCurvePoint) -> void:
+	var point_index := _get_current_point_index(point)
+	if point_index == -1:
+		return
+	_preserve_point_selection_on_refresh = true
+	_selected_point_index = point_index
+	_selected_point_resource_id = point.get_instance_id()
+	if easing_curve_editor != null:
+		easing_curve_editor.select_point(point)
 
 
 # remember bind() arguments are at the end
