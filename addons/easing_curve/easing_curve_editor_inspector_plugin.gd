@@ -539,31 +539,17 @@ class DeferredParameterEditorProperty:
 		value: Variant,
 		action_name := "",
 	) -> void:
-		var original_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
-
-		object._begin_editor_parameter_edit()
-		object.set(property_name, value)
-
-		var final_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
-
-		if final_snapshot == original_snapshot:
-			object._cancel_editor_parameter_edit()
-			return
-
-		object._finish_editor_parameter_edit()
-
 		if action_name.is_empty():
 			action_name = (
 				"Change Easing Curve %s"
 				% String(property_name).capitalize()
 			)
 
-		EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+		EASING_CURVE_EDITOR_UNDO.apply_parameter_action(
 			undo_redo,
 			object,
 			action_name,
-			original_snapshot,
-			final_snapshot,
+			func(): object.set(property_name, value),
 			self,
 		)
 
@@ -619,22 +605,13 @@ class GenerateFunctionEditorProperty:
 		var object := get_edited_object() as EasingCurve
 		if object == null:
 			return
-		var original_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
-		object._begin_editor_parameter_edit()
-		object.generate_irregular()
-		var generated_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
-		if generated_snapshot == original_snapshot:
-			object._cancel_editor_parameter_edit()
-		else:
-			object._finish_editor_parameter_edit()
-			EASING_CURVE_EDITOR_UNDO.commit_applied_action(
-				undo_redo,
-				object,
-				"Generate Easing Curve",
-				original_snapshot,
-				generated_snapshot,
-				self,
-			)
+		EASING_CURVE_EDITOR_UNDO.apply_parameter_action(
+			undo_redo,
+			object,
+			"Generate Easing Curve",
+			func(): object.generate_irregular(),
+			self,
+		)
 		if is_instance_valid(curve_editor):
 			curve_editor.queue_redraw()
 
@@ -1632,13 +1609,10 @@ func _move_point(from_index: int, to_index: int) -> void:
 	curve.swap_points(from_index, to_index)
 	_select_reordered_point(moved_point)
 	var selection_after := _capture_point_selection_state()
-	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
-		editor_undo_redo,
-		curve,
+	_commit_curve_action(
 		"Reorder Easing Curve Points",
 		before,
 		{},
-		_undo_source_property(),
 		Callable(self, "_restore_point_selection_state"),
 		selection_before,
 		selection_after,
@@ -2317,13 +2291,31 @@ func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
 	var after := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	# Flush the draft point notifications once at the drag boundary.
 	curve.set_point_snapshot(curve.get_point_snapshot())
-	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+	_commit_curve_action(
+		action_name,
+		before,
+		after,
+	)
+
+
+func _commit_curve_action(
+		action_name: String,
+		before: Dictionary,
+		after: Dictionary = {},
+		selection_restorer: Callable = Callable(),
+		before_selection: Dictionary = {},
+		after_selection: Dictionary = {},
+) -> bool:
+	return EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 		editor_undo_redo,
 		curve,
 		action_name,
 		before,
 		after,
 		_undo_source_property(),
+		selection_restorer,
+		before_selection,
+		after_selection,
 	)
 
 
@@ -2948,13 +2940,9 @@ func _apply_point_property_change(
 		if not _point_edit_before_state.is_empty():
 			_commit_point_edit()
 			return
-		EASING_CURVE_EDITOR_UNDO.commit_applied_action(
-			editor_undo_redo,
-			curve,
+		_commit_curve_action(
 			_point_action_name(property_name),
 			before,
-			{},
-			_undo_source_property(),
 		)
 
 
@@ -3005,13 +2993,10 @@ func _add_point(
 			"property_name": StringName(),
 		}
 	)
-	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
-		editor_undo_redo,
-		curve,
+	_commit_curve_action(
 		"Add Easing Curve Point",
 		before,
 		{},
-		_undo_source_property(),
 		Callable(self, "_restore_point_selection_state") if not selection_before.is_empty() else Callable(),
 		selection_before,
 		selection_after,
@@ -3028,13 +3013,10 @@ func _remove_point(point: EasingCurvePoint) -> void:
 	updated_points.remove_at(point_index)
 	curve.set_point_snapshot(curve.make_point_snapshot(updated_points))
 	var selection_after := _capture_point_selection_state()
-	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
-		editor_undo_redo,
-		curve,
+	_commit_curve_action(
 		"Remove Easing Curve Point",
 		before,
 		{},
-		_undo_source_property(),
 		Callable(self, "_restore_point_selection_state"),
 		selection_before,
 		selection_after,
@@ -3047,30 +3029,23 @@ func _emit_curve_property(property_name: StringName, value: Variant) -> void:
 		and curve.is_selected_preset_modified()
 	):
 		return
-	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
-	curve.set(property_name, value)
 	var action_name := "Change Easing Curve Ease" if property_name == &"ease_type" else "Change Easing Curve Transition"
-	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+	EASING_CURVE_EDITOR_UNDO.apply_action(
 		editor_undo_redo,
 		curve,
 		action_name,
-		before,
-		{},
+		func(): curve.set(property_name, value),
 		_undo_source_property(),
 	)
 
 func _on_reset_selected_preset(object: EasingCurve) -> void:
 	if object == null:
 		return
-	var before := EASING_CURVE_EDITOR_UNDO.capture_state(object)
-	if not object.reset_selected_preset():
-		return
-	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
+	EASING_CURVE_EDITOR_UNDO.apply_action(
 		editor_undo_redo,
 		object,
 		"Reset Easing Curve Preset",
-		before,
-		{},
+		func(): object.reset_selected_preset(),
 		_undo_source_property(),
 	)
 

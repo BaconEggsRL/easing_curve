@@ -1351,6 +1351,36 @@ Milestones 2C and 6.
 New actions are less likely to omit required commit/refresh arguments without
 making drag behavior opaque.
 
+### Completion record
+
+Completed. `EasingCurveEditorUndo.apply_parameter_action()` now owns the
+identical immediate parameter-edit sequence: capture the before snapshot, begin
+the parameter edit, apply the simple mutation, capture the after snapshot,
+cancel no-ops, finish changed edits, and commit. It is used only by the
+Inspector's one-shot parameter edit/reset and irregular-function generation
+paths. The Inspector now uses `_commit_curve_action()` for its shared
+`editor_undo_redo`, curve, and source-property wiring while preserving each
+caller's explicit mutation, action name, optional after snapshot, and existing
+selection-restoration arguments. Existing `apply_action()` covers the simple
+transition/ease and preset-reset mutations.
+
+Continuous parameter drags retain their explicit begin/change/finish-or-cancel
+sequence. Point/control drags, Position-X order preview and its deferred
+commit, pending add, RMB delete/release ordering, and topology snapshot
+mutations remain explicit because their gesture or selection timing is distinct.
+The Milestone 6 selection helpers remain the only Inspector selection-write
+authority; the add/remove/reorder callers pass the same selection snapshots and
+restorer to the local commit wrapper. Snapshot restoration, notification calls,
+serialized state, and runtime curve behavior are unchanged.
+
+Focused validation passed: editor Undo/Redo (505 checks; visible-only native
+layout fixtures skipped as documented for Godot 4.7 headless), graph gestures
+(13), selection/refresh (35), Points-list add (84), Points-list reorder (45),
+Position-X drag (60), point state (93), control editability (15), and linear
+control aliases (72). Visible-editor fold, focus, scroll, and narrow/wide
+layout checks in `test/docs/easing_curve_editor_visible_regression_checklist.md`
+remain manual.
+
 ## Milestone 8 — Modest transition presentation metadata consolidation
 
 ### Goal

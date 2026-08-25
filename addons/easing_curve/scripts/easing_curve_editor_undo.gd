@@ -101,6 +101,33 @@ static func apply_action(
 	return commit_applied_action(undo_redo, curve, action_name, before, {}, source_property)
 
 
+static func apply_parameter_action(
+		undo_redo: Object,
+		curve: EasingCurve,
+		action_name: String,
+		mutation: Callable,
+		source_property: EditorProperty = null,
+) -> bool:
+	if curve == null or not mutation.is_valid():
+		return false
+	var before := capture_state(curve)
+	curve._begin_editor_parameter_edit()
+	mutation.call()
+	var after := capture_state(curve)
+	if before == after:
+		curve._cancel_editor_parameter_edit()
+		return false
+	curve._finish_editor_parameter_edit()
+	return commit_applied_action(
+		undo_redo,
+		curve,
+		action_name,
+		before,
+		after,
+		source_property,
+	)
+
+
 static func _find_parent_inspector(source_property: EditorProperty) -> EditorInspector:
 	var current: Node = source_property
 	while current != null:
