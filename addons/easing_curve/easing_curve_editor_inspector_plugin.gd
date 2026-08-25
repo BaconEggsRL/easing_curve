@@ -1060,6 +1060,69 @@ func _clear_point_property_selection() -> void:
 	_selected_point_resource_id = 0
 
 
+func _capture_point_selection_state() -> Dictionary:
+	if curve == null:
+		return {"has_selection": false}
+
+	var point_index := -1
+	var property_name := StringName()
+	if _selected_point_index >= 0 and _selected_point_index < curve.points.size():
+		var selected_point := curve.points[_selected_point_index]
+		if (
+			_selected_point_resource_id == 0
+			or selected_point.get_instance_id() == _selected_point_resource_id
+		):
+			point_index = _selected_point_index
+			property_name = _selected_point_property_name
+
+	if (
+		point_index == -1
+		and is_instance_valid(easing_curve_editor)
+		and easing_curve_editor.selected_index >= 0
+		and easing_curve_editor.selected_index < curve.points.size()
+	):
+		point_index = easing_curve_editor.selected_index
+
+	if point_index == -1:
+		return {"has_selection": false}
+
+	return {
+		"has_selection": true,
+		"point_index": point_index,
+		"point_resource_id": curve.points[point_index].get_instance_id(),
+		"property_name": property_name,
+	}
+
+
+func _restore_point_selection_state(selection: Dictionary) -> void:
+	if not bool(selection.get("has_selection", false)):
+		_clear_point_property_selection()
+		if is_instance_valid(easing_curve_editor):
+			easing_curve_editor.selected_index = -1
+		return
+
+	var point_index := int(selection.get("point_index", -1))
+	var point_resource_id := int(selection.get("point_resource_id", 0))
+	if point_resource_id != 0:
+		for i in range(curve.points.size()):
+			if curve.points[i].get_instance_id() == point_resource_id:
+				point_index = i
+				break
+
+	if point_index < 0 or point_index >= curve.points.size():
+		_restore_point_selection_state({"has_selection": false})
+		return
+
+	_preserve_point_selection_on_refresh = true
+	_selected_point_property_header = null
+	_selected_point_index = point_index
+	_selected_point_resource_id = curve.points[point_index].get_instance_id()
+	_selected_point_property_name = StringName(
+		selection.get("property_name", StringName())
+	)
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.selected_index = point_index
+
 func handle_points(curve: EasingCurve) -> VBoxContainer:
 	# Contains the list of points
 	var point_list = PointsListContainer.new()
@@ -1561,17 +1624,24 @@ func _move_point(from_index: int, to_index: int) -> void:
 		or to_index >= curve.points.size()
 	):
 		return
+
+	var selection_before := _capture_point_selection_state()
+	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	var moved_point := curve.points[from_index]
-	EASING_CURVE_EDITOR_UNDO.apply_action(
+	curve.swap_points(from_index, to_index)
+	_select_reordered_point(moved_point)
+	var selection_after := _capture_point_selection_state()
+	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 		editor_undo_redo,
 		curve,
 		"Reorder Easing Curve Points",
-		func():
-			curve.swap_points(from_index, to_index)
-			_select_reordered_point(moved_point),
+		before,
+		{},
 		_undo_source_property(),
+		Callable(self, "_restore_point_selection_state"),
+		selection_before,
+		selection_after,
 	)
-
 
 func _select_reordered_point(point: EasingCurvePoint) -> void:
 	var point_index := _get_current_point_index(point)
@@ -2176,9 +2246,11 @@ func _on_add_point_btn_pressed() -> void:
 
 func _add_points_list_point(point: EasingCurvePoint) -> void:
 	_preserve_point_selection_on_refresh = true
-	var added_point := _add_point(point)
-	_select_reordered_point(added_point)
-
+	_add_point(
+		point,
+		_capture_point_selection_state(),
+		true,
+	)
 
 func _create_foldable_section(
 	title: String,
@@ -2314,7 +2386,7 @@ func _on_linear_control_x_input_focus_exited(
 
 
 func _on_curve_editor_point_add_requested(point: EasingCurvePoint) -> void:
-	_add_point(point)
+	_add_point(point, _capture_point_selection_state())
 
 
 func _on_curve_editor_point_remove_requested(point: EasingCurvePoint) -> void:
@@ -2915,7 +2987,11 @@ func _point_action_name(property_name: StringName) -> String:
 	return "Edit Easing Curve Point"
 
 
-func _add_point(point: EasingCurvePoint) -> EasingCurvePoint:
+func _add_point(
+	point: EasingCurvePoint,
+	selection_before: Dictionary = {},
+	select_added_immediately := false,
+) -> EasingCurvePoint:
 	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	var updated_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	updated_points.append(point)
@@ -2925,6 +3001,20 @@ func _add_point(point: EasingCurvePoint) -> EasingCurvePoint:
 	)
 	var added_point_index := updated_points.find(point)
 	curve.set_point_snapshot(curve.make_point_snapshot(updated_points))
+	var added_point := curve.points[added_point_index]
+	if select_added_immediately:
+		_select_reordered_point(added_point)
+
+	var selection_after := (
+		_capture_point_selection_state()
+		if select_added_immediately
+		else {
+			"has_selection": true,
+			"point_index": added_point_index,
+			"point_resource_id": added_point.get_instance_id(),
+			"property_name": StringName(),
+		}
+	)
 	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 		editor_undo_redo,
 		curve,
@@ -2932,11 +3022,14 @@ func _add_point(point: EasingCurvePoint) -> EasingCurvePoint:
 		before,
 		{},
 		_undo_source_property(),
+		Callable(self, "_restore_point_selection_state") if not selection_before.is_empty() else Callable(),
+		selection_before,
+		selection_after,
 	)
-	return curve.points[added_point_index]
-
+	return added_point
 
 func _remove_point(point: EasingCurvePoint) -> void:
+	var selection_before := _capture_point_selection_state()
 	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	var updated_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	var point_index := updated_points.find(point)
@@ -2944,6 +3037,7 @@ func _remove_point(point: EasingCurvePoint) -> void:
 		return
 	updated_points.remove_at(point_index)
 	curve.set_point_snapshot(curve.make_point_snapshot(updated_points))
+	var selection_after := _capture_point_selection_state()
 	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 		editor_undo_redo,
 		curve,
@@ -2951,8 +3045,10 @@ func _remove_point(point: EasingCurvePoint) -> void:
 		before,
 		{},
 		_undo_source_property(),
+		Callable(self, "_restore_point_selection_state"),
+		selection_before,
+		selection_after,
 	)
-
 
 func _emit_curve_property(property_name: StringName, value: Variant) -> void:
 	if (

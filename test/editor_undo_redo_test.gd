@@ -18,6 +18,7 @@ func _init() -> void:
 	_test_point_drag()
 	_test_handle_drag()
 	_test_add_point()
+	_test_topology_selection_undo_redo()
 	_test_remove_point()
 	_test_point_lock()
 	_test_point_reset()
@@ -221,6 +222,101 @@ func _test_add_point() -> void:
 	_expect(curve.points[1].changed.is_connected(Callable(curve, "_on_point_changed")), "Add point Redo left the restored point disconnected")
 	_dispose_history(history)
 
+
+func _test_topology_selection_undo_redo() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	curve.points = [
+		EasingCurvePoint.new(Vector2.ZERO),
+		EasingCurvePoint.new(Vector2.ONE),
+	]
+	var editor_context := EDITOR_HOST.create_inspector_context(curve)
+	var editor: EasingCurveEditor = editor_context.editor
+	var inspector: Object = editor_context.inspector
+	var history := UndoRedo.new()
+	inspector.call("_clear_point_property_selection")
+	editor.selected_index = -1
+
+	var add_a_before := EDITOR_UNDO.capture_state(curve)
+	var add_a_before_selection: Dictionary = inspector.call(
+		"_capture_point_selection_state"
+	)
+	var point_a := EasingCurvePoint.new(Vector2(0.33, 0.25))
+	var add_a_points: Array[EasingCurvePoint] = curve.points.duplicate()
+	add_a_points.append(point_a)
+	var point_a_index := add_a_points.find(point_a)
+	curve.set_point_snapshot(curve.make_point_snapshot(add_a_points))
+	inspector.call("_select_reordered_point", curve.points[point_a_index])
+	var add_a_after_selection: Dictionary = inspector.call(
+		"_capture_point_selection_state"
+	)
+	_expect(
+		EDITOR_UNDO.commit_applied_action(
+			history,
+			curve,
+			"Add Easing Curve Point A",
+			add_a_before,
+			{},
+			null,
+			Callable(inspector, "_restore_point_selection_state"),
+			add_a_before_selection,
+			add_a_after_selection,
+		),
+		"Add A did not record selection restoration",
+	)
+	_expect(editor.selected_index == point_a_index, "Add A did not select its point")
+	history.undo()
+	_expect(editor.selected_index == -1, "Undo Add A did not restore no graph selection")
+	_expect(inspector.get("_selected_point_index") == -1, "Undo Add A did not restore no list selection")
+	history.redo()
+	point_a_index = int(add_a_after_selection.point_index)
+	_expect(editor.selected_index == point_a_index, "Redo Add A did not restore graph selection")
+	_expect(inspector.get("_selected_point_index") == point_a_index, "Redo Add A did not restore list selection")
+
+	var add_b_before := EDITOR_UNDO.capture_state(curve)
+	var add_b_before_selection: Dictionary = inspector.call(
+		"_capture_point_selection_state"
+	)
+	var point_b := EasingCurvePoint.new(Vector2(0.66, 0.75))
+	var add_b_points: Array[EasingCurvePoint] = curve.points.duplicate()
+	add_b_points.append(point_b)
+	var point_b_index := add_b_points.find(point_b)
+	curve.set_point_snapshot(curve.make_point_snapshot(add_b_points))
+	inspector.call("_select_reordered_point", curve.points[point_b_index])
+	var add_b_after_selection: Dictionary = inspector.call(
+		"_capture_point_selection_state"
+	)
+	_expect(
+		EDITOR_UNDO.commit_applied_action(
+			history,
+			curve,
+			"Add Easing Curve Point B",
+			add_b_before,
+			{},
+			null,
+			Callable(inspector, "_restore_point_selection_state"),
+			add_b_before_selection,
+			add_b_after_selection,
+		),
+		"Add B did not record selection restoration",
+	)
+	history.undo()
+	point_a_index = int(add_b_before_selection.point_index)
+	_expect(editor.selected_index == point_a_index, "Undo Add B did not restore Add A selection")
+	history.redo()
+	point_b_index = int(add_b_after_selection.point_index)
+	_expect(editor.selected_index == point_b_index, "Redo Add B did not restore Add B selection")
+	history.undo()
+	history.undo()
+	_expect(editor.selected_index == -1, "Undoing both adds did not restore no graph selection")
+	_expect(inspector.get("_selected_point_index") == -1, "Undoing both adds did not restore no list selection")
+	history.redo()
+	_expect(editor.selected_index == point_a_index, "Redo Add A after no selection did not restore A")
+	history.redo()
+	_expect(editor.selected_index == point_b_index, "Redo Add B after no selection did not restore B")
+	history.clear_history(false)
+	history.free()
+	editor.free()
 
 func _test_remove_point() -> void:
 	var curve := _three_point_curve()

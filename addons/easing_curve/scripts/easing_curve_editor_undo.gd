@@ -15,6 +15,9 @@ static func commit_applied_action(
 		before: Dictionary,
 		after: Dictionary = {},
 		source_property: EditorProperty = null,
+		selection_restorer: Callable = Callable(),
+		before_selection: Dictionary = {},
+		after_selection: Dictionary = {},
 ) -> bool:
 	if curve == null:
 		return false
@@ -53,6 +56,13 @@ static func commit_applied_action(
 			"emit_signal",
 			&"property_edited",
 			String(EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY),
+		)
+	if selection_restorer.is_valid():
+		undo_redo.add_do_method(
+			selection_restorer.bind(after_selection.duplicate(true)),
+		)
+		undo_redo.add_undo_method(
+			selection_restorer.bind(before_selection.duplicate(true)),
 		)
 	# The editor control already applied the resulting state for immediate feedback.
 	undo_redo.commit_action(false)
