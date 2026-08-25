@@ -127,7 +127,7 @@ func _copy_point_property_value(
 	if point_index < 0 or point_index >= curve.points.size():
 		return
 
-	var value: Vector2 = curve.points[point_index].get(property_name)
+	var value: Variant = curve.points[point_index].get(property_name)
 
 	DisplayServer.clipboard_set(
 		var_to_str(value)
@@ -144,7 +144,15 @@ func _paste_point_property_value(
 	var clipboard := DisplayServer.clipboard_get()
 	var value: Variant = str_to_var(clipboard)
 
-	if not value is Vector2:
+	_apply_pasted_point_property_value(point_index, property_name, value)
+
+
+func _apply_pasted_point_property_value(
+	point_index: int,
+	property_name: StringName,
+	value: Variant,
+) -> void:
+	if not _is_point_property_value_compatible(property_name, value):
 		return
 
 	_apply_point_property_change(
@@ -166,13 +174,30 @@ func _copy_point_property_path(
 	)
 
 
-static func _clipboard_has_vector2() -> bool:
+static func _is_point_property_value_compatible(
+	property_name: StringName,
+	value: Variant,
+) -> bool:
+	if property_name == &"handle_mode":
+		return (
+			value is int
+			and int(value) in EasingCurvePoint.HandleMode.values()
+		)
+	return value is Vector2
+
+
+static func _clipboard_has_compatible_point_property_value(
+	property_name: StringName,
+) -> bool:
 	var clipboard := DisplayServer.clipboard_get()
 
 	if clipboard.is_empty():
 		return false
 
-	return str_to_var(clipboard) is Vector2
+	return _is_point_property_value_compatible(
+		property_name,
+		str_to_var(clipboard),
+	)
 
 
 func _create_point_property_context_menu(
@@ -225,6 +250,68 @@ func _create_point_property_context_menu(
 
 	return menu
 
+
+func _create_selectable_point_property_header(
+	i: int,
+	property_name: StringName,
+	label_text: String,
+	reset_btn: Button,
+) -> PanelContainer:
+	var property_header := PanelContainer.new()
+	property_header.focus_mode = Control.FOCUS_NONE
+
+	var property_context_menu := _create_point_property_context_menu(
+		i,
+		property_name,
+	)
+	property_header.add_child(property_context_menu)
+	var property_path := _point_property_path(i, property_name)
+	property_header.tooltip_text = property_path
+	property_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	property_header.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	property_header.add_theme_stylebox_override(&"panel", StyleBoxEmpty.new())
+	property_header.gui_input.connect(
+		func(event: InputEvent):
+			if not event is InputEventMouseButton or not event.pressed:
+				return
+
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				_select_point_property(property_header, i, property_name)
+			elif event.button_index == MOUSE_BUTTON_RIGHT:
+				_select_point_property(property_header, i, property_name)
+				var paste_index := property_context_menu.get_item_index(
+					POINT_MENU_PASTE_VALUE,
+				)
+				property_context_menu.set_item_disabled(
+					paste_index,
+					not _clipboard_has_compatible_point_property_value(
+						property_name,
+					),
+				)
+				property_context_menu.position = DisplayServer.mouse_get_position()
+				property_context_menu.popup()
+				property_header.accept_event()
+	)
+
+	if (
+		_selected_point_index == i
+		and _selected_point_property_name == property_name
+	):
+		_selected_point_property_header = property_header
+		_set_point_property_selected(property_header, true)
+
+	var header_hbox := HBoxContainer.new()
+	header_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_hbox.add_theme_constant_override(&"separation", _compact_separation())
+	property_header.add_child(header_hbox)
+
+	var property_label := Label.new()
+	property_label.text = label_text
+	property_label.tooltip_text = property_path
+	_configure_compact_label(property_label)
+	header_hbox.add_child(property_label)
+	header_hbox.add_child(_create_point_reset_margin(reset_btn))
+	return property_header
 
 
 class DeferredParameterEditorProperty:
@@ -1560,10 +1647,11 @@ func _set_point_property_selected(
 
 	var style := StyleBoxFlat.new()
 
-	var accent := EditorInterface.get_base_control().get_theme_color(
-		&"accent_color",
-		&"Editor"
-	)
+	var accent := Color(0.3, 0.6, 1.0)
+	if DisplayServer.get_name() != "headless":
+		var base_control := EditorInterface.get_base_control()
+		if is_instance_valid(base_control):
+			accent = base_control.get_theme_color(&"accent_color", &"Editor")
 
 	accent.a = 0.10
 	style.bg_color = accent
@@ -1601,97 +1689,19 @@ func _create_vector2_property(
 	property_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	property_vbox.add_child(property_hbox)
 
-	# Clickable properties
-	var property_header := PanelContainer.new()
-	property_header.focus_mode = Control.FOCUS_NONE
-
-	var property_context_menu := _create_point_property_context_menu(
-		i,
-		StringName(property_name)
-	)
-	property_header.add_child(property_context_menu)
-	var property_path := _point_property_path(
-		i,
-		StringName(property_name)
-	)
-	property_header.tooltip_text = property_path
-
-	property_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	property_header.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	property_header.add_theme_stylebox_override(
-		&"panel",
-		StyleBoxEmpty.new()
-	)
-	property_header.gui_input.connect(
-		func(event: InputEvent):
-			if not event is InputEventMouseButton:
-				return
-
-			if not event.pressed:
-				return
-
-			if event.button_index == MOUSE_BUTTON_LEFT:
-				_select_point_property(
-					property_header,
-					i,
-					StringName(property_name)
-				)
-
-			elif event.button_index == MOUSE_BUTTON_RIGHT:
-				_select_point_property(
-					property_header,
-					i,
-					StringName(property_name)
-				)
-
-				var paste_index := property_context_menu.get_item_index(
-					POINT_MENU_PASTE_VALUE
-				)
-
-				property_context_menu.set_item_disabled(
-					paste_index,
-					not _clipboard_has_vector2()
-				)
-
-				property_context_menu.position = (
-					DisplayServer.mouse_get_position()
-				)
-
-				property_context_menu.popup()
-
-				property_header.accept_event()
-	)
-	property_hbox.add_child(property_header)
-	if (
-	_selected_point_index == i
-		and _selected_point_property_name == StringName(property_name)
-	):
-		_selected_point_property_header = property_header
-		_set_point_property_selected(property_header, true)
-
-	var header_hbox := HBoxContainer.new()
-	header_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_hbox.add_theme_constant_override(
-		&"separation",
-		_compact_separation()
-	)
-	property_header.add_child(header_hbox)
-
-	# Property label (Position / Left Control / Right Control)
-	var property_label := Label.new()
-	property_label.text = label_text
-	property_label.tooltip_text = property_path
-	_configure_compact_label(property_label)
-	header_hbox.add_child(property_label)
-
-	# Reset Button
+	# Selectable property header and reset slot.
 	var reset_btn := _create_point_reset_button()
-	var reset_margin := _create_point_reset_margin(reset_btn)
 	_set_point_reset_button_available(
 		reset_btn,
 		not current_vec.is_equal_approx(default_vec)
 	)
-	header_hbox.add_child(reset_margin)
+	var property_header := _create_selectable_point_property_header(
+		i,
+		StringName(property_name),
+		label_text,
+		reset_btn,
+	)
+	property_hbox.add_child(property_header)
 
 	# Value container panel (x/y inputs; lock_btn)
 	var value_panel := PanelContainer.new()
@@ -1996,7 +2006,13 @@ func _create_inspector_section(
 				_selected_point_property_name
 			)
 
-	section.can_paste_callback = _clipboard_has_vector2
+	section.can_paste_callback = func():
+		return (
+			_selected_point_index >= 0
+			and _clipboard_has_compatible_point_property_value(
+				_selected_point_property_name,
+			)
+		)
 
 	section.setup(title, content, curve)
 	return section
@@ -2101,21 +2117,26 @@ func _create_handle_mode_property(
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", _compact_separation())
 
-	var label := Label.new()
-	label.text = "Handle Mode"
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(label)
-
 	var reset_btn := _create_point_reset_button()
 	_set_point_reset_button_available(
 		reset_btn,
 		point.handle_mode != EasingCurvePoint.HandleMode.FREE,
 	)
-	row.add_child(_create_point_reset_margin(reset_btn))
+	var property_header := _create_selectable_point_property_header(
+		i,
+		&"handle_mode",
+		"Handle Mode",
+		reset_btn,
+	)
+	row.add_child(property_header)
 
+	var value_panel := PanelContainer.new()
+	value_panel.add_theme_stylebox_override(&"panel", X_STYLEBOX)
+	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(value_panel)
 	var option := OptionButton.new()
-	option.fit_to_longest_item = false
-	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_configure_compact_option(option)
+	value_panel.add_child(option)
 
 	option.add_item("Free", EasingCurvePoint.HandleMode.FREE)
 	option.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
@@ -2130,17 +2151,33 @@ func _create_handle_mode_property(
 
 	option.item_selected.connect(
 		func(index: int):
+			var point_index := _get_current_point_index(point)
+			if point_index == -1:
+				return
+			_select_point_property(property_header, point_index, &"handle_mode")
 			_apply_point_property_change(
-				i,
+				point_index,
 				&"handle_mode",
 				option.get_item_id(index),
 			)
 	)
+	option.focus_entered.connect(
+		_select_point_property_for_point.bind(
+			property_header,
+			point,
+			&"handle_mode",
+		)
+	)
 	reset_btn.pressed.connect(
 		_on_handle_mode_reset_pressed.bind(point, option, reset_btn)
 	)
-
-	row.add_child(option)
+	reset_btn.pressed.connect(
+		_select_point_property_for_point.bind(
+			property_header,
+			point,
+			&"handle_mode",
+		)
+	)
 
 	return row
 
