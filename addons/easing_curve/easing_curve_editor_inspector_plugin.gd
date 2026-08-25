@@ -264,12 +264,7 @@ func _create_selectable_point_property_header(
 	property_header.focus_mode = Control.FOCUS_NONE
 	#property_header.clip_contents = true
 
-	var reset_width := maxf(
-		reset_btn.get_combined_minimum_size().x,
-		float(reset_btn.icon.get_width())
-			* EditorInterface.get_editor_scale(),
-	)
-
+	var reset_width := 24.0 * EditorInterface.get_editor_scale()
 	var reset_gap := float(_compact_separation())
 
 	property_header.custom_minimum_size.x = (
@@ -351,17 +346,35 @@ func _create_selectable_point_property_header(
 	reset_btn.set_meta(&"point_property_label", property_label)
 	reset_btn.set_meta(&"point_reset_width", reset_width)
 	reset_btn.set_meta(&"point_reset_gap", reset_gap)
-	reset_btn.anchor_left = 1.0
-	reset_btn.anchor_right = 1.0
+
+
+	var reset_clip := Control.new()
+	reset_clip.clip_contents = true
+	reset_clip.anchor_left = 1.0
+	reset_clip.anchor_right = 1.0
+	reset_clip.anchor_top = 0.0
+	reset_clip.anchor_bottom = 1.0
+	reset_clip.offset_left = -(reset_width + reset_gap)
+	reset_clip.offset_right = -reset_gap
+	reset_clip.offset_top = 0.0
+	reset_clip.offset_bottom = 0.0
+	overlay_root.add_child(reset_clip)
+
+	reset_btn.anchor_left = 0.5
+	reset_btn.anchor_right = 0.5
 	reset_btn.anchor_top = 0.0
 	reset_btn.anchor_bottom = 1.0
-	reset_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	reset_btn.offset_left = -(reset_width + reset_gap)
-	reset_btn.offset_right = -reset_gap
+	reset_btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
 
+	var button_width := reset_btn.get_combined_minimum_size().x
+	reset_btn.offset_left = -button_width * 0.5
+	reset_btn.offset_right = button_width * 0.5
 	reset_btn.offset_top = 0.0
 	reset_btn.offset_bottom = 0.0
-	overlay_root.add_child(reset_btn)
+
+	reset_clip.add_child(reset_btn)
+
+
 	_update_point_reset_button_label_margin(reset_btn)
 
 	return property_header
@@ -1658,14 +1671,20 @@ static func _create_point_reset_button() -> Button:
 		StyleBoxEmpty.new(),
 	)
 
-	reset_btn.add_theme_stylebox_override(
-		&"hover",
-		reset_btn.get_theme_stylebox(&"hover").duplicate(),
-	)
-	reset_btn.add_theme_stylebox_override(
-		&"pressed",
-		reset_btn.get_theme_stylebox(&"pressed").duplicate(),
-	)
+	var hover_style := reset_btn.get_theme_stylebox(&"hover").duplicate()
+	var pressed_style := reset_btn.get_theme_stylebox(&"pressed").duplicate()
+
+	var horizontal_margin := 0.0
+
+	hover_style.content_margin_left = horizontal_margin
+	hover_style.content_margin_right = horizontal_margin
+
+	pressed_style.content_margin_left = horizontal_margin
+	pressed_style.content_margin_right = horizontal_margin
+
+	reset_btn.add_theme_stylebox_override(&"hover", hover_style)
+	reset_btn.add_theme_stylebox_override(&"pressed", pressed_style)
+
 
 	reset_btn.add_theme_stylebox_override(
 		&"focus",
