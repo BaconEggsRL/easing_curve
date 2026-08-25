@@ -838,6 +838,7 @@ class PointsFoldableSection:
 	var _fallback_folded := false
 	var _fold_scroll_debug_collapse_count := 0
 	var _pending_fold_scroll_debug_collapse := 0
+	var _fold_scroll_debug_hierarchy_logged := false
 	var base := EditorInterface.get_base_control()
 	var normal_color := base.get_theme_color(
 		&"font_color",
@@ -1069,16 +1070,43 @@ class PointsFoldableSection:
 			ancestor = ancestor.get_parent()
 		return null
 
+	func _capture_fold_scroll_debug_hierarchy() -> void:
+		if _fold_scroll_debug_hierarchy_logged:
+			return
+		_fold_scroll_debug_hierarchy_logged = true
+
+		var inspectors: Array[Dictionary] = []
+		var ancestor := get_parent()
+		while ancestor != null:
+			if ancestor is EditorInspector:
+				var inspector := ancestor as EditorInspector
+				var scroll_bar := inspector.get_v_scroll_bar()
+				inspectors.append({
+					"path": String(inspector.get_path()),
+					"instance_id": inspector.get_instance_id(),
+					"size_y": inspector.size.y,
+					"scroll_vertical": inspector.get_v_scroll(),
+					"scrollbar_value": scroll_bar.value,
+					"scrollbar_max_value": scroll_bar.max_value,
+					"scrollbar_page": scroll_bar.page,
+				})
+			ancestor = ancestor.get_parent()
+
+		print("EC_FOLD_SCROLL_HIERARCHY ", JSON.stringify(inspectors))
+
 	func _capture_fold_scroll_debug(stage: String, collapse_id: int) -> void:
 		if not FOLD_SCROLL_DEBUG or not is_inside_tree():
 			return
 
-		var inspector := _find_inspector_scroll_container()
-		if inspector == null:
-			print("EC_FOLD_SCROLL collapse=%d stage=%s inspector=missing" % [collapse_id, stage])
+		_capture_fold_scroll_debug_hierarchy()
+		var nested_inspector := _find_inspector_scroll_container()
+		if nested_inspector == null:
+			print("EC_FOLD_SCROLL collapse=%d stage=%s nested_inspector=missing" % [collapse_id, stage])
 			return
 
-		var scroll_bar := inspector.get_v_scroll_bar()
+		var nested_scroll_bar := nested_inspector.get_v_scroll_bar()
+		var main_inspector := EditorInterface.get_inspector()
+		var main_scroll_bar := main_inspector.get_v_scroll_bar()
 		var focus_owner := get_viewport().gui_get_focus_owner()
 		var focus_in_content := (
 			is_instance_valid(focus_owner)
@@ -1093,11 +1121,23 @@ class PointsFoldableSection:
 			"collapse": collapse_id,
 			"stage": stage,
 			"folded": folded,
-			"scroll_vertical": inspector.get_v_scroll(),
-			"scrollbar_value": scroll_bar.value,
-			"scrollbar_max_value": scroll_bar.max_value,
-			"scrollbar_page": scroll_bar.page,
-			"inspector_size_y": inspector.size.y,
+			"nested_path": String(nested_inspector.get_path()),
+			"nested_instance_id": nested_inspector.get_instance_id(),
+			"nested_size_y": nested_inspector.size.y,
+			"nested_scroll_vertical": nested_inspector.get_v_scroll(),
+			"nested_scrollbar_value": nested_scroll_bar.value,
+			"nested_scrollbar_max_value": nested_scroll_bar.max_value,
+			"nested_scrollbar_page": nested_scroll_bar.page,
+			"main_path": String(main_inspector.get_path()),
+			"main_instance_id": main_inspector.get_instance_id(),
+			"main_size_y": main_inspector.size.y,
+			"main_global_y": main_inspector.global_position.y,
+			"main_scroll_vertical": main_inspector.get_v_scroll(),
+			"main_scrollbar_value": main_scroll_bar.value,
+			"main_scrollbar_max_value": main_scroll_bar.max_value,
+			"main_scrollbar_page": main_scroll_bar.page,
+			"section_global_y": _native_section.global_position.y,
+			"section_viewport_y": _native_section.global_position.y - main_inspector.global_position.y,
 			"section_size_y": _native_section.size.y,
 			"section_minimum_y": _native_section.get_combined_minimum_size().y,
 			"content_size_y": _content.size.y,
@@ -1105,7 +1145,6 @@ class PointsFoldableSection:
 			"focus_owner": focus_name,
 			"focus_in_content": focus_in_content,
 		}))
-
 	func _capture_fold_scroll_debug_after_frames(collapse_id: int) -> void:
 		if not is_inside_tree():
 			return
