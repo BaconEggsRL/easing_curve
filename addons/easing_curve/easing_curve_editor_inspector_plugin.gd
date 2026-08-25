@@ -825,8 +825,9 @@ class PointsFoldableSection:
 	var copy_path_callback: Callable
 	var can_paste_callback: Callable
 
-	static var folded_by_resource: Dictionary[int, bool] = {}
+	static var folded_by_section: Dictionary[String, bool] = {}
 	var resource_id: int
+	var fold_state_key := ""
 	var title: String
 	var _native_section: Control
 	var _fallback_header: Button
@@ -916,8 +917,15 @@ class PointsFoldableSection:
 	func setup(section_title: String, content: Control, object: EasingCurve) -> void:
 		resource_id = object.get_instance_id()
 		title = section_title
+		fold_state_key = "%d:%s" % [
+			resource_id,
+			section_title,
+		]
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var initially_folded: bool = folded_by_resource.get(resource_id, false)
+		var initially_folded: bool = folded_by_section.get(
+			fold_state_key,
+			false,
+		)
 		if ClassDB.class_exists(&"FoldableContainer"):
 			_native_section = ClassDB.instantiate(&"FoldableContainer") as Control
 			_native_section.set(&"title", section_title)
@@ -1006,7 +1014,7 @@ class PointsFoldableSection:
 		_set_fallback_folded(false)
 
 	func _on_folding_changed(is_folded: bool) -> void:
-		folded_by_resource[resource_id] = is_folded
+		folded_by_section[fold_state_key] = is_folded
 
 	func _toggle_fallback() -> void:
 		_set_fallback_folded(not _fallback_folded)
@@ -1196,6 +1204,13 @@ func handle_easing_curve_editor(object) -> Control:
 		point_toolbar_gap.custom_minimum_size.y = _compact_separation()
 		curve_section.add_child(point_toolbar_gap)
 
+
+		var curve_editor_content := VBoxContainer.new()
+		curve_editor_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		curve_editor_content.add_theme_constant_override(
+			"separation",
+			_compact_separation(),
+		)
 		########################################
 		# Add curve editor
 		easing_curve_editor = EasingCurveEditor.new()
@@ -1258,14 +1273,14 @@ func handle_easing_curve_editor(object) -> Control:
 		)
 
 		# Add curve editor
-		curve_section.add_child(easing_curve_editor)
+		curve_editor_content.add_child(easing_curve_editor)
 		easing_curve_editor.resized.connect(easing_curve_editor.update_minimum_size)
 
 		########################################
 		# Add zoom slider
 		var zoom_row := HBoxContainer.new()
 		zoom_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		curve_section.add_child(zoom_row)
+		curve_editor_content.add_child(zoom_row)
 
 		var zoom_spacer := Control.new()
 		zoom_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1280,6 +1295,13 @@ func handle_easing_curve_editor(object) -> Control:
 		easing_curve_editor._slider = zoom_slider_container
 		easing_curve_editor.set_slider_value(object._last_slider_value)
 
+
+		var curve_editor_section := _create_foldable_section(
+			"Curve Editor",
+			curve_editor_content,
+			object,
+		)
+		curve_section.add_child(curve_editor_section)
 		########################################
 		return curve_section
 	return null
@@ -2155,6 +2177,16 @@ func _add_points_list_point(point: EasingCurvePoint) -> void:
 	_preserve_point_selection_on_refresh = true
 	var added_point := _add_point(point)
 	_select_reordered_point(added_point)
+
+
+func _create_foldable_section(
+	title: String,
+	content: Control,
+	curve: EasingCurve,
+) -> Control:
+	var section := PointsFoldableSection.new()
+	section.setup(title, content, curve)
+	return section
 
 
 func _create_inspector_section(

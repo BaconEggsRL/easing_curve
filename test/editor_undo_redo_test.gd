@@ -497,7 +497,7 @@ func _test_points_foldable_section() -> void:
 	var third_section := INSPECTOR_PLUGIN.PointsFoldableSection.new()
 	third_section.setup("Points", VBoxContainer.new(), curve)
 	_expect(not third_section.folded, "Expanded Points state was not preserved after rebuilding the Inspector")
-	INSPECTOR_PLUGIN.PointsFoldableSection.folded_by_resource.erase(curve.get_instance_id())
+	INSPECTOR_PLUGIN.PointsFoldableSection.folded_by_section.erase("%d:%s" % [curve.get_instance_id(), "Points"])
 	first_section.free()
 	second_section.free()
 	third_section.free()
