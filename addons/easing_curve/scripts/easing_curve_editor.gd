@@ -1310,7 +1310,12 @@ func _update_point_toolbar() -> void:
 	_point_toolbar.visible = true
 
 	if not valid_selection:
-		_point_label.text = "No Selection"
+		_point_label.text = (
+			""
+			if _curve != null
+			and _curve.curve_mode == EasingCurve.CurveMode.FUNCTION
+			else "No Selection"
+		)
 		_point_label.modulate.a = 0.6
 		_point_handle_mode.visible = false
 		_set_point_toolbar_reset_available(false)
