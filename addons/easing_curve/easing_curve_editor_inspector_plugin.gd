@@ -2033,12 +2033,41 @@ func _create_vector2_property(
 	value_vbox.add_child(y_row)
 
 func _on_add_point_btn_pressed() -> void:
-	var default_position := Vector2(0.0, 0.0)
+	var has_left_endpoint := false
+	var has_right_endpoint := false
 	for point in curve.points:
-		if point != null and EasingCurve.is_left_endpoint_x(point.position.x):
-			default_position = Vector2(1.0, 1.0)
-			break
-	_add_point(EasingCurvePoint.new(default_position))
+		if point == null:
+			continue
+		has_left_endpoint = has_left_endpoint or EasingCurve.is_left_endpoint_x(
+			point.position.x
+		)
+		has_right_endpoint = has_right_endpoint or EasingCurve.is_right_endpoint_x(
+			point.position.x
+		)
+
+	if not has_left_endpoint:
+		_add_point(EasingCurvePoint.new(Vector2(0.0, 0.0)))
+		return
+
+	if not has_right_endpoint:
+		_add_point(EasingCurvePoint.new(Vector2(1.0, 1.0)))
+		return
+
+	var largest_gap := -1.0
+	var new_x := 0.0
+	for i in range(curve.points.size() - 1):
+		var left_point := curve.points[i]
+		var right_point := curve.points[i + 1]
+		if left_point == null or right_point == null:
+			continue
+		var gap := right_point.position.x - left_point.position.x
+		if gap > largest_gap:
+			largest_gap = gap
+			new_x = (left_point.position.x + right_point.position.x) * 0.5
+
+	var new_point := EasingCurvePoint.new(Vector2(new_x, curve.sample(new_x)))
+	new_point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
+	_add_point(new_point)
 
 
 func _create_inspector_section(
