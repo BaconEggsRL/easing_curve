@@ -56,13 +56,17 @@ func check_client_status(params: Dictionary) -> Dictionary:
 	# Match the dock refresh worker's cold-load guard. This is pure-memory and
 	# performs no launcher discovery, CLI lookup, or config/status probe.
 	McpClientConfigurator.warm_status_worker_bytecode()
+	# Refresh cwd/project roots on main before the status worker starts while
+	# preserving the startup launch snapshot for the deferred worker.
+	var status_context := _fallback_launch_context.duplicate(true)
+	status_context["project_roots"] = McpClientConfigurator.capture_project_roots()
 	# The aggregate command has a 30-second budget. Its worker resolves the
 	# shared Claude Desktop/Codex attach launch once, then reuses it for every
 	# command-shaped client instead of repeating cold launcher discovery.
 	# Start the worker from the deferred finisher after its first frame. That
 	# lets the dispatcher register this request before any probe can complete.
 	_finish_client_status_deferred(
-		McpClientConfigurator.run_client_status_sweep.bind(_fallback_launch_context),
+		McpClientConfigurator.run_client_status_sweep.bind(status_context),
 		request_id,
 		_connection,
 	)

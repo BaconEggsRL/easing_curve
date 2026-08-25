@@ -225,6 +225,8 @@ func _process(delta: float) -> void:
 		WebSocketPeer.STATE_CONNECTING:
 			pass
 
+func get_session_id() -> String:
+	return _session_id
 
 ## Drain up to PACKET_DRAIN_CAP_PER_TICK inbound packets and dispatch each
 ## via `_handle_message`. Anything past the cap stays in the peer's queue

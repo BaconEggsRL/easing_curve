@@ -9,15 +9,42 @@ func _init() -> void:
 	cli_names = PackedStringArray(["claude", "claude.exe"] if OS.get_name() == "Windows" else ["claude"])
 	## Stdio registration through the client-owned `godot-ai attach` bridge
 	## (#838). `--` stops claude's own flag parsing so the attach argv passes
-	## through verbatim; stdio is the CLI's default transport. Scope stays
-	## `user` — the same ~/.claude.json the pre-attach HTTP entry lived in.
+	## through verbatim; stdio is the CLI's default transport. Scope comes from
+	## the `godot_ai/mcp_client_scope` EditorSetting via the `{scope}` token; it
+	## defaults to `user` — the same ~/.claude.json the pre-attach HTTP entry
+	## lived in — and can be set to `project` to write <project>/.mcp.json so the
+	## server is not loaded in every unrelated workspace.
 	cli_register_template = PackedStringArray(
-		["mcp", "add", "--scope", "user", "{name}", "--", "{command}", "{args...}"]
+		["mcp", "add", "--scope", "{scope}", "{name}", "--", "{command}", "{args...}"]
 	)
 	## Explicit scope: an unscoped `mcp remove` deletes from whichever scope
-	## matches first, which could eat a project-local entry the user made.
-	cli_unregister_template = PackedStringArray(["mcp", "remove", "--scope", "user", "{name}"])
+	## matches first, so the flag keeps each removal aimed at one known place.
+	## Note what that does and does not protect (#877): the dock's **Remove**
+	## button runs this once, at the selected scope only. **Configure** runs it
+	## once per scope in `CLIENT_SCOPES` before registering, so a Configure at
+	## any setting does delete a `godot-ai` entry from <cwd>/.mcp.json if one is
+	## there — see the cwd caveat below for which directory that actually is.
+	cli_unregister_template = PackedStringArray(["mcp", "remove", "--scope", "{scope}", "{name}"])
+	## Scope caveat: `--scope project` resolves `.mcp.json` against the
+	## *spawned CLI's* working directory, which is whatever the editor process
+	## inherited at launch — not necessarily `res://`. Godot has no API to set
+	## a child's cwd (`OS.execute_with_pipe` takes none), so this is an
+	## accepted limitation rather than something the descriptor can pin. It is
+	## self-consistent: `cli_status_args` runs from the same cwd, so the
+	## read-back finds whatever the register wrote (see
+	## `_scope_diverges_from_json_fallback` in client_configurator.gd).
 	cli_status_args = PackedStringArray(["mcp", "list"])
+	## `mcp list` prints the resolved entry for the cwd without saying which
+	## scope won, so it cannot tell "registered at project scope" from "an old
+	## user-scope entry is shadowing an empty project scope". `mcp get` prints
+	## both the command and a `Scope: …` line, in the same single subprocess,
+	## so scope-token clients probe with it instead (#872). Verified against
+	## claude 2.1.241, which prints one of:
+	##   Scope: User config (available in all your projects)
+	##   Scope: Project config (shared via .mcp.json)
+	##   Scope: Local config (private to you in this project)
+	## and exits 1 with "No MCP server named …" when the entry is absent.
+	cli_scope_status_template = PackedStringArray(["mcp", "get", "{name}"])
 	## #463: JSON fallback for when the `claude` binary isn't on PATH — e.g.
 	## Claude Code installed only as a VS Code / Cursor extension. The CLI is
 	## still preferred for Configure whenever it resolves; this is what gets
@@ -26,13 +53,17 @@ func _init() -> void:
 	## (verified live against claude CLI in an isolated CLAUDE_CONFIG_DIR):
 	##   "godot-ai": { "type": "stdio", "command": "<cmd>", "args": [...], "env": {} }
 	## The fallback writer omits the empty `env`; the verifier accepts both.
-	## Status always reads this file — it is the CLI's own store for user
-	## scope, and file reads give exact launch-drift detection that `mcp list`
-	## stdout scanning cannot.
+	## Status reads this file only while the selected scope is still `user` —
+	## it is the CLI's own store for that scope, and file reads give exact
+	## launch-drift detection that `mcp list` stdout scanning cannot. At
+	## `project`/`local` the entry is somewhere `path_template` cannot see, so
+	## `_scope_diverges_from_json_fallback` (client_configurator.gd) routes
+	## status to `cli_scope_status_template` instead and this file is not read.
 	path_template = {"unix": "~/.claude.json", "windows": "~/.claude.json"}
 	server_key_path = PackedStringArray(["mcpServers"])
 	## URL-mode shape, used only for the manual-instruction fallback text —
-	## `claude mcp add --scope user --transport http` writes {type: http, url}.
+	## `claude mcp add --scope <scope> --transport http` writes {type: http, url},
+	## where <scope> is whatever `godot_ai/mcp_client_scope` resolves to.
 	entry_extra_fields = {"type": "http"}
 	command_shape = McpClient.CommandShape.FLAT
 	command_transport_key = "type"

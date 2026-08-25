@@ -21,6 +21,7 @@ const ClientRegistry := preload("res://addons/godot_ai/clients/_registry.gd")
 const JsonStrategy := preload("res://addons/godot_ai/clients/_json_strategy.gd")
 const TomlStrategy := preload("res://addons/godot_ai/clients/_toml_strategy.gd")
 const YamlStrategy := preload("res://addons/godot_ai/clients/_yaml_strategy.gd")
+const DshStrategy := preload("res://addons/godot_ai/clients/_dsh_strategy.gd")
 const CliStrategy := preload("res://addons/godot_ai/clients/_cli_strategy.gd")
 const ManualCommand := preload("res://addons/godot_ai/clients/_manual_command.gd")
 const CliFinder := preload("res://addons/godot_ai/clients/_cli_finder.gd")
@@ -47,6 +48,12 @@ const SUGGEST_PORT_MAX_PROBES := 64
 const SETTING_WS_PORT := "godot_ai/ws_port"
 const SETTING_STARTUP_TRACE := "godot_ai/log_startup_timing"
 const SETTING_KEEP_SERVER_ON_EXIT := "godot_ai/keep_server_on_exit"
+## External cwd the user can set when an MCP client (Pi, code-server, …) reads
+## project-tier config files from a directory this editor can't see. The
+## merge-tier strategies include it as an extra `_project_candidate_paths` root
+## so project overrides there are detected instead of silently shadowed by a
+## global-tier write. Codex-review finding F1.
+const SETTING_EXTERNAL_CLIENT_CWD := "godot_ai/external_client_cwd"
 const _DISCOVERY_TIMEOUT_MS := 3000
 ## Codex launches Windows console-subsystem MCP commands in a visible terminal.
 ## A GUI-subsystem Python keeps the bridge attached to Codex's redirected MCP
@@ -111,6 +118,8 @@ static func ensure_settings_registered() -> void:
 	_register_port_setting(es, SETTING_WS_PORT, DEFAULT_WS_PORT)
 	_register_bool_setting(es, SETTING_STARTUP_TRACE, false)
 	_register_bool_setting(es, SETTING_KEEP_SERVER_ON_EXIT, false)
+	_register_client_scope_setting(es)
+	_register_string_setting(es, SETTING_EXTERNAL_CLIENT_CWD, "")
 
 
 static func _register_port_setting(es: EditorSettings, key: String, default_port: int) -> void:
@@ -125,6 +134,22 @@ static func _register_port_setting(es: EditorSettings, key: String, default_port
 	})
 
 
+## Surface the CLI registration scope as an enum in Settings > Plugins so it is
+## discoverable without hand-editing editor_settings-4.tres. Kept at `user` by
+## default; `project` writes the entry into <project>/.mcp.json instead.
+static func _register_client_scope_setting(es: EditorSettings) -> void:
+	var key := McpSettings.SETTING_CLIENT_SCOPE
+	if not es.has_setting(key):
+		es.set_setting(key, McpSettings.DEFAULT_CLIENT_SCOPE)
+	es.set_initial_value(key, McpSettings.DEFAULT_CLIENT_SCOPE, false)
+	es.add_property_info({
+		"name": key,
+		"type": TYPE_STRING,
+		"hint": PROPERTY_HINT_ENUM,
+		"hint_string": ",".join(PackedStringArray(McpSettings.CLIENT_SCOPES)),
+	})
+
+
 static func _register_bool_setting(es: EditorSettings, key: String, default_value: bool) -> void:
 	if not es.has_setting(key):
 		es.set_setting(key, default_value)
@@ -132,6 +157,21 @@ static func _register_bool_setting(es: EditorSettings, key: String, default_valu
 	es.add_property_info({
 		"name": key,
 		"type": TYPE_BOOL,
+	})
+
+
+static func _register_string_setting(es: EditorSettings, key: String, default_value: String) -> void:
+	## Same idempotent set-then-hint dance as the bool helper; `PROPERTY_HINT_NONE`
+	## leaves the editor's plain text-input widget in place (the cwd string is
+	## freeform). The hint-string slot is required by the API even when empty.
+	if not es.has_setting(key):
+		es.set_setting(key, default_value)
+	es.set_initial_value(key, default_value, false)
+	es.add_property_info({
+		"name": key,
+		"type": TYPE_STRING,
+		"hint": PROPERTY_HINT_NONE,
+		"hint_string": "",
 	})
 
 
@@ -249,6 +289,7 @@ static func capture_launch_context() -> Dictionary:
 		"allow_dev_venv": mode_override() != "user",
 		"platform": OS.get_name(),
 		"server_url": "http://127.0.0.1:%d/mcp" % captured_http_port,
+		"project_roots": capture_project_roots(),
 		## The opt-out must ride the attach argv: the client spawns the bridge
 		## (and the bridge its backend) with no editor in the loop, so the
 		## env-injection path in server_lifecycle.gd never runs for them.
@@ -258,6 +299,51 @@ static func capture_launch_context() -> Dictionary:
 	_launch_context_snapshot = context.duplicate(true)
 	_launch_context_snapshot_mutex.unlock()
 	return context
+
+
+## Resolve roots used by cwd-relative client project config tiers while the
+## engine singletons are safe to access. Workers receive this immutable snapshot.
+static func capture_project_roots() -> PackedStringArray:
+	var current_access := DirAccess.open(".")
+	var current_root := "" if current_access == null else current_access.get_current_dir().simplify_path()
+	var project_root := ProjectSettings.globalize_path("res://").simplify_path()
+	# Codex F1: when the user sets `godot_ai/external_client_cwd` we probe that
+	# directory in addition to the two guessed roots. The setter / setter-snapshot
+	# pathway is the same as the existing EditorSettings (warm_env_snapshot
+	# pre-warms this key so worker-thread callers see the snapshot, not the live
+	# EditorInterface). Empty string is filtered out by `_canonicalize_roots_for_test`.
+	var external_cwd := str(_editor_setting_lookup(SETTING_EXTERNAL_CLIENT_CWD))
+	return _canonicalize_roots_for_test(PackedStringArray([current_root, project_root, external_cwd]))
+
+
+## Canonicalize a list of root paths to one filesystem representation per
+## directory and deduplicate. `ProjectSettings.globalize_path` maps any
+## `res://` / `user://` form to the absolute path and is idempotent on an
+## already-absolute path, so a `res://`-form candidate and its absolute twin
+## collapse to the same entry. Without this pass, `_project_candidate_paths`
+## would probe `<root>/.pi/mcp.json` against both representations of the same
+## directory and `manual_target_details` would mis-report a single project
+## override as multiple tiers (codex-review finding F4). Public-ish seam
+## (named `_..._for_test`) so the clients suite can pin the behaviour without
+## having to mock `DirAccess.open(".")`.
+static func _canonicalize_roots_for_test(raws: PackedStringArray) -> PackedStringArray:
+	var seen := {}
+	var roots := PackedStringArray()
+	for raw in raws:
+		var s := str(raw).strip_edges()
+		if s.is_empty():
+			continue
+		var canon := ProjectSettings.globalize_path(s).simplify_path()
+		if canon.is_empty() or seen.has(canon):
+			continue
+		seen[canon] = true
+		roots.append(canon)
+	return roots
+
+
+static func _project_roots_from_context(context: Dictionary) -> PackedStringArray:
+	var roots = context.get("project_roots", PackedStringArray())
+	return roots if roots is PackedStringArray else PackedStringArray()
 
 
 ## Read the `godot_ai/allow_remote_hosts` EditorSetting as a canonicalized
@@ -354,13 +440,13 @@ static func configure(id: String, url: String = "", launch_context: Dictionary =
 		if client.command_shape != Client.CommandShape.NONE
 		else {}
 	)
-	var result := _dispatch_configure(client, url, launch)
+	var result := _dispatch_configure(client, url, launch, context)
 	## Trust-but-verify: a strategy may report ok and have actually written the
 	## file, yet the entry is missing/stale on the read-back path — most often
 	## because the user's installed client is reading a different file than
 	## `path_template` resolves to (issue #201). Re-read the live state and
 	## surface a clear error before the dock reports a bogus green dot.
-	return _verify_post_state(client, result, Client.Status.CONFIGURED, url, "configure", launch)
+	return _verify_post_state(client, result, Client.Status.CONFIGURED, url, "configure", launch, context)
 
 
 static func check_status(id: String) -> Client.Status:
@@ -441,6 +527,8 @@ static func warm_env_snapshot() -> void:
 	_editor_setting_lookup(MODE_OVERRIDE_SETTING)
 	_editor_setting_lookup(SETTING_STARTUP_TRACE)
 	_editor_setting_lookup(SETTING_KEEP_SERVER_ON_EXIT)
+	_editor_setting_lookup(SETTING_EXTERNAL_CLIENT_CWD)
+	McpSettings.warm_client_scope()
 	# Publish the complete launch context while EditorInterface access is safe;
 	# worker callers of capture_launch_context() read this snapshot only.
 	capture_launch_context()
@@ -472,6 +560,7 @@ static func warm_status_worker_bytecode() -> void:
 	var any_client := ClientRegistry.get_by_id(String(ids[0]))
 	if any_client != null:
 		JsonStrategy.verify_entry(any_client, {}, "")
+		DshStrategy.command_launch_error(any_client, {})
 	TomlStrategy.format_body(PackedStringArray(), "")
 	CliStrategy.format_args(PackedStringArray(), "", "")
 	# Compile the aggregate worker entry point on main as well. After a plugin
@@ -554,8 +643,8 @@ static func remove(id: String, url: String = "", launch_context: Dictionary = {}
 		if client.command_shape != Client.CommandShape.NONE
 		else {}
 	)
-	var result := _dispatch_remove(client)
-	return _verify_post_state(client, result, Client.Status.NOT_CONFIGURED, url, "remove", launch)
+	var result := _dispatch_remove(client, context)
+	return _verify_post_state(client, result, Client.Status.NOT_CONFIGURED, url, "remove", launch, context)
 
 
 ## Resolve config-backed path errors before attach-launch discovery. This both
@@ -570,37 +659,45 @@ static func _config_path_resolution_error(client: Client) -> String:
 
 # --- Strategy dispatch + verify (testable seam) --------------------------
 
-static func _dispatch_configure(client: Client, url: String, launch: Dictionary = {}) -> Dictionary:
+static func _dispatch_configure(
+	client: Client, url: String, launch: Dictionary = {}, launch_context: Dictionary = {}
+) -> Dictionary:
 	launch = launch_for_client(client, launch)
 	match client.config_type:
 		"json":
-			return JsonStrategy.configure(client, SERVER_NAME, url, launch)
+			return JsonStrategy.configure(client, SERVER_NAME, url, launch, _project_roots_from_context(launch_context))
 		"toml":
 			return TomlStrategy.configure(client, SERVER_NAME, url, launch)
 		"yaml":
 			return YamlStrategy.configure(client, SERVER_NAME, url, launch)
+		"dsh":
+			return DshStrategy.configure(client, SERVER_NAME, url, launch)
 		"cli":
 			# #463: fall back to writing the config file directly when the CLI
 			# binary isn't on PATH (Claude Code as a VS Code/Cursor extension).
 			if client.has_json_fallback() and CliStrategy.resolve_cli_path(client).is_empty():
-				return JsonStrategy.configure(client, SERVER_NAME, url, launch)
+				return _note_unhonoured_scope(
+					client, JsonStrategy.configure(client, SERVER_NAME, url, launch, _project_roots_from_context(launch_context))
+				)
 			return CliStrategy.configure(client, SERVER_NAME, url, launch)
 	return {"status": "error", "message": "Unknown config_type for %s: %s" % [client.id, client.config_type]}
 
 
-static func _dispatch_remove(client: Client) -> Dictionary:
+static func _dispatch_remove(client: Client, launch_context: Dictionary = {}) -> Dictionary:
 	match client.config_type:
 		"json":
-			return JsonStrategy.remove(client, SERVER_NAME)
+			return JsonStrategy.remove(client, SERVER_NAME, _project_roots_from_context(launch_context))
 		"toml":
 			return TomlStrategy.remove(client, SERVER_NAME)
 		"yaml":
 			return YamlStrategy.remove(client, SERVER_NAME)
+		"dsh":
+			return DshStrategy.remove(client, SERVER_NAME)
 		"cli":
 			# #463: mirror the configure fallback so Remove also works without
 			# the CLI binary — otherwise a fallback-written entry is unremovable.
 			if client.has_json_fallback() and CliStrategy.resolve_cli_path(client).is_empty():
-				return JsonStrategy.remove(client, SERVER_NAME)
+				return JsonStrategy.remove(client, SERVER_NAME, _project_roots_from_context(launch_context))
 			return CliStrategy.remove(client, SERVER_NAME)
 	return {"status": "error", "message": "Unknown config_type for %s: %s" % [client.id, client.config_type]}
 
@@ -629,7 +726,7 @@ static func _dispatch_check_status_with_cli_path_details(
 			var launch := {}
 			if client.command_shape != Client.CommandShape.NONE:
 				launch = _resolved_or_discovered_launch(client, resolved_launch, launch_context)
-			return JsonStrategy.check_status_details(client, SERVER_NAME, url, launch)
+			return JsonStrategy.check_status_details(client, SERVER_NAME, url, launch, _project_roots_from_context(launch_context))
 		"toml":
 			var launch := {}
 			if client.command_shape != Client.CommandShape.NONE:
@@ -640,6 +737,11 @@ static func _dispatch_check_status_with_cli_path_details(
 			if client.command_shape != Client.CommandShape.NONE:
 				yaml_launch = _resolved_or_discovered_launch(client, resolved_launch, launch_context)
 			return YamlStrategy.check_status_details(client, SERVER_NAME, url, yaml_launch)
+		"dsh":
+			var dsh_launch := {}
+			if client.command_shape != Client.CommandShape.NONE:
+				dsh_launch = _resolved_or_discovered_launch(client, resolved_launch, launch_context)
+			return DshStrategy.check_status_details(client, SERVER_NAME, url, dsh_launch)
 		"cli":
 			# Command-shape CLI clients register through their CLI, but the entry
 			# lands in the same file the JSON fallback reads (`claude mcp add
@@ -647,9 +749,15 @@ static func _dispatch_check_status_with_cli_path_details(
 			# file gives exact launch-drift detection — a changed port, version
 			# pin, or exclusion list — which scanning `mcp list` stdout cannot,
 			# so it is preferred even when the CLI binary resolves.
-			if client.command_shape != Client.CommandShape.NONE and client.has_json_fallback():
+			# #872: ...but only while the selected scope is still the one
+			# `path_template` points at — see _scope_diverges_from_json_fallback.
+			if (
+				client.command_shape != Client.CommandShape.NONE
+				and client.has_json_fallback()
+				and not _scope_diverges_from_json_fallback(client)
+			):
 				var command_launch := _resolved_or_discovered_launch(client, resolved_launch, launch_context)
-				return JsonStrategy.check_status_details(client, SERVER_NAME, url, command_launch)
+				return JsonStrategy.check_status_details(client, SERVER_NAME, url, command_launch, _project_roots_from_context(launch_context))
 			var resolved_cli := cli_path if not cli_path.is_empty() else CliStrategy.resolve_cli_path(client)
 			# #463: with no CLI binary, read the JSON fallback config so a
 			# fallback-configured entry reports CONFIGURED instead of red.
@@ -657,12 +765,91 @@ static func _dispatch_check_status_with_cli_path_details(
 				var fallback_launch := {}
 				if client.command_shape != Client.CommandShape.NONE:
 					fallback_launch = _resolved_or_discovered_launch(client, resolved_launch, launch_context)
-				return JsonStrategy.check_status_details(client, SERVER_NAME, url, fallback_launch)
+				return JsonStrategy.check_status_details(client, SERVER_NAME, url, fallback_launch, _project_roots_from_context(launch_context))
 			var cli_launch := {}
 			if client.command_shape != Client.CommandShape.NONE:
 				cli_launch = _resolved_or_discovered_launch(client, resolved_launch, launch_context)
+			# #872: at a scope `path_template` can't see, a plain listing probe
+			# cannot tell our entry from a leftover one in another scope. When
+			# the descriptor offers a scope-aware probe, use it — same single
+			# subprocess, but it reports which scope actually resolved.
+			if (
+				not client.cli_scope_status_template.is_empty()
+				and CliStrategy.uses_scope_token(client)
+			):
+				return CliStrategy.check_scope_status_details(
+					client, SERVER_NAME, url, resolved_cli, cli_launch, McpSettings.client_scope()
+				)
 			return CliStrategy.check_status_details(client, SERVER_NAME, url, resolved_cli, cli_launch)
 	return {"status": Client.Status.NOT_CONFIGURED, "error_msg": ""}
+
+
+## #872: the #463 JSON fallback writes the user-scope file whatever
+## `godot_ai/mcp_client_scope` says — that file IS `path_template`, and
+## `clients/_path_template.gd` has no project-relative token to aim it
+## elsewhere. Returning a bare "configured" would hide that the requested
+## scope was not honoured, so say so in the message.
+##
+## Deliberately a message and not a status. `_verify_post_state` compares the
+## post-write status against CONFIGURED and replaces the ok with an error on
+## any mismatch (pinned by test_verify_post_state_treats_drift_as_failure_
+## after_configure), so reporting this write as NOT_CONFIGURED or MISMATCH
+## would turn a *successful* configure into a user-facing failure — the same
+## false-error class #872's blocker was about, just moved onto the fallback
+## path. The entry is genuinely written and genuinely works; only its scope
+## differs from the request, and that is a caveat, not a failure.
+static func _note_unhonoured_scope(client: Client, result: Dictionary) -> Dictionary:
+	if result.get("status") != "ok":
+		return result
+	if not CliStrategy.uses_scope_token(client):
+		return result
+	var scope := McpSettings.client_scope()
+	if scope == McpSettings.DEFAULT_CLIENT_SCOPE:
+		return result
+	var noted := result.duplicate(true)
+	noted["message"] = (
+		"%s — wrote %s scope, not %s: the %s CLI wasn't found, and the file fallback can only write %s"
+		% [
+			str(result.get("message", "")),
+			McpSettings.DEFAULT_CLIENT_SCOPE,
+			scope,
+			client.display_name,
+			client.resolved_config_path(),
+		]
+	)
+	return noted
+
+
+## True when this client's CLI writes its entry somewhere `path_template`
+## cannot see, so reading that file would describe the wrong thing (#872).
+##
+## `claude mcp add --scope project` writes <cwd>/.mcp.json and `--scope local`
+## writes a per-project block inside ~/.claude.json — neither is the top-level
+## `mcpServers` map `path_template` + `server_key_path` resolve to. Reading it
+## anyway makes `_verify_post_state` turn every successful project-scope
+## Configure into "configure ok but verification still reads Not configured",
+## and pins the dock row red (or green, describing a stale user-scope entry).
+##
+## Diverging sends status down the CLI probe instead: `mcp list` is
+## scope-agnostic and inherits the same cwd the register ran in, so read-back
+## and write agree by construction. The cost is losing exact launch-drift
+## detection — a stdout scan sees the command, not the full argv — which is the
+## documented trade for a status that is merely coarse instead of wrong.
+##
+## Deliberately says nothing about whether the CLI resolves (#879). An earlier
+## version walked PATH here and returned false for an unresolvable binary, on
+## the reasoning that configure would then have taken the #463 JSON fallback —
+## which writes user scope whatever the setting says — so the file was the
+## right thing to read again. That extra clause could not change any outcome:
+## this is only consulted from the one call site below, already guarded on
+## `has_json_fallback()`, and when the CLI does not resolve the very next
+## branch (`resolved_cli.is_empty() and client.has_json_fallback()`) takes the
+## fallback read anyway. All it bought was a second full `McpCliFinder.find`
+## sweep per status check, on top of the one that immediately follows.
+static func _scope_diverges_from_json_fallback(client: Client) -> bool:
+	if not CliStrategy.uses_scope_token(client):
+		return false
+	return McpSettings.client_scope() != McpSettings.DEFAULT_CLIENT_SCOPE
 
 
 static func _resolved_or_discovered_launch(
@@ -687,16 +874,17 @@ static func _verify_post_state(
 	url: String,
 	action: String,
 	resolved_launch: Dictionary = {},
+	launch_context: Dictionary = {},
 ) -> Dictionary:
 	if result.get("status") != "ok":
 		return result
-	var actual := _dispatch_check_status_with_cli_path_details(
-		client, url, "", {}, resolved_launch
-	).get("status", Client.Status.NOT_CONFIGURED)
+	var details := _dispatch_check_status_with_cli_path_details(
+		client, url, "", launch_context, resolved_launch
+	)
+	var actual := details.get("status", Client.Status.NOT_CONFIGURED)
 	if actual == expected:
 		return result
-	var path := client.resolved_config_path()
-	var path_hint := "" if path.is_empty() else " Inspect %s and remove the godot-ai entry by hand if needed." % path
+	var path_hint := _post_state_path_hint(client, str(details.get("resolved_scope", "")))
 	return {
 		"status": "error",
 		"message": "%s reported %s ok but verification still reads %s (expected %s).%s" % [
@@ -705,6 +893,63 @@ static func _verify_post_state(
 			path_hint,
 		],
 	}
+
+
+## Where to send the user when verification finds an entry that should not be
+## there. `resolved_config_path()` is `path_template` — right only for the
+## default user scope. Naming ~/.claude.json for a project-scope survivor sends
+## them to a file with nothing in it, which is worse than naming no file at all
+## (#879). The scope probe supplies `resolved_scope`; `path_template` has no
+## project-relative token (see `_note_unhonoured_scope`), so the project case is
+## described rather than resolved to a path.
+static func _post_state_path_hint(client: Client, resolved_scope: String) -> String:
+	match resolved_scope:
+		"project":
+			return (
+				" The surviving entry is project-scoped: inspect the .mcp.json in the"
+				+ " directory the editor was launched from and remove the godot-ai entry"
+				+ " by hand if needed."
+			)
+		"local":
+			var local_path := client.resolved_config_path()
+			if local_path.is_empty():
+				return ""
+			return (
+				" The surviving entry is local-scoped: inspect the block for the"
+				+ " directory the editor was launched from in %s and remove the"
+				+ " godot-ai entry by hand if needed."
+			) % local_path
+		_:
+			var path := client.resolved_config_path()
+			if path.is_empty():
+				return ""
+			return " Inspect %s and remove the godot-ai entry by hand if needed." % path
+
+
+## #877: Configure's first act is the all-scope pre-cleanup — it deletes the
+## `godot-ai` entry from every scope the descriptor can write to, including a
+## `.mcp.json` resolved against the CLI's working directory, which need not be
+## this project's folder. The manual-command panel that spells those removes
+## out is only shown when Configure FAILS (`mcp_dock.gd`), so on the success
+## path — the one where the sweep actually ran — this note is its only
+## disclosure. Empty for descriptors without a scope token: their single
+## implicit pass removes exactly the entry the register is about to rewrite,
+## which needs no warning (the same rule `_sweep_caveat` applies).
+##
+## "attempted", not "cleared": `CliStrategy.configure` discards every
+## pre-cleanup result, and `mcp remove` exits non-zero for an absent entry as
+## well as for a real failure, so a timed-out or failed remove leaves the scope
+## untouched while the register still returns ok. The note names what ran,
+## not what it can prove.
+static func configure_sweep_note(id: String) -> String:
+	var client := ClientRegistry.get_by_id(id)
+	if client == null or client.config_type != "cli":
+		return ""
+	if client.cli_unregister_template.is_empty() or not CliStrategy.uses_scope_token(client):
+		return ""
+	return "attempted to clear %s from %s" % [
+		SERVER_NAME, ", ".join(CliStrategy.cleanup_scopes(client)),
+	]
 
 
 static func manual_command(id: String) -> String:
@@ -727,6 +972,7 @@ static func manual_command(id: String) -> String:
 		server_url_from(context),
 		str(path_resolution.get("path", "")),
 		launch,
+		_project_roots_from_context(context),
 	)
 	if cmd.is_empty():
 		return cmd
@@ -743,6 +989,58 @@ static func manual_command(id: String) -> String:
 static func config_path(id: String) -> String:
 	var client := ClientRegistry.get_by_id(id)
 	return client.resolved_config_path() if client != null else ""
+
+
+## Resolve the highest-precedence config tier that actually contains the server
+## entry. For Pi-style merge clients, returns the tier path the entry lives in
+## (e.g. `~/.pi/agent/.mcp.json`) instead of the lowest-tier `path_template`
+## `config_path()` returns. Falls back to `path_template` when no entry is
+## found anywhere. Empty `launch_context` is allowed; command-shape clients
+## synthesize one via `capture_launch_context()` so dock row construction can
+## call this without first capturing launch state.
+static func effective_config_path(id: String, launch_context: Dictionary = {}) -> String:
+	var client := ClientRegistry.get_by_id(id)
+	if client == null:
+		return ""
+	var resolution := client.resolved_config_path_details()
+	var fallback := str(resolution.get("path", ""))
+	var context := launch_context
+	if context.is_empty() and client.command_shape != Client.CommandShape.NONE:
+		context = capture_launch_context()
+	var roots := _project_roots_from_context(context)
+	var target := JsonStrategy.manual_target_details(client, SERVER_NAME, fallback, roots)
+	if bool(target.get("ok", false)):
+		return str(target.get("path", fallback))
+	return fallback
+
+
+## Path that `_check_status_merged` would consider authoritative for the
+## server entry, or `path_template` when no entry is found anywhere.
+## For Pi-style merge clients this is the latest project tier when one
+## exists (matching the F2 last-wins status logic), falling back to the
+## latest global tier, then to `path_template`.
+##
+## The dock uses this for Open/Reveal so the file the user inspects is
+## the same file that drives the status check — `effective_config_path`
+## fails closed (returns `path_template`) when there are multiple project
+## tiers, which historically sent users to the wrong file (codex round 3,
+## F-3-4). Splitting this from `effective_config_path` keeps the manual
+## instructions fail-closed while letting the dock follow the
+## authoritative tier.
+static func effective_authoritative_path(id: String, launch_context: Dictionary = {}) -> String:
+	var client := ClientRegistry.get_by_id(id)
+	if client == null:
+		return ""
+	var resolution := client.resolved_config_path_details()
+	var fallback := str(resolution.get("path", ""))
+	var context := launch_context
+	if context.is_empty() and client.command_shape != Client.CommandShape.NONE:
+		context = capture_launch_context()
+	var roots := _project_roots_from_context(context)
+	var authoritative: String = JsonStrategy.authoritative_tier_path(client, SERVER_NAME, roots)
+	if not authoritative.is_empty():
+		return authoritative
+	return fallback
 
 
 static func is_installed(id: String) -> bool:

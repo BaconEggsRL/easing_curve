@@ -44,6 +44,7 @@ const DOMAINS := [
 	{"id": "batch", "label": "batch", "count": 1, "tools": ["batch_execute"]},
 	{"id": "camera", "label": "camera", "count": 1, "tools": ["camera_manage"]},
 	{"id": "client", "label": "client", "count": 1, "tools": ["client_manage"]},
+	{"id": "custom", "label": "custom", "count": 1, "tools": ["custom_manage"]},
 	{"id": "editor", "label": "editor", "count": 4, "tools": ["editor_manage", "editor_reload_plugin", "editor_screenshot", "logs_read"]},
 	{"id": "filesystem", "label": "filesystem", "count": 1, "tools": ["filesystem_manage"]},
 	{"id": "game", "label": "game", "count": 1, "tools": ["game_manage"]},

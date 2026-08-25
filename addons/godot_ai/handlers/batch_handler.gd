@@ -77,6 +77,26 @@ func batch_execute(params: Dictionary) -> Dictionary:
 		## all-or-nothing contract for malformed input.
 		if typeof(item.get("params", {})) != TYPE_DICTIONARY:
 			return ErrorCodes.make(ErrorCodes.WRONG_TYPE, "commands[%d].params must be a dict" % idx)
+		if cmd_name.begins_with("custom_tool:"):
+			var _custom_tools := McpToolRegistry.get_instance()
+			if _custom_tools:
+				var spec := _custom_tools.get_spec(cmd_name.trim_prefix("custom_tool:"))
+				## A deferred tool's real reply arrives via ctx.send_deferred
+				## AFTER the batch has already returned its synchronous
+				## results — the sub-command would report an opaque
+				## "_deferred" placeholder and the actual payload would be
+				## orphaned. Reject up-front, matching the FORBIDDEN_SUBCOMMANDS
+				## contract for run_tests.
+				if spec != null and spec.deferred:
+					return ErrorCodes.make(
+						ErrorCodes.VALUE_OUT_OF_RANGE,
+						"commands[%d] custom_tool:%s is deferred — its reply outlives the batch response; call it directly instead" % [idx, cmd_name.trim_prefix("custom_tool:")]
+					)
+				if undo and spec != null and not spec.undoable:
+					return ErrorCodes.make(
+						ErrorCodes.CUSTOM_TOOL_NOT_UNDOABLE,
+						"commands[%d] custom_tool:%s is not undoable" % [idx, cmd_name.trim_prefix("custom_tool:")]
+					)
 
 	var results: Array = []
 	var succeeded := 0

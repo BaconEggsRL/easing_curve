@@ -75,6 +75,19 @@ func register_lazy_handler(handler_key: String, script_path: String, ctor_args: 
 func register_lazy(command_name: String, handler_key: String, method: StringName) -> void:
 	_lazy_commands[command_name] = {"handler": handler_key, "method": method}
 
+func unregister(command_name: String, handler_key: String) -> void:
+	_handlers.erase(command_name)
+	_lazy_commands.erase(command_name)
+	## Drop the lazy spec/cache only when no remaining command routes to
+	## this handler key. Custom tools use 1:1 keys ("custom:<name>") so this
+	## always erases for them, but built-in keys serve many commands —
+	## erasing the shared spec would strand the siblings on
+	## "No lazy handler declared" at dispatch time.
+	for entry in _lazy_commands.values():
+		if entry.get("handler", "") == handler_key:
+			return
+	_lazy_handler_cache.erase(handler_key)
+	_lazy_handler_specs.erase(handler_key)
 
 ## Drop registered handlers, queued commands, and the log buffer ref so
 ## plugin.gd can release RefCounted handlers before Godot reloads their

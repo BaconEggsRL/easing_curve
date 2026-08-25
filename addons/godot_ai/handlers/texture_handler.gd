@@ -195,3 +195,5 @@ func _assign_texture(tex: Resource, sub_resources: Array, node_path: String, pro
 	}
 	data.merge(extra)
 	return {"data": data}
+
+

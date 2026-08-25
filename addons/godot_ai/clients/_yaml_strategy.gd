@@ -346,7 +346,7 @@ static func _parse_entry(raw: String, lines: PackedStringArray, start: int, entr
 			data[key] = sub["value"]
 			i = sub["next_idx"]
 		else:
-			data[key] = _coerce_scalar(val)
+			data[key] = coerce_scalar(val)
 			i += 1
 	return {"name": name, "data": data, "next_idx": i}
 
@@ -375,7 +375,7 @@ static func _parse_subblock(lines: PackedStringArray, start: int, entry_indent: 
 		if val.is_empty():
 			i += 1
 			continue
-		sub[key] = _coerce_scalar(val)
+		sub[key] = coerce_scalar(val)
 		i += 1
 	return {"value": sub, "next_idx": i}
 
@@ -425,26 +425,27 @@ static func _emit_entry(name: String, data: Dictionary) -> PackedStringArray:
 		if val is Dictionary:
 			lines.append(INDENT + INDENT + "%s:" % key)
 			for sk in val:
-				lines.append(INDENT + INDENT + INDENT + "%s: %s" % [sk, _emit_scalar(val[sk])])
+				lines.append(INDENT + INDENT + INDENT + "%s: %s" % [sk, emit_scalar(val[sk])])
 		elif val is Array or val is PackedStringArray:
-			lines.append(INDENT + INDENT + "%s: %s" % [key, _emit_flow_array(_array_copy(val))])
+			lines.append(INDENT + INDENT + "%s: %s" % [key, emit_flow_array(_array_copy(val))])
 		else:
-			lines.append(INDENT + INDENT + "%s: %s" % [key, _emit_scalar(val)])
+			lines.append(INDENT + INDENT + "%s: %s" % [key, emit_scalar(val)])
 	return lines
 
 
 ## Flow-style sequence with every item double-quoted. JSON string quoting is
 ## valid YAML double-quote style (shared escape set), so the same encoding
-## both writes the file and — via JSON.parse_string in `_coerce_scalar` —
-## reads it back for verification.
-static func _emit_flow_array(values: Array) -> String:
+## both writes the file and — via JSON.parse_string in `coerce_scalar` —
+## reads it back for verification. Shared with `McpDshStrategy` for the
+## DeepSeek Harness patch-list `args` lines.
+static func emit_flow_array(values: Array) -> String:
 	var parts: Array[String] = []
 	for v in values:
 		parts.append(JSON.stringify(str(v)))
 	return "[%s]" % ", ".join(parts)
 
 
-static func _emit_scalar(v: Variant) -> String:
+static func emit_scalar(v: Variant) -> String:
 	match typeof(v):
 		TYPE_BOOL:
 			return "true" if bool(v) else "false"
@@ -453,20 +454,22 @@ static func _emit_scalar(v: Variant) -> String:
 		TYPE_FLOAT:
 			return str(float(v))
 		_:
-			return _emit_string_scalar(str(v))
+			return emit_string_scalar(str(v))
 
 
 ## Plain YAML scalars cannot safely carry ": ", " #", quotes, flow
 ## indicators, or leading indicator characters — a Windows launcher path with
 ## spaces would silently corrupt the entry. Quote exactly when needed so
 ## existing plain values (urls, bools-as-strings) keep their current
-## byte-shape on rewrite.
-static func _emit_string_scalar(s: String) -> String:
+## byte-shape on rewrite. Backslashes are quoted too: a Windows path parses
+## either way, but quoting makes the written shape unambiguous for any
+## consumer. Shared with `McpDshStrategy` for DeepSeek Harness patch entries.
+static func emit_string_scalar(s: String) -> String:
 	if s.is_empty():
 		return "\"\""
 	var needs_quote := s.begins_with(" ") or s.ends_with(" ")
 	if not needs_quote:
-		for needle in [": ", " #", "\"", "'", "\n", "\t", "{", "}", "[", "]", ","]:
+		for needle in [": ", " #", "\"", "'", "\n", "\t", "\\", "{", "}", "[", "]", ","]:
 			if s.contains(needle):
 				needs_quote = true
 				break
@@ -502,8 +505,10 @@ static func _indent_of(line: String) -> int:
 ## url/headers/command/args. A hand-edited args in block style or with
 ## unquoted items doesn't JSON-parse — it stays a raw string, compares
 ## unequal, and surfaces as CONFIGURED_MISMATCH, which Reconfigure
-## normalizes back to the flow form.
-static func _coerce_scalar(s: String) -> Variant:
+## normalizes back to the flow form. Public: the dsh strategy parses its
+## patch-list scalars with the same rules, so both YAML dialects share one
+## coercion (#867 review).
+static func coerce_scalar(s: String) -> Variant:
 	var t := s.strip_edges()
 	if t.begins_with("[") and t.ends_with("]"):
 		var parsed_array: Variant = JSON.parse_string(t)

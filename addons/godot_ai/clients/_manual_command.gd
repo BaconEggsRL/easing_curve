@@ -21,16 +21,19 @@ static func build(
 	server_url: String,
 	resolved_path: String,
 	launch: Dictionary = {},
+	project_roots: PackedStringArray = PackedStringArray(),
 ) -> String:
 	match client.config_type:
 		"cli":
-			return _build_cli(client, server_name, server_url, resolved_path, launch)
+			return _build_cli(client, server_name, server_url, resolved_path, launch, project_roots)
 		"json":
-			return _build_json(client, server_name, server_url, resolved_path, launch)
+			return _build_json(client, server_name, server_url, resolved_path, launch, project_roots)
 		"toml":
 			return _build_toml(client, server_name, server_url, resolved_path, launch)
 		"yaml":
 			return _build_yaml(client, server_name, server_url, resolved_path, launch)
+		"dsh":
+			return _build_dsh(client, server_name, server_url, resolved_path, launch)
 	return ""
 
 
@@ -46,6 +49,7 @@ static func _build_cli(
 	server_url: String,
 	resolved_path: String = "",
 	launch: Dictionary = {},
+	project_roots: PackedStringArray = PackedStringArray(),
 ) -> String:
 	if client.cli_register_template.is_empty() or client.cli_names.is_empty():
 		return ""
@@ -66,22 +70,71 @@ static func _build_cli(
 			var parts: Array[String] = [short_name]
 			for arg in args:
 				parts.append(String(arg))
-			cmd = _format_shell_command(parts, shell_kind)
+			var lines := _sweep_lines(client, server_name, server_url, short_name, shell_kind)
+			lines.append(_render_command_line(parts, shell_kind))
+			cmd = _format_shell_block(lines, shell_kind) + _sweep_caveat(client)
 	else:
 		var args := McpCliStrategy.format_args(client.cli_register_template, server_name, server_url)
 		var parts: Array[String] = [short_name]
 		for arg in args:
 			parts.append(String(arg))
-		cmd = _format_shell_command(parts, shell_kind)
+		var lines := _sweep_lines(client, server_name, server_url, short_name, shell_kind)
+		lines.append(_render_command_line(parts, shell_kind))
+		cmd = _format_shell_block(lines, shell_kind) + _sweep_caveat(client)
 	# #463: a CLI client with a JSON fallback (Claude Code) may have no `claude`
 	# binary at all — e.g. installed only as a VS Code/Cursor extension. The CLI
 	# line above is useless to that user, so also show the config-file edit that
 	# auto-configure falls back to writing.
 	if client.has_json_fallback() and not resolved_path.is_empty():
 		return "%s\n\nNo `%s` CLI (e.g. installed as a VS Code/Cursor extension)? %s" % [
-			cmd, short_name, _build_json(client, server_name, server_url, resolved_path, launch),
+			cmd, short_name, _build_json(client, server_name, server_url, resolved_path, launch, project_roots),
 		]
 	return cmd
+
+
+## #877: Configure's first act is the pre-cleanup — it runs the unregister
+## template once per scope the descriptor can write to (`_cli_strategy.gd`
+## `configure`) before registering. Rendering only the register line made this
+## hint disagree with what the button does, which is the worst property a
+## "run this manually" string can have. The removes go in the SAME shell block
+## as the register, in the order Configure runs them, so the whole thing stays
+## one copy-paste rather than a labelled command plus loose prose.
+static func _sweep_lines(
+	client: McpClient,
+	server_name: String,
+	server_url: String,
+	short_name: String,
+	shell_kind: String,
+) -> Array[String]:
+	var lines: Array[String] = []
+	if client.cli_unregister_template.is_empty():
+		return lines
+	for pre_scope in McpCliStrategy.cleanup_scopes(client):
+		var args := McpCliStrategy.format_args(
+			client.cli_unregister_template, server_name, server_url, {}, pre_scope
+		)
+		var parts: Array[String] = [short_name]
+		for arg in args:
+			parts.append(String(arg))
+		lines.append(_render_command_line(parts, shell_kind))
+	return lines
+
+
+## The one thing the commands themselves cannot show: that the project pass
+## resolves `.mcp.json` against the CLI's cwd, so it can delete an entry from a
+## repository that has nothing to do with this project. Only for `{scope}`
+## descriptors — a single implicit-scope pass removes exactly the entry the
+## register is about to rewrite, which needs no warning. Kept outside the shell
+## block so pasting the block never picks up prose.
+static func _sweep_caveat(client: McpClient) -> String:
+	if client.cli_unregister_template.is_empty() or not McpCliStrategy.uses_scope_token(client):
+		return ""
+	return (
+		"\n\nThe project-scope remove rewrites the .mcp.json in the directory the"
+		+ " editor was launched from — not necessarily this project — so it drops a"
+		+ " hand-maintained godot-ai entry there. Other servers in that file are left"
+		+ " alone."
+	)
 
 
 static func _shell_kind_for_platform() -> String:
@@ -92,11 +145,22 @@ static func _shell_kind_for_platform() -> String:
 ## POSIX and PowerShell use different escaping for embedded single quotes, so
 ## presenting the command without its target shell invites a bad copy/paste.
 static func _format_shell_command(parts: Array[String], shell_kind: String) -> String:
+	return _format_shell_block([_render_command_line(parts, shell_kind)], shell_kind)
+
+
+## One label over N command lines. The label is per-block, not per-line:
+## repeating "Run in PowerShell:" four times would bury the single line that
+## actually registers.
+static func _format_shell_block(lines: Array[String], shell_kind: String) -> String:
+	var label := "Run in PowerShell:" if shell_kind == SHELL_POWERSHELL else "Run in a POSIX shell:"
+	return "%s\n%s" % [label, "\n".join(lines)]
+
+
+static func _render_command_line(parts: Array[String], shell_kind: String) -> String:
 	var rendered: Array[String] = []
 	for part in parts:
 		rendered.append(_shell_display_arg(part, shell_kind))
-	var label := "Run in PowerShell:" if shell_kind == SHELL_POWERSHELL else "Run in a POSIX shell:"
-	return "%s\n%s" % [label, " ".join(rendered)]
+	return " ".join(rendered)
 
 
 ## Quote one argv element for the paste-into-terminal hint. Single-quoted
@@ -124,26 +188,40 @@ static func _build_json(
 	server_url: String,
 	resolved_path: String,
 	launch: Dictionary = {},
+	project_roots: PackedStringArray = PackedStringArray(),
 ) -> String:
-	var key := client.server_key_path[0] if client.server_key_path.size() > 0 else "mcpServers"
+	var target := McpJsonStrategy.manual_target_details(client, server_name, resolved_path, project_roots)
+	var target_note := ""
+	if not target.get("ok", false):
+		target_note = "Target inspection failed: %s" % str(target.get("error", "cannot inspect config"))
+		target = {"path": resolved_path, "key_path": client.server_key_path}
+	var target_path := str(target.get("path", resolved_path))
+	var key_path: PackedStringArray = target.get("key_path", client.server_key_path)
+	var key := key_path[0] if key_path.size() > 0 else "mcpServers"
 	if client.command_shape != McpClient.CommandShape.NONE:
 		var lines: Array[String] = []
 		var launch_error := McpJsonStrategy.command_launch_error(client, launch)
 		if launch_error.is_empty():
 			var command_entry := McpJsonStrategy.build_entry(client, server_url, null, launch)
-			lines.append("Edit %s and add under \"%s\":" % [resolved_path, key])
+			lines.append("Edit %s and add under \"%s\":" % [target_path, key])
 			lines.append("  \"%s\": %s" % [server_name, _format_entry_inline(command_entry)])
 		else:
 			lines.append("Attach launch command unavailable: %s" % launch_error)
 		if client.command_supports_url_fallback:
 			lines.append("")
 			lines.append("Advanced fallback — use this URL-mode entry instead; never configure both shapes together. URL mode depends on your client's own reconnect behavior. If the server is down when the client starts, restarting the client may be required.")
-			lines.append("Edit %s and add under \"%s\":" % [resolved_path, key])
+			lines.append("Edit %s and add under \"%s\":" % [target_path, key])
 			var fallback_entry := McpJsonStrategy.build_url_entry(client, server_url)
 			lines.append("  \"%s\": %s" % [server_name, _format_entry_inline(fallback_entry)])
+		if not target_note.is_empty():
+			lines.append("")
+			lines.append(target_note)
 		return "\n".join(lines)
 	var entry := McpJsonStrategy.build_entry(client, server_url)
-	return "Edit %s and add under \"%s\":\n  \"%s\": %s" % [resolved_path, key, server_name, _format_entry_inline(entry)]
+	var instructions := "Edit %s and add under \"%s\":\n  \"%s\": %s" % [target_path, key, server_name, _format_entry_inline(entry)]
+	if not target_note.is_empty():
+		instructions += "\n\n" + target_note
+	return instructions
 
 
 static func _build_toml(
@@ -211,6 +289,47 @@ static func _build_yaml(
 	]
 	for k in entry:
 		lines.append("    %s: %s" % [k, str(entry[k])])
+	return "\n".join(lines)
+
+
+## DeepSeek Harness: the user pastes a loader `insert` row into the home
+## patch layer (`$DSH_HOME/cordis.patch.yml`). Auto-configure writes exactly
+## these lines, so the manual text matches the file Configure would produce
+## byte-for-byte.
+static func _build_dsh(
+	client: McpClient,
+	server_name: String,
+	server_url: String,
+	resolved_path: String,
+	launch: Dictionary = {},
+) -> String:
+	var lines: Array[String] = ["Edit %s and add this loader entry (an `insert` row; a plain `- id:` row only overrides an existing bundle id and would be skipped):" % resolved_path]
+	var entry_id_value := McpDshStrategy.entry_id(server_name)
+	if client.command_shape != McpClient.CommandShape.NONE:
+		var launch_error := McpDshStrategy.command_launch_error(client, launch)
+		if launch_error.is_empty():
+			var command_entry := McpDshStrategy.build_entry(client, server_name, server_url, null, launch)
+			for row_line in McpDshStrategy.render_insert_row(entry_id_value, command_entry):
+				lines.append(String(row_line))
+		else:
+			lines.append("Attach launch command unavailable: %s" % launch_error)
+		if client.command_supports_url_fallback:
+			lines.append("")
+			## No command/args block was rendered on the launch-error path, so
+			## "replace the block above" would point at nothing.
+			var fallback_lead := (
+				"replace the command/args block above with this URL-mode entry"
+				if launch_error.is_empty()
+				else "use this URL-mode entry instead"
+			)
+			lines.append("Advanced fallback — %s; never configure both shapes together. URL mode depends on the harness' own reconnect behavior. If the server is down when the harness starts, restarting the harness may be required." % fallback_lead)
+			var fallback_entry := McpDshStrategy.build_url_entry(client, server_name, server_url)
+			for row_line in McpDshStrategy.render_insert_row(entry_id_value, fallback_entry):
+				lines.append(String(row_line))
+		return "\n".join(lines)
+	var url_entry := McpDshStrategy.build_url_entry(client, server_name, server_url)
+	for row_line in McpDshStrategy.render_insert_row(entry_id_value, url_entry):
+		lines.append(String(row_line))
 	return "\n".join(lines)
 
 

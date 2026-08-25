@@ -14,6 +14,10 @@ extends RefCounted
 ## inter-Claude-Code contention) gets killed at the budget instead of
 ## locking up the caller forever — see issues #238 / #239.
 
+## The descriptor token resolved from `godot_ai/mcp_client_scope` (#872).
+## Only Claude Code takes it today; any `config_type = "cli"` descriptor can.
+const SCOPE_TOKEN := "{scope}"
+
 const _CONFIGURE_TIMEOUT_MS := 10000
 const _REMOVE_TIMEOUT_MS := 10000
 const _STATUS_TIMEOUT_MS := 6000
@@ -39,8 +43,18 @@ static func configure(
 	# the same budget — a hung unregister shouldn't block the configure
 	# that follows.
 	if not client.cli_unregister_template.is_empty():
-		var pre_args := _format_args(client.cli_unregister_template, server_name, server_url)
-		McpCliExec.run(cli, pre_args, _REMOVE_TIMEOUT_MS)
+		## #872: a `{scope}` descriptor sweeps EVERY scope, not just the
+		## selected one. Flipping the setting user -> project and pressing
+		## Configure would otherwise leave the old user-scope entry alive —
+		## exactly the "loaded in every unrelated workspace" problem the
+		## setting exists to fix. `mcp remove` on an absent entry is a no-op
+		## and the result is discarded either way, so the extra passes are
+		## safe; they cost one bounded subprocess per additional scope.
+		for pre_scope in _cleanup_scopes(client):
+			var pre_args := _format_args(
+				client.cli_unregister_template, server_name, server_url, {}, pre_scope
+			)
+			McpCliExec.run(cli, pre_args, _REMOVE_TIMEOUT_MS)
 
 	if client.cli_register_template.is_empty():
 		return {"status": "error", "message": "%s descriptor missing cli_register_template" % client.display_name}
@@ -182,15 +196,28 @@ static func remove(client: McpClient, server_name: String) -> Dictionary:
 ## is exactly `{args...}` is spliced into the argv as one element per launch
 ## arg. Whole-element matching keeps a literal brace inside a path or flag
 ## from ever triggering an expansion.
+##
+## `scope_override` forces a specific `{scope}` value instead of the live
+## setting; the configure pre-cleanup uses it to sweep the scopes the user is
+## NOT currently on. Empty means "resolve from the setting".
 static func format_args(
-	template: PackedStringArray, server_name: String, server_url: String, launch: Dictionary = {}
+	template: PackedStringArray,
+	server_name: String,
+	server_url: String,
+	launch: Dictionary = {},
+	scope_override: String = "",
 ) -> Array[String]:
-	return _format_args(template, server_name, server_url, launch)
+	return _format_args(template, server_name, server_url, launch, scope_override)
 
 
 static func _format_args(
-	template: PackedStringArray, server_name: String, server_url: String, launch: Dictionary = {}
+	template: PackedStringArray,
+	server_name: String,
+	server_url: String,
+	launch: Dictionary = {},
+	scope_override: String = "",
 ) -> Array[String]:
+	var scope := scope_override if not scope_override.is_empty() else McpSettings.client_scope()
 	var out: Array[String] = []
 	for arg in template:
 		var s := String(arg)
@@ -203,8 +230,138 @@ static func _format_args(
 			continue
 		s = s.replace("{name}", server_name)
 		s = s.replace("{url}", server_url)
+		## Resolved per-call rather than baked into the descriptor so the
+		## setting can change without an editor restart, and so the manual
+		## command shown in the dock always matches what Configure would run.
+		s = s.replace(SCOPE_TOKEN, scope)
 		out.append(s)
 	return out
+
+
+## Scope-aware status for descriptors that declare `cli_scope_status_template`.
+## Returns the same `{"status", "error_msg"}` shape as check_status_details.
+##
+## Split from the subprocess call so the verdict is a pure function of what the
+## CLI printed — `_scope_probe_verdict` is unit-tested against real recorded
+## `claude mcp get` output rather than needing a `claude` binary on the runner.
+static func check_scope_status_details(
+	client: McpClient,
+	server_name: String,
+	server_url: String,
+	cli: String,
+	launch: Dictionary,
+	expected_scope: String,
+) -> Dictionary:
+	if cli.is_empty() or client.cli_scope_status_template.is_empty():
+		return _status_details(McpClient.Status.NOT_CONFIGURED)
+	var expected_target := server_url
+	if client.command_shape != McpClient.CommandShape.NONE:
+		## Same fail-closed contract as configure and the plain status probe.
+		var launch_error := command_launch_error(client, launch)
+		if not launch_error.is_empty():
+			return _status_details(McpClient.Status.ERROR, launch_error)
+		expected_target = str(launch.get("command", ""))
+	var args := _format_args(client.cli_scope_status_template, server_name, server_url)
+	var result := McpCliExec.run(cli, args, _STATUS_TIMEOUT_MS, false)
+	if result.get("timed_out", false):
+		return _status_details(McpClient.Status.ERROR, "probe timed out")
+	if result.get("spawn_failed", false):
+		return _status_details(McpClient.Status.NOT_CONFIGURED)
+	return _scope_probe_verdict(
+		int(result.get("exit_code", -1)),
+		str(result.get("stdout", "")),
+		expected_scope,
+		expected_target,
+	)
+
+
+## The `Scope:` label the probe printed, normalised to a CLIENT_SCOPES value,
+## or "" when no line was recognisable. Matched on the first word after the
+## label so the parenthetical blurb ("(shared via .mcp.json)") can change
+## wording between CLI releases without breaking detection.
+static func _scope_from_probe_output(text: String) -> String:
+	for raw_line in text.split("\n"):
+		var line := String(raw_line).strip_edges()
+		var marker := line.find("Scope:")
+		if marker < 0:
+			continue
+		var rest := line.substr(marker + 6).strip_edges().to_lower()
+		for scope in McpSettings.CLIENT_SCOPES:
+			var name := String(scope)
+			if rest.begins_with(name):
+				return name
+	return ""
+
+
+## Pure verdict for a scope probe. A non-zero exit is the CLI's "no such
+## server" signal. An entry resolved from a scope other than the selected one
+## is MISMATCH, not CONFIGURED: the dock offers Reconfigure, and Configure's
+## all-scope pre-cleanup is what actually moves it.
+##
+## A missing or unrecognised `Scope:` line degrades to the target check alone,
+## deliberately rather than failing closed. `_verify_post_state` turns any
+## non-CONFIGURED status after a successful write into an error, so treating an
+## unparsed label as MISMATCH would mean a future CLI release that reworded or
+## dropped that line breaks Configure outright — a false error plus a
+## permanently amber row whose Reconfigure button cannot clear it. The entry
+## has already been matched by name and exact launcher path at that point; the
+## only thing in doubt is which scope it came from, and a slightly optimistic
+## dot is a much cheaper failure than a configure flow that reports success as
+## failure. Today's claude (2.1.241) always prints the line, so this is a
+## forward-compatibility hedge, not a live code path.
+static func _scope_probe_verdict(
+	exit_code: int, text: String, expected_scope: String, expected_target: String
+) -> Dictionary:
+	if exit_code != 0:
+		return _status_details(McpClient.Status.NOT_CONFIGURED)
+	## `resolved_scope` rides along as structured data so callers can act on it
+	## — `_verify_post_state`'s path hint needs to know WHICH scope survived to
+	## name the right file, and parsing it back out of the human-facing message
+	## would couple that hint to this wording (#879). Parsed BEFORE the target
+	## check so both mismatch paths carry it: an entry whose launcher drifted
+	## sends the user to the wrong file just as readily as one whose scope did.
+	var resolved := _scope_from_probe_output(text)
+	if not expected_target.is_empty() and text.find(expected_target) < 0:
+		var drifted := _status_details(McpClient.Status.CONFIGURED_MISMATCH)
+		if not resolved.is_empty():
+			drifted["resolved_scope"] = resolved
+		return drifted
+	if resolved.is_empty():
+		return _status_details(McpClient.Status.CONFIGURED)
+	if resolved != expected_scope:
+		var details := _status_details(
+			McpClient.Status.CONFIGURED_MISMATCH,
+			"registered at %s scope, not %s" % [resolved, expected_scope],
+		)
+		details["resolved_scope"] = resolved
+		return details
+	return _status_details(McpClient.Status.CONFIGURED)
+
+
+## True when the descriptor's register template takes `{scope}`, i.e. where
+## its entry lands is decided by the `godot_ai/mcp_client_scope` setting rather
+## than fixed by the descriptor. The configurator uses this to decide whether
+## the JSON-fallback file is still a valid place to read status back from.
+static func uses_scope_token(client: McpClient) -> bool:
+	return client.cli_register_template.has(SCOPE_TOKEN)
+
+
+## Public view of the pre-cleanup sweep, for the manual-command text: what the
+## dock tells the user to run has to match what Configure actually runs (#877).
+static func cleanup_scopes(client: McpClient) -> Array[String]:
+	return _cleanup_scopes(client)
+
+
+## Scopes the configure pre-cleanup removes from. A descriptor without the
+## `{scope}` token has exactly one place its entry can live, so it keeps the
+## single pass it always had — "" means "resolve the scope normally".
+static func _cleanup_scopes(client: McpClient) -> Array[String]:
+	if not uses_scope_token(client):
+		return [""]
+	var scopes: Array[String] = []
+	for scope in McpSettings.CLIENT_SCOPES:
+		scopes.append(String(scope))
+	return scopes
 
 
 static func _resolve_cli(client: McpClient) -> String:

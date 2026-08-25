@@ -50,7 +50,7 @@ static func configured_message(client: McpClient, server_url: String) -> String:
 
 var id: String = ""                              ## stable key, e.g. "cursor"
 var display_name: String = ""                    ## "Cursor"
-var config_type: String = ""                     ## "json" | "toml" | "yaml" | "cli"
+var config_type: String = ""                     ## "json" | "toml" | "yaml" | "cli" | "dsh"
 
 # JSON / TOML clients ------------------------------------------------------
 ## {"darwin": "~/...", "windows": "$APPDATA/...", "linux": "$XDG_CONFIG_HOME/..."}
@@ -78,6 +78,16 @@ var path_template: Dictionary = {}
 ## `path_template` remains the fallback.
 var config_path_candidates: Dictionary = {}
 
+## Optional global JSON config files merged by the client from lowest to highest
+## precedence. Unlike `config_path_candidates`, every existing file participates;
+## Configure updates the effective last definition, status verifies it, and
+## Remove clears every global definition transactionally.
+var config_merge_path_templates: Dictionary = {}
+## Project-relative tiers that may override the global files. Their root is the
+## external client's working directory, which the Godot process cannot know.
+## The strategy checks plausible roots and fails closed instead of mutating them.
+var config_merge_project_paths: PackedStringArray = PackedStringArray()
+
 ## De-duplicate persistent path-ambiguity warnings across recurring status
 ## refreshes. The actionable message still returns on every resolution; only
 ## the editor-console echo is single-shot until the ambiguity clears/changes.
@@ -89,6 +99,10 @@ var _config_path_warning_mutex := Mutex.new()
 ## VS Code:                                ["servers"]
 ## OpenCode:                               ["mcp"]
 var server_key_path: PackedStringArray = PackedStringArray()
+## Alternative server-map paths accepted by the client, in precedence order
+## after `server_key_path`. JSON strategy operations select the first non-null
+## existing path so Configure, status, and Remove agree with the client parser.
+var server_key_path_aliases: Array[PackedStringArray] = []
 
 ## Field inside the entry dict that holds our server URL.
 ## "url" by default; some clients use "serverUrl" or "httpUrl".
@@ -222,6 +236,16 @@ var cli_unregister_template: PackedStringArray = PackedStringArray()
 ## URL. Presence of `name` AND `url` → CONFIGURED, name only → MISMATCH,
 ## neither → NOT_CONFIGURED.
 var cli_status_args: PackedStringArray = PackedStringArray()
+## Optional scope-aware status template with a `{name}` token, for descriptors
+## that also take `{scope}` in their register template. `cli_status_args` lists
+## whatever the CLI resolves for the current directory and cannot say WHICH
+## scope an entry came from, so a leftover user-scope entry reads as CONFIGURED
+## while the selected project scope is empty — the dock then shows green over
+## exactly the "loaded in every workspace" state the scope setting exists to
+## end (#872). This template must print a `Scope: <user|project|local> …` line
+## (`claude mcp get <name>` does) and exit non-zero when the server is absent.
+## Only consulted when the selected scope isn't the one `path_template` reads.
+var cli_scope_status_template: PackedStringArray = PackedStringArray()
 
 # Codex / TOML clients -----------------------------------------------------
 ## Dotted TOML path under which our entry lives, e.g. ["mcp_servers", "godot-ai"].
