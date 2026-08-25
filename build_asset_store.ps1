@@ -16,6 +16,9 @@ $CanonicalDistributionFiles = @(
         ArchivePath = "addons/easing_curve/LICENSE.md"
     }
 )
+$RequiredArchiveFiles = @(
+    "addons/easing_curve/plugin.cfg"
+)
 
 $OutputPath = "_exports\_asset_store_builds"
 $BuildPath = "$OutputPath\_staging"
@@ -172,6 +175,16 @@ try {
         }
 
         Write-Host "  [OK]   $EntryPath" -ForegroundColor DarkGray
+    }
+
+    foreach ($RequiredFile in $RequiredArchiveFiles) {
+        if ($null -eq $VerifyZip.GetEntry($RequiredFile)) {
+            Write-Host "  [FAIL] Missing required archive file: $RequiredFile" -ForegroundColor Red
+            $VerificationFailed = $true
+            continue
+        }
+
+        Write-Host "  [OK]   Required archive file present: $RequiredFile" -ForegroundColor Green
     }
 
     foreach ($File in $CanonicalDistributionFiles) {
