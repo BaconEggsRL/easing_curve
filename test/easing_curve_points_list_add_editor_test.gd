@@ -28,43 +28,75 @@ func _expect(condition: bool, message: String) -> void:
 
 
 func _test_points_list_add_preserves_endpoints() -> void:
-	var curve := EasingCurve.new()
-	curve.trans_type = EasingCurve.TRANS.CUSTOM
-	curve.points = [
-		EasingCurvePoint.new(Vector2.ZERO),
-		EasingCurvePoint.new(Vector2.ONE),
+	var test_cases: Array[Dictionary] = [
+		{
+			"name": "empty curve",
+			"input": [],
+			"expected": [Vector2(0.0, 0.0)],
+		},
+		{
+			"name": "left endpoint only",
+			"input": [Vector2(0.0, 0.2)],
+			"expected": [Vector2(0.0, 0.2), Vector2(1.0, 1.0)],
+		},
+		{
+			"name": "left endpoint with interiors",
+			"input": [Vector2(0.0, 0.2), Vector2(0.4, 0.7), Vector2(0.8, 0.3)],
+			"expected": [Vector2(0.0, 0.2), Vector2(0.4, 0.7), Vector2(0.8, 0.3), Vector2(1.0, 1.0)],
+		},
+		{
+			"name": "both endpoints",
+			"input": [Vector2(0.0, 0.2), Vector2(0.5, 0.6), Vector2(1.0, 0.25)],
+			"expected": [Vector2(0.0, 0.2), Vector2(0.5, 0.6), Vector2(1.0, 1.0)],
+			"check_undo_redo": true,
+		},
+		{
+			"name": "right endpoint only",
+			"input": [Vector2(1.0, 0.25)],
+			"expected": [Vector2(0.0, 0.0), Vector2(1.0, 0.25)],
+		},
 	]
-	var editor_context := EDITOR_HOST.create_inspector_context(curve)
-	var editor: EasingCurveEditor = editor_context.editor
-	var inspector: Object = editor_context.inspector
-	var notifications := {"changed": 0, "points": 0, "property_list": 0}
-	curve.changed.connect(func() -> void: notifications.changed += 1)
-	curve.points_changed.connect(
-		func(_points: Array[EasingCurvePoint]) -> void: notifications.points += 1,
-	)
-	curve.property_list_changed.connect(
-		func() -> void: notifications.property_list += 1,
-	)
-	var before := EDITOR_UNDO.capture_state(curve)
 
-	inspector.call("_on_add_point_btn_pressed")
+	for test_case in test_cases:
+		var curve := EasingCurve.new()
+		curve.trans_type = EasingCurve.TRANS.CUSTOM
+		var input_points: Array[EasingCurvePoint] = []
+		for position: Vector2 in test_case["input"]:
+			input_points.append(EasingCurvePoint.new(position))
+		curve.points = input_points
+		var editor_context := EDITOR_HOST.create_inspector_context(curve)
+		var editor: EasingCurveEditor = editor_context.editor
+		var inspector: Object = editor_context.inspector
+		var notifications := {"changed": 0, "points": 0, "property_list": 0}
+		curve.changed.connect(func() -> void: notifications.changed += 1)
+		curve.points_changed.connect(
+			func(_points: Array[EasingCurvePoint]) -> void: notifications.points += 1,
+		)
+		curve.property_list_changed.connect(
+			func() -> void: notifications.property_list += 1,
+		)
+		var before := EDITOR_UNDO.capture_state(curve)
 
-	var after := EDITOR_UNDO.capture_state(curve)
-	_expect(curve.points.size() == 3, "Points-list Add did not add exactly one point")
-	_expect(curve.points[0].position == Vector2.ZERO, "Points-list Add replaced the left endpoint")
-	_expect(curve.points[2].position == Vector2.ONE, "Points-list Add replaced the right endpoint")
-	_expect(curve.points[1].position == Vector2(0.5, 0.5), "Points-list Add did not use the midpoint default")
-	_expect(notifications.changed == 1 and notifications.points == 1 and notifications.property_list == 1, "Points-list Add did not refresh the inspector and graph")
+		inspector.call("_on_add_point_btn_pressed")
 
-	var history := UndoRedo.new()
-	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Add Easing Curve Point", before, after), "Points-list Add did not produce an Undo/Redo state change")
-	history.undo()
-	_expect(curve.get_editor_state_snapshot() == before, "Points-list Add Undo did not restore the endpoints")
-	history.redo()
-	_expect(curve.get_editor_state_snapshot() == after, "Points-list Add Redo did not restore the midpoint")
-	history.clear_history(false)
-	history.free()
-	editor.free()
+		var after := EDITOR_UNDO.capture_state(curve)
+		var expected_positions: Array = test_case["expected"]
+		_expect(curve.points.size() == expected_positions.size(), "%s produced the wrong point count" % test_case["name"])
+		for i in range(expected_positions.size()):
+			_expect(curve.points[i].position == expected_positions[i], "%s produced the wrong point at index %d" % [test_case["name"], i])
+		_expect(_is_ordered_by_x(curve.points), "%s did not keep point order" % test_case["name"])
+		_expect(notifications.changed == 1 and notifications.points == 1 and notifications.property_list == 1, "%s did not refresh the inspector and graph" % test_case["name"])
+
+		if bool(test_case.get("check_undo_redo", false)):
+			var history := UndoRedo.new()
+			_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Add Easing Curve Point", before, after), "Points-list Add did not produce an Undo/Redo state change")
+			history.undo()
+			_expect(curve.get_editor_state_snapshot() == before, "Points-list Add Undo did not restore the complete point state")
+			history.redo()
+			_expect(curve.get_editor_state_snapshot() == after, "Points-list Add Redo did not restore the complete point state")
+			history.clear_history(false)
+			history.free()
+		editor.free()
 
 	var graph_curve := EasingCurve.new()
 	graph_curve.trans_type = EasingCurve.TRANS.CUSTOM
@@ -84,4 +116,12 @@ func _test_points_list_add_preserves_endpoints() -> void:
 	_expect(graph_curve.points.size() == 3, "Graph Add did not add exactly one point")
 	_expect(graph_curve.points[0].position == Vector2.ZERO and graph_curve.points[2].position == Vector2.ONE, "Graph Add changed an endpoint")
 	_expect(graph_curve.points[1].position == graph_point.position, "Graph Add did not preserve the requested point position")
+	_expect(_is_ordered_by_x(graph_curve.points), "Graph Add did not keep point order")
 	graph_editor.free()
+
+
+func _is_ordered_by_x(points: Array[EasingCurvePoint]) -> bool:
+	for i in range(1, points.size()):
+		if points[i - 1].position.x > points[i].position.x:
+			return false
+	return true

@@ -2033,7 +2033,12 @@ func _create_vector2_property(
 	value_vbox.add_child(y_row)
 
 func _on_add_point_btn_pressed() -> void:
-	_add_point(EasingCurvePoint.new(Vector2(0.5, 0.5)))
+	var default_position := Vector2(0.0, 0.0)
+	for point in curve.points:
+		if point != null and EasingCurve.is_left_endpoint_x(point.position.x):
+			default_position = Vector2(1.0, 1.0)
+			break
+	_add_point(EasingCurvePoint.new(default_position))
 
 
 func _create_inspector_section(
