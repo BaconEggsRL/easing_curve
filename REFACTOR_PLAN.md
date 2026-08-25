@@ -733,20 +733,21 @@ unverified.
 - **Required validation:** Parse/tests plus review that every removed line was
   inactive and every retained rationale still matches code.
 
-## PRESET-01 — Parameter setters contain identical notification branches
+## PRESET-01 — Preset parameter setters require revision-gated notifications
 
 - **Location:** `constant_value` and `overshoot` setters in `easing_curve.gd`.
-- **Category:** Redundant Control Flow.
-- **Evidence:** Each records `revision_before` and then calls
-  `_notify_parameter_changed()` in both the `if` and `else` branches.
-- **Why it matters:** The branch implies a behavioral distinction that does not
-  exist and distracts from the real snapshot/notification sequence.
-- **Proposed action:** Remove the unused revision comparison and retain one
-  unconditional `_notify_parameter_changed()` at the same point.
-- **Risk:** Low.
-- **Priority:** P2 — worthwhile cleanup.
-- **Required validation:** Back/Constant parameter drag, preset modified/reset,
-  signal counts, runtime update, and Undo/Redo tests.
+- **Category:** Notification behavioral invariant.
+- **Evidence:** For active Constant/Back presets, `set_point_snapshot()` can
+  publish `_notify_curve_changed()` and increment `_change_revision`. The
+  revision guard prevents a second `changed` signal. When the parameter is not
+  active for the selected preset, no snapshot change occurs, so the `else`
+  branch must call `_notify_parameter_changed()`.
+- **Required action:** Retain the original revision-gated notification logic.
+  Regression coverage must assert one `changed`/one `points_changed` signal for
+  active preset regeneration and one `changed`/zero `points_changed` signals
+  for inactive Constant/Back parameter edits.
+- **Risk:** Medium.
+- **Priority:** P1 — duplicate runtime and Inspector updates otherwise result.
 
 ## PACKAGE-01 — Working tree is packaged correctly by inspection, but the archive is unverified
 
@@ -1072,18 +1073,20 @@ Remove proven noise without changing architecture or behavior.
 
 ### Current behavior
 
-Private unused fields/constants/helpers, redundant callback data, inactive debug
-blocks, and identical notification branches remain.
+Private unused fields/constants/helpers, redundant callback data, and inactive
+debug blocks remain. PRESET-01 is a required notification distinction, not
+cleanup candidate.
 
 ### Exact scope
 
-The private symbols in CLEANUP-01, inactive blocks in CLEANUP-02, and redundant
-branches in PRESET-01.
+The private symbols in CLEANUP-01 and inactive blocks in CLEANUP-02. PRESET-01
+was reviewed and retained as a notification compatibility invariant.
 
 ### Proposed changes
 
 Delete only reference-proven private code; simplify affected binds/signatures;
-retain public symbols and rationale comments; rerun searches after the diff.
+retain public symbols, rationale comments, and PRESET-01 notification logic;
+rerun searches after the diff.
 
 ### Non-goals
 
@@ -1093,6 +1096,21 @@ No class/file extraction, public API removal, naming sweep, or functional fix.
 
 Full automated suite, parser check, diff review proving removed code was inactive,
 and key visible Inspector smoke checks.
+
+### Completion status
+
+Completed on 2026-08-25. Removed private Inspector dead code (`BTN_NORMAL`, the
+shadowed `trans_option` field, `points_editor_property`, `print_properties()`,
+the unused anchor lookup, and obsolete callback arguments/locals), stale debug
+and commented implementation blocks. Review found the PRESET-01 simplification
+was not behavior-preserving, so the `constant_value` and `overshoot` revision
+guards were restored. Runtime regression coverage protects active preset
+regeneration (one `changed` and one `points_changed` signal) and inactive
+parameter edits (one `changed` and zero `points_changed` signals). Focused
+editor-host, runtime update, preset/parameter, Undo/Redo, and
+serialization/transition suites pass. The aggregate runner remains blocked at
+its first suite by the documented Codex sandbox restriction on creating
+`user://logs`; no test or production workaround was added.
 
 ### Risk
 

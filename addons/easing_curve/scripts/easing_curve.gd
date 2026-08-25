@@ -645,9 +645,6 @@ var _css_cubic_bezier_controls := PackedFloat64Array([
 ######################################################
 # INIT
 ######################################################
-# --- Constructor ---
-#func _init():
-#pass
 func _init() -> void:
 	if _points.is_empty():
 		_update_preset()
@@ -1139,11 +1136,6 @@ func swap_points(a, b) -> void:
 		swap_points(points[i], points[j])
 
 	elif a is EasingCurvePoint and b is EasingCurvePoint:
-		# var p0 = a
-		# var p1 = b
-		#var temp_x = p0.position.x
-		#p0.position.x = p1.position.x
-		#p1.position.x = temp_x
 		swap_properties(a, b)
 		sort_points()
 
@@ -2125,14 +2117,6 @@ func auto_smooth_handles():
 		var p_prev = points[max(i - 1, 0)]
 		var p_next = points[min(i + 1, points.size() - 1)]
 
-		var prev = p_prev.position.y
-		var curr = p.position.y
-		var next = p_next.position.y
-
-		var is_peak = (curr > prev and curr > next)
-		var is_valley = (curr < prev and curr < next)
-
-		#var tangent = (p_next.position - p_prev.position) * 0.5
 		var d1 = p.position - p_prev.position
 		var d2 = p_next.position - p.position
 
@@ -2146,8 +2130,6 @@ func auto_smooth_handles():
 		tangent *= min(len1, len2)
 
 		var handle_length = 1.0 / 3.0
-		#if is_peak or is_valley:
-		#handle_length *= 0.6
 
 		p.right_control_point = p.position + tangent * handle_length
 		p.left_control_point = p.position - tangent * handle_length
@@ -2184,7 +2166,6 @@ func derivative(func_ref: Callable, x: float, eps := 0.0001) -> float:
 
 func _on_curve_editor_slider_value_changed(slider_value: float) -> void:
 	_last_slider_value = slider_value
-	# print("_curve._last_slider_value = ", slider_value)
 
 
 func _on_curve_editor_zoom_changed(zoom: Vector2) -> void:

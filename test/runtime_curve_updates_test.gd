@@ -17,6 +17,7 @@ func _init() -> void:
 	_test_handle_control_signal_suppression()
 	_test_resource_free_point_snapshots()
 	_test_parameter_drag_transactions()
+	_test_preset_parameter_notification_counts()
 	_test_back_overshoot_contract()
 	_test_back_overshoot_geometry()
 	_test_back_overshoot_runtime_updates()
@@ -454,6 +455,62 @@ func _test_back_overshoot_runtime_updates() -> void:
 	_expect(is_equal_approx(running_curve.overshoot, 3.5), "Runtime snapshot lost Back Overshoot")
 	_expect(running_curve.get_point_snapshot() == deferred_curve.get_point_snapshot(), "Runtime snapshot applied different Back geometry")
 	_expect(running_counts.changed == 1 and running_counts.points == 1, "Runtime snapshot did not publish one Back update")
+
+
+func _test_preset_parameter_notification_counts() -> void:
+	var constant_curve := EasingCurve.new()
+	constant_curve.trans_type = EasingCurve.TRANS.CONSTANT
+	var constant_regenerated_counts := _signal_counts(constant_curve)
+	constant_curve.constant_value = 0.75
+	_expect(
+		constant_regenerated_counts.changed == 1
+		and constant_regenerated_counts.points == 1,
+		"Constant regeneration did not publish exactly one change and point update",
+	)
+	_expect(
+		not constant_curve.is_selected_preset_modified(),
+		"Constant regeneration changed the selected preset state",
+	)
+
+	constant_curve.trans_type = EasingCurve.TRANS.SINE
+	var constant_snapshot := constant_curve.get_point_snapshot()
+	var constant_non_regenerated_counts := _signal_counts(constant_curve)
+	constant_curve.constant_value = 0.25
+	_expect(
+		constant_non_regenerated_counts.changed == 1
+		and constant_non_regenerated_counts.points == 0,
+		"Constant non-regeneration did not publish exactly one parameter change",
+	)
+	_expect(
+		constant_curve.get_point_snapshot() == constant_snapshot,
+		"Constant non-regeneration changed Sine geometry",
+	)
+
+	var back_curve := EasingCurve.new()
+	back_curve.trans_type = EasingCurve.TRANS.BACK
+	var back_regenerated_counts := _signal_counts(back_curve)
+	back_curve.overshoot = 3.25
+	_expect(
+		back_regenerated_counts.changed == 1 and back_regenerated_counts.points == 1,
+		"Back regeneration did not publish exactly one change and point update",
+	)
+	_expect(
+		not back_curve.is_selected_preset_modified(),
+		"Back regeneration changed the selected preset state",
+	)
+
+	back_curve.trans_type = EasingCurve.TRANS.SINE
+	var back_snapshot := back_curve.get_point_snapshot()
+	var back_non_regenerated_counts := _signal_counts(back_curve)
+	back_curve.overshoot = 4.0
+	_expect(
+		back_non_regenerated_counts.changed == 1 and back_non_regenerated_counts.points == 0,
+		"Back non-regeneration did not publish exactly one parameter change",
+	)
+	_expect(
+		back_curve.get_point_snapshot() == back_snapshot,
+		"Back non-regeneration changed Sine geometry",
+	)
 
 
 func _test_back_overshoot_round_trip() -> void:

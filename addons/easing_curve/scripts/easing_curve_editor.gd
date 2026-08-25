@@ -8,8 +8,6 @@ extends Control
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
 const RELOAD_ICON = preload("res://addons/easing_curve/assets/icons/Reload.svg")
-var _drag_auto_range := Vector2.ZERO
-var _has_drag_auto_range := false
 
 var use_pending_add := true
 var hide_point_toolbar_for_functions := false
@@ -122,7 +120,6 @@ func _ready() -> void:
 
 	if _curve == null:
 		_curve = EasingCurve.new()
-		# _curve.range_changed.connect(_on_curve_changed)
 		_curve.changed.connect(_on_curve_changed)
 
 	_create_point_toolbar()
@@ -316,8 +313,6 @@ func _gui_input(event: InputEvent) -> void:
 				if can_drag_control:
 					dragging_point = control[0]
 					dragging_control = control[1]
-					_drag_auto_range = _compute_auto_y_range()
-					_has_drag_auto_range = true
 				else:
 					# Try dragging main point if under cursor
 					if point_idx != -1 and not _curve.points[point_idx].is_lock_active(&"position"):
@@ -333,8 +328,6 @@ func _gui_input(event: InputEvent) -> void:
 				if not p.is_lock_active(&"position"):
 					dragging_point = point_idx
 					dragging_control = ControlIndex.NONE
-					_drag_auto_range = _compute_auto_y_range()
-					_has_drag_auto_range = true
 				selected_index = point_idx
 				queue_redraw()
 				return
@@ -388,9 +381,6 @@ func _gui_input(event: InputEvent) -> void:
 			if selected_index != -1:
 				dragging_point = selected_index
 				dragging_control = ControlIndex.NONE
-				_drag_auto_range = _compute_auto_y_range()
-				_has_drag_auto_range = true
-
 			queue_redraw()
 			return
 
@@ -434,7 +424,6 @@ func _gui_input(event: InputEvent) -> void:
 
 				dragging_point = -1
 				dragging_control = ControlIndex.NONE
-				_has_drag_auto_range = false
 				queue_redraw()
 				return
 
@@ -448,7 +437,6 @@ func _gui_input(event: InputEvent) -> void:
 			dragging_point = -1
 			dragging_control = ControlIndex.NONE
 
-			_has_drag_auto_range = false
 			if finish_point_edit:
 				point_edit_finished.emit(point_order)
 			queue_redraw()
@@ -775,14 +763,7 @@ func update_view_transform() -> void:
 		else SELECTION_TOOLBAR_HEIGHT * _editor_scale
 	)
 
-	# Auto range looks kinda bad; turning off for now
-	#var auto_range = _compute_auto_y_range()
 	var auto_range := Vector2(0.0, 1.0)
-	#var auto_range := (
-		#_drag_auto_range
-		#if _has_drag_auto_range
-		#else _compute_auto_y_range()
-	#)
 
 	var auto_min_y = auto_range.x
 	var auto_max_y = auto_range.y
@@ -927,7 +908,6 @@ func _on_autofit_pressed() -> void:
 
 
 func _on_slider_changed(value: float) -> void:
-	# print("slider changed to: ", value)
 	_zoom_step = int(value)
 	_apply_zoom_from_step()
 
@@ -1090,62 +1070,6 @@ func _draw_bezier_segment(
 func _bezier(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
 	var omt = 1.0 - t
 	return omt * omt * omt * p0 + 3 * omt * omt * t * p1 + 3 * omt * t * t * p2 + t * t * t * p3
-
-
-func _compute_auto_y_range() -> Vector2:
-	if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
-		var min_y := 0.0
-		var max_y := 1.0
-		var steps := 200
-
-		for i in range(steps + 1):
-			var x = float(i) / steps
-			var y = _curve.sample(x)
-			min_y = min(min_y, y)
-			max_y = max(max_y, y)
-
-		var padding := (max_y - min_y) * 0.1
-		return Vector2(min_y - padding, max_y + padding)
-
-	if _curve == null or _curve.points.size() < 2:
-		return Vector2(0.0, 1.0)
-
-	var min_y := 0.0
-	var max_y := 1.0
-
-	var steps := 40
-
-	for i in range(_curve.points.size() - 1):
-		var a = _curve.points[i]
-		var b = _curve.points[i + 1]
-
-		for j in range(steps + 1):
-			var t = j / float(steps)
-			var pt = _bezier(
-				a.position,
-				a.right_control_point,
-				b.left_control_point,
-				b.position,
-				t,
-			)
-
-			# Expand only if overshooting
-			if pt.y < min_y:
-				min_y = pt.y
-			elif pt.y > max_y:
-				max_y = pt.y
-
-	# If still inside [0,1], keep default range
-	if min_y >= 0.0 and max_y <= 1.0:
-		min_y = 0.0
-		max_y = 1.0
-
-	# Add padding
-	var padding := (max_y - min_y) * 0.1
-	min_y -= padding
-	max_y += padding
-
-	return Vector2(min_y, max_y)
 
 
 func _draw_function_curve():

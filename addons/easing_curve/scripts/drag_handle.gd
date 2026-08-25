@@ -19,12 +19,10 @@ func _ready():
 
 
 func _on_mouse_entered():
-	# print("enter")
 	mouse_default_cursor_shape = Control.CURSOR_DRAG
 
 
 func _on_mouse_exited():
-	# print("exit")
 	mouse_default_cursor_shape = Control.CURSOR_ARROW
 
 
