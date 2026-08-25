@@ -1102,15 +1102,7 @@ and key visible Inspector smoke checks.
 Completed on 2026-08-25. Removed private Inspector dead code (`BTN_NORMAL`, the
 shadowed `trans_option` field, `points_editor_property`, `print_properties()`,
 the unused anchor lookup, and obsolete callback arguments/locals), stale debug
-and commented implementation blocks. Review found the PRESET-01 simplification
-was not behavior-preserving, so the `constant_value` and `overshoot` revision
-guards were restored. Runtime regression coverage protects active preset
-regeneration (one `changed` and one `points_changed` signal) and inactive
-parameter edits (one `changed` and zero `points_changed` signals). Focused
-editor-host, runtime update, preset/parameter, Undo/Redo, and
-serialization/transition suites pass. The aggregate runner remains blocked at
-its first suite by the documented Codex sandbox restriction on creating
-`user://logs`; no test or production workaround was added.
+and commented implementation blocks. Review found the PRESET-01 simplification was not behavior-preserving, so the `constant_value` and `overshoot` revision guards were restored while redundant `constant_value`/`overshoot` notification branches were removed. Runtime regression coverage protects active preset regeneration (one `changed` and one `points_changed` signal) and inactive parameter edits (one `changed` and zero `points_changed` signals). Focused editor-host, runtime update, preset/parameter, Undo/Redo, and serialization/transition suites pass. The aggregate runner remains blocked at its first suite by the documented Codex sandbox restriction on creating `user://logs`; no test or production workaround was added.
 
 ### Risk
 
