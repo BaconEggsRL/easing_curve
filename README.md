@@ -128,18 +128,19 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 * **Locking Control Points**
   * Vector2 properties can be locked by clicking the lock icon.
-	* Locked properties cannot be changed, except by copy-paste. This can be used to drag a point without affecting its control handles.
+	* Locked properties cannot be changed (except by copy-paste or manual re-ordering of the points list.)
+	* Locking a point's controls (left or right) allows you to drag the point without affecting its control handles.
   * Lockable properties include point position, left control position, and right control position.
 	* Force Linear and Lock control states are available in Free and Linked handle modes.
 
 * **Handle Modes**
   * Each point can use a handle mode to control how its left and right control handles behave:
-    * **Free** -- Each handle moves independently without affecting the other handle.
-    * **Linear** -- Keeps the handles aligned with the neighboring points, creating straight-line segments through the point.
-    * **Balanced** -- Keeps both handles aligned in opposite directions while allowing each handle to have a different length.
-    * **Mirrored** -- Keeps both handles aligned in opposite directions and at the same length. Moving one handle mirrors the other across the point.
-    * **Linked** -- Keeps both controls at a shared position.
-    * Note that control states apply in Free and Linked modes, and are preserved when switching modes.
+		* **Free** -- Each handle moves independently without affecting the other handle.
+		* **Linear** -- Keeps the handles aligned with the neighboring points, creating straight-line segments through the point.
+		* **Balanced** -- Keeps both handles aligned in opposite directions while allowing each handle to have a different length.
+		* **Mirrored** -- Keeps both handles aligned in opposite directions and at the same length. Moving one handle mirrors the other across the point.
+		* **Linked** -- Keeps both controls at a shared position.
+	* Note that control Locked and Forced Linear states apply in Free and Linked modes, and are preserved when switching modes.
   * The selected-point toolbar shows the point number, Handle Mode, L/R control state, and Reset controls.
 
 * **Zoom and Pan**
