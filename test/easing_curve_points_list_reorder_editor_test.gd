@@ -1,6 +1,7 @@
 extends SceneTree
 
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/easing_curve_editor_inspector_plugin.gd")
+const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 
 var _failures := 0
 var _checks := 0
@@ -9,6 +10,7 @@ var _checks := 0
 func _init() -> void:
 	_test_repeated_arrow_moves_keep_the_logical_point_selected()
 	_test_committed_drag_reorder_selects_the_dragged_point()
+	_test_handle_mode_reset_uses_the_normal_transition()
 
 	if _failures == 0:
 		print("PASS: %d Points-list submitted reorder checks" % _checks)
@@ -90,4 +92,47 @@ func _test_committed_drag_reorder_selects_the_dragged_point() -> void:
 
 	inspector.call("_move_point", 2, 2)
 	_expect(editor.selected_index == 2 and curve.points[2] == moved, "No-op drag reorder changed normal selection")
+	editor.free()
+
+
+func _test_handle_mode_reset_uses_the_normal_transition() -> void:
+	var fixture := _make_fixture()
+	var curve: EasingCurve = fixture.curve
+	var editor: EasingCurveEditor = fixture.editor
+	var inspector: Object = fixture.inspector
+	var point: EasingCurvePoint = fixture.points[1]
+	var free_row: HBoxContainer = inspector.call("_create_handle_mode_property", point, 1)
+	var free_reset_btn := (free_row.get_child(1) as MarginContainer).get_child(0) as Button
+	_expect(is_zero_approx(free_reset_btn.self_modulate.a), "Free Handle Mode showed its reset action")
+	_expect(free_reset_btn.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Free Handle Mode reset action remained enabled")
+	free_row.free()
+
+	point.right_force_linear = true
+	point.set_locked("position", true)
+	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
+	var before := EDITOR_UNDO.capture_state(curve)
+	var row: HBoxContainer = inspector.call("_create_handle_mode_property", point, 1)
+	var reset_btn := (row.get_child(1) as MarginContainer).get_child(0) as Button
+	var option := row.get_child(2) as OptionButton
+	_expect(is_equal_approx(reset_btn.self_modulate.a, 1.0), "Non-Free Handle Mode did not show its reset action")
+	_expect(reset_btn.tooltip_text == "Reset to default", "Handle Mode reset tooltip differed from point-property resets")
+
+	reset_btn.emit_signal(&"pressed")
+	var after := EDITOR_UNDO.capture_state(curve)
+	_expect(point.handle_mode == EasingCurvePoint.HandleMode.FREE, "Handle Mode reset did not select Free")
+	_expect(option.get_selected_id() == EasingCurvePoint.HandleMode.FREE, "Handle Mode reset did not update its selector")
+	_expect(point.left_control_point.is_equal_approx(point.position + Vector2.LEFT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH), "Linear-to-Free reset did not restore the normal Free left handle")
+	_expect(point.right_control_point == point.position and point.right_force_linear, "Handle Mode reset changed Force Linear state instead of applying Free geometry")
+	_expect(point.is_lock_active("position") and point.position.is_equal_approx(Vector2(0.3, 0.7)), "Handle Mode reset changed the point position or lock state")
+	_expect(is_zero_approx(reset_btn.self_modulate.a) and reset_btn.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Handle Mode reset did not reserve and disable its reset slot")
+
+	var history := UndoRedo.new()
+	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Change Easing Curve Handle Mode", before, after), "Handle Mode reset did not produce an Undo/Redo action")
+	history.undo()
+	_expect(curve.get_editor_state_snapshot() == before, "Handle Mode reset Undo did not restore the prior mode and geometry")
+	history.redo()
+	_expect(curve.get_editor_state_snapshot() == after, "Handle Mode reset Redo did not reapply Free geometry")
+	history.clear_history(false)
+	history.free()
+	row.free()
 	editor.free()

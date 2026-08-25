@@ -1444,6 +1444,33 @@ static func _set_point_reset_button_available(
 	)
 
 
+static func _create_point_reset_button() -> Button:
+	var reset_btn := Button.new()
+	reset_btn.icon = RELOAD
+	reset_btn.tooltip_text = "Reset to default"
+	reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	reset_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	reset_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	reset_btn.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
+	reset_btn.add_theme_stylebox_override(
+		&"hover",
+		reset_btn.get_theme_stylebox(&"hover").duplicate(),
+	)
+	reset_btn.add_theme_stylebox_override(
+		&"pressed",
+		reset_btn.get_theme_stylebox(&"pressed").duplicate(),
+	)
+	reset_btn.add_theme_stylebox_override(&"focus", StyleBoxEmpty.new())
+	return reset_btn
+
+
+static func _create_point_reset_margin(reset_btn: Button) -> MarginContainer:
+	var reset_margin := MarginContainer.new()
+	reset_margin.add_theme_constant_override("margin_right", 2)
+	reset_margin.add_child(reset_btn)
+	return reset_margin
+
+
 func _select_point_property(
 	property_header: PanelContainer,
 	point_index: int,
@@ -1658,29 +1685,12 @@ func _create_vector2_property(
 	header_hbox.add_child(property_label)
 
 	# Reset Button
-	var reset_btn := Button.new()
-	reset_btn.icon = RELOAD
-	#reset_btn.flat = true
-	reset_btn.tooltip_text = "Reset to default"
-	reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	reset_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	reset_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
-	var normal_style := reset_btn.get_theme_stylebox(&"normal").duplicate()
-	var empty_style := StyleBoxEmpty.new()
-	var hover_style := reset_btn.get_theme_stylebox(&"hover").duplicate()
-	var pressed_style := reset_btn.get_theme_stylebox(&"pressed").duplicate()
-	reset_btn.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
-	reset_btn.add_theme_stylebox_override(&"hover", hover_style)
-	reset_btn.add_theme_stylebox_override(&"pressed", pressed_style)
-	reset_btn.add_theme_stylebox_override(&"focus", StyleBoxEmpty.new())
-	var reset_margin := MarginContainer.new()
-	reset_margin.add_theme_constant_override("margin_right", 2)
+	var reset_btn := _create_point_reset_button()
+	var reset_margin := _create_point_reset_margin(reset_btn)
 	_set_point_reset_button_available(
 		reset_btn,
 		not current_vec.is_equal_approx(default_vec)
 	)
-	reset_margin.add_child(reset_btn)
-	#property_hbox.add_child(reset_margin)
 	header_hbox.add_child(reset_margin)
 
 	# Value container panel (x/y inputs; lock_btn)
@@ -2096,6 +2106,13 @@ func _create_handle_mode_property(
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(label)
 
+	var reset_btn := _create_point_reset_button()
+	_set_point_reset_button_available(
+		reset_btn,
+		point.handle_mode != EasingCurvePoint.HandleMode.FREE,
+	)
+	row.add_child(_create_point_reset_margin(reset_btn))
+
 	var option := OptionButton.new()
 	option.fit_to_longest_item = false
 	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2119,10 +2136,33 @@ func _create_handle_mode_property(
 				option.get_item_id(index),
 			)
 	)
+	reset_btn.pressed.connect(
+		_on_handle_mode_reset_pressed.bind(point, option, reset_btn)
+	)
 
 	row.add_child(option)
 
 	return row
+
+
+func _on_handle_mode_reset_pressed(
+	point: EasingCurvePoint,
+	option: OptionButton,
+	reset_btn: Button,
+) -> void:
+	var i := _get_current_point_index(point)
+	if i == -1:
+		return
+	if point.handle_mode == EasingCurvePoint.HandleMode.FREE:
+		_set_point_reset_button_available(reset_btn, false)
+		return
+	option.select(option.get_item_index(EasingCurvePoint.HandleMode.FREE))
+	_apply_point_property_change(
+		i,
+		&"handle_mode",
+		EasingCurvePoint.HandleMode.FREE,
+	)
+	_set_point_reset_button_available(reset_btn, false)
 
 
 func _set_snapshot_handle_mode(
