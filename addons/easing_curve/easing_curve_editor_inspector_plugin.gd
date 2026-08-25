@@ -2046,11 +2046,11 @@ func _on_add_point_btn_pressed() -> void:
 		)
 
 	if not has_left_endpoint:
-		_add_point(EasingCurvePoint.new(Vector2(0.0, 0.0)))
+		_add_points_list_point(EasingCurvePoint.new(Vector2(0.0, 0.0)))
 		return
 
 	if not has_right_endpoint:
-		_add_point(EasingCurvePoint.new(Vector2(1.0, 1.0)))
+		_add_points_list_point(EasingCurvePoint.new(Vector2(1.0, 1.0)))
 		return
 
 	var largest_gap := -1.0
@@ -2067,7 +2067,13 @@ func _on_add_point_btn_pressed() -> void:
 
 	var new_point := EasingCurvePoint.new(Vector2(new_x, curve.sample(new_x)))
 	new_point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
-	_add_point(new_point)
+	_add_points_list_point(new_point)
+
+
+func _add_points_list_point(point: EasingCurvePoint) -> void:
+	_preserve_point_selection_on_refresh = true
+	var added_point := _add_point(point)
+	_select_reordered_point(added_point)
 
 
 func _create_inspector_section(
@@ -2795,7 +2801,7 @@ func _point_action_name(property_name: StringName) -> String:
 	return "Edit Easing Curve Point"
 
 
-func _add_point(point: EasingCurvePoint) -> void:
+func _add_point(point: EasingCurvePoint) -> EasingCurvePoint:
 	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	var updated_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	updated_points.append(point)
@@ -2803,6 +2809,7 @@ func _add_point(point: EasingCurvePoint) -> void:
 		updated_points,
 		point,
 	)
+	var added_point_index := updated_points.find(point)
 	curve.set_point_snapshot(curve.make_point_snapshot(updated_points))
 	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 		editor_undo_redo,
@@ -2812,6 +2819,7 @@ func _add_point(point: EasingCurvePoint) -> void:
 		{},
 		_undo_source_property(),
 	)
+	return curve.points[added_point_index]
 
 
 func _remove_point(point: EasingCurvePoint) -> void:
