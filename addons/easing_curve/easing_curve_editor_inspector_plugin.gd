@@ -1727,14 +1727,13 @@ func _create_vector2_property(
 
 	##############################################
 	# Force Linear button (control handles only)
-	var force_linear_btn: Button
+	var force_linear_btn := Button.new()
+	force_linear_btn.flat = true
+	force_linear_btn.toggle_mode = true
+	force_linear_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	force_linear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	if property_name in ["left_control_point", "right_control_point"]:
-		force_linear_btn = Button.new()
-		force_linear_btn.flat = true
-		force_linear_btn.toggle_mode = true
-		force_linear_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		force_linear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 		var pressed_color := Color.WHITE
 		force_linear_btn.add_theme_color_override(
@@ -1812,7 +1811,13 @@ func _create_vector2_property(
 				easing_curve_editor.queue_redraw()
 		)
 
-		value_hbox.add_child(force_linear_btn)
+	else:
+		force_linear_btn.modulate.a = 0.0
+		force_linear_btn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		force_linear_btn.focus_mode = Control.FOCUS_NONE
+
+	value_hbox.add_child(force_linear_btn)
+
 	##############################################
 
 
