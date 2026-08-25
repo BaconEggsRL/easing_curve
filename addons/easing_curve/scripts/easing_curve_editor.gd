@@ -14,6 +14,7 @@ var _has_drag_auto_range := false
 var use_pending_add := true
 
 static var _selected_index_by_curve: Dictionary[int, int] = {}
+static var _right_delete_drag_state_by_curve: Dictionary[int, Dictionary] = {}
 
 signal point_changed
 signal point_property_change_requested(index: int, property_name: StringName, value: Variant, changing: bool)
@@ -75,6 +76,9 @@ var hovered_control_index: ControlIndex = ControlIndex.NONE
 var dragging_point: int = -1
 var dragging_control: ControlIndex = ControlIndex.NONE
 var pending_add_point: EasingCurvePoint
+var is_right_delete_dragging := false
+var _right_delete_requires_exit := false
+var _right_delete_blocked_position := Vector2.ZERO
 
 var grabbing: GrabMode = GrabMode.NONE
 var initial_grab_pos: Vector2
@@ -155,6 +159,10 @@ func _gui_input(event: InputEvent) -> void:
 	# =========================
 	if event is InputEventMouseMotion:
 		if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
+			return
+
+		if is_right_delete_dragging:
+			_try_remove_point_at(event.position)
 			return
 
 		if pending_add_point != null:
@@ -375,26 +383,22 @@ func _gui_input(event: InputEvent) -> void:
 			return
 
 
-		# --- RIGHT CLICK ---
-		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		# --- RIGHT CLICK / DELETE DRAG ---
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			if event.pressed:
+				_right_delete_requires_exit = false
+				_set_right_delete_dragging(true)
 
-			var point_idx = get_point_at(event.position)
+				if _try_remove_point_at(event.position):
+					return
 
-			if point_idx != -1:
-				_request_point_remove(_curve.points[point_idx])
-
-				if selected_index == point_idx:
-					selected_index = -1
-				elif selected_index > point_idx:
-					selected_index -= 1
-
+				# Right-clicking empty graph space clears the point selection.
+				selected_index = -1
+				selected_control_index = ControlIndex.NONE
 				queue_redraw()
 				return
 
-			# Right-clicking empty graph space clears the point selection.
-			selected_index = -1
-			selected_control_index = ControlIndex.NONE
-			queue_redraw()
+			_set_right_delete_dragging(false)
 			return
 
 
@@ -466,6 +470,68 @@ func _request_point_remove(point: EasingCurvePoint) -> void:
 			"Remove Easing Curve Point",
 			_curve.remove_point.bind(point),
 		)
+
+
+func _try_remove_point_at(view_pos: Vector2) -> bool:
+	if _right_delete_requires_exit:
+		if view_pos.distance_squared_to(_right_delete_blocked_position) < point_radius * point_radius:
+			return false
+		_right_delete_requires_exit = false
+
+	var point_idx := get_point_at(view_pos)
+	if point_idx == -1:
+		return false
+
+	var point := _curve.points[point_idx]
+	_right_delete_requires_exit = true
+	_right_delete_blocked_position = get_view_pos(point.position)
+	_store_right_delete_drag_state()
+
+	if selected_index == point_idx:
+		selected_index = -1
+	elif selected_index > point_idx:
+		selected_index -= 1
+
+	_request_point_remove(point)
+	queue_redraw()
+	return true
+
+
+func _set_right_delete_dragging(enabled: bool) -> void:
+	is_right_delete_dragging = enabled
+	if not enabled:
+		_right_delete_requires_exit = false
+		if _curve != null:
+			_right_delete_drag_state_by_curve.erase(_curve.get_instance_id())
+		return
+	_store_right_delete_drag_state()
+
+
+func _store_right_delete_drag_state() -> void:
+	if _curve == null or not is_right_delete_dragging:
+		return
+	_right_delete_drag_state_by_curve[_curve.get_instance_id()] = {
+		"requires_exit": _right_delete_requires_exit,
+		"blocked_position": _right_delete_blocked_position,
+	}
+
+
+func _restore_right_delete_drag_state() -> void:
+	if _curve == null:
+		return
+
+	var curve_id := _curve.get_instance_id()
+	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		_right_delete_drag_state_by_curve.erase(curve_id)
+		return
+
+	var state: Dictionary = _right_delete_drag_state_by_curve.get(curve_id, {})
+	if state.is_empty():
+		return
+
+	is_right_delete_dragging = true
+	_right_delete_requires_exit = bool(state.get("requires_exit", false))
+	_right_delete_blocked_position = state.get("blocked_position", Vector2.ZERO)
 
 
 # =========================
@@ -658,6 +724,7 @@ func set_curve(easing_curve: EasingCurve):
 				_curve.get_instance_id(),
 				-1,
 			)
+			_restore_right_delete_drag_state()
 		else:
 			selected_index = -1
 
