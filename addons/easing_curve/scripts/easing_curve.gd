@@ -1989,7 +1989,7 @@ func _sample_raw(offset: float) -> float:
 		)
 
 	if points.size() < 2:
-		return 0.0
+		return get_bezier_fallback_value(offset)
 
 	var solve_result: Array[Dictionary] = []
 	var result := _sample_bezier_points(points, offset, solve_result)
@@ -2009,13 +2009,17 @@ static func sample_bezier_points(
 	return _sample_bezier_points(point_list, offset, null)
 
 
+static func get_bezier_fallback_value(_offset: float) -> float:
+	return 0.0
+
+
 static func _sample_bezier_points(
 		point_list: Array[EasingCurvePoint],
 		offset: float,
 		solve_result: Variant,
 ) -> float:
 	if point_list.size() < 2:
-		return 0.0
+		return get_bezier_fallback_value(offset)
 
 	for i in range(point_list.size() - 1):
 		var a := point_list[i]
@@ -2035,7 +2039,7 @@ static func _sample_bezier_points(
 
 		return _sample_bezier_segment(a, b, offset, solve_result)
 
-	return 0.0
+	return get_bezier_fallback_value(offset)
 
 
 static func sample_bezier_segment(

@@ -955,16 +955,49 @@ func _get_display_points() -> Array[EasingCurvePoint]:
 
 
 func _draw_bezier_curve(point_list: Array[EasingCurvePoint]) -> void:
+	var fallback_y := EasingCurve.get_bezier_fallback_value(0.0)
 	if point_list.size() < 2:
+		draw_line(
+			get_view_pos(Vector2(0.0, fallback_y)),
+			get_view_pos(Vector2(1.0, fallback_y)),
+			LINE_COLOR,
+			2,
+		)
 		return
 
-	var first_x := clampf(get_world_pos(Vector2.ZERO).x, 0.0, 1.0)
-	var last_x := clampf(get_world_pos(Vector2(size.x, 0.0)).x, 0.0, 1.0)
-	var min_x := minf(first_x, last_x)
-	var max_x := maxf(first_x, last_x)
+	var first_point: EasingCurvePoint = point_list.front()
+	var last_point: EasingCurvePoint = point_list.back()
+
+	if not EasingCurve.is_left_endpoint_x(first_point.position.x):
+		draw_line(
+			get_view_pos(Vector2(0.0, fallback_y)),
+			get_view_pos(Vector2(first_point.position.x, fallback_y)),
+			LINE_COLOR,
+			2,
+		)
+		draw_line(
+			get_view_pos(Vector2(first_point.position.x, fallback_y)),
+			get_view_pos(first_point.position),
+			LINE_COLOR,
+			2,
+		)
 
 	for i in range(point_list.size() - 1):
-		_draw_bezier_segment(point_list[i], point_list[i + 1], min_x, max_x)
+		_draw_bezier_segment(point_list[i], point_list[i + 1], 0.0, 1.0)
+
+	if not EasingCurve.is_right_endpoint_x(last_point.position.x):
+		draw_line(
+			get_view_pos(last_point.position),
+			get_view_pos(Vector2(last_point.position.x, fallback_y)),
+			LINE_COLOR,
+			2,
+		)
+		draw_line(
+			get_view_pos(Vector2(last_point.position.x, fallback_y)),
+			get_view_pos(Vector2(1.0, fallback_y)),
+			LINE_COLOR,
+			2,
+		)
 
 
 func _draw_bezier_segment(
