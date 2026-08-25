@@ -1037,10 +1037,15 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 		var side_vbox := _create_point_side_vbox(i, point_list, point_panel, point)
 		point_main_hbox.add_child(side_vbox)
 
-		# VBox containing all properties
-		var point_panel_vbox := VBoxContainer.new()
-		point_panel_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		point_main_hbox.add_child(point_panel_vbox)
+		var point_properties_grid := GridContainer.new()
+		point_properties_grid.columns = 2
+		point_properties_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		point_properties_grid.add_theme_constant_override(
+			"h_separation",
+			_compact_separation(),
+		)
+		point_properties_grid.add_theme_constant_override("v_separation", 0)
+		point_main_hbox.add_child(point_properties_grid)
 
 		# Remove button (centered vertically)
 		var remove_btn := Button.new()
@@ -1053,13 +1058,19 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 		point_main_hbox.add_child(remove_btn)
 
 		# Position
-		point_panel_vbox.add_child(
-			_create_vector2_property(point, i, "position", "Position"),
+		_create_vector2_property(
+			point,
+			i,
+			"position",
+			"Position",
+			point_properties_grid,
 		)
 
 		# Handle Mode
-		point_panel_vbox.add_child(
-			_create_handle_mode_property(point, i),
+		_create_handle_mode_property(
+			point,
+			i,
+			point_properties_grid,
 		)
 
 		# Control Points
@@ -1067,12 +1078,20 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 
 		if point_count > 1:
 			if i != 0: # not the first point -> add left control
-				point_panel_vbox.add_child(
-					_create_vector2_property(point, i, "left_control_point", "Left Control"),
+				_create_vector2_property(
+					point,
+					i,
+					"left_control_point",
+					"Left Control",
+					point_properties_grid,
 				)
 			if i != point_count - 1: # not the last point -> add right control
-				point_panel_vbox.add_child(
-					_create_vector2_property(point, i, "right_control_point", "Right Control"),
+				_create_vector2_property(
+					point,
+					i,
+					"right_control_point",
+					"Right Control",
+					point_properties_grid,
 				)
 
 		# IMPORTANT: add panel to list
@@ -1700,30 +1719,14 @@ func _set_point_property_selected(
 
 func _create_vector2_property(
 	point: EasingCurvePoint,
-		i: int,
-		property_name: String,
-		label_text: String,
-) -> Control:
+	i: int,
+	property_name: String,
+	label_text: String,
+	property_grid: GridContainer,
+) -> void:
 	var position := point.position
 	var default_vec: Vector2 = curve.get_default_for_property(i, property_name)
 	var current_vec: Vector2 = point.get(property_name)
-
-	var property_panel := PanelContainer.new()
-	property_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	property_panel.add_theme_stylebox_override(
-		&"panel",
-		StyleBoxEmpty.new()
-	)
-	var property_vbox := VBoxContainer.new()
-	property_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	property_panel.add_child(property_vbox)
-	#var property_vbox := VBoxContainer.new()
-
-	# Row container
-	var property_hbox := HBoxContainer.new()
-	property_hbox.add_theme_constant_override("separation", _compact_separation())
-	property_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	property_vbox.add_child(property_hbox)
 
 	# Selectable property header and reset slot.
 	var reset_btn := _create_point_reset_button()
@@ -1740,7 +1743,7 @@ func _create_vector2_property(
 	)
 	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
 	property_header.custom_minimum_size.x = 0.0
-	property_hbox.add_child(property_header)
+	property_grid.add_child(property_header)
 
 	# Value container panel (x/y inputs; lock_btn)
 	var value_panel := PanelContainer.new()
@@ -1748,7 +1751,7 @@ func _create_vector2_property(
 	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
 	value_panel.custom_minimum_size.x = 0.0
-	property_hbox.add_child(value_panel)
+	property_grid.add_child(value_panel)
 
 	# HBox for x/y inputs; lock_btn
 	var value_hbox := HBoxContainer.new()
@@ -2026,9 +2029,6 @@ func _create_vector2_property(
 	y_row.add_child(y_input)
 	value_vbox.add_child(y_row)
 
-	return property_panel
-
-
 func _on_add_point_btn_pressed() -> void:
 	_add_point(EasingCurvePoint.new())
 
@@ -2167,10 +2167,8 @@ func _on_curve_editor_point_remove_requested(point: EasingCurvePoint) -> void:
 func _create_handle_mode_property(
 	point: EasingCurvePoint,
 	i: int,
-) -> Control:
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", _compact_separation())
+	property_grid: GridContainer,
+) -> void:
 
 	var reset_btn := _create_point_reset_button()
 	_set_point_reset_button_available(
@@ -2185,14 +2183,14 @@ func _create_handle_mode_property(
 	)
 	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
 	property_header.custom_minimum_size.x = 0.0
-	row.add_child(property_header)
+	property_grid.add_child(property_header)
 
 	var value_panel := PanelContainer.new()
 	value_panel.add_theme_stylebox_override(&"panel", X_STYLEBOX)
 	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
 	value_panel.custom_minimum_size.x = 0.0
-	row.add_child(value_panel)
+	property_grid.add_child(value_panel)
 
 	var option_container := Control.new()
 	option_container.custom_minimum_size.x = 0.0
@@ -2244,9 +2242,6 @@ func _create_handle_mode_property(
 			&"handle_mode",
 		)
 	)
-
-	return row
-
 
 func _on_handle_mode_reset_pressed(
 	point: EasingCurvePoint,
