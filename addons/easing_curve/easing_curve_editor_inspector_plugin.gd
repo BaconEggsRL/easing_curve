@@ -2033,7 +2033,7 @@ func _create_vector2_property(
 	value_vbox.add_child(y_row)
 
 func _on_add_point_btn_pressed() -> void:
-	_add_point(EasingCurvePoint.new())
+	_add_point(EasingCurvePoint.new(Vector2(0.5, 0.5)))
 
 
 func _create_inspector_section(
