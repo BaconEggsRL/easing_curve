@@ -1044,7 +1044,10 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 			"h_separation",
 			_compact_separation(),
 		)
-		point_properties_grid.add_theme_constant_override("v_separation", 0)
+		point_properties_grid.add_theme_constant_override(
+			"v_separation",
+			_compact_separation(),
+		)
 		point_main_hbox.add_child(point_properties_grid)
 
 		# Remove button (centered vertically)
@@ -2192,15 +2195,10 @@ func _create_handle_mode_property(
 	value_panel.custom_minimum_size.x = 0.0
 	property_grid.add_child(value_panel)
 
-	var option_container := Control.new()
-	option_container.custom_minimum_size.x = 0.0
-	option_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	value_panel.add_child(option_container)
-
 	var option := OptionButton.new()
 	_configure_compact_option(option)
-	option.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	option_container.add_child(option)
+	option.custom_minimum_size.x = 0.0
+	value_panel.add_child(option)
 
 	option.add_item("Free", EasingCurvePoint.HandleMode.FREE)
 	option.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
