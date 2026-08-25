@@ -1047,6 +1047,23 @@ Milestones 2A and 2B.
 
 High-risk editor refactors gain explicit behavioral acceptance criteria.
 
+### Completion record
+
+Completed. The aggregate runner now registers three focused editor-host suites:
+`test/easing_curve_point_state_characterization_test.gd` (93 checks),
+`test/easing_curve_selection_refresh_characterization_test.gd` (35 checks),
+and `test/easing_curve_editor_gesture_characterization_test.gd` (13 checks).
+They characterize the full HandleMode transition matrix, display-space handle
+relationships, direct and Inspector Lock/Force Linear precedence, selection
+restoration through refresh/reorder/topology/resource switching, and graph
+gesture state boundaries. `test/docs/easing_curve_editor_visible_regression_checklist.md`
+records the remaining visible-only fold, focus, scroll, and responsive-layout
+checks, including the intentional `FOCUS_NONE` workaround. Under the Codex
+sandbox, the aggregate runner cannot create Godot `user://logs` files, so its
+headless suites terminate before test initialization; the first affected suite
+(`css_linear_test.gd`) passes with exit code 0 under the same normal invocation
+when its user directory is accessible. No production addon code was changed.
+
 ## Milestone 3 — Evidence-backed dead and stale code cleanup
 
 ### Goal
