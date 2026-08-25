@@ -1,12 +1,6 @@
-[CmdletBinding()]
-param(
-	[string]$Godot = "godot"
-)
-
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$godotCommand = Get-Command $Godot -ErrorAction Stop
-$godotPath = $godotCommand.Source
+$godotLauncher = Join-Path $PSScriptRoot "run_godot.ps1"
 
 $suites = @(
 	@{ Name = "css_linear_test.gd"; Editor = $false },
@@ -47,7 +41,7 @@ foreach ($suite in $suites) {
 	try {
 		$previousErrorActionPreference = $ErrorActionPreference
 		$ErrorActionPreference = "Continue"
-		& $godotPath @arguments 1> $stdoutPath 2> $stderrPath
+		& $godotLauncher @arguments 1> $stdoutPath 2> $stderrPath
 		$suiteExitCode = $LASTEXITCODE
 		$ErrorActionPreference = $previousErrorActionPreference
 		$stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -Raw -LiteralPath $stdoutPath } else { "" }

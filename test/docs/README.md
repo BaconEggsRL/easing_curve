@@ -13,7 +13,7 @@ The following tests require an Editor-host launch:
 Run an Editor-dependent test with:
 
 ```text
-godot --editor --headless --path . --script res://test/<test_name>.gd
+./test/run_godot.ps1 --editor --headless --path . --script res://test/<test_name>.gd
 ```
 
 Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can
@@ -24,12 +24,15 @@ misleadingly report zero checks. It is not a valid result for these tests.
 Run every headless and Editor-host suite independently with:
 
 ```powershell
-./test/run_all_tests.ps1 -Godot godot
+./test/run_all_tests.ps1
 ```
 
-Pass the full path to the Godot executable with `-Godot` when it is not on
-`PATH`. The runner returns a non-zero exit code if any suite times out, exits
-unsuccessfully, lacks a PASS marker, or logs a script error.
+`test/run_godot.ps1` launches the configured Godot 4.7.1 console executable
+with Windows native application-error dialogs suppressed for that test process
+tree only. It preserves Godot stdout, stderr, and exact exit codes; a non-zero
+Godot exit remains a test failure. Direct Godot execution remains valid for
+manual debugging. The runner returns a non-zero exit code if any suite times
+out, exits unsuccessfully, lacks a PASS marker, or logs a script error.
 
 Under Godot 4.7 `--editor --headless`, `editor_undo_redo_test.gd` skips its
 `FoldableContainer` fixture because it crashes in that environment and its
