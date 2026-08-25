@@ -173,6 +173,18 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 **&nbsp;**
 
+### Development testing
+
+The Inspector-dependent tests `easing_curve_editor_position_x_drag_test.gd`, `easing_curve_linear_control_alias_test.gd`, and `easing_curve_points_list_reorder_editor_test.gd` require an Editor-host launch:
+
+```text
+godot --editor --headless --path . --script res://test/<test_name>.gd
+```
+
+Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can misleadingly report zero checks; it is not a valid result for these tests. `editor_undo_redo_test.gd` also needs an Editor host, but currently cannot complete on Godot 4.7 because its `FoldableContainer` fixture crashes before assertions run. Treat that run as blocked, not passing.
+
+**&nbsp;**
+
 
 ### **Future feature map:**
 
