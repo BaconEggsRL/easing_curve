@@ -18,6 +18,7 @@ func _init() -> void:
 
 	if _failures == 0:
 		print("PASS: %d EasingCurveEditor Position X drag checks" % _checks)
+		quit()
 	else:
 		push_error("FAIL: %d of %d EasingCurveEditor Position X drag checks failed" % [_failures, _checks])
 	quit(_failures)

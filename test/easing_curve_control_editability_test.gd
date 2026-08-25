@@ -16,6 +16,7 @@ func _init() -> void:
 
 	if _failures == 0:
 		print("PASS: %d EasingCurve control editability checks" % _checks)
+		quit()
 	else:
 		push_error("FAIL: %d of %d EasingCurve control editability checks failed" % [_failures, _checks])
 	quit(_failures)

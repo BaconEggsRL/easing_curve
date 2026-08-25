@@ -14,6 +14,7 @@ func _init() -> void:
 
 	if _failures == 0:
 		print("PASS: %d EasingCurveEditor RMB delete checks" % _checks)
+		quit()
 	else:
 		push_error("FAIL: %d of %d EasingCurveEditor RMB delete checks failed" % [_failures, _checks])
 	quit(_failures)

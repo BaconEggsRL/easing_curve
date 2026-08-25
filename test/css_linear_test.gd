@@ -15,6 +15,7 @@ func _init() -> void:
 
 	if _failures == 0:
 		print("PASS: %d CSS Linear checks" % _checks)
+		quit()
 	else:
 		push_error("FAIL: %d of %d CSS Linear checks failed" % [_failures, _checks])
 	quit(_failures)
