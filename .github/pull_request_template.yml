@@ -1,0 +1,18 @@
+## Description
+
+Briefly describe the change.
+
+## Related Issue
+
+Closes #
+
+## Testing
+
+- Godot version(s) tested:
+- What was tested:
+
+## Checklist
+
+- [ ] I tested the change in Godot.
+- [ ] I kept the change focused on the related bug, feature, or improvement.
+- [ ] I updated documentation if necessary.

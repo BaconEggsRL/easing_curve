@@ -173,6 +173,8 @@ const ZOOM_MIN := 0.1
 const ZOOM_MAX := 10.0
 const ZOOM_FACTOR := 1.2 # same as wheel multiplier
 const PRESET_GEOMETRY_TOLERANCE := 0.000001
+const POINT_ORDER_EPSILON := 0.000001
+const SEGMENT_X_EPSILON := 0.000001
 const ZOOM_STEPS := int(round(log(ZOOM_MAX / ZOOM_MIN) / log(ZOOM_FACTOR)))
 const DEFAULT_SLIDER_VALUE := floor(ZOOM_STEPS / 2.0)
 const min_value := 0.0
@@ -189,13 +191,16 @@ const POINT_PROPERTIES: Array[StringName] = [
 	&"left_control_point",
 	&"right_control_point",
 	&"locked",
+	&"handle_mode",
+	&"left_force_linear",
+	&"right_force_linear",
 ]
 
 ## Zoom slider variables
 var _last_slider_value: float = DEFAULT_SLIDER_VALUE
 var _last_zoom := Vector2(1, 1)
 var _last_pan := Vector2.ZERO
-var _last_t := 0.0
+var _last_solved_t := 0.0
 var _points: Array[EasingCurvePoint] = []
 var _connected_points: Array[EasingCurvePoint] = []
 var _point_topology: Array[EasingCurvePoint] = []
@@ -674,10 +679,22 @@ func _get_property_list() -> Array[Dictionary]:
 
 	for i in range(_points.size()):
 		for property_name in POINT_PROPERTIES:
+			var property_type := TYPE_VECTOR2
+
+			match property_name:
+				&"locked":
+					property_type = TYPE_DICTIONARY
+				&"handle_mode":
+					property_type = TYPE_INT
+				&"left_force_linear":
+					property_type = TYPE_BOOL
+				&"right_force_linear":
+					property_type = TYPE_BOOL
+
 			properties.append(
 				{
 					"name": _get_point_storage_name(i, property_name),
-					"type": TYPE_DICTIONARY if property_name == &"locked" else TYPE_VECTOR2,
+					"type": property_type,
 					"usage": PROPERTY_USAGE_STORAGE,
 				},
 			)
@@ -1100,24 +1117,18 @@ func printpoints():
 		print(i, ": ", p.position, " L:", p.left_control_point, " R:", p.right_control_point)
 
 
-func sort_points() -> void:
-	_points.sort_custom(func(a, b): return a.position.x < b.position.x)
+func sort_points(notify_change: bool = true) -> void:
+	sort_point_list_by_x(_points)
 	_synchronize_point_connections()
-	_notify_curve_changed(true, true)
+	if notify_change:
+		_notify_curve_changed(true, true)
 
 
 func swap_properties(p0: EasingCurvePoint, p1: EasingCurvePoint) -> void:
-	var temp_position_x = p0.position.x
-	p0.position.x = p1.position.x
-	p1.position.x = temp_position_x
-
-	var temp_lcp_x = p0.left_control_point.x
-	p0.left_control_point.x = p1.left_control_point.x
-	p1.left_control_point.x = temp_lcp_x
-
-	var temp_rcp_x = p0.right_control_point.x
-	p0.right_control_point.x = p1.right_control_point.x
-	p1.right_control_point.x = temp_rcp_x
+	var p0_x := p0.position.x
+	var p1_x := p1.position.x
+	p0.move_horizontally(p1_x - p0_x, true)
+	p1.move_horizontally(p0_x - p1_x, true)
 
 
 # Swap two points, either by Point references or by indices
@@ -1143,8 +1154,12 @@ func swap_points(a, b) -> void:
 func add_point(p: EasingCurvePoint) -> void:
 	if p == null:
 		return
-	_points.append(p)
-	_points.sort_custom(func(a, b): return a.position.x < b.position.x)
+	var updated_points: Array[EasingCurvePoint] = _points.duplicate()
+	updated_points.append(p)
+	_points = build_ordered_points_with_endpoint_takeover(
+		updated_points,
+		p,
+	)
 	_synchronize_point_connections()
 	_notify_curve_changed(true, true)
 
@@ -1190,23 +1205,38 @@ func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 	var positions := PackedVector2Array()
 	var left_control_points := PackedVector2Array()
 	var right_control_points := PackedVector2Array()
+	var handle_modes := PackedInt32Array()
 	var locks: Array[Dictionary] = []
+	var left_force_linear := PackedByteArray()
+	var right_force_linear := PackedByteArray()
+
 	for point in point_values:
 		if point == null:
 			positions.append(Vector2.ZERO)
 			left_control_points.append(Vector2.ZERO)
 			right_control_points.append(Vector2.ZERO)
+			handle_modes.append(EasingCurvePoint.HandleMode.FREE)
 			locks.append({})
+			left_force_linear.append(0)
+			right_force_linear.append(0)
 			continue
+
 		positions.append(point.position)
 		left_control_points.append(point.left_control_point)
 		right_control_points.append(point.right_control_point)
+		handle_modes.append(point.handle_mode)
 		locks.append(point.locked.duplicate())
+		left_force_linear.append(int(point.left_force_linear))
+		right_force_linear.append(int(point.right_force_linear))
+
 	return {
 		"positions": positions,
 		"left_control_points": left_control_points,
 		"right_control_points": right_control_points,
+		"handle_modes": handle_modes,
 		"locks": locks,
+		"left_force_linear": left_force_linear,
+		"right_force_linear": right_force_linear,
 	}
 
 
@@ -1226,11 +1256,26 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 		PackedVector2Array(),
 	)
 	var locks: Array = snapshot.get("locks", [])
+	var handle_modes: PackedInt32Array = snapshot.get(
+		"handle_modes",
+		PackedInt32Array(),
+	)
+	var left_force_linear: PackedByteArray = snapshot.get(
+		"left_force_linear",
+		PackedByteArray(),
+	)
+	var right_force_linear: PackedByteArray = snapshot.get(
+		"right_force_linear",
+		PackedByteArray(),
+	)
 
 	var reversed_positions := PackedVector2Array()
 	var reversed_left_controls := PackedVector2Array()
 	var reversed_right_controls := PackedVector2Array()
 	var reversed_locks: Array[Dictionary] = []
+	var reversed_handle_modes := PackedInt32Array()
+	var reversed_left_force_linear := PackedByteArray()
+	var reversed_right_force_linear := PackedByteArray()
 
 	for i in range(positions.size() - 1, -1, -1):
 		var position := positions[i]
@@ -1252,6 +1297,21 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 			else {}
 		)
 
+		if i < handle_modes.size():
+			reversed_handle_modes.append(handle_modes[i])
+
+		reversed_left_force_linear.append(
+			right_force_linear[i]
+			if i < right_force_linear.size()
+			else 0
+		)
+
+		reversed_right_force_linear.append(
+			left_force_linear[i]
+			if i < left_force_linear.size()
+			else 0
+		)
+
 		# Handle locks swap for the same reason as the handles.
 		reversed_locks.append({
 			"position": bool(lock_values.get("position", false)),
@@ -1267,6 +1327,9 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 	result["left_control_points"] = reversed_left_controls
 	result["right_control_points"] = reversed_right_controls
 	result["locks"] = reversed_locks
+	result["handle_modes"] = reversed_handle_modes
+	result["left_force_linear"] = reversed_left_force_linear
+	result["right_force_linear"] = reversed_right_force_linear
 
 	return result
 
@@ -1317,18 +1380,61 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 	var positions: PackedVector2Array = snapshot.get("positions", PackedVector2Array())
 	var left_control_points: PackedVector2Array = snapshot.get("left_control_points", PackedVector2Array())
 	var right_control_points: PackedVector2Array = snapshot.get("right_control_points", PackedVector2Array())
+	var handle_modes: PackedInt32Array = snapshot.get("handle_modes", PackedInt32Array())
+	var left_force_linear: PackedByteArray = snapshot.get(
+		"left_force_linear",
+		PackedByteArray(),
+	)
+	var right_force_linear: PackedByteArray = snapshot.get(
+		"right_force_linear",
+		PackedByteArray(),
+	)
 	var locks: Array = snapshot.get("locks", [])
 	var changing := bool(snapshot.get("changing", false))
 	var topology_changed := positions.size() != _points.size() or _points.has(null)
-	var point_data_changed := _point_snapshot_differs(positions, left_control_points, right_control_points, locks)
+	var point_data_changed := _point_snapshot_differs(
+		positions,
+		left_control_points,
+		right_control_points,
+		handle_modes,
+		locks,
+		left_force_linear,
+		right_force_linear,
+	)
 	_suppress_point_notifications += 1
 	if not topology_changed:
 		for i in range(positions.size()):
-			_points[i].position = positions[i]
+			var point := _points[i]
+
+			# Disable per-side force state while restoring exact geometry.
+			point.set_force_linear_state(false, false, false)
+
+			# Temporarily use Free so restoring one handle does not
+			# modify the opposite handle.
+			point.handle_mode = EasingCurvePoint.HandleMode.FREE
+
+			point.position = positions[i]
+
 			if i < left_control_points.size():
-				_points[i].left_control_point = left_control_points[i]
+				point.left_control_point = left_control_points[i]
+
 			if i < right_control_points.size():
-				_points[i].right_control_point = right_control_points[i]
+				point.right_control_point = right_control_points[i]
+
+			if i < handle_modes.size():
+				point.handle_mode = handle_modes[i]
+
+			# Restore the stored state without modifying restored geometry.
+			point.set_force_linear_state(
+				bool(left_force_linear[i])
+					if i < left_force_linear.size()
+					else false,
+				bool(right_force_linear[i])
+					if i < right_force_linear.size()
+					else false,
+				false,
+			)
+
 			if i < locks.size() and locks[i] is Dictionary:
 				var lock_values: Dictionary = locks[i]
 				_points[i].locked = {
@@ -1340,10 +1446,28 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 		var new_points: Array[EasingCurvePoint] = []
 		for i in range(positions.size()):
 			var point := EasingCurvePoint.new(positions[i])
+
+			point.set_force_linear_state(false, false, false)
+
 			if i < left_control_points.size():
 				point.left_control_point = left_control_points[i]
+
 			if i < right_control_points.size():
 				point.right_control_point = right_control_points[i]
+
+			if i < handle_modes.size():
+				point.handle_mode = handle_modes[i]
+
+			point.set_force_linear_state(
+				bool(left_force_linear[i])
+					if i < left_force_linear.size()
+					else false,
+				bool(right_force_linear[i])
+					if i < right_force_linear.size()
+					else false,
+				false,
+			)
+
 			if i < locks.size() and locks[i] is Dictionary:
 				var lock_values: Dictionary = locks[i]
 				point.locked = {
@@ -1364,11 +1488,22 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 
 	if changing:
 		_point_snapshot_change_pending = _point_snapshot_change_pending or point_data_changed
-		_point_snapshot_property_list_pending = _point_snapshot_property_list_pending or topology_changed
+		_point_snapshot_property_list_pending = (
+			_point_snapshot_property_list_pending
+			or point_data_changed
+			or topology_changed
+		)
 		return
 
 	var notify_points := point_data_changed or _point_snapshot_change_pending
-	var notify_property_list := topology_changed or _point_snapshot_property_list_pending
+	# Point fields are rendered by the custom Points Inspector section. Refresh it
+	# whenever a completed snapshot publishes changed point data, even when its
+	# topology did not change.
+	var notify_property_list := (
+		notify_points
+		or topology_changed
+		or _point_snapshot_property_list_pending
+	)
 	_point_snapshot_change_pending = false
 	_point_snapshot_property_list_pending = false
 	if notify_points:
@@ -1415,13 +1550,19 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	var positions: PackedVector2Array = point_snapshot.get("positions", PackedVector2Array())
 	var left_control_points: PackedVector2Array = point_snapshot.get("left_control_points", PackedVector2Array())
 	var right_control_points: PackedVector2Array = point_snapshot.get("right_control_points", PackedVector2Array())
+	var handle_modes: PackedInt32Array = point_snapshot.get("handle_modes", PackedInt32Array())
 	var locks: Array = point_snapshot.get("locks", [])
+	var left_force_linear: PackedByteArray = point_snapshot.get("left_force_linear", PackedByteArray())
+	var right_force_linear: PackedByteArray = point_snapshot.get("right_force_linear", PackedByteArray())
 	var topology_changed := positions.size() != _points.size() or _points.has(null)
 	var point_data_changed := _point_snapshot_differs(
 		positions,
 		left_control_points,
 		right_control_points,
+		handle_modes,
 		locks,
+		left_force_linear,
+		right_force_linear,
 	)
 	var locks_changed := _point_snapshot_locks_differ(locks)
 	var bezier_parameters_changed := (
@@ -1441,7 +1582,8 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 		return
 
 	var property_list_changed := (
-		topology_changed
+		point_data_changed
+		or topology_changed
 		or locks_changed
 		or ease_type != snapshot_ease
 		or trans_type != snapshot_trans
@@ -1572,7 +1714,10 @@ func _point_snapshot_differs(
 		positions: PackedVector2Array,
 		left_control_points: PackedVector2Array,
 		right_control_points: PackedVector2Array,
+		handle_modes: PackedInt32Array,
 		locks: Array,
+		left_force_linear: PackedByteArray,
+		right_force_linear: PackedByteArray,
 ) -> bool:
 	if positions.size() != _points.size() or _points.has(null):
 		return true
@@ -1584,11 +1729,27 @@ func _point_snapshot_differs(
 			return true
 		if i < right_control_points.size() and point.right_control_point != right_control_points[i]:
 			return true
+		if i < handle_modes.size() and point.handle_mode != handle_modes[i]:
+			return true
 		if i < locks.size() and locks[i] is Dictionary:
 			var lock_values: Dictionary = locks[i]
 			for property_name in POINT_PROPERTIES.slice(0, 3):
 				if bool(point.locked.get(property_name, false)) != bool(lock_values.get(property_name, false)):
 					return true
+		var snapshot_left_force := (
+			bool(left_force_linear[i])
+			if i < left_force_linear.size()
+			else false
+		)
+		var snapshot_right_force := (
+			bool(right_force_linear[i])
+			if i < right_force_linear.size()
+			else false
+		)
+		if point.left_force_linear != snapshot_left_force:
+			return true
+		if point.right_force_linear != snapshot_right_force:
+			return true
 	return false
 
 
@@ -1833,11 +1994,47 @@ func _sample_raw(offset: float) -> float:
 		)
 
 	if points.size() < 2:
-		return 0.0
+		return get_bezier_fallback_value(offset)
 
-	for i in range(points.size() - 1):
-		var a = points[i]
-		var b = points[i + 1]
+	var solve_result: Array[Dictionary] = []
+	var result := _sample_bezier_points(points, offset, solve_result)
+	if not solve_result.is_empty():
+		_last_solved_t = solve_result[0]["t"]
+	return result
+
+
+func get_last_solved_t() -> float:
+	return _last_solved_t
+
+
+static func sample_bezier_points(
+		point_list: Array[EasingCurvePoint],
+		offset: float,
+) -> float:
+	return _sample_bezier_points(point_list, offset, null)
+
+
+static func get_bezier_fallback_value(_offset: float) -> float:
+	return 0.0
+
+
+static func _sample_bezier_points(
+		point_list: Array[EasingCurvePoint],
+		offset: float,
+		solve_result: Variant,
+) -> float:
+	if point_list.size() < 2:
+		return get_bezier_fallback_value(offset)
+
+	for i in range(point_list.size() - 1):
+		var a := point_list[i]
+		var b := point_list[i + 1]
+		if absf(b.position.x - a.position.x) <= SEGMENT_X_EPSILON:
+			if absf(offset - a.position.x) <= SEGMENT_X_EPSILON:
+				if solve_result != null:
+					solve_result.append({"t": 1.0})
+				return b.position.y
+			continue
 
 		var min_x = min(a.position.x, b.position.x)
 		var max_x = max(a.position.x, b.position.x)
@@ -1845,18 +2042,54 @@ func _sample_raw(offset: float) -> float:
 		if offset < min_x or offset > max_x:
 			continue
 
-		var t = _solve_for_t(offset, a, b)
+		return _sample_bezier_segment(a, b, offset, solve_result)
 
-		if t >= 0.0 and t <= 1.0:
-			return _bezier_interpolate(
-				a.position.y,
-				a.right_control_point.y,
-				b.left_control_point.y,
-				b.position.y,
-				t,
-			)
+	return get_bezier_fallback_value(offset)
 
-	return 0.0
+
+static func sample_bezier_segment(
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+		offset: float,
+) -> float:
+	return _sample_bezier_segment(a, b, offset, null)
+
+
+static func _sample_bezier_segment(
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+		offset: float,
+		solve_result: Variant,
+) -> float:
+	var controls := _get_effective_segment_controls(a, b)
+	var solve_info := _solve_for_t(offset, a, b, controls[0], controls[1])
+	var t: float = solve_info["t"]
+	if solve_result != null:
+		solve_result.append({"t": t})
+	return _bezier_interpolate(
+		a.position.y,
+		controls[0].y,
+		controls[1].y,
+		b.position.y,
+		t,
+	)
+
+
+static func _get_effective_segment_controls(
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+) -> Array[Vector2]:
+	var out_control := a.right_control_point
+	var in_control := b.left_control_point
+	var min_x := minf(a.position.x, b.position.x)
+	var max_x := maxf(a.position.x, b.position.x)
+	out_control.x = clampf(out_control.x, min_x, max_x)
+	in_control.x = clampf(in_control.x, min_x, max_x)
+	if out_control.x > in_control.x:
+		var shared_x := (out_control.x + in_control.x) * 0.5
+		out_control.x = shared_x
+		in_control.x = shared_x
+	return [out_control, in_control]
 
 
 ## Sample the curve, calculating f(t) given x.
@@ -2183,28 +2416,40 @@ func _on_point_changed() -> void:
 	_notify_curve_changed(true, false)
 
 
-# Newton-Raphson solver with a binary-search fallback for flat handles.
-func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
+# Solve X-to-t across monotonic intervals, with Newton/binary fallback for numerical misses.
+static func _solve_for_t(
+		x: float,
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+		out_control: Vector2,
+		in_control: Vector2,
+) -> Dictionary:
 	var segment_width := b.position.x - a.position.x
-	var t := clampf((x - a.position.x) / segment_width, 0.0, 1.0) if not is_zero_approx(segment_width) else 0.5
+	var seed := clampf((x - a.position.x) / segment_width, 0.0, 1.0) if not is_zero_approx(segment_width) else 0.5
+	var roots := _find_x_roots(x, a.position.x, out_control.x, in_control.x, b.position.x)
+
+	if not roots.is_empty():
+		# The first monotonic interval is the deterministic branch policy.
+		return roots[0]
+
+	var t := seed
 
 	for _iteration in range(12):
 		var x_est := _bezier_interpolate(
 			a.position.x,
-			a.right_control_point.x,
-			b.left_control_point.x,
+			out_control.x,
+			in_control.x,
 			b.position.x,
 			t,
 		)
 		var error := x_est - x
 		if absf(error) <= 0.00000001:
-			_last_t = t
-			return t
+			return {"t": t, "branch": -1, "branch_count": 0}
 
 		var dx := _bezier_derivative(
 			a.position.x,
-			a.right_control_point.x,
-			b.left_control_point.x,
+			out_control.x,
+			in_control.x,
 			b.position.x,
 			t,
 		)
@@ -2217,12 +2462,87 @@ func _solve_for_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
 			break
 		t = next_t
 
-	t = _binary_search_t(x, a, b)
-	_last_t = t
-	return t
+	t = _binary_search_t(x, a.position.x, out_control.x, in_control.x, b.position.x)
+	return {"t": t, "branch": -1, "branch_count": 0}
 
 
-func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> float:
+static func _find_x_roots(
+		x: float,
+		p0: float,
+		p1: float,
+		p2: float,
+		p3: float,
+) -> Array[Dictionary]:
+	var coefficient_a := -p0 + 3.0 * p1 - 3.0 * p2 + p3
+	var coefficient_b := 3.0 * p0 - 6.0 * p1 + 3.0 * p2
+	var coefficient_c := -3.0 * p0 + 3.0 * p1
+	var bounds: Array[float] = [0.0, 1.0]
+	var derivative_a := 3.0 * coefficient_a
+	var derivative_b := 2.0 * coefficient_b
+
+	if absf(derivative_a) <= 0.00000001:
+		if absf(derivative_b) > 0.00000001:
+			_append_x_root_bound(bounds, -coefficient_c / derivative_b)
+	else:
+		var discriminant := derivative_b * derivative_b - 4.0 * derivative_a * coefficient_c
+		if discriminant >= 0.0:
+			var root_delta := sqrt(discriminant)
+			_append_x_root_bound(bounds, (-derivative_b - root_delta) / (2.0 * derivative_a))
+			_append_x_root_bound(bounds, (-derivative_b + root_delta) / (2.0 * derivative_a))
+
+	bounds.sort()
+	var roots: Array[Dictionary] = []
+	var branch_count := bounds.size() - 1
+	for i in range(bounds.size() - 1):
+		var low := bounds[i]
+		var high := bounds[i + 1]
+		var low_error := _bezier_interpolate(p0, p1, p2, p3, low) - x
+		var high_error := _bezier_interpolate(p0, p1, p2, p3, high) - x
+
+		if absf(low_error) <= 0.00000001:
+			_append_x_root(roots, low, i, branch_count)
+		if absf(high_error) <= 0.00000001:
+			_append_x_root(roots, high, i, branch_count)
+		if low_error * high_error < 0.0:
+			for _iteration in range(40):
+				var middle := (low + high) * 0.5
+				var middle_error := _bezier_interpolate(p0, p1, p2, p3, middle) - x
+				if absf(middle_error) <= 0.00000001:
+					low = middle
+					high = middle
+					break
+				if low_error * middle_error < 0.0:
+					high = middle
+				else:
+					low = middle
+					low_error = middle_error
+			_append_x_root(roots, (low + high) * 0.5, i, branch_count)
+
+	return roots
+
+
+static func _append_x_root_bound(bounds: Array[float], value: float) -> void:
+	if value > 0.0 and value < 1.0:
+		bounds.append(value)
+
+
+static func _append_x_root(
+		roots: Array[Dictionary],
+		value: float,
+		branch: int,
+		branch_count: int,
+) -> void:
+	for root in roots:
+		if is_equal_approx(root["t"], value):
+			return
+	roots.append({
+		"t": value,
+		"branch": branch,
+		"branch_count": branch_count,
+	})
+
+
+static func _binary_search_t(x: float, p0: float, p1: float, p2: float, p3: float) -> float:
 	var low := 0.0
 	var high := 1.0
 	var mid := 0.5
@@ -2231,10 +2551,10 @@ func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> flo
 		mid = (low + high) * 0.5
 
 		var x_est = _bezier_interpolate(
-			a.position.x,
-			a.right_control_point.x,
-			b.left_control_point.x,
-			b.position.x,
+			p0,
+			p1,
+			p2,
+			p3,
 			mid,
 		)
 		if absf(x_est - x) <= 0.00000001:
@@ -2248,13 +2568,63 @@ func _binary_search_t(x: float, a: EasingCurvePoint, b: EasingCurvePoint) -> flo
 	return mid
 
 
-func _bezier_derivative(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
+static func _bezier_derivative(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
 	var omt = 1.0 - t
 	return 3.0 * omt * omt * (p1 - p0) \
 	+ 6.0 * omt * t * (p2 - p1) \
 	+ 3.0 * t * t * (p3 - p2)
 
 
-func _bezier_interpolate(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
+static func _bezier_interpolate(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
 	var omt = 1.0 - t
 	return omt * omt * omt * p0 + 3 * omt * omt * t * p1 + 3 * omt * t * t * p2 + t * t * t * p3
+
+
+static func sort_point_list_by_x(point_list: Array[EasingCurvePoint]) -> void:
+	var entries: Array[Dictionary] = []
+	for i in range(point_list.size()):
+		entries.append({
+			"point": point_list[i],
+			"index": i,
+			"bucket": roundi(point_list[i].position.x / POINT_ORDER_EPSILON),
+		})
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a["bucket"] == b["bucket"]:
+			return a["index"] < b["index"]
+		return a["bucket"] < b["bucket"]
+	)
+	for i in range(entries.size()):
+		point_list[i] = entries[i]["point"]
+
+
+static func is_left_endpoint_x(x: float) -> bool:
+	return absf(x) <= POINT_ORDER_EPSILON
+
+
+static func is_right_endpoint_x(x: float) -> bool:
+	return absf(x - 1.0) <= POINT_ORDER_EPSILON
+
+
+static func build_ordered_points_with_endpoint_takeover(
+	point_list: Array[EasingCurvePoint],
+	active_point: EasingCurvePoint,
+) -> Array[EasingCurvePoint]:
+	var result: Array[EasingCurvePoint] = []
+	var takes_left_endpoint := is_left_endpoint_x(active_point.position.x)
+	var takes_right_endpoint := is_right_endpoint_x(active_point.position.x)
+
+	for point in point_list:
+		if point == null:
+			continue
+		if point != active_point and (
+			(takes_left_endpoint and is_left_endpoint_x(point.position.x))
+			or (takes_right_endpoint and is_right_endpoint_x(point.position.x))
+		):
+			continue
+		result.append(point)
+
+	if active_point not in result:
+		result.append(active_point)
+
+	sort_point_list_by_x(result)
+	return result

@@ -1,0 +1,56 @@
+[gd_resource type="Resource" script_class="EasingCurve" format=3 uid="uid://dcoivx3d6wmpq"]
+
+[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="1_qn4uq"]
+
+[resource]
+script = ExtResource("1_qn4uq")
+power = 1.6509999999999998
+decay = 2.5
+_css_linear_points = PackedVector2Array(0, 0, 1, 1)
+_css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.25, 1)
+_point_count = 4
+_point_0/position = Vector2(0, 0)
+_point_0/left_control_point = Vector2(0, 0)
+_point_0/right_control_point = Vector2(0, 0)
+_point_0/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_0/handle_mode = 0
+_point_0/left_force_linear = false
+_point_0/right_force_linear = false
+_point_1/position = Vector2(0.46815467, 0.78648937)
+_point_1/left_control_point = Vector2(0.36815467, 0.78648937)
+_point_1/right_control_point = Vector2(0.5681547, 0.78648937)
+_point_1/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_1/handle_mode = 0
+_point_1/left_force_linear = false
+_point_1/right_force_linear = false
+_point_2/position = Vector2(0.46815467, 0.27365172)
+_point_2/left_control_point = Vector2(0.36815464, 0.27365172)
+_point_2/right_control_point = Vector2(0.5681547, 0.27365172)
+_point_2/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_2/handle_mode = 0
+_point_2/left_force_linear = false
+_point_2/right_force_linear = false
+_point_3/position = Vector2(1, 0.92426664)
+_point_3/left_control_point = Vector2(0.9, 0.92426664)
+_point_3/right_control_point = Vector2(1.1, 0.92426664)
+_point_3/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_3/handle_mode = 0
+_point_3/left_force_linear = false
+_point_3/right_force_linear = false
+metadata/_custom_type_script = "uid://c10cjby72qngf"

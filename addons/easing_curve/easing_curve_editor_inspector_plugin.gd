@@ -13,6 +13,10 @@ const BTN_NORMAL = preload("uid://c6hb75fm8lwht")
 const GUI_TREE_ARROW_RIGHT = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowRight.svg")
 const GUI_TREE_ARROW_DOWN = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowDown.svg")
 const ZOOM_SLIDER_CONTAINER = preload("uid://r1ymwr6nae")
+
+const FORCE_LINEAR_ICON_ON = preload("res://addons/easing_curve/assets/icons/Instance.svg")
+const FORCE_LINEAR_ICON_OFF = preload("res://addons/easing_curve/assets/icons/Unlinked.svg")
+
 const RELOAD = preload("res://addons/easing_curve/assets/icons/Reload.svg")
 const REMOVE = preload("res://addons/easing_curve/assets/icons/Remove.svg")
 const ADD = preload("res://addons/easing_curve/assets/icons/Add.svg")
@@ -25,6 +29,7 @@ const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easi
 ## Vector2 slider step
 const SLIDER_INPUT_STEP = 0.001
 const DRAGGING_META := &"_easing_curve_dragging"
+const POSITION_X_EDITING_META := &"_easing_curve_position_x_editing"
 # copy functions
 const POINT_MENU_COPY_VALUE := 0
 const POINT_MENU_PASTE_VALUE := 1
@@ -122,7 +127,7 @@ func _copy_point_property_value(
 	if point_index < 0 or point_index >= curve.points.size():
 		return
 
-	var value: Vector2 = curve.points[point_index].get(property_name)
+	var value: Variant = curve.points[point_index].get(property_name)
 
 	DisplayServer.clipboard_set(
 		var_to_str(value)
@@ -139,7 +144,15 @@ func _paste_point_property_value(
 	var clipboard := DisplayServer.clipboard_get()
 	var value: Variant = str_to_var(clipboard)
 
-	if not value is Vector2:
+	_apply_pasted_point_property_value(point_index, property_name, value)
+
+
+func _apply_pasted_point_property_value(
+	point_index: int,
+	property_name: StringName,
+	value: Variant,
+) -> void:
+	if not _is_point_property_value_compatible(property_name, value):
 		return
 
 	_apply_point_property_change(
@@ -161,13 +174,30 @@ func _copy_point_property_path(
 	)
 
 
-static func _clipboard_has_vector2() -> bool:
+static func _is_point_property_value_compatible(
+	property_name: StringName,
+	value: Variant,
+) -> bool:
+	if property_name == &"handle_mode":
+		return (
+			value is int
+			and int(value) in EasingCurvePoint.HandleMode.values()
+		)
+	return value is Vector2
+
+
+static func _clipboard_has_compatible_point_property_value(
+	property_name: StringName,
+) -> bool:
 	var clipboard := DisplayServer.clipboard_get()
 
 	if clipboard.is_empty():
 		return false
 
-	return str_to_var(clipboard) is Vector2
+	return _is_point_property_value_compatible(
+		property_name,
+		str_to_var(clipboard),
+	)
 
 
 func _create_point_property_context_menu(
@@ -221,6 +251,68 @@ func _create_point_property_context_menu(
 	return menu
 
 
+func _create_selectable_point_property_header(
+	i: int,
+	property_name: StringName,
+	label_text: String,
+	reset_btn: Button,
+) -> PanelContainer:
+	var property_header := PanelContainer.new()
+	property_header.focus_mode = Control.FOCUS_NONE
+
+	var property_context_menu := _create_point_property_context_menu(
+		i,
+		property_name,
+	)
+	property_header.add_child(property_context_menu)
+	var property_path := _point_property_path(i, property_name)
+	property_header.tooltip_text = property_path
+	property_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	property_header.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	property_header.add_theme_stylebox_override(&"panel", StyleBoxEmpty.new())
+	property_header.gui_input.connect(
+		func(event: InputEvent):
+			if not event is InputEventMouseButton or not event.pressed:
+				return
+
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				_select_point_property(property_header, i, property_name)
+			elif event.button_index == MOUSE_BUTTON_RIGHT:
+				_select_point_property(property_header, i, property_name)
+				var paste_index := property_context_menu.get_item_index(
+					POINT_MENU_PASTE_VALUE,
+				)
+				property_context_menu.set_item_disabled(
+					paste_index,
+					not _clipboard_has_compatible_point_property_value(
+						property_name,
+					),
+				)
+				property_context_menu.position = DisplayServer.mouse_get_position()
+				property_context_menu.popup()
+				property_header.accept_event()
+	)
+
+	if (
+		_selected_point_index == i
+		and _selected_point_property_name == property_name
+	):
+		_selected_point_property_header = property_header
+		_set_point_property_selected(property_header, true)
+
+	var header_hbox := HBoxContainer.new()
+	header_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_hbox.add_theme_constant_override(&"separation", _compact_separation())
+	property_header.add_child(header_hbox)
+
+	var property_label := Label.new()
+	property_label.text = label_text
+	property_label.tooltip_text = property_path
+	_configure_compact_label(property_label)
+	header_hbox.add_child(property_label)
+	header_hbox.add_child(_create_point_reset_margin(reset_btn))
+	return property_header
+
 
 class DeferredParameterEditorProperty:
 	extends EditorProperty
@@ -266,7 +358,10 @@ class DeferredParameterEditorProperty:
 		row.add_child(input)
 		add_focusable(input)
 
-		input.deferred_drag_mode = false
+		# Added in Godot 4.7 -- defers property update to end of slider drag.
+		if input.has_method("set_deferred_drag_mode_enabled"):
+			input.set_deferred_drag_mode_enabled(false)
+
 		input.grabbed.connect(_on_grabbed)
 		input.ungrabbed.connect(_on_ungrabbed)
 		input.value_focus_entered.connect(_on_value_focus_entered)
@@ -871,6 +966,7 @@ var _selected_point_index := -1
 var _selected_point_property_name := StringName()
 var _selected_point_resource_id := 0
 var _preserve_point_selection_on_refresh := false
+var _position_x_order_preview_point: EasingCurvePoint
 
 
 func _clear_point_property_selection() -> void:
@@ -883,6 +979,7 @@ func _clear_point_property_selection() -> void:
 	_selected_point_property_header = null
 	_selected_point_index = -1
 	_selected_point_property_name = StringName()
+	_selected_point_resource_id = 0
 
 
 func handle_points(curve: EasingCurve) -> VBoxContainer:
@@ -930,6 +1027,11 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 		# Position
 		point_panel_vbox.add_child(
 			_create_vector2_property(point, i, "position", "Position"),
+		)
+
+		# Handle Mode
+		point_panel_vbox.add_child(
+			_create_handle_mode_property(point, i),
 		)
 
 		# Control Points
@@ -998,6 +1100,10 @@ func handle_easing_curve_editor(object) -> Control:
 
 		# Keep references
 		curve_section.add_child(_toolbar)
+
+		var point_toolbar_gap := Control.new()
+		point_toolbar_gap.custom_minimum_size.y = _compact_separation()
+		curve_section.add_child(point_toolbar_gap)
 
 		########################################
 		# Add curve editor
@@ -1135,10 +1241,12 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 	if object is EasingCurve and name == EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY:
 		return true
 	if object is EasingCurve and name == EasingCurve.FUNCTION_SNAPSHOT_PROPERTY:
+		return true
+	if object is EasingCurve and name == "generate_tool_button":
 		if EasingCurve.uses_generated_function_data(object.trans_type):
 			var property_editor := GenerateFunctionEditorProperty.new()
 			property_editor.setup(easing_curve_editor, editor_undo_redo)
-			add_property_editor(name, property_editor)
+			add_custom_control(property_editor)
 		return true
 	if object is EasingCurve and name == "generate_tool_button":
 		return true
@@ -1201,18 +1309,29 @@ func _update_point_reset_btn(
 
 func _on_reset_btn_pressed(
 		i: int,
+		point: EasingCurvePoint,
 		_default: Vector2,
 		x_input: EditorSpinSlider,
 		y_input: EditorSpinSlider,
 		property_name: String,
 		reset_btn: Button,
 ) -> void:
+	i = _get_current_point_index(point)
+	if i == -1:
+		return
 	_preserve_point_selection_on_refresh = true
-	var new_default := curve.get_default_for_property(i, property_name)
+	var edit_property_name := _get_point_input_edit_property(point, property_name)
+	var new_default := curve.get_default_for_property(i, edit_property_name)
 
 	x_input.set_value_no_signal(new_default.x)
 	y_input.set_value_no_signal(new_default.y)
-	_apply_point_property_change(i, property_name, new_default)
+	_apply_point_property_change(
+		i,
+		edit_property_name,
+		new_default,
+		false,
+		point if edit_property_name == &"position" else null,
+	)
 
 	reset_btn.visible = false
 
@@ -1221,24 +1340,80 @@ func _on_remove_btn_pressed(_point_list: VBoxContainer, _i: int, _point_panel: P
 	_remove_point(p)
 
 
-func _on_x_input_value_changed(value: float, i: int, x_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
+func _on_x_input_value_changed(value: float, i: int, point: EasingCurvePoint, x_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
 	# print("p%d x: %.3f" % [i, value])
-	var point := curve.points[i]
-	var v: Vector2 = point.get(property_name)
+	i = _get_current_point_index(point)
+	if i == -1:
+		return
+	if not _is_point_input_editable(point, property_name):
+		return
+	var edit_property_name := _get_point_input_edit_property(point, property_name)
+	var v: Vector2 = point.get(edit_property_name)
 	v.x = value
-	_apply_point_property_change(i, property_name, v, x_input.has_meta(DRAGGING_META))
-	_update_point_reset_btn(reset_btn, i, property_name) # show reset if different
+	_apply_point_property_change(
+		i,
+		edit_property_name,
+		v,
+		x_input.has_meta(DRAGGING_META)
+			or x_input.has_meta(POSITION_X_EDITING_META),
+		point if edit_property_name == &"position" else null,
+	)
+	i = _get_current_point_index(point)
+	_update_point_reset_btn(reset_btn, i, edit_property_name) # show reset if different
 	easing_curve_editor.queue_redraw()
 
 
-func _on_y_input_value_changed(value: float, i: int, y_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
+func _on_y_input_value_changed(value: float, i: int, point: EasingCurvePoint, y_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
 	# print("p%d y: %.3f" % [i, value])
-	var point := curve.points[i]
-	var v: Vector2 = point.get(property_name)
+	i = _get_current_point_index(point)
+	if i == -1:
+		return
+	if not _is_point_input_editable(point, property_name):
+		return
+	var edit_property_name := _get_point_input_edit_property(point, property_name)
+	var v: Vector2 = point.get(edit_property_name)
 	v.y = value
-	_apply_point_property_change(i, property_name, v, y_input.has_meta(DRAGGING_META))
-	_update_point_reset_btn(reset_btn, i, property_name) # show reset if different
+	_apply_point_property_change(
+		i,
+		edit_property_name,
+		v,
+		y_input.has_meta(DRAGGING_META),
+		point if edit_property_name == &"position" else null,
+	)
+	_update_point_reset_btn(reset_btn, i, edit_property_name) # show reset if different
 	easing_curve_editor.queue_redraw()
+
+
+func _get_point_input_edit_property(
+	point: EasingCurvePoint,
+	property_name: String,
+) -> StringName:
+	if (
+		point.handle_mode == EasingCurvePoint.HandleMode.LINEAR
+		and property_name in ["left_control_point", "right_control_point"]
+	):
+		var side := (
+			EasingCurvePoint.ControlSide.LEFT
+			if property_name == "left_control_point"
+			else EasingCurvePoint.ControlSide.RIGHT
+		)
+		if point.is_control_position_editable(side):
+			return &"position"
+	return StringName(property_name)
+
+
+func _is_point_input_editable(
+	point: EasingCurvePoint,
+	property_name: String,
+) -> bool:
+	if property_name not in ["left_control_point", "right_control_point"]:
+		return true
+	var side := (
+		EasingCurvePoint.ControlSide.LEFT
+		if property_name == "left_control_point"
+		else EasingCurvePoint.ControlSide.RIGHT
+	)
+	return point.is_control_position_editable(side)
 
 
 func _move_point_up(i: int) -> void:
@@ -1264,15 +1439,35 @@ func _move_point_down(i: int) -> void:
 
 
 func _move_point(from_index: int, to_index: int) -> void:
-	if from_index == to_index:
+	if (
+		from_index == to_index
+		or from_index < 0
+		or to_index < 0
+		or from_index >= curve.points.size()
+		or to_index >= curve.points.size()
+	):
 		return
+	var moved_point := curve.points[from_index]
 	EASING_CURVE_EDITOR_UNDO.apply_action(
 		editor_undo_redo,
 		curve,
 		"Reorder Easing Curve Points",
-		curve.swap_points.bind(from_index, to_index),
+		func():
+			curve.swap_points(from_index, to_index)
+			_select_reordered_point(moved_point),
 		_undo_source_property(),
 	)
+
+
+func _select_reordered_point(point: EasingCurvePoint) -> void:
+	var point_index := _get_current_point_index(point)
+	if point_index == -1:
+		return
+	_preserve_point_selection_on_refresh = true
+	_selected_point_index = point_index
+	_selected_point_resource_id = point.get_instance_id()
+	if easing_curve_editor != null:
+		easing_curve_editor.select_point(point)
 
 
 # remember bind() arguments are at the end
@@ -1336,6 +1531,33 @@ static func _set_point_reset_button_available(
 	)
 
 
+static func _create_point_reset_button() -> Button:
+	var reset_btn := Button.new()
+	reset_btn.icon = RELOAD
+	reset_btn.tooltip_text = "Reset to default"
+	reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	reset_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	reset_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	reset_btn.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
+	reset_btn.add_theme_stylebox_override(
+		&"hover",
+		reset_btn.get_theme_stylebox(&"hover").duplicate(),
+	)
+	reset_btn.add_theme_stylebox_override(
+		&"pressed",
+		reset_btn.get_theme_stylebox(&"pressed").duplicate(),
+	)
+	reset_btn.add_theme_stylebox_override(&"focus", StyleBoxEmpty.new())
+	return reset_btn
+
+
+static func _create_point_reset_margin(reset_btn: Button) -> MarginContainer:
+	var reset_margin := MarginContainer.new()
+	reset_margin.add_theme_constant_override("margin_right", 2)
+	reset_margin.add_child(reset_btn)
+	return reset_margin
+
+
 func _select_point_property(
 	property_header: PanelContainer,
 	point_index: int,
@@ -1350,8 +1572,66 @@ func _select_point_property(
 	_selected_point_property_header = property_header
 	_selected_point_index = point_index
 	_selected_point_property_name = property_name
+	_selected_point_resource_id = (
+		curve.points[point_index].get_instance_id()
+		if point_index >= 0 and point_index < curve.points.size()
+		else 0
+	)
 
 	_set_point_property_selected(property_header, true)
+
+
+func _select_point_property_for_point(
+	property_header: PanelContainer,
+	point: EasingCurvePoint,
+	property_name: StringName,
+) -> void:
+	var point_index := _get_current_point_index(point)
+	if point_index != -1:
+		_select_point_property(property_header, point_index, property_name)
+
+
+func _get_current_point_index(point: EasingCurvePoint) -> int:
+	return curve.points.find(point)
+
+
+func _reorder_position_edited_point(
+	point: EasingCurvePoint,
+	defer_list_reorder: bool = false,
+) -> void:
+	var point_order := EasingCurve.build_ordered_points_with_endpoint_takeover(
+		curve.points,
+		point,
+	)
+	if not defer_list_reorder:
+		_position_x_order_preview_point = null
+		easing_curve_editor._clear_position_x_order_preview()
+	var point_index := point_order.find(point)
+	if point_index == -1:
+		return
+
+	if defer_list_reorder:
+		_position_x_order_preview_point = point
+		easing_curve_editor._set_position_x_order_preview(point)
+		return
+
+	_selected_point_index = point_index
+	_selected_point_resource_id = point.get_instance_id()
+	easing_curve_editor.selected_index = point_index
+
+	if curve.points != point_order:
+		curve.points = point_order
+	else:
+		curve.sort_points(false)
+
+
+func _commit_position_x_order_preview() -> void:
+	if _position_x_order_preview_point == null:
+		return
+
+	var point := _position_x_order_preview_point
+	_position_x_order_preview_point = null
+	_reorder_position_edited_point(point)
 
 
 func _set_point_property_selected(
@@ -1367,10 +1647,11 @@ func _set_point_property_selected(
 
 	var style := StyleBoxFlat.new()
 
-	var accent := EditorInterface.get_base_control().get_theme_color(
-		&"accent_color",
-		&"Editor"
-	)
+	var accent := Color(0.3, 0.6, 1.0)
+	if DisplayServer.get_name() != "headless":
+		var base_control := EditorInterface.get_base_control()
+		if is_instance_valid(base_control):
+			accent = base_control.get_theme_color(&"accent_color", &"Editor")
 
 	accent.a = 0.10
 	style.bg_color = accent
@@ -1408,114 +1689,19 @@ func _create_vector2_property(
 	property_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	property_vbox.add_child(property_hbox)
 
-	# Clickable properties
-	var property_header := PanelContainer.new()
-	property_header.focus_mode = Control.FOCUS_NONE
-
-	var property_context_menu := _create_point_property_context_menu(
-		i,
-		StringName(property_name)
-	)
-	property_header.add_child(property_context_menu)
-	var property_path := _point_property_path(
-		i,
-		StringName(property_name)
-	)
-	property_header.tooltip_text = property_path
-
-	property_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	property_header.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	property_header.add_theme_stylebox_override(
-		&"panel",
-		StyleBoxEmpty.new()
-	)
-	property_header.gui_input.connect(
-		func(event: InputEvent):
-			if not event is InputEventMouseButton:
-				return
-
-			if not event.pressed:
-				return
-
-			if event.button_index == MOUSE_BUTTON_LEFT:
-				_select_point_property(
-					property_header,
-					i,
-					StringName(property_name)
-				)
-
-			elif event.button_index == MOUSE_BUTTON_RIGHT:
-				_select_point_property(
-					property_header,
-					i,
-					StringName(property_name)
-				)
-
-				var paste_index := property_context_menu.get_item_index(
-					POINT_MENU_PASTE_VALUE
-				)
-
-				property_context_menu.set_item_disabled(
-					paste_index,
-					not _clipboard_has_vector2()
-				)
-
-				property_context_menu.position = (
-					DisplayServer.mouse_get_position()
-				)
-
-				property_context_menu.popup()
-
-				property_header.accept_event()
-	)
-	property_hbox.add_child(property_header)
-	if (
-	_selected_point_index == i
-		and _selected_point_property_name == StringName(property_name)
-	):
-		_selected_point_property_header = property_header
-		_set_point_property_selected(property_header, true)
-
-	var header_hbox := HBoxContainer.new()
-	header_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_hbox.add_theme_constant_override(
-		&"separation",
-		_compact_separation()
-	)
-	property_header.add_child(header_hbox)
-
-	# Property label (Position / Left Control / Right Control)
-	var property_label := Label.new()
-	property_label.text = label_text
-	property_label.tooltip_text = property_path
-	_configure_compact_label(property_label)
-	header_hbox.add_child(property_label)
-
-	# Reset Button
-	var reset_btn := Button.new()
-	reset_btn.icon = RELOAD
-	#reset_btn.flat = true
-	reset_btn.tooltip_text = "Reset to default"
-	reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	reset_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	reset_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
-	var normal_style := reset_btn.get_theme_stylebox(&"normal").duplicate()
-	var empty_style := StyleBoxEmpty.new()
-	var hover_style := reset_btn.get_theme_stylebox(&"hover").duplicate()
-	var pressed_style := reset_btn.get_theme_stylebox(&"pressed").duplicate()
-	reset_btn.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
-	reset_btn.add_theme_stylebox_override(&"hover", hover_style)
-	reset_btn.add_theme_stylebox_override(&"pressed", pressed_style)
-	reset_btn.add_theme_stylebox_override(&"focus", StyleBoxEmpty.new())
-	var reset_margin := MarginContainer.new()
-	reset_margin.add_theme_constant_override("margin_right", 2)
+	# Selectable property header and reset slot.
+	var reset_btn := _create_point_reset_button()
 	_set_point_reset_button_available(
 		reset_btn,
 		not current_vec.is_equal_approx(default_vec)
 	)
-	reset_margin.add_child(reset_btn)
-	#property_hbox.add_child(reset_margin)
-	header_hbox.add_child(reset_margin)
+	var property_header := _create_selectable_point_property_header(
+		i,
+		StringName(property_name),
+		label_text,
+		reset_btn,
+	)
+	property_hbox.add_child(property_header)
 
 	# Value container panel (x/y inputs; lock_btn)
 	var value_panel := PanelContainer.new()
@@ -1538,6 +1724,98 @@ func _create_vector2_property(
 	value_vbox.add_theme_constant_override("separation", 0)
 	value_hbox.add_child(value_vbox)
 
+
+	##############################################
+	# Force Linear button (control handles only)
+	var force_linear_btn: Button
+
+	if property_name in ["left_control_point", "right_control_point"]:
+		force_linear_btn = Button.new()
+		force_linear_btn.flat = true
+		force_linear_btn.toggle_mode = true
+		force_linear_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		force_linear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+		var pressed_color := Color.WHITE
+		force_linear_btn.add_theme_color_override(
+			"icon_pressed_color",
+			pressed_color,
+		)
+		force_linear_btn.add_theme_color_override(
+			"icon_hover_pressed_color",
+			pressed_color,
+		)
+
+		var force_property := (
+			&"left_force_linear"
+			if property_name == "left_control_point"
+			else &"right_force_linear"
+		)
+
+		var force_linear := point.is_control_forced_linear(
+			EasingCurvePoint.ControlSide.LEFT
+			if property_name == "left_control_point"
+			else EasingCurvePoint.ControlSide.RIGHT
+		)
+		force_linear_btn.button_pressed = force_linear
+
+		var editor_theme := EditorInterface.get_editor_theme()
+		var anchor_icon := editor_theme.get_icon(
+			&"Anchor",
+			&"EditorIcons",
+		)
+
+		force_linear_btn.icon = (
+			FORCE_LINEAR_ICON_ON
+			if force_linear
+			else FORCE_LINEAR_ICON_OFF
+		)
+
+		force_linear_btn.modulate.a = 1.0
+
+		force_linear_btn.tooltip_text = (
+			(
+				"Unforce Linear — Handle returns to Free default"
+				if force_linear
+				else "Force Linear — Collapse this handle to the point"
+			)
+			if point.supports_control_state()
+			else "Force Linear — Available in Free or Linked handle mode"
+		)
+
+		var force_linear_available := point.supports_control_state()
+
+		force_linear_btn.disabled = not force_linear_available
+
+		if not force_linear_available:
+			force_linear_btn.modulate.a = 0.25
+		else:
+			force_linear_btn.modulate.a = 1.0
+
+		force_linear_btn.toggled.connect(
+			func(toggled_on: bool):
+
+				force_linear_btn.icon = (
+					FORCE_LINEAR_ICON_ON
+					if toggled_on
+					else FORCE_LINEAR_ICON_OFF
+				)
+
+				force_linear_btn.modulate.a = 1.0
+
+				_apply_point_property_change(
+					i,
+					force_property,
+					toggled_on,
+				)
+
+				easing_curve_editor.queue_redraw()
+		)
+
+		value_hbox.add_child(force_linear_btn)
+	##############################################
+
+
 	# Right side (lock button)
 	var lock_btn := Button.new()
 	lock_btn.icon = LOCK
@@ -1546,18 +1824,37 @@ func _create_vector2_property(
 	lock_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	lock_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
-	var normal_color := lock_btn.get_theme_color("icon_normal_color")
 	var pressed_color := Color.WHITE
 	lock_btn.add_theme_color_override("icon_pressed_color", pressed_color)
 	lock_btn.add_theme_color_override("icon_hover_pressed_color", pressed_color)
 
-	# var toggled_on := lock_btn.button_pressed
 	var locked := point.locked[property_name]
 	lock_btn.button_pressed = locked
 	var toggled_on := lock_btn.button_pressed
 
+	var lock_available := (
+		property_name == "position"
+		or point.supports_control_state()
+	)
+
+	lock_btn.disabled = not lock_available
+
+	lock_btn.tooltip_text = (
+		(
+			"Unlock — Allow this property to be edited"
+			if locked
+			else "Lock — Prevent this property from being edited"
+		)
+		if lock_available
+		else "Lock — Available in Free or Linked handle mode"
+	)
+
 	lock_btn.icon = LOCK if toggled_on else UNLOCK
-	lock_btn.modulate.a = 1.0 if toggled_on else 0.5
+
+	if not lock_available:
+		lock_btn.modulate.a = 0.25
+	else:
+		lock_btn.modulate.a = 1.0 if toggled_on else 0.5
 
 	lock_btn.toggled.connect(
 		func(toggled_on: bool):
@@ -1570,11 +1867,21 @@ func _create_vector2_property(
 
 			lock_btn.icon = LOCK if toggled_on else UNLOCK
 			lock_btn.modulate.a = 1.0 if toggled_on else 0.5
-			# 🔒 Disable editing when locked
-			# x_input.read_only = toggled_on
-			# y_input.read_only = toggled_on
+
 			var locks: Dictionary = curve.points[i].locked.duplicate()
-			locks[property_name] = toggled_on
+
+			if (
+				point.handle_mode == EasingCurvePoint.HandleMode.LINKED
+				and property_name in [
+					"left_control_point",
+					"right_control_point",
+				]
+			):
+				locks["left_control_point"] = toggled_on
+				locks["right_control_point"] = toggled_on
+			else:
+				locks[property_name] = toggled_on
+
 			_apply_point_property_change(i, &"locked", locks)
 	)
 
@@ -1606,13 +1913,25 @@ func _create_vector2_property(
 	x_input.value = vec.x
 	x_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	x_input.value_changed.connect(_on_x_input_value_changed.bind(i, x_input, reset_btn, default_vec.x, property_name))
+	x_input.value_changed.connect(_on_x_input_value_changed.bind(i, point, x_input, reset_btn, default_vec.x, property_name))
 	_connect_point_input_drag_signals(x_input)
-	x_input.grabbed.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
-	x_input.focus_entered.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
+	if property_name == "position":
+		x_input.value_focus_entered.connect(
+			_on_position_x_input_focus_entered.bind(x_input)
+		)
+		x_input.value_focus_exited.connect(
+			_on_position_x_input_focus_exited.bind(x_input)
+		)
+	elif property_name in ["left_control_point", "right_control_point"]:
+		x_input.value_focus_entered.connect(
+			_on_linear_control_x_input_focus_entered.bind(x_input, point)
+		)
+		x_input.value_focus_exited.connect(
+			_on_linear_control_x_input_focus_exited.bind(x_input, point)
+		)
+	x_input.grabbed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
+	x_input.focus_entered.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 	point.set_input_control(property_name, "x", x_input)
-	x_input.read_only = point.locked[property_name]
-	y_input.read_only = point.locked[property_name]
 
 	x_row.add_child(x_label)
 	x_row.add_child(x_input)
@@ -1639,14 +1958,14 @@ func _create_vector2_property(
 	y_input.value = vec.y
 	y_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	y_input.value_changed.connect(_on_y_input_value_changed.bind(i, y_input, reset_btn, default_vec.y, property_name))
+	y_input.value_changed.connect(_on_y_input_value_changed.bind(i, point, y_input, reset_btn, default_vec.y, property_name))
 	_connect_point_input_drag_signals(y_input)
-	y_input.grabbed.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
-	y_input.focus_entered.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
+	y_input.grabbed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
+	y_input.focus_entered.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 	point.set_input_control(property_name, "y", y_input)
 
-	reset_btn.pressed.connect(_on_reset_btn_pressed.bind(i, position, x_input, y_input, property_name, reset_btn))
-	reset_btn.pressed.connect(_select_point_property.bind(property_header, i, StringName(property_name)))
+	reset_btn.pressed.connect(_on_reset_btn_pressed.bind(i, point, position, x_input, y_input, property_name, reset_btn))
+	reset_btn.pressed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 
 	y_row.add_child(y_label)
 	y_row.add_child(y_input)
@@ -1687,7 +2006,13 @@ func _create_inspector_section(
 				_selected_point_property_name
 			)
 
-	section.can_paste_callback = _clipboard_has_vector2
+	section.can_paste_callback = func():
+		return (
+			_selected_point_index >= 0
+			and _clipboard_has_compatible_point_property_value(
+				_selected_point_property_name,
+			)
+		)
 
 	section.setup(title, content, curve)
 	return section
@@ -1701,17 +2026,20 @@ func _on_curve_editor_point_property_change_requested(i: int, property_name: Str
 	_apply_point_property_change(i, property_name, value, changing)
 
 
-func _on_curve_editor_point_edit_finished() -> void:
-	_commit_point_edit()
+func _on_curve_editor_point_edit_finished(point_order: Array[EasingCurvePoint]) -> void:
+	_commit_point_edit(point_order)
 
 
-func _commit_point_edit() -> void:
+func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
+	_commit_position_x_order_preview()
 	if _point_edit_before_state.is_empty():
 		return
 	var before := _point_edit_before_state
 	var action_name := _point_edit_action_name
 	_point_edit_before_state = {}
 	_point_edit_action_name = "Edit Easing Curve Point"
+	if not point_order.is_empty() and curve.points != point_order:
+		curve.points = point_order
 	var after := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	# Flush the draft point notifications once at the drag boundary.
 	curve.set_point_snapshot(curve.get_point_snapshot())
@@ -1747,6 +2075,32 @@ func _on_point_input_focus_entered(input: EditorSpinSlider) -> void:
 		_commit_point_edit()
 
 
+func _on_position_x_input_focus_entered(input: EditorSpinSlider) -> void:
+	input.set_meta(POSITION_X_EDITING_META, true)
+
+
+func _on_position_x_input_focus_exited(input: EditorSpinSlider) -> void:
+	if input.has_meta(POSITION_X_EDITING_META):
+		input.remove_meta(POSITION_X_EDITING_META)
+		_commit_point_edit.call_deferred()
+
+
+func _on_linear_control_x_input_focus_entered(
+	input: EditorSpinSlider,
+	point: EasingCurvePoint,
+) -> void:
+	if point.handle_mode == EasingCurvePoint.HandleMode.LINEAR:
+		_on_position_x_input_focus_entered(input)
+
+
+func _on_linear_control_x_input_focus_exited(
+	input: EditorSpinSlider,
+	_point: EasingCurvePoint,
+) -> void:
+	if input.has_meta(POSITION_X_EDITING_META):
+		_on_position_x_input_focus_exited(input)
+
+
 func _on_curve_editor_point_add_requested(point: EasingCurvePoint) -> void:
 	_add_point(point)
 
@@ -1755,7 +2109,280 @@ func _on_curve_editor_point_remove_requested(point: EasingCurvePoint) -> void:
 	_remove_point(point)
 
 
-func _apply_point_property_change(i: int, property_name: StringName, value: Variant, changing: bool = false) -> void:
+func _create_handle_mode_property(
+	point: EasingCurvePoint,
+	i: int,
+) -> Control:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", _compact_separation())
+
+	var reset_btn := _create_point_reset_button()
+	_set_point_reset_button_available(
+		reset_btn,
+		point.handle_mode != EasingCurvePoint.HandleMode.FREE,
+	)
+	var property_header := _create_selectable_point_property_header(
+		i,
+		&"handle_mode",
+		"Handle Mode",
+		reset_btn,
+	)
+	row.add_child(property_header)
+
+	var value_panel := PanelContainer.new()
+	value_panel.add_theme_stylebox_override(&"panel", X_STYLEBOX)
+	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(value_panel)
+	var option := OptionButton.new()
+	_configure_compact_option(option)
+	value_panel.add_child(option)
+
+	option.add_item("Free", EasingCurvePoint.HandleMode.FREE)
+	option.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
+	option.add_item("Balanced", EasingCurvePoint.HandleMode.BALANCED)
+	option.add_item("Mirrored", EasingCurvePoint.HandleMode.MIRRORED)
+	option.add_item("Linked", EasingCurvePoint.HandleMode.LINKED)
+
+	for index in range(option.item_count):
+		if option.get_item_id(index) == point.handle_mode:
+			option.select(index)
+			break
+
+	option.item_selected.connect(
+		func(index: int):
+			var point_index := _get_current_point_index(point)
+			if point_index == -1:
+				return
+			_select_point_property(property_header, point_index, &"handle_mode")
+			_apply_point_property_change(
+				point_index,
+				&"handle_mode",
+				option.get_item_id(index),
+			)
+	)
+	option.focus_entered.connect(
+		_select_point_property_for_point.bind(
+			property_header,
+			point,
+			&"handle_mode",
+		)
+	)
+	reset_btn.pressed.connect(
+		_on_handle_mode_reset_pressed.bind(point, option, reset_btn)
+	)
+	reset_btn.pressed.connect(
+		_select_point_property_for_point.bind(
+			property_header,
+			point,
+			&"handle_mode",
+		)
+	)
+
+	return row
+
+
+func _on_handle_mode_reset_pressed(
+	point: EasingCurvePoint,
+	option: OptionButton,
+	reset_btn: Button,
+) -> void:
+	var i := _get_current_point_index(point)
+	if i == -1:
+		return
+	if point.handle_mode == EasingCurvePoint.HandleMode.FREE:
+		_set_point_reset_button_available(reset_btn, false)
+		return
+	option.select(option.get_item_index(EasingCurvePoint.HandleMode.FREE))
+	_apply_point_property_change(
+		i,
+		&"handle_mode",
+		EasingCurvePoint.HandleMode.FREE,
+	)
+	_set_point_reset_button_available(reset_btn, false)
+
+
+func _set_snapshot_handle_mode(
+	snapshot: Dictionary,
+	i: int,
+	new_mode: int,
+) -> void:
+	var point := curve.points[i]
+	var handles := point.get_handles_for_mode_change(new_mode)
+
+	if new_mode == EasingCurvePoint.HandleMode.LINKED:
+		var locks: Array = snapshot["locks"]
+		var point_locks: Dictionary = locks[i].duplicate(true)
+		var left_force_linear: PackedByteArray = snapshot[
+			"left_force_linear"
+		]
+		var right_force_linear: PackedByteArray = snapshot[
+			"right_force_linear"
+		]
+
+		var shared_locked := (
+			bool(point_locks.get("left_control_point", false))
+			or bool(point_locks.get("right_control_point", false))
+		)
+		var shared_force_linear := (
+			bool(left_force_linear[i])
+			or bool(right_force_linear[i])
+		)
+
+		point_locks["left_control_point"] = shared_locked
+		point_locks["right_control_point"] = shared_locked
+		left_force_linear[i] = int(shared_force_linear)
+		right_force_linear[i] = int(shared_force_linear)
+
+		locks[i] = point_locks
+		snapshot["locks"] = locks
+		snapshot["left_force_linear"] = left_force_linear
+		snapshot["right_force_linear"] = right_force_linear
+		if shared_force_linear:
+			handles["left"] = point.position
+			handles["right"] = point.position
+
+	if new_mode == EasingCurvePoint.HandleMode.FREE:
+		var left_force_linear: PackedByteArray = snapshot[
+			"left_force_linear"
+		]
+		var right_force_linear: PackedByteArray = snapshot[
+			"right_force_linear"
+		]
+
+		if bool(left_force_linear[i]):
+			handles["left"] = point.position
+
+		if bool(right_force_linear[i]):
+			handles["right"] = point.position
+
+	var handle_modes: PackedInt32Array = snapshot["handle_modes"]
+	var left_control_points: PackedVector2Array = snapshot[
+		"left_control_points"
+	]
+	var right_control_points: PackedVector2Array = snapshot[
+		"right_control_points"
+	]
+
+	handle_modes[i] = new_mode
+	left_control_points[i] = handles["left"]
+	right_control_points[i] = handles["right"]
+
+	snapshot["handle_modes"] = handle_modes
+	snapshot["left_control_points"] = left_control_points
+	snapshot["right_control_points"] = right_control_points
+
+
+func _set_snapshot_control_state(
+	snapshot: Dictionary,
+	i: int,
+	side: EasingCurvePoint.ControlSide,
+	control_state: int,
+) -> void:
+	var point := curve.points[i]
+	var handle_modes: PackedInt32Array = snapshot["handle_modes"]
+	var linked := handle_modes[i] == EasingCurvePoint.HandleMode.LINKED
+	var sides: Array[EasingCurvePoint.ControlSide] = [side]
+	if linked:
+		sides = [
+			EasingCurvePoint.ControlSide.LEFT,
+			EasingCurvePoint.ControlSide.RIGHT,
+		]
+
+	var locks: Array = snapshot["locks"]
+	var point_locks: Dictionary = locks[i].duplicate(true)
+	var left_force_linear: PackedByteArray = snapshot[
+		"left_force_linear"
+	]
+	var right_force_linear: PackedByteArray = snapshot[
+		"right_force_linear"
+	]
+	var left_control_points: PackedVector2Array = snapshot[
+		"left_control_points"
+	]
+	var right_control_points: PackedVector2Array = snapshot[
+		"right_control_points"
+	]
+	var had_force_linear := (
+		bool(left_force_linear[i])
+		if linked
+		else (
+			bool(left_force_linear[i])
+			if side == EasingCurvePoint.ControlSide.LEFT
+			else bool(right_force_linear[i])
+		)
+	)
+
+	for control_side in sides:
+		var force_property := (
+			&"left_force_linear"
+			if control_side == EasingCurvePoint.ControlSide.LEFT
+			else &"right_force_linear"
+		)
+		var lock_property := (
+			&"left_control_point"
+			if control_side == EasingCurvePoint.ControlSide.LEFT
+			else &"right_control_point"
+		)
+		var offset := (
+			Vector2.LEFT
+			if control_side == EasingCurvePoint.ControlSide.LEFT
+			else Vector2.RIGHT
+		)
+
+		if force_property == &"left_force_linear":
+			left_force_linear[i] = int(
+				control_state == EasingCurvePoint.ControlState.LINEAR
+			)
+		else:
+			right_force_linear[i] = int(
+				control_state == EasingCurvePoint.ControlState.LINEAR
+			)
+
+		point_locks[lock_property] = (
+			control_state == EasingCurvePoint.ControlState.LOCKED
+		)
+
+		if control_state == EasingCurvePoint.ControlState.LINEAR:
+			if control_side == EasingCurvePoint.ControlSide.LEFT:
+				left_control_points[i] = point.position
+			else:
+				right_control_points[i] = point.position
+		elif had_force_linear:
+			if control_side == EasingCurvePoint.ControlSide.LEFT:
+				left_control_points[i] = (
+					point.position
+					+ offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+				)
+			else:
+				right_control_points[i] = (
+					point.position
+					+ offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+				)
+
+	if linked and control_state != EasingCurvePoint.ControlState.LINEAR and had_force_linear:
+		var linked_default := (
+			point.position
+			+ Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+		)
+		left_control_points[i] = linked_default
+		right_control_points[i] = linked_default
+
+	locks[i] = point_locks
+	snapshot["locks"] = locks
+	snapshot["left_force_linear"] = left_force_linear
+	snapshot["right_force_linear"] = right_force_linear
+	snapshot["left_control_points"] = left_control_points
+	snapshot["right_control_points"] = right_control_points
+
+
+func _apply_point_property_change(
+	i: int,
+	property_name: StringName,
+	value: Variant,
+	changing: bool = false,
+	position_reorder_point: EasingCurvePoint = null,
+) -> void:
 	if i < 0 or i >= curve.points.size():
 		return
 	_preserve_point_selection_on_refresh = true
@@ -1765,20 +2392,287 @@ func _apply_point_property_change(i: int, property_name: StringName, value: Vari
 		_point_edit_action_name = _point_action_name(property_name)
 	var snapshot := curve.get_point_snapshot()
 	match property_name:
-		&"position", &"left_control_point", &"right_control_point":
-			var snapshot_key := String(property_name) + "s" if property_name != &"position" else "positions"
-			var values: PackedVector2Array = snapshot[snapshot_key]
-			values[i] = value
-			snapshot[snapshot_key] = values
+		&"position":
+			var point := curve.points[i]
+			var positions: PackedVector2Array = snapshot["positions"]
+			var old_position := positions[i]
+			var new_position: Vector2 = value
+			positions[i] = new_position
+			snapshot["positions"] = positions
+
+			var delta := new_position - old_position
+			if not point.is_lock_active(&"left_control_point"):
+				var left_control_points: PackedVector2Array = snapshot[
+					"left_control_points"
+				]
+				left_control_points[i] += delta
+				snapshot["left_control_points"] = left_control_points
+
+			if not point.is_lock_active(&"right_control_point"):
+				var right_control_points: PackedVector2Array = snapshot[
+					"right_control_points"
+				]
+				right_control_points[i] += delta
+				snapshot["right_control_points"] = right_control_points
+
+		&"left_control_point", &"right_control_point":
+			var point := curve.points[i]
+
+			var side := (
+				EasingCurvePoint.ControlSide.LEFT
+				if property_name == &"left_control_point"
+				else EasingCurvePoint.ControlSide.RIGHT
+			)
+
+			var pair := point.get_control_point_pair(side, value)
+
+			var left_control_points: PackedVector2Array = snapshot[
+				"left_control_points"
+			]
+			var right_control_points: PackedVector2Array = snapshot[
+				"right_control_points"
+			]
+
+			left_control_points[i] = pair["left"]
+			right_control_points[i] = pair["right"]
+
+			snapshot["left_control_points"] = left_control_points
+			snapshot["right_control_points"] = right_control_points
+
+		&"handle_mode":
+			_set_snapshot_handle_mode(snapshot, i, int(value))
+
+
+		&"left_control_state", &"right_control_state":
+			var point := curve.points[i]
+			if not point.supports_control_state():
+				return
+
+			var side := (
+				EasingCurvePoint.ControlSide.LEFT
+				if property_name == &"left_control_state"
+				else EasingCurvePoint.ControlSide.RIGHT
+			)
+			var control_state := int(value)
+			if control_state not in [
+				EasingCurvePoint.ControlState.FREE,
+				EasingCurvePoint.ControlState.LINEAR,
+				EasingCurvePoint.ControlState.LOCKED,
+			]:
+				return
+
+			_set_snapshot_control_state(snapshot, i, side, control_state)
+
+
+		&"toolbar_options_reset":
+			_set_snapshot_handle_mode(
+				snapshot,
+				i,
+				EasingCurvePoint.HandleMode.FREE,
+			)
+			_set_snapshot_control_state(
+				snapshot,
+				i,
+				EasingCurvePoint.ControlSide.LEFT,
+				EasingCurvePoint.ControlState.FREE,
+			)
+			_set_snapshot_control_state(
+				snapshot,
+				i,
+				EasingCurvePoint.ControlSide.RIGHT,
+				EasingCurvePoint.ControlState.FREE,
+			)
+
+
+		&"left_force_linear", &"right_force_linear":
+			var point := curve.points[i]
+			var linked := point.handle_mode == EasingCurvePoint.HandleMode.LINKED
+			var force_values: PackedByteArray = snapshot[property_name]
+			force_values[i] = int(value)
+			snapshot[property_name] = force_values
+
+			var control_property := (
+				&"left_control_points"
+				if property_name == &"left_force_linear"
+				else &"right_control_points"
+			)
+
+			var lock_property := (
+				&"left_control_point"
+				if property_name == &"left_force_linear"
+				else &"right_control_point"
+			)
+
+			var offset := (
+				Vector2.LEFT
+				if property_name == &"left_force_linear"
+				else Vector2.RIGHT
+			)
+
+			var control_points: PackedVector2Array = snapshot[
+				control_property
+			]
+
+			if linked:
+				var left_force_linear: PackedByteArray = snapshot[
+					"left_force_linear"
+				]
+				var right_force_linear: PackedByteArray = snapshot[
+					"right_force_linear"
+				]
+				var left_control_points: PackedVector2Array = snapshot[
+					"left_control_points"
+				]
+				var right_control_points: PackedVector2Array = snapshot[
+					"right_control_points"
+				]
+
+				left_force_linear[i] = int(value)
+				right_force_linear[i] = int(value)
+				if value:
+					var locks: Array = snapshot["locks"]
+					var point_locks: Dictionary = locks[i].duplicate(true)
+					point_locks["left_control_point"] = false
+					point_locks["right_control_point"] = false
+					locks[i] = point_locks
+					snapshot["locks"] = locks
+					left_control_points[i] = point.position
+					right_control_points[i] = point.position
+				else:
+					var linked_default := (
+						point.position
+						+ Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+					)
+					left_control_points[i] = linked_default
+					right_control_points[i] = linked_default
+
+				snapshot["left_force_linear"] = left_force_linear
+				snapshot["right_force_linear"] = right_force_linear
+				snapshot["left_control_points"] = left_control_points
+				snapshot["right_control_points"] = right_control_points
+
+			elif value:
+				# Force Linear wins over Lock.
+				var locks: Array = snapshot["locks"]
+				var point_locks: Dictionary = locks[i].duplicate(true)
+				point_locks[lock_property] = false
+				locks[i] = point_locks
+				snapshot["locks"] = locks
+
+				control_points[i] = curve.points[i].position
+
+			else:
+				control_points[i] = (
+					curve.points[i].position
+					+ offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+				)
+
+			if not linked:
+				snapshot[control_property] = control_points
+
+
 		&"locked":
+			var point := curve.points[i]
 			var locks: Array = snapshot["locks"]
-			locks[i] = value.duplicate(true)
+			var previous_locks: Dictionary = locks[i]
+			var new_locks: Dictionary = value.duplicate(true)
+			var linked_force_linear_cleared := false
+
+			for control_property in [
+				&"left_control_point",
+				&"right_control_point",
+			]:
+				var was_locked := bool(
+					previous_locks.get(control_property, false)
+				)
+				var is_locked := bool(
+					new_locks.get(control_property, false)
+				)
+
+				# Only react when this handle is being locked.
+				if was_locked or not is_locked:
+					continue
+
+				var force_property := (
+					&"left_force_linear"
+					if control_property == &"left_control_point"
+					else &"right_force_linear"
+				)
+
+				var force_values: PackedByteArray = snapshot[
+					force_property
+				]
+
+				if not bool(force_values[i]):
+					continue
+
+				# Lock wins over Force Linear.
+				force_values[i] = 0
+				snapshot[force_property] = force_values
+				linked_force_linear_cleared = (
+					point.handle_mode == EasingCurvePoint.HandleMode.LINKED
+				)
+
+				# Create default 0.1 handle
+				var control_array_name := (
+					&"left_control_points"
+					if control_property == &"left_control_point"
+					else &"right_control_points"
+				)
+
+				var offset := (
+					Vector2.LEFT
+					if control_property == &"left_control_point"
+					else Vector2.RIGHT
+				)
+
+				var control_points: PackedVector2Array = snapshot[
+					control_array_name
+				]
+
+				# Leaving Force Linear restores the default handle
+				# before locking it.
+				control_points[i] = (
+					curve.points[i].position
+					+ offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+				)
+
+				snapshot[control_array_name] = control_points
+
+			locks[i] = new_locks
 			snapshot["locks"] = locks
+
+			if linked_force_linear_cleared:
+				var linked_default := (
+					point.position
+					+ Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+				)
+				var left_control_points: PackedVector2Array = snapshot[
+					"left_control_points"
+				]
+				var right_control_points: PackedVector2Array = snapshot[
+					"right_control_points"
+				]
+				left_control_points[i] = linked_default
+				right_control_points[i] = linked_default
+				snapshot["left_control_points"] = left_control_points
+				snapshot["right_control_points"] = right_control_points
+
 		_:
 			return
-	snapshot["changing"] = changing
+
+	var defer_notification := position_reorder_point != null
+	snapshot["changing"] = changing or defer_notification
 	curve.set_point_snapshot(snapshot)
+	if position_reorder_point != null:
+		_reorder_position_edited_point(position_reorder_point, changing)
+		if not changing:
+			curve.set_point_snapshot(curve.get_point_snapshot())
+
 	if not changing:
+		if not _point_edit_before_state.is_empty():
+			_commit_point_edit()
+			return
 		EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 			editor_undo_redo,
 			curve,
@@ -1795,8 +2689,16 @@ func _point_action_name(property_name: StringName) -> String:
 			return "Move Easing Curve Point"
 		&"left_control_point", &"right_control_point":
 			return "Move Easing Curve Handle"
+		&"left_control_state", &"right_control_state":
+			return "Change Easing Curve Handle State"
+		&"toolbar_options_reset":
+			return "Reset Easing Curve Point Options"
+		&"handle_mode":
+			return "Change Easing Curve Handle Mode"
 		&"locked":
 			return "Change Easing Curve Point Lock"
+		&"left_force_linear", &"right_force_linear":
+			return "Change Easing Curve Handle Force Linear State"
 	return "Edit Easing Curve Point"
 
 
@@ -1804,7 +2706,10 @@ func _add_point(point: EasingCurvePoint) -> void:
 	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	var updated_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	updated_points.append(point)
-	updated_points.sort_custom(func(a: EasingCurvePoint, b: EasingCurvePoint) -> bool: return a.position.x < b.position.x)
+	updated_points = EasingCurve.build_ordered_points_with_endpoint_takeover(
+		updated_points,
+		point,
+	)
 	curve.set_point_snapshot(curve.make_point_snapshot(updated_points))
 	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 		editor_undo_redo,

@@ -6,11 +6,21 @@ extends Control
 ## Main script for editing the EasingCurve resource.
 ## More info here to come.
 
+const SELECTION_TOOLBAR_HEIGHT := 32.0
+const RELOAD_ICON = preload("res://addons/easing_curve/assets/icons/Reload.svg")
+var _drag_auto_range := Vector2.ZERO
+var _has_drag_auto_range := false
+
+var use_pending_add := true
+
+static var _selected_index_by_curve: Dictionary[int, int] = {}
+static var _right_delete_drag_state_by_curve: Dictionary[int, Dictionary] = {}
+
 signal point_changed
 signal point_property_change_requested(index: int, property_name: StringName, value: Variant, changing: bool)
 signal point_add_requested(point: EasingCurvePoint)
 signal point_remove_requested(point: EasingCurvePoint)
-signal point_edit_finished
+signal point_edit_finished(point_order: Array[EasingCurvePoint])
 signal slider_changed
 signal zoom_changed
 signal pan_changed
@@ -50,12 +60,27 @@ var hover_radius: int = BASE_HOVER_RADIUS
 var control_radius: int = BASE_CONTROL_RADIUS
 var control_hover_radius: int = BASE_CONTROL_HOVER_RADIUS
 var control_length: int = BASE_CONTROL_LENGTH
-var selected_index: int = -1
+
+var selected_index: int = -1:
+	set(value):
+		selected_index = value
+		if _curve != null:
+			_selected_index_by_curve[_curve.get_instance_id()] = value
+		_update_point_toolbar()
+		queue_redraw()
+
 var hovered_index: int = -1
 var selected_control_index: ControlIndex = ControlIndex.NONE
 var hovered_control_index: ControlIndex = ControlIndex.NONE
+
 var dragging_point: int = -1
 var dragging_control: ControlIndex = ControlIndex.NONE
+var pending_add_point: EasingCurvePoint
+var position_x_order_preview_point: EasingCurvePoint
+var is_right_delete_dragging := false
+var _right_delete_requires_exit := false
+var _right_delete_blocked_position := Vector2.ZERO
+
 var grabbing: GrabMode = GrabMode.NONE
 var initial_grab_pos: Vector2
 var initial_grab_index: int
@@ -72,6 +97,18 @@ var _slider: EasingCurveZoomSliderContainer:
 var _world_to_view: Transform2D
 var _editor_scale: float = 1.0
 
+var _point_toolbar_panel: VBoxContainer
+var _point_toolbar: GridContainer
+var _point_label: Label
+var _point_toolbar_controls: HBoxContainer
+var _point_handle_mode: OptionButton
+var _point_left_state_label: Label
+var _point_left_state: OptionButton
+var _point_right_state_label: Label
+var _point_right_state: OptionButton
+var _point_reset_button: Button
+var _updating_point_toolbar := false
+
 
 func _ready() -> void:
 	custom_minimum_size = Vector2.ZERO
@@ -87,6 +124,9 @@ func _ready() -> void:
 		# _curve.range_changed.connect(_on_curve_changed)
 		_curve.changed.connect(_on_curve_changed)
 
+	_create_point_toolbar()
+	_update_point_toolbar()
+
 
 # =========================
 # GUI INPUT (DRAGGING)
@@ -97,6 +137,14 @@ func _gui_input(event: InputEvent) -> void:
 
 	# Middle mouse pressed → start panning
 	if event is InputEventMouseButton:
+		# Always end an RMB delete gesture before any later button branch can return.
+		if (
+			not event.pressed
+			and event.button_index == MOUSE_BUTTON_RIGHT
+		):
+			_set_right_delete_dragging(false)
+			return
+
 		if event.button_index == MOUSE_BUTTON_MIDDLE:
 			if event.pressed:
 				is_panning = true
@@ -122,21 +170,48 @@ func _gui_input(event: InputEvent) -> void:
 		if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
 			return
 
+		if is_right_delete_dragging:
+			if event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
+				_try_remove_point_at(event.position)
+				return
+			_set_right_delete_dragging(false)
+
+		if pending_add_point != null:
+			var world_pos := get_world_pos(event.position)
+
+			if not world_pos.is_finite():
+				return
+
+			var clamped_pos := world_pos.clamp(
+				Vector2(0, _curve.min_value),
+				Vector2(1.0, _curve.max_value),
+			)
+			pending_add_point.position = clamped_pos
+			queue_redraw()
+			return
+
 		# ----- DRAGGING -----
 		if dragging_point != -1:
 			var p = _curve.points[dragging_point]
+			if dragging_control != ControlIndex.NONE:
+				p.set_handle_display_scale(
+					get_world_to_view_scale()
+				)
 			var world_pos = get_world_pos(event.position)
 
+			if not world_pos.is_finite():
+				return
+
 			# Block main point movement
-			if dragging_control == ControlIndex.NONE and p.locked["position"]:
+			if dragging_control == ControlIndex.NONE and p.is_lock_active(&"position"):
 				return
 
 			# Block left control
-			if dragging_control == ControlIndex.LEFT and p.locked["left_control_point"]:
+			if dragging_control == ControlIndex.LEFT and p.is_lock_active(&"left_control_point"):
 				return
 
 			# Block right control
-			if dragging_control == ControlIndex.RIGHT and p.locked["right_control_point"]:
+			if dragging_control == ControlIndex.RIGHT and p.is_lock_active(&"right_control_point"):
 				return
 
 			match dragging_control:
@@ -155,10 +230,10 @@ func _gui_input(event: InputEvent) -> void:
 					_request_point_property_change(dragging_point, &"position", clamped_pos, true)
 
 					# Only move controls if they are NOT locked
-					if not p.locked["left_control_point"]:
+					if not p.is_lock_active(&"left_control_point"):
 						_request_point_property_change(dragging_point, &"left_control_point", left_control + delta, true)
 
-					if not p.locked["right_control_point"]:
+					if not p.is_lock_active(&"right_control_point"):
 						_request_point_property_change(dragging_point, &"right_control_point", right_control + delta, true)
 
 			point_changed.emit(dragging_point, p)
@@ -190,16 +265,19 @@ func _gui_input(event: InputEvent) -> void:
 	# =========================
 	if event is InputEventMouseButton:
 		# --- Mouse Wheel Zoom ---
-		if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_zoom_step = clamp(_zoom_step + 1, 0, ZOOM_STEPS)
-			_apply_zoom_from_step()
-			queue_redraw()
+		if (
+			event.pressed
+			and event.button_index == MOUSE_BUTTON_WHEEL_UP
+		):
+			_zoom_at_view_pos(1, event.position)
 			accept_event()
 			return
-		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_zoom_step = clamp(_zoom_step - 1, 0, ZOOM_STEPS)
-			_apply_zoom_from_step()
-			queue_redraw()
+
+		elif (
+			event.pressed
+			and event.button_index == MOUSE_BUTTON_WHEEL_DOWN
+		):
+			_zoom_at_view_pos(-1, event.position)
 			accept_event()
 			return
 
@@ -211,6 +289,14 @@ func _gui_input(event: InputEvent) -> void:
 			var control = get_control_at(event.position)
 			var point_idx = get_point_at(event.position)
 
+			if (
+				control[0] != -1
+				and _curve.points[control[0]].handle_mode
+					== EasingCurvePoint.HandleMode.LINEAR
+			):
+				point_idx = control[0]
+				control = [-1, ControlIndex.NONE]
+
 			# --- If we hit a control ---
 			if control[0] != -1:
 				var p = _curve.points[control[0]]
@@ -218,9 +304,9 @@ func _gui_input(event: InputEvent) -> void:
 
 				match control[1]:
 					ControlIndex.LEFT:
-						can_drag_control = not p.locked["left_control_point"]
+						can_drag_control = not p.is_lock_active(&"left_control_point")
 					ControlIndex.RIGHT:
-						can_drag_control = not p.locked["right_control_point"]
+						can_drag_control = not p.is_lock_active(&"right_control_point")
 
 				# Always select the point
 				selected_index = control[0]
@@ -229,9 +315,11 @@ func _gui_input(event: InputEvent) -> void:
 				if can_drag_control:
 					dragging_point = control[0]
 					dragging_control = control[1]
+					_drag_auto_range = _compute_auto_y_range()
+					_has_drag_auto_range = true
 				else:
 					# Try dragging main point if under cursor
-					if point_idx != -1 and not _curve.points[point_idx].locked["position"]:
+					if point_idx != -1 and not _curve.points[point_idx].is_lock_active(&"position"):
 						dragging_point = point_idx
 						dragging_control = ControlIndex.NONE
 
@@ -241,47 +329,128 @@ func _gui_input(event: InputEvent) -> void:
 			# --- If we hit only a main point ---
 			if point_idx != -1:
 				var p = _curve.points[point_idx]
-				if not p.locked["position"]:
+				if not p.is_lock_active(&"position"):
 					dragging_point = point_idx
 					dragging_control = ControlIndex.NONE
+					_drag_auto_range = _compute_auto_y_range()
+					_has_drag_auto_range = true
 				selected_index = point_idx
 				queue_redraw()
 				return
 
+
 			# --- If we hit nothing, add a new point ---
-			var new_point = EasingCurvePoint.new()
-			var world_pos = get_world_pos(event.position)
-			var clamped_pos = world_pos.clamp(Vector2(0, _curve.min_value), Vector2(1.0, _curve.max_value))
+			var world_pos := get_world_pos(event.position)
+
+			if not world_pos.is_finite():
+				return
+
+			var clamped_pos := world_pos.clamp(
+				Vector2(0, _curve.min_value),
+				Vector2(1.0, _curve.max_value),
+			)
+
+			if use_pending_add:
+				pending_add_point = EasingCurvePoint.new()
+
+				pending_add_point.position = clamped_pos
+				pending_add_point.left_control_point = (
+					clamped_pos + Vector2(-0.1, 0.0)
+				)
+				pending_add_point.right_control_point = (
+					clamped_pos + Vector2(0.1, 0.0)
+				)
+
+				queue_redraw()
+				accept_event()
+				return
+
+			var new_point := EasingCurvePoint.new()
+
 			new_point.position = clamped_pos
-			new_point.left_control_point = clamped_pos + Vector2(-0.1, 0)
-			new_point.right_control_point = clamped_pos + Vector2(0.1, 0)
-			# _curve.add_point(new_point)
+			new_point.left_control_point = (
+				clamped_pos + Vector2(-0.1, 0.0)
+			)
+			new_point.right_control_point = (
+				clamped_pos + Vector2(0.1, 0.0)
+			)
+
 			_request_point_add(new_point)
+
 			selected_index = -1
+
 			for i in range(_curve.points.size()):
 				if _curve.points[i].position == clamped_pos:
 					selected_index = i
 					break
 
-		# --- RIGHT CLICK ---
+			if selected_index != -1:
+				dragging_point = selected_index
+				dragging_control = ControlIndex.NONE
+				_drag_auto_range = _compute_auto_y_range()
+				_has_drag_auto_range = true
+
+			queue_redraw()
+			return
+
+
+		# --- RIGHT CLICK / DELETE DRAG ---
 		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
-			var point_idx = get_point_at(event.position)
-			if point_idx != -1:
-				# _curve.remove_point(_curve.points[point_idx])
-				_request_point_remove(_curve.points[point_idx])
-				if selected_index == point_idx:
-					selected_index = -1
-				elif selected_index > point_idx:
-					selected_index -= 1
+			if pending_add_point != null:
+				_cancel_pending_add()
+				accept_event()
+				return
+
+			_right_delete_requires_exit = false
+			_set_right_delete_dragging(true)
+
+			if _try_remove_point_at(event.position):
+				return
+
+			# Right-clicking empty graph space clears the point selection.
+			selected_index = -1
+			selected_control_index = ControlIndex.NONE
+			queue_redraw()
+			return
+
+
+		# Reset dragging state only when left mouse button is released.
+		elif (
+			not event.pressed
+			and event.button_index == MOUSE_BUTTON_LEFT
+		):
+			if pending_add_point != null:
+				var point := pending_add_point
+				var point_position := point.position
+				pending_add_point = null
+				_request_point_add(point)
+
+				selected_index = -1
+				for i in range(_curve.points.size()):
+					if _curve.points[i].position == point_position:
+						selected_index = i
+						break
+
+				dragging_point = -1
+				dragging_control = ControlIndex.NONE
+				_has_drag_auto_range = false
 				queue_redraw()
 				return
 
-		# Reset dragging state when mouse button released
-		elif not event.pressed:
-			if dragging_point != -1:
-				point_edit_finished.emit()
+			var finish_point_edit := dragging_point != -1
+			var point_order: Array[EasingCurvePoint] = []
+			if finish_point_edit and dragging_control == ControlIndex.NONE:
+				var dragged_point := _curve.points[dragging_point]
+				point_order = _get_display_points()
+				selected_index = point_order.find(dragged_point)
+
 			dragging_point = -1
 			dragging_control = ControlIndex.NONE
+
+			_has_drag_auto_range = false
+			if finish_point_edit:
+				point_edit_finished.emit(point_order)
+			queue_redraw()
 
 
 func _request_point_property_change(index: int, property_name: StringName, value: Variant, changing: bool = false) -> void:
@@ -313,6 +482,75 @@ func _request_point_remove(point: EasingCurvePoint) -> void:
 			"Remove Easing Curve Point",
 			_curve.remove_point.bind(point),
 		)
+
+
+func _cancel_pending_add() -> void:
+	pending_add_point = null
+	_set_right_delete_dragging(false)
+	queue_redraw()
+
+
+func _try_remove_point_at(view_pos: Vector2) -> bool:
+	if _right_delete_requires_exit:
+		if view_pos.distance_squared_to(_right_delete_blocked_position) < point_radius * point_radius:
+			return false
+		_right_delete_requires_exit = false
+
+	var point_idx := get_point_at(view_pos)
+	if point_idx == -1:
+		return false
+
+	var point := _curve.points[point_idx]
+	_right_delete_requires_exit = true
+	_right_delete_blocked_position = get_view_pos(point.position)
+	_store_right_delete_drag_state()
+
+	if selected_index == point_idx:
+		selected_index = -1
+	elif selected_index > point_idx:
+		selected_index -= 1
+
+	_request_point_remove(point)
+	queue_redraw()
+	return true
+
+
+func _set_right_delete_dragging(enabled: bool) -> void:
+	is_right_delete_dragging = enabled
+	if not enabled:
+		_right_delete_requires_exit = false
+		_right_delete_blocked_position = Vector2.ZERO
+		if _curve != null:
+			_right_delete_drag_state_by_curve.erase(_curve.get_instance_id())
+		return
+	_store_right_delete_drag_state()
+
+
+func _store_right_delete_drag_state() -> void:
+	if _curve == null or not is_right_delete_dragging:
+		return
+	_right_delete_drag_state_by_curve[_curve.get_instance_id()] = {
+		"requires_exit": _right_delete_requires_exit,
+		"blocked_position": _right_delete_blocked_position,
+	}
+
+
+func _restore_right_delete_drag_state() -> void:
+	if _curve == null:
+		return
+
+	var curve_id := _curve.get_instance_id()
+	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		_right_delete_drag_state_by_curve.erase(curve_id)
+		return
+
+	var state: Dictionary = _right_delete_drag_state_by_curve.get(curve_id, {})
+	if state.is_empty():
+		return
+
+	is_right_delete_dragging = true
+	_right_delete_requires_exit = bool(state.get("requires_exit", false))
+	_right_delete_blocked_position = state.get("blocked_position", Vector2.ZERO)
 
 
 # =========================
@@ -373,25 +611,33 @@ func _draw():
 	if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
 		_draw_function_curve()
 
-	# --- Draw curve segments ---
-	for i in range(_curve.points.size() - 1):
-		var a = _curve.points[i]
-		var b = _curve.points[i + 1]
-		_draw_bezier_segment(a, b)
+	var display_points := _get_display_points()
+
+	# --- Draw curve using the same X-to-Y evaluation as EasingCurve.sample() ---
+	if _curve.curve_mode != EasingCurve.CurveMode.FUNCTION:
+		_draw_bezier_curve(display_points)
 
 	# --- Draw points and control points ---
-	for i in range(_curve.points.size()):
-		var p = _curve.points[i]
+	for i in range(display_points.size()):
+		var p := display_points[i]
 		var pos_view = get_view_pos(p.position)
 
-		# var is_selected = (i == selected_index)
-		var is_hovered = (i == hovered_index)
+		var is_selected := p == pending_add_point or (
+			selected_index >= 0
+			and selected_index < _curve.points.size()
+			and p == _curve.points[selected_index]
+		)
+		var is_hovered := (
+			hovered_index >= 0
+			and hovered_index < _curve.points.size()
+			and p == _curve.points[hovered_index]
+		)
 
 		# Slightly dim when not selected/hovered
 		var alpha := 1.0 if (is_hovered) else 0.5
 
 		# ----- Colors -----
-		var point_color = Color(1, 0.5, 0, alpha) if i == selected_index else Color(1, 0, 0, alpha)
+		var point_color = Color(1, 0.5, 0, alpha) if is_selected else Color(1, 0, 0, alpha)
 
 		# ----- Main Point -----
 		draw_circle(pos_view, point_radius, point_color)
@@ -402,7 +648,7 @@ func _draw():
 			var left_view = get_view_pos(p.left_control_point)
 
 			var left_hovered = (
-				i == hovered_index and
+				is_hovered and
 				hovered_control_index == ControlIndex.LEFT
 			)
 
@@ -421,11 +667,11 @@ func _draw():
 			draw_circle(left_view, left_radius, left_color)
 
 		# RIGHT
-		if i != _curve.points.size() - 1:
+		if i != display_points.size() - 1:
 			var right_view = get_view_pos(p.right_control_point)
 
 			var right_hovered = (
-				i == hovered_index and
+				is_hovered and
 				hovered_control_index == ControlIndex.RIGHT
 			)
 
@@ -442,7 +688,6 @@ func _draw():
 
 			draw_line(pos_view, right_view, right_line_color)
 			draw_circle(right_view, right_radius, right_color)
-
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_FOCUS_ENTER:
@@ -488,9 +733,20 @@ func set_curve(easing_curve: EasingCurve):
 	if _curve != easing_curve:
 		if _curve != null:
 			_curve.changed.disconnect(_on_curve_changed)
+
 		_curve = easing_curve
+
 		if _curve != null:
 			_curve.changed.connect(_on_curve_changed)
+
+			selected_index = _selected_index_by_curve.get(
+				_curve.get_instance_id(),
+				-1,
+			)
+			_restore_right_delete_drag_state()
+		else:
+			selected_index = -1
+
 		queue_redraw()
 
 
@@ -498,10 +754,29 @@ func get_curve() -> EasingCurve:
 	return _curve
 
 
-func update_view_transform() -> void:
-	var margin = 4 * _editor_scale
+func select_point(point: EasingCurvePoint) -> bool:
+	if _curve == null:
+		return false
+	var point_index := _curve.points.find(point)
+	if point_index == -1:
+		return false
+	selected_index = point_index
+	return true
 
-	var auto_range = _compute_auto_y_range()
+
+func update_view_transform() -> void:
+	var margin := 4.0 * _editor_scale
+	var toolbar_height := SELECTION_TOOLBAR_HEIGHT * _editor_scale
+
+	# Auto range looks kinda bad; turning off for now
+	#var auto_range = _compute_auto_y_range()
+	var auto_range := Vector2(0.0, 1.0)
+	#var auto_range := (
+		#_drag_auto_range
+		#if _has_drag_auto_range
+		#else _compute_auto_y_range()
+	#)
+
 	var auto_min_y = auto_range.x
 	var auto_max_y = auto_range.y
 	var auto_height = auto_max_y - auto_min_y
@@ -521,8 +796,14 @@ func update_view_transform() -> void:
 
 	# Get world rect
 	var world_rect = Rect2(Vector2(min_x, min_y), Vector2(max_x - min_x, max_y - min_y))
-	var view_margin = Vector2(margin, margin)
-	var view_size = size - view_margin * 2
+	var view_origin := Vector2(
+		margin,
+		toolbar_height + margin,
+	)
+	var view_size := Vector2(
+		maxf(size.x - margin * 2.0, 1.0),
+		maxf(size.y - toolbar_height - margin * 2.0, 1.0),
+	)
 	var view_scale = view_size / world_rect.size
 
 	var world_trans: Transform2D
@@ -530,7 +811,7 @@ func update_view_transform() -> void:
 	world_trans = world_trans.scaled(Vector2(view_scale.x, -view_scale.y))
 
 	var view_trans: Transform2D
-	view_trans = view_trans.translated_local(view_margin)
+	view_trans = view_trans.translated_local(view_origin)
 
 	_world_to_view = view_trans * world_trans
 
@@ -540,6 +821,12 @@ func get_view_pos(world_pos: Vector2) -> Vector2:
 
 
 func get_world_pos(view_pos: Vector2) -> Vector2:
+	if (
+		not _world_to_view.is_finite()
+		or is_zero_approx(_world_to_view.determinant())
+	):
+		return Vector2(NAN, NAN)
+
 	return _world_to_view.affine_inverse() * (view_pos - pan_offset)
 
 
@@ -571,18 +858,58 @@ func get_control_at(pos: Vector2) -> Array: # [point_index, ControlIndex]
 		var p = _curve.points[i]
 
 		# LEFT (only if not first and not locked)
-		if i != 0: # and not p.locked["left_control_point"]:
+		if (
+			i != 0
+			and not p.is_control_force_linear_active(
+				EasingCurvePoint.ControlSide.LEFT
+			)
+		):
 			var left_view = get_view_pos(p.left_control_point)
 			if left_view.distance_squared_to(pos) < control_hover_radius * control_hover_radius:
 				return [i, ControlIndex.LEFT]
 
 		# RIGHT (only if not last and not locked)
-		if i != _curve.points.size() - 1: # and not p.locked["right_control_point"]:
+		if (
+			i != _curve.points.size() - 1
+			and not p.is_control_force_linear_active(
+				EasingCurvePoint.ControlSide.RIGHT
+			)
+		):
 			var right_view = get_view_pos(p.right_control_point)
 			if right_view.distance_squared_to(pos) < control_hover_radius * control_hover_radius:
 				return [i, ControlIndex.RIGHT]
 
 	return [-1, ControlIndex.NONE]
+
+
+func _zoom_at_view_pos(step_delta: int, view_pos: Vector2) -> void:
+	var world_before := get_world_pos(view_pos)
+
+	if not world_before.is_finite():
+		return
+
+	var new_step := clamp(
+		_zoom_step + step_delta,
+		0,
+		ZOOM_STEPS,
+	)
+
+	if new_step == _zoom_step:
+		return
+
+	_zoom_step = new_step
+	_apply_zoom_from_step()
+
+	# _apply_zoom_from_step() changes zoom values, but the transform
+	# normally isn't rebuilt until the next draw.
+	update_view_transform()
+
+	var view_after := get_view_pos(world_before)
+
+	pan_offset += view_pos - view_after
+
+	pan_changed.emit(pan_offset)
+	queue_redraw()
 
 
 func _on_autofit_pressed() -> void:
@@ -619,22 +946,138 @@ func _on_curve_changed() -> void:
 	if dragging_point >= point_count:
 		dragging_point = -1
 		dragging_control = ControlIndex.NONE
+	_update_point_toolbar()
 	queue_redraw()
 
 
 func _get_minimum_size() -> Vector2:
-	return Vector2(64.0, maxf(MIN_GRAPH_HEIGHT, size.x * ASPECT_RATIO)) * _editor_scale
+	var graph_height := maxf(
+		MIN_GRAPH_HEIGHT,
+		size.x * ASPECT_RATIO,
+	)
+
+	return Vector2(
+		64.0,
+		graph_height + SELECTION_TOOLBAR_HEIGHT,
+	) * _editor_scale
 
 
-func _draw_bezier_segment(a: EasingCurvePoint, b: EasingCurvePoint) -> void:
-	var steps = 20
-	var prev = get_view_pos(a.position)
-	for j in range(1, steps + 1):
-		var t = j / float(steps)
-		var pt = _bezier(a.position, a.right_control_point, b.left_control_point, b.position, t)
-		var pt_view = get_view_pos(pt)
-		draw_line(prev, pt_view, LINE_COLOR, 2)
-		prev = pt_view
+func _get_display_points() -> Array[EasingCurvePoint]:
+	var display_points: Array[EasingCurvePoint] = _curve.points.duplicate()
+	var active_point: EasingCurvePoint
+
+	if pending_add_point != null or (
+		dragging_point != -1
+		and dragging_control == ControlIndex.NONE
+	) or position_x_order_preview_point != null:
+		if pending_add_point != null:
+			display_points.append(pending_add_point)
+			active_point = pending_add_point
+		elif dragging_point != -1 and dragging_control == ControlIndex.NONE:
+			active_point = _curve.points[dragging_point]
+		else:
+			active_point = position_x_order_preview_point
+		return EasingCurve.build_ordered_points_with_endpoint_takeover(
+			display_points,
+			active_point,
+		)
+
+	return display_points
+
+
+func _set_position_x_order_preview(point: EasingCurvePoint) -> void:
+	position_x_order_preview_point = point
+	queue_redraw()
+
+
+func _clear_position_x_order_preview() -> void:
+	position_x_order_preview_point = null
+	queue_redraw()
+
+
+func _draw_bezier_curve(point_list: Array[EasingCurvePoint]) -> void:
+	var fallback_y := EasingCurve.get_bezier_fallback_value(0.0)
+	if point_list.size() < 2:
+		draw_line(
+			get_view_pos(Vector2(0.0, fallback_y)),
+			get_view_pos(Vector2(1.0, fallback_y)),
+			LINE_COLOR,
+			2,
+		)
+		return
+
+	var first_point: EasingCurvePoint = point_list.front()
+	var last_point: EasingCurvePoint = point_list.back()
+
+	if not EasingCurve.is_left_endpoint_x(first_point.position.x):
+		draw_line(
+			get_view_pos(Vector2(0.0, fallback_y)),
+			get_view_pos(Vector2(first_point.position.x, fallback_y)),
+			LINE_COLOR,
+			2,
+		)
+		draw_line(
+			get_view_pos(Vector2(first_point.position.x, fallback_y)),
+			get_view_pos(first_point.position),
+			LINE_COLOR,
+			2,
+		)
+
+	for i in range(point_list.size() - 1):
+		_draw_bezier_segment(point_list[i], point_list[i + 1], 0.0, 1.0)
+
+	if not EasingCurve.is_right_endpoint_x(last_point.position.x):
+		draw_line(
+			get_view_pos(last_point.position),
+			get_view_pos(Vector2(last_point.position.x, fallback_y)),
+			LINE_COLOR,
+			2,
+		)
+		draw_line(
+			get_view_pos(Vector2(last_point.position.x, fallback_y)),
+			get_view_pos(Vector2(1.0, fallback_y)),
+			LINE_COLOR,
+			2,
+		)
+
+
+func _draw_bezier_segment(
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+		visible_min_x: float,
+		visible_max_x: float,
+) -> void:
+	var segment_width := b.position.x - a.position.x
+	if absf(segment_width) <= EasingCurve.SEGMENT_X_EPSILON:
+		if a.position.x >= visible_min_x and a.position.x <= visible_max_x:
+			draw_line(get_view_pos(a.position), get_view_pos(b.position), LINE_COLOR, 2)
+		return
+
+	var segment_min_x := minf(a.position.x, b.position.x)
+	var segment_max_x := maxf(a.position.x, b.position.x)
+	var start_x := maxf(segment_min_x, visible_min_x)
+	var end_x := minf(segment_max_x, visible_max_x)
+	if start_x > end_x:
+		return
+
+	var start_view_x := get_view_pos(Vector2(start_x, 0.0)).x
+	var end_view_x := get_view_pos(Vector2(end_x, 0.0)).x
+	var steps := max(1, ceili(absf(end_view_x - start_view_x)))
+	var previous := Vector2.ZERO
+
+	for i in range(steps + 1):
+		var x := lerpf(start_x, end_x, i / float(steps))
+		var y := (
+			a.position.y
+			if i == 0 and is_equal_approx(x, a.position.x)
+			else b.position.y
+			if i == steps and is_equal_approx(x, b.position.x)
+			else EasingCurve.sample_bezier_segment(a, b, x)
+		)
+		var current := get_view_pos(Vector2(x, y))
+		if i > 0:
+			draw_line(previous, current, LINE_COLOR, 2)
+		previous = current
 
 
 func _bezier(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
@@ -711,3 +1154,365 @@ func _draw_function_curve():
 			draw_line(prev, pt, LINE_COLOR, 2)
 
 		prev = pt
+
+
+func _create_point_toolbar() -> void:
+	_point_toolbar_panel = VBoxContainer.new()
+	_point_toolbar_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	_point_toolbar_panel.set_anchors_and_offsets_preset(
+		Control.PRESET_TOP_WIDE
+	)
+
+	_point_toolbar_panel.custom_minimum_size.y = (
+		SELECTION_TOOLBAR_HEIGHT * _editor_scale
+	)
+
+	add_child(_point_toolbar_panel)
+
+	_point_toolbar = GridContainer.new()
+	_point_toolbar.columns = 3
+	_point_toolbar.add_theme_constant_override(
+		"h_separation",
+		maxi(1, roundi(2.0 * _editor_scale)),
+	)
+	_point_toolbar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	_point_toolbar_panel.add_child(_point_toolbar)
+
+	_point_label = Label.new()
+	_point_label.text = "No Selection"
+	_point_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_point_toolbar.add_child(_point_label)
+	_reserve_point_toolbar_label_column_width()
+
+	_point_toolbar_controls = HBoxContainer.new()
+	_point_toolbar_controls.add_theme_constant_override(
+		"separation",
+		maxi(1, roundi(2.0 * _editor_scale)),
+	)
+	_point_toolbar_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_point_toolbar.add_child(_point_toolbar_controls)
+
+	_point_handle_mode = OptionButton.new()
+	_point_handle_mode.fit_to_longest_item = false
+	_point_handle_mode.clip_text = true
+	_point_handle_mode.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_point_handle_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_point_handle_mode.size_flags_stretch_ratio = 1.2
+
+	_point_handle_mode.add_item(
+		"Free",
+		EasingCurvePoint.HandleMode.FREE,
+	)
+	_point_handle_mode.add_item(
+		"Linear",
+		EasingCurvePoint.HandleMode.LINEAR,
+	)
+	_point_handle_mode.add_item(
+		"Balanced",
+		EasingCurvePoint.HandleMode.BALANCED,
+	)
+	_point_handle_mode.add_item(
+		"Mirrored",
+		EasingCurvePoint.HandleMode.MIRRORED,
+	)
+	_point_handle_mode.add_item(
+		"Linked",
+		EasingCurvePoint.HandleMode.LINKED,
+	)
+
+	_point_handle_mode.item_selected.connect(
+		_on_point_toolbar_handle_mode_selected
+	)
+
+	_point_toolbar_controls.add_child(_point_handle_mode)
+
+	_point_left_state_label = Label.new()
+	_point_left_state_label.text = "L"
+	_point_toolbar_controls.add_child(_point_left_state_label)
+	_point_left_state = _create_point_toolbar_control_state_option(
+		EasingCurvePoint.ControlSide.LEFT
+	)
+	_point_toolbar_controls.add_child(_point_left_state)
+
+	_point_right_state_label = Label.new()
+	_point_right_state_label.text = "R"
+	_point_toolbar_controls.add_child(_point_right_state_label)
+	_reserve_point_toolbar_control_side_label_width()
+	_point_right_state = _create_point_toolbar_control_state_option(
+		EasingCurvePoint.ControlSide.RIGHT
+	)
+	_point_toolbar_controls.add_child(_point_right_state)
+
+	_point_reset_button = Button.new()
+	_point_reset_button.icon = RELOAD_ICON
+	_point_reset_button.flat = true
+	_point_reset_button.tooltip_text = "Reset Point Options"
+	_point_reset_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_point_reset_button.pressed.connect(_on_point_toolbar_reset_pressed)
+	_point_toolbar.add_child(_point_reset_button)
+	_set_point_toolbar_reset_available(false)
+
+
+func _reserve_point_toolbar_label_column_width() -> void:
+	var original_text := _point_label.text
+	var label_column_width := 0.0
+
+	for label_text in ["Ease", "Trans"]:
+		_point_label.text = label_text
+		label_column_width = maxf(
+			label_column_width,
+			_point_label.get_combined_minimum_size().x,
+		)
+
+	_point_label.text = original_text
+	_point_label.custom_minimum_size.x = label_column_width
+
+
+func _reserve_point_toolbar_control_side_label_width() -> void:
+	var label_width := maxf(
+		_point_left_state_label.get_combined_minimum_size().x,
+		_point_right_state_label.get_combined_minimum_size().x,
+	)
+	_point_left_state_label.custom_minimum_size.x = label_width
+	_point_right_state_label.custom_minimum_size.x = label_width
+
+
+func _create_point_toolbar_control_state_option(
+	side: EasingCurvePoint.ControlSide,
+) -> OptionButton:
+	var option := OptionButton.new()
+	option.fit_to_longest_item = false
+	option.clip_text = true
+	option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	option.size_flags_stretch_ratio = 1.0
+	option.add_item("Free", EasingCurvePoint.ControlState.FREE)
+	option.add_item("Linear", EasingCurvePoint.ControlState.LINEAR)
+	option.add_item("Locked", EasingCurvePoint.ControlState.LOCKED)
+	option.item_selected.connect(_on_point_toolbar_control_state_selected.bind(side))
+	return option
+
+
+
+
+func _update_point_toolbar() -> void:
+	if _point_toolbar == null:
+		return
+
+	var valid_selection := (
+		_curve != null
+		and selected_index >= 0
+		and selected_index < _curve.points.size()
+	)
+
+	_point_toolbar.visible = true
+
+	if not valid_selection:
+		_point_label.text = "No Selection"
+		_point_label.modulate.a = 0.6
+		_point_handle_mode.visible = false
+		_set_point_toolbar_reset_available(false)
+		_set_point_toolbar_control_state_visible(
+			EasingCurvePoint.ControlSide.LEFT,
+			false,
+		)
+		_set_point_toolbar_control_state_visible(
+			EasingCurvePoint.ControlSide.RIGHT,
+			false,
+		)
+		return
+
+	var point := _curve.points[selected_index]
+
+	_point_label.text = "P%d" % selected_index
+	_point_label.modulate.a = 1.0
+	_point_handle_mode.visible = true
+
+	_updating_point_toolbar = true
+
+	for index in range(_point_handle_mode.item_count):
+		if (
+			_point_handle_mode.get_item_id(index)
+			== point.handle_mode
+		):
+			_point_handle_mode.select(index)
+			break
+
+	_update_point_toolbar_control_state(
+		point,
+		EasingCurvePoint.ControlSide.LEFT,
+		selected_index > 0 and point.supports_control_state(),
+	)
+	_update_point_toolbar_control_state(
+		point,
+		EasingCurvePoint.ControlSide.RIGHT,
+		selected_index < _curve.points.size() - 1 and point.supports_control_state(),
+	)
+	_set_point_toolbar_reset_available(
+		not _point_toolbar_options_are_default(point)
+	)
+
+	_updating_point_toolbar = false
+
+
+func _set_point_toolbar_control_state_visible(
+	side: EasingCurvePoint.ControlSide,
+	visible: bool,
+) -> void:
+	var label := (
+		_point_left_state_label
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else _point_right_state_label
+	)
+	var option := (
+		_point_left_state
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else _point_right_state
+	)
+	label.visible = visible
+	option.visible = visible
+
+
+func _set_point_toolbar_reset_available(available: bool) -> void:
+	var tint := _point_reset_button.self_modulate
+	tint.a = 1.0 if available else 0.0
+	_point_reset_button.self_modulate = tint
+	_point_reset_button.mouse_filter = (
+		Control.MOUSE_FILTER_STOP
+		if available
+		else Control.MOUSE_FILTER_IGNORE
+	)
+	_point_reset_button.focus_mode = (
+		Control.FOCUS_ALL if available else Control.FOCUS_NONE
+	)
+	_point_reset_button.disabled = not available
+
+
+func _point_toolbar_options_are_default(point: EasingCurvePoint) -> bool:
+	return (
+		point.handle_mode == EasingCurvePoint.HandleMode.FREE
+		and not point.left_force_linear
+		and not point.right_force_linear
+		and not point.locked.get(&"left_control_point", false)
+		and not point.locked.get(&"right_control_point", false)
+	)
+
+
+func _update_point_toolbar_control_state(
+	point: EasingCurvePoint,
+	side: EasingCurvePoint.ControlSide,
+	visible: bool,
+) -> void:
+	_set_point_toolbar_control_state_visible(side, visible)
+	if not visible:
+		return
+
+	var option := (
+		_point_left_state
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else _point_right_state
+	)
+	var control_state := _get_point_toolbar_control_state(point, side)
+	for index in range(option.item_count):
+		if option.get_item_id(index) == control_state:
+			option.select(index)
+			break
+
+
+func _get_point_toolbar_control_state(
+	point: EasingCurvePoint,
+	side: EasingCurvePoint.ControlSide,
+) -> EasingCurvePoint.ControlState:
+	if point.handle_mode == EasingCurvePoint.HandleMode.LINKED:
+		if (
+			point.locked.get(&"left_control_point", false)
+			or point.locked.get(&"right_control_point", false)
+		):
+			return EasingCurvePoint.ControlState.LOCKED
+		if point.is_control_force_linear_active(side):
+			return EasingCurvePoint.ControlState.LINEAR
+		return EasingCurvePoint.ControlState.FREE
+
+	var lock_property := (
+		&"left_control_point"
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else &"right_control_point"
+	)
+	if point.locked.get(lock_property, false):
+		return EasingCurvePoint.ControlState.LOCKED
+	if point.is_control_force_linear_active(side):
+		return EasingCurvePoint.ControlState.LINEAR
+	return EasingCurvePoint.ControlState.FREE
+
+
+func _on_point_toolbar_handle_mode_selected(index: int) -> void:
+	if _updating_point_toolbar:
+		return
+
+	if (
+		_curve == null
+		or selected_index < 0
+		or selected_index >= _curve.points.size()
+	):
+		return
+
+	_request_point_property_change(
+		selected_index,
+		&"handle_mode",
+		_point_handle_mode.get_item_id(index),
+	)
+
+
+func _on_point_toolbar_control_state_selected(
+	index: int,
+	side: EasingCurvePoint.ControlSide,
+) -> void:
+	if _updating_point_toolbar:
+		return
+
+	if (
+		_curve == null
+		or selected_index < 0
+		or selected_index >= _curve.points.size()
+	):
+		return
+
+	var property_name := (
+		&"left_control_state"
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else &"right_control_state"
+	)
+	var option := (
+		_point_left_state
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else _point_right_state
+	)
+	_request_point_property_change(
+		selected_index,
+		property_name,
+		option.get_item_id(index),
+	)
+
+
+func _on_point_toolbar_reset_pressed() -> void:
+	if (
+		_curve == null
+		or selected_index < 0
+		or selected_index >= _curve.points.size()
+	):
+		return
+
+	_request_point_property_change(
+		selected_index,
+		&"toolbar_options_reset",
+		true,
+	)
+
+
+func get_world_to_view_scale() -> Vector2:
+	return Vector2(
+		_world_to_view.x.length(),
+		_world_to_view.y.length()
+	)

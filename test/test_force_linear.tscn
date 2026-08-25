@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://chuhef6htvewg"]
+
+[ext_resource type="Script" uid="uid://ddko04trl6xm0" path="res://test/test_force_linear.gd" id="1_sh2rv"]
+
+[node name="TestForceLinear" type="Node2D" unique_id=1430603993]
+script = ExtResource("1_sh2rv")
