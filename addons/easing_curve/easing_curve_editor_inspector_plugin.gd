@@ -2281,7 +2281,6 @@ func _create_handle_mode_property(
 		reset_btn,
 	)
 	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
-	property_header.custom_minimum_size.x = 0.0
 	property_grid.add_child(property_header)
 
 	var value_panel := PanelContainer.new()
