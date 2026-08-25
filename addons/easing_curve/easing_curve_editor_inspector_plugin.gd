@@ -8,7 +8,6 @@ extends EditorInspectorPlugin
 
 ## Styleboxes
 const X_STYLEBOX = preload("uid://dsapcj11t0kpu")
-const BTN_NORMAL = preload("uid://c6hb75fm8lwht")
 ## GUI Icons
 const GUI_TREE_ARROW_RIGHT = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowRight.svg")
 const GUI_TREE_ARROW_DOWN = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowDown.svg")
@@ -842,9 +841,6 @@ class PointsFoldableSection:
 		&"font_hover_color",
 		&"Editor"
 	)
-	#var normal_color := Color(1.0, 1.0, 1.0, 0.75)
-	#var hover_color := Color(1.0, 1.0, 1.0, 0.85)
-
 	var normal_icon_color := Color(1.0, 1.0, 1.0, 0.90)
 	var hover_icon_color := Color.WHITE
 
@@ -958,11 +954,6 @@ class PointsFoldableSection:
 			_native_section.add_child(content)
 			_native_section.connect(&"folding_changed", _on_folding_changed)
 			add_child(_native_section)
-			#call_deferred("_debug_points_layout")
-			#call_deferred("_debug_fold_alignment")
-			#call_deferred("_debug_theme")
-
-
 			_native_section.add_theme_color_override(
 				&"font_color",
 				normal_font_base
@@ -1031,9 +1022,7 @@ class PointsFoldableSection:
 var editor_undo_redo: EditorUndoRedoManager # assigned from EditorPlugin
 var easing_curve_editor: EasingCurveEditor
 var curve_editor_property: EditorProperty
-var points_editor_property: EditorProperty
 var ease_option: OptionButton
-var trans_option: OptionButton
 var preset_reset_button: Button
 var curve: EasingCurve
 var _instantiating_default_property := false
@@ -1301,9 +1290,6 @@ func handle_easing_curve_editor(object) -> Control:
 		curve = object
 		_point_edit_before_state = {}
 		_point_edit_action_name = "Edit Easing Curve Point"
-		# print("curve.ease_type = ", curve.EASE.keys()[curve.ease_type])
-		# print("curve.trans_type = ", curve.TRANS.keys()[curve.trans_type])
-
 		# Connect ease/trans preset selected signals
 		ease_option.item_selected.connect(
 			func(idx):
@@ -1371,17 +1357,6 @@ func handle_easing_curve_editor(object) -> Control:
 	return null
 
 
-func print_properties(object, type, name, hint_type, hint_string, usage_flags, wide):
-	print("=============================")
-	print("object: ", object)
-	print("type: ", type)
-	print("name: ", name)
-	print("hint_type: ", hint_type)
-	print("hint_string: ", hint_string)
-	print("usage_flags: ", usage_flags)
-	print("wide: ", wide)
-
-
 func _can_handle(object):
 	if object is EasingCurve and not _instantiating_default_property:
 		return true
@@ -1390,7 +1365,6 @@ func _can_handle(object):
 
 
 func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wide):
-	# print_properties(object, type, name, hint_type, hint_string, usage_flags, wide)
 	# Handle properties
 	if object is EasingCurve and name == "easing_curve_editor":
 		curve = object
@@ -1461,9 +1435,6 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 	return false
 
 
-#func _update_reset_btn(reset_btn: Button, value: float, default: float) -> void:
-	#reset_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-	#reset_btn.visible = !is_equal_approx(value, default)
 func _update_point_reset_btn(
 	reset_btn: Button,
 	i: int,
@@ -1485,15 +1456,13 @@ func _update_point_reset_btn(
 
 
 func _on_reset_btn_pressed(
-		i: int,
 		point: EasingCurvePoint,
-		_default: Vector2,
 		x_input: EditorSpinSlider,
 		y_input: EditorSpinSlider,
 		property_name: String,
 		reset_btn: Button,
 ) -> void:
-	i = _get_current_point_index(point)
+	var i := _get_current_point_index(point)
 	if i == -1:
 		return
 	_preserve_point_selection_on_refresh = true
@@ -1513,13 +1482,12 @@ func _on_reset_btn_pressed(
 	_set_point_reset_button_available(reset_btn, false)
 
 
-func _on_remove_btn_pressed(_point_list: VBoxContainer, _i: int, _point_panel: PanelContainer, p: EasingCurvePoint) -> void:
+func _on_remove_btn_pressed(p: EasingCurvePoint) -> void:
 	_remove_point(p)
 
 
-func _on_x_input_value_changed(value: float, i: int, point: EasingCurvePoint, x_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
-	# print("p%d x: %.3f" % [i, value])
-	i = _get_current_point_index(point)
+func _on_x_input_value_changed(value: float, point: EasingCurvePoint, x_input: EditorSpinSlider, reset_btn: Button, property_name: String) -> void:
+	var i := _get_current_point_index(point)
 	if i == -1:
 		return
 	if not _is_point_input_editable(point, property_name):
@@ -1540,9 +1508,8 @@ func _on_x_input_value_changed(value: float, i: int, point: EasingCurvePoint, x_
 	easing_curve_editor.queue_redraw()
 
 
-func _on_y_input_value_changed(value: float, i: int, point: EasingCurvePoint, y_input: EditorSpinSlider, reset_btn: Button, default: float, property_name: String) -> void:
-	# print("p%d y: %.3f" % [i, value])
-	i = _get_current_point_index(point)
+func _on_y_input_value_changed(value: float, point: EasingCurvePoint, y_input: EditorSpinSlider, reset_btn: Button, property_name: String) -> void:
+	var i := _get_current_point_index(point)
 	if i == -1:
 		return
 	if not _is_point_input_editable(point, property_name):
@@ -1901,7 +1868,6 @@ func _create_vector2_property(
 	label_text: String,
 	property_grid: GridContainer,
 ) -> void:
-	var position := point.position
 	var default_vec: Vector2 = curve.get_default_for_property(i, property_name)
 	var current_vec: Vector2 = point.get(property_name)
 
@@ -1984,12 +1950,6 @@ func _create_vector2_property(
 			else EasingCurvePoint.ControlSide.RIGHT
 		)
 		force_linear_btn.button_pressed = force_linear
-
-		var editor_theme := EditorInterface.get_editor_theme()
-		var anchor_icon := editor_theme.get_icon(
-			&"Anchor",
-			&"EditorIcons",
-		)
 
 		force_linear_btn.icon = (
 			FORCE_LINEAR_ICON_ON
@@ -2147,7 +2107,7 @@ func _create_vector2_property(
 	x_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	x_input.custom_minimum_size.x = 0.0
 
-	x_input.value_changed.connect(_on_x_input_value_changed.bind(i, point, x_input, reset_btn, default_vec.x, property_name))
+	x_input.value_changed.connect(_on_x_input_value_changed.bind(point, x_input, reset_btn, property_name))
 	_connect_point_input_drag_signals(x_input)
 	if property_name == "position":
 		x_input.value_focus_entered.connect(
@@ -2193,13 +2153,13 @@ func _create_vector2_property(
 	y_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	y_input.custom_minimum_size.x = 0.0
 
-	y_input.value_changed.connect(_on_y_input_value_changed.bind(i, point, y_input, reset_btn, default_vec.y, property_name))
+	y_input.value_changed.connect(_on_y_input_value_changed.bind(point, y_input, reset_btn, property_name))
 	_connect_point_input_drag_signals(y_input)
 	y_input.grabbed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 	y_input.focus_entered.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 	point.set_input_control(property_name, "y", y_input)
 
-	reset_btn.pressed.connect(_on_reset_btn_pressed.bind(i, point, position, x_input, y_input, property_name, reset_btn))
+	reset_btn.pressed.connect(_on_reset_btn_pressed.bind(point, x_input, y_input, property_name, reset_btn))
 	reset_btn.pressed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 
 	y_row.add_child(y_label)
@@ -3185,8 +3145,6 @@ func _disconnect_preset_state_ui(object: EasingCurve, callback: Callable) -> voi
 
 
 func _undo_source_property() -> EditorProperty:
-	if is_instance_valid(points_editor_property):
-		return points_editor_property
 	if is_instance_valid(curve_editor_property):
 		return curve_editor_property
 	return null

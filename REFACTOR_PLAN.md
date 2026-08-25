@@ -1094,6 +1094,18 @@ No class/file extraction, public API removal, naming sweep, or functional fix.
 Full automated suite, parser check, diff review proving removed code was inactive,
 and key visible Inspector smoke checks.
 
+### Completion status
+
+Completed on 2026-08-25. Removed private Inspector dead code (`BTN_NORMAL`, the
+shadowed `trans_option` field, `points_editor_property`, `print_properties()`,
+the unused anchor lookup, and obsolete callback arguments/locals), stale debug
+and commented implementation blocks, and the redundant `constant_value` and
+`overshoot` notification branches. Focused editor-host, runtime update,
+preset/parameter, Undo/Redo, and serialization/transition suites pass. The
+aggregate runner remains blocked at its first suite by the documented Codex
+sandbox restriction on creating `user://logs`; no test or production workaround
+was added.
+
 ### Risk
 
 Low.
