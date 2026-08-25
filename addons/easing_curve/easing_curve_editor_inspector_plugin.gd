@@ -1706,6 +1706,7 @@ func _create_vector2_property(
 		reset_btn,
 	)
 	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
+	property_header.custom_minimum_size.x = 0.0
 	property_hbox.add_child(property_header)
 
 	# Value container panel (x/y inputs; lock_btn)
@@ -1713,6 +1714,7 @@ func _create_vector2_property(
 	value_panel.add_theme_stylebox_override("panel", X_STYLEBOX)
 	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
+	value_panel.custom_minimum_size.x = 0.0
 	property_hbox.add_child(value_panel)
 
 	# HBox for x/y inputs; lock_btn
@@ -1720,6 +1722,11 @@ func _create_vector2_property(
 	value_hbox.add_theme_constant_override("separation", _compact_separation())
 	value_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_panel.add_child(value_hbox)
+
+	var force_linear_slot := Control.new()
+	force_linear_slot.custom_minimum_size.x = 24.0 * EditorInterface.get_editor_scale()
+	force_linear_slot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	value_hbox.add_child(force_linear_slot)
 
 	# Left side (the X/Y stack)
 	var value_vbox := VBoxContainer.new()
@@ -1736,8 +1743,9 @@ func _create_vector2_property(
 	var force_linear_btn := Button.new()
 	force_linear_btn.flat = true
 	force_linear_btn.toggle_mode = true
-	force_linear_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	force_linear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	#force_linear_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	#force_linear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	force_linear_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	if property_name in ["left_control_point", "right_control_point"]:
 
@@ -1822,7 +1830,8 @@ func _create_vector2_property(
 		force_linear_btn.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		force_linear_btn.focus_mode = Control.FOCUS_NONE
 
-	value_hbox.add_child(force_linear_btn)
+	#value_hbox.add_child(force_linear_btn)
+	force_linear_slot.add_child(force_linear_btn)
 
 	##############################################
 
@@ -2142,16 +2151,19 @@ func _create_handle_mode_property(
 		reset_btn,
 	)
 	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
+	property_header.custom_minimum_size.x = 0.0
 	row.add_child(property_header)
 
 	var value_panel := PanelContainer.new()
 	value_panel.add_theme_stylebox_override(&"panel", X_STYLEBOX)
 	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
+	value_panel.custom_minimum_size.x = 0.0
 	row.add_child(value_panel)
 
 	var option := OptionButton.new()
 	_configure_compact_option(option)
+	option.custom_minimum_size.x = 0.0
 	value_panel.add_child(option)
 
 	option.add_item("Free", EasingCurvePoint.HandleMode.FREE)
