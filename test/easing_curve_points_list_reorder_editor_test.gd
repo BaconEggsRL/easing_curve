@@ -153,7 +153,7 @@ func _test_handle_mode_reset_uses_the_normal_transition() -> void:
 		editor.free()
 		return
 	var free_reset_btn: Button = free_parts.reset_button
-	_expect(is_zero_approx(free_reset_btn.self_modulate.a), "Free Handle Mode showed its reset action")
+	_expect(not free_reset_btn.visible, "Free Handle Mode showed its reset action")
 	_expect(free_reset_btn.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Free Handle Mode reset action remained enabled")
 	free_grid.free()
 
@@ -179,7 +179,7 @@ func _test_handle_mode_reset_uses_the_normal_transition() -> void:
 	_expect(point.left_control_point.is_equal_approx(point.position + Vector2.LEFT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH), "Linear-to-Free reset did not restore the normal Free left handle")
 	_expect(point.right_control_point == point.position and point.right_force_linear, "Handle Mode reset changed Force Linear state instead of applying Free geometry")
 	_expect(point.is_lock_active("position") and point.position.is_equal_approx(Vector2(0.3, 0.7)), "Handle Mode reset changed the point position or lock state")
-	_expect(is_zero_approx(reset_btn.self_modulate.a) and reset_btn.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Handle Mode reset did not reserve and disable its reset slot")
+	_expect(not reset_btn.visible and reset_btn.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Handle Mode reset did not reserve and disable its reset slot")
 
 	var history := UndoRedo.new()
 	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Change Easing Curve Handle Mode", before, after), "Handle Mode reset did not produce an Undo/Redo action")

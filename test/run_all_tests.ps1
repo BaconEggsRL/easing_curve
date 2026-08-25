@@ -1,7 +1,6 @@
 [CmdletBinding()]
 param(
-	[string]$Godot = "godot",
-	[int]$TimeoutSeconds = 300
+	[string]$Godot = "godot"
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,28 +37,15 @@ foreach ($suite in $suites) {
 		"--path", $projectRoot,
 		"--script", "res://test/$($suite.Name)"
 	)
-	$quotedArguments = $arguments | ForEach-Object {
-		'"' + $_.Replace('"', '\"') + '"'
-	}
 	$stdoutPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stdout" -f [guid]::NewGuid())
 	$stderrPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stderr" -f [guid]::NewGuid())
-	$timedOut = $false
-	$exitCode = -1
+	$suiteExitCode = -1
 	try {
-		$process = Start-Process `
-			-FilePath $godotPath `
-			-ArgumentList $quotedArguments `
-			-RedirectStandardOutput $stdoutPath `
-			-RedirectStandardError $stderrPath `
-			-WindowStyle Hidden `
-			-PassThru
-		if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-			$timedOut = $true
-			Stop-Process -Id $process.Id -Force
-			$process.WaitForExit()
-		} else {
-			$exitCode = $process.ExitCode
-		}
+		$previousErrorActionPreference = $ErrorActionPreference
+		$ErrorActionPreference = "Continue"
+		& $godotPath @arguments 1> $stdoutPath 2> $stderrPath
+		$suiteExitCode = $LASTEXITCODE
+		$ErrorActionPreference = $previousErrorActionPreference
 		$stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -Raw -LiteralPath $stdoutPath } else { "" }
 		$stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -Raw -LiteralPath $stderrPath } else { "" }
 		$output = "$stdout`n$stderr"
@@ -67,12 +53,11 @@ foreach ($suite in $suites) {
 		if ($stderr) { Write-Host $stderr.TrimEnd() }
 		$hasPass = $output -match '(?m)^PASS:'
 		$hasScriptError = $output -match 'SCRIPT ERROR:'
-		$passed = -not $timedOut -and $exitCode -eq 0 -and $hasPass -and -not $hasScriptError
+		$passed = $suiteExitCode -eq 0 -and $hasPass -and -not $hasScriptError
 		$results += [pscustomobject]@{
 			Suite = $suite.Name
 			Mode = $mode
-			ExitCode = $exitCode
-			TimedOut = $timedOut
+			ExitCode = $suiteExitCode
 			PassMarker = $hasPass
 			ScriptError = $hasScriptError
 			Passed = $passed

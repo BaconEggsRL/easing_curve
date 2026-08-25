@@ -385,7 +385,7 @@ godot --editor --headless --path . --script res://test/<test>.gd
 | `css_linear_test.gd` | PASS — 86 checks |
 | `easing_curve_editor_rmb_delete_test.gd` | PASS — 20 checks |
 | `easing_curve_manual_reorder_test.gd` | PASS — 75 checks |
-| `easing_curve_transform_test.gd` | Assertions PASS — 498 checks; process hangs because success does not call `quit()` |
+| `easing_curve_transform_test.gd` | PASS — 498 checks; exits with code 0 |
 | `easing_curve_v105_regression_test.gd` | PASS — 1,056 checks |
 | `runtime_curve_updates_test.gd` | PASS — 1,039 checks |
 | `tween_equivalence_test.gd` | PASS — 36 Bézier approximation and 48 analytic reference checks |
@@ -398,7 +398,7 @@ godot --editor --headless --path . --script res://test/<test>.gd
 | `easing_curve_editor_position_x_drag_test.gd` | PASS — 60 checks |
 | `easing_curve_linear_control_alias_test.gd` | PASS — 72 checks |
 | `easing_curve_points_list_add_editor_test.gd` | PASS — 80 checks |
-| `easing_curve_points_list_reorder_editor_test.gd` | INVALID/PARTIAL — four stale fixture calls raise script errors; misleading 13-check PASS; process hangs |
+| `easing_curve_points_list_reorder_editor_test.gd` | PASS — 45 checks; all four fixtures complete and the suite exits with code 0 |
 | `editor_undo_redo_test.gd` | PASS — 505 checks; native layout fixtures skipped as documented |
 
 Under `--editor --headless`, successful suites also reported aborted filesystem
@@ -904,8 +904,8 @@ terminate without manual intervention.
 
 ### Current behavior
 
-All executed production assertions pass except the stale Points-list fixtures;
-one suite false-passes after script errors and two runners hang.
+Completed. All 13 headless and Editor-host suites pass independently with exit
+code 0, a PASS marker, and no `SCRIPT ERROR:` output.
 
 ### Exact scope
 
@@ -927,6 +927,13 @@ redesign.
 Run every existing headless and editor-host suite under Godot 4.7.1; require no
 script errors, no hangs, and unchanged passing assertion totals except the newly
 restored fixture checks.
+
+### Completion status
+
+Completed on 2026-08-25 under Godot 4.7.1. The aggregate runner reports all 13
+suites passing; the repaired Points-list suite reports 45 checks and the
+transform suite reports 498 checks. Known `--editor --headless` shutdown
+diagnostics remain recorded separately above.
 
 ### Risk
 
