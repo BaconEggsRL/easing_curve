@@ -1416,14 +1416,22 @@ func _get_current_point_index(point: EasingCurvePoint) -> int:
 
 
 func _reorder_position_edited_point(point: EasingCurvePoint) -> void:
-	curve.sort_points(false)
-	var point_index := curve.points.find(point)
+	var point_order := EasingCurve.build_ordered_points_with_endpoint_takeover(
+		curve.points,
+		point,
+	)
+	var point_index := point_order.find(point)
 	if point_index == -1:
 		return
 
 	_selected_point_index = point_index
 	_selected_point_resource_id = point.get_instance_id()
 	easing_curve_editor.selected_index = point_index
+
+	if curve.points != point_order:
+		curve.points = point_order
+	else:
+		curve.sort_points(false)
 
 
 func _set_point_property_selected(
@@ -2510,7 +2518,10 @@ func _add_point(point: EasingCurvePoint) -> void:
 	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	var updated_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	updated_points.append(point)
-	EasingCurve.sort_point_list_by_x(updated_points)
+	updated_points = EasingCurve.build_ordered_points_with_endpoint_takeover(
+		updated_points,
+		point,
+	)
 	curve.set_point_snapshot(curve.make_point_snapshot(updated_points))
 	EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 		editor_undo_redo,

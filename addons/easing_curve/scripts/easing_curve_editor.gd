@@ -868,6 +868,7 @@ func _get_minimum_size() -> Vector2:
 
 func _get_display_points() -> Array[EasingCurvePoint]:
 	var display_points: Array[EasingCurvePoint] = _curve.points.duplicate()
+	var active_point: EasingCurvePoint
 
 	if pending_add_point != null or (
 		dragging_point != -1
@@ -875,7 +876,13 @@ func _get_display_points() -> Array[EasingCurvePoint]:
 	):
 		if pending_add_point != null:
 			display_points.append(pending_add_point)
-		EasingCurve.sort_point_list_by_x(display_points)
+			active_point = pending_add_point
+		else:
+			active_point = _curve.points[dragging_point]
+		return EasingCurve.build_ordered_points_with_endpoint_takeover(
+			display_points,
+			active_point,
+		)
 
 	return display_points
 

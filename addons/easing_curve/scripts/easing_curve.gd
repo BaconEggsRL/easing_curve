@@ -1161,8 +1161,12 @@ func swap_points(a, b) -> void:
 func add_point(p: EasingCurvePoint) -> void:
 	if p == null:
 		return
-	_points.append(p)
-	sort_point_list_by_x(_points)
+	var updated_points: Array[EasingCurvePoint] = _points.duplicate()
+	updated_points.append(p)
+	_points = build_ordered_points_with_endpoint_takeover(
+		updated_points,
+		p,
+	)
 	_synchronize_point_connections()
 	_notify_curve_changed(true, true)
 
@@ -2582,3 +2586,36 @@ static func sort_point_list_by_x(point_list: Array[EasingCurvePoint]) -> void:
 	)
 	for i in range(entries.size()):
 		point_list[i] = entries[i]["point"]
+
+
+static func is_left_endpoint_x(x: float) -> bool:
+	return absf(x) <= POINT_ORDER_EPSILON
+
+
+static func is_right_endpoint_x(x: float) -> bool:
+	return absf(x - 1.0) <= POINT_ORDER_EPSILON
+
+
+static func build_ordered_points_with_endpoint_takeover(
+	point_list: Array[EasingCurvePoint],
+	active_point: EasingCurvePoint,
+) -> Array[EasingCurvePoint]:
+	var result: Array[EasingCurvePoint] = []
+	var takes_left_endpoint := is_left_endpoint_x(active_point.position.x)
+	var takes_right_endpoint := is_right_endpoint_x(active_point.position.x)
+
+	for point in point_list:
+		if point == null:
+			continue
+		if point != active_point and (
+			(takes_left_endpoint and is_left_endpoint_x(point.position.x))
+			or (takes_right_endpoint and is_right_endpoint_x(point.position.x))
+		):
+			continue
+		result.append(point)
+
+	if active_point not in result:
+		result.append(active_point)
+
+	sort_point_list_by_x(result)
+	return result
