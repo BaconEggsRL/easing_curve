@@ -76,6 +76,7 @@ var hovered_control_index: ControlIndex = ControlIndex.NONE
 var dragging_point: int = -1
 var dragging_control: ControlIndex = ControlIndex.NONE
 var pending_add_point: EasingCurvePoint
+var position_x_order_preview_point: EasingCurvePoint
 var is_right_delete_dragging := false
 var _right_delete_requires_exit := false
 var _right_delete_blocked_position := Vector2.ZERO
@@ -958,18 +959,30 @@ func _get_display_points() -> Array[EasingCurvePoint]:
 	if pending_add_point != null or (
 		dragging_point != -1
 		and dragging_control == ControlIndex.NONE
-	):
+	) or position_x_order_preview_point != null:
 		if pending_add_point != null:
 			display_points.append(pending_add_point)
 			active_point = pending_add_point
-		else:
+		elif dragging_point != -1 and dragging_control == ControlIndex.NONE:
 			active_point = _curve.points[dragging_point]
+		else:
+			active_point = position_x_order_preview_point
 		return EasingCurve.build_ordered_points_with_endpoint_takeover(
 			display_points,
 			active_point,
 		)
 
 	return display_points
+
+
+func _set_position_x_order_preview(point: EasingCurvePoint) -> void:
+	position_x_order_preview_point = point
+	queue_redraw()
+
+
+func _clear_position_x_order_preview() -> void:
+	position_x_order_preview_point = null
+	queue_redraw()
 
 
 func _draw_bezier_curve(point_list: Array[EasingCurvePoint]) -> void:

@@ -879,6 +879,7 @@ var _selected_point_index := -1
 var _selected_point_property_name := StringName()
 var _selected_point_resource_id := 0
 var _preserve_point_selection_on_refresh := false
+var _position_x_order_preview_point: EasingCurvePoint
 
 
 func _clear_point_property_selection() -> void:
@@ -1415,13 +1416,24 @@ func _get_current_point_index(point: EasingCurvePoint) -> int:
 	return curve.points.find(point)
 
 
-func _reorder_position_edited_point(point: EasingCurvePoint) -> void:
+func _reorder_position_edited_point(
+	point: EasingCurvePoint,
+	defer_list_reorder: bool = false,
+) -> void:
 	var point_order := EasingCurve.build_ordered_points_with_endpoint_takeover(
 		curve.points,
 		point,
 	)
+	if not defer_list_reorder:
+		_position_x_order_preview_point = null
+		easing_curve_editor._clear_position_x_order_preview()
 	var point_index := point_order.find(point)
 	if point_index == -1:
+		return
+
+	if defer_list_reorder:
+		_position_x_order_preview_point = point
+		easing_curve_editor._set_position_x_order_preview(point)
 		return
 
 	_selected_point_index = point_index
@@ -1432,6 +1444,15 @@ func _reorder_position_edited_point(point: EasingCurvePoint) -> void:
 		curve.points = point_order
 	else:
 		curve.sort_points(false)
+
+
+func _commit_position_x_order_preview() -> void:
+	if _position_x_order_preview_point == null:
+		return
+
+	var point := _position_x_order_preview_point
+	_position_x_order_preview_point = null
+	_reorder_position_edited_point(point)
 
 
 func _set_point_property_selected(
@@ -1914,6 +1935,7 @@ func _on_curve_editor_point_edit_finished(point_order: Array[EasingCurvePoint]) 
 
 
 func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
+	_commit_position_x_order_preview()
 	if _point_edit_before_state.is_empty():
 		return
 	var before := _point_edit_before_state
@@ -2480,11 +2502,14 @@ func _apply_point_property_change(
 	snapshot["changing"] = changing or defer_notification
 	curve.set_point_snapshot(snapshot)
 	if position_reorder_point != null:
-		_reorder_position_edited_point(position_reorder_point)
+		_reorder_position_edited_point(position_reorder_point, changing)
 		if not changing:
 			curve.set_point_snapshot(curve.get_point_snapshot())
 
 	if not changing:
+		if not _point_edit_before_state.is_empty():
+			_commit_point_edit()
+			return
 		EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 			editor_undo_redo,
 			curve,
