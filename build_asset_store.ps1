@@ -2,11 +2,69 @@ $ErrorActionPreference = "Stop"
 
 $PluginPath = "addons\easing_curve"
 $ConfigPath = "$PluginPath\plugin.cfg"
-$ReadmeSourcePath = "README.md"
-$PackagedReadmePath = "$PluginPath\README.md"
+$CanonicalDistributionFiles = @(
+    @{
+        Name = "README"
+        SourcePath = "README.md"
+        PackagedPath = "$PluginPath\README.md"
+        ArchivePath = "addons/easing_curve/README.md"
+    }
+    @{
+        Name = "LICENSE"
+        SourcePath = "LICENSE.md"
+        PackagedPath = "$PluginPath\LICENSE.md"
+        ArchivePath = "addons/easing_curve/LICENSE.md"
+    }
+)
 
 $OutputPath = "_exports\_asset_store_builds"
 $BuildPath = "$OutputPath\_staging"
+
+
+function Sync-CanonicalDistributionFiles {
+    param([array]$Files)
+
+    foreach ($File in $Files) {
+        if (-not (Test-Path $File.SourcePath -PathType Leaf)) {
+            throw "Could not find canonical $($File.Name): $($File.SourcePath)"
+        }
+        Copy-Item $File.SourcePath $File.PackagedPath -Force
+    }
+}
+
+
+function Test-PackagedCanonicalDistributionFile {
+    param(
+        [System.IO.Compression.ZipArchive]$Archive,
+        [hashtable]$File
+    )
+
+    $Entry = $Archive.GetEntry($File.ArchivePath)
+    if ($null -eq $Entry) {
+        Write-Host "  [FAIL] Missing packaged $($File.Name)" -ForegroundColor Red
+        return $false
+    }
+
+    $Reader = [System.IO.StreamReader]::new($Entry.Open())
+    try {
+        $PackagedContents = $Reader.ReadToEnd()
+    }
+    finally {
+        $Reader.Dispose()
+    }
+
+    $CanonicalContents = [System.IO.File]::ReadAllText(
+        (Resolve-Path $File.SourcePath).Path
+    )
+    if ($PackagedContents -cne $CanonicalContents) {
+        Write-Host "  [FAIL] Packaged $($File.Name) differs from root $($File.Name)" -ForegroundColor Red
+        return $false
+    }
+
+    Write-Host "  [OK]   Packaged $($File.Name) matches root $($File.Name)" -ForegroundColor Green
+    return $true
+}
+
 
 # Read version from plugin.cfg.
 $VersionLine = Get-Content $ConfigPath |
@@ -26,11 +84,8 @@ $OutputZip = "$OutputPath\easing_curve_v$Version.zip"
 
 Write-Host "Building Easing Curve v$Version..."
 
-# The root README is canonical; refresh the packaged addon copy before staging.
-if (-not (Test-Path $ReadmeSourcePath -PathType Leaf)) {
-    throw "Could not find canonical README: $ReadmeSourcePath"
-}
-Copy-Item $ReadmeSourcePath $PackagedReadmePath -Force
+# Root distribution files are canonical; refresh packaged addon copies before staging.
+Sync-CanonicalDistributionFiles $CanonicalDistributionFiles
 
 # Make sure output directory exists.
 New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
@@ -119,29 +174,9 @@ try {
         Write-Host "  [OK]   $EntryPath" -ForegroundColor DarkGray
     }
 
-    $ReadmeEntry = $VerifyZip.GetEntry("addons/easing_curve/README.md")
-    if ($null -eq $ReadmeEntry) {
-        Write-Host "  [FAIL] Missing packaged README" -ForegroundColor Red
-        $VerificationFailed = $true
-    }
-    else {
-        $ReadmeReader = [System.IO.StreamReader]::new($ReadmeEntry.Open())
-        try {
-            $PackagedReadme = $ReadmeReader.ReadToEnd()
-        }
-        finally {
-            $ReadmeReader.Dispose()
-        }
-
-        $CanonicalReadme = [System.IO.File]::ReadAllText(
-            (Resolve-Path $ReadmeSourcePath).Path
-        )
-        if ($PackagedReadme -cne $CanonicalReadme) {
-            Write-Host "  [FAIL] Packaged README differs from root README" -ForegroundColor Red
+    foreach ($File in $CanonicalDistributionFiles) {
+        if (-not (Test-PackagedCanonicalDistributionFile $VerifyZip $File)) {
             $VerificationFailed = $true
-        }
-        else {
-            Write-Host "  [OK]   Packaged README matches root README" -ForegroundColor Green
         }
     }
 }
