@@ -2,7 +2,6 @@
 
 [ext_resource type="Animation" uid="uid://bu7npk7dfjsrs" path="res://test/presets/TestAnimation.res" id="1_p7ucw"]
 [ext_resource type="Texture2D" uid="uid://coucrkolyfdo8" path="res://icon.svg" id="1_ttyv3"]
-[ext_resource type="Texture2D" uid="uid://bsv1ikv7ovwnl" path="res://addons/easing_curve/assets/icons/Reload.svg" id="3_7wvgl"]
 
 [sub_resource type="Animation" id="Animation_p7ucw"]
 length = 0.001
@@ -37,25 +36,3 @@ libraries/ = SubResource("AnimationLibrary_p7ucw")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=321592374]
 texture = ExtResource("1_ttyv3")
-
-[node name="Button" type="Button" parent="." unique_id=1544595720]
-custom_minimum_size = Vector2(16, 16)
-layout_mode = 0
-offset_right = 14.0
-offset_bottom = 24.0
-
-[node name="TextureRect" type="TextureRect" parent="Button" unique_id=690608014]
-custom_maximum_size = Vector2(16, 16)
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -8.0
-offset_top = -8.0
-offset_right = 8.0
-offset_bottom = 8.0
-grow_horizontal = 2
-grow_vertical = 2
-texture = ExtResource("3_7wvgl")
