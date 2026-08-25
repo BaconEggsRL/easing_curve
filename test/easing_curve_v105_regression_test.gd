@@ -112,6 +112,8 @@ func _test_point_ordering_and_endpoint_takeover() -> void:
 	var duplicate_curve := _make_curve([left, duplicate_a, duplicate_b, right])
 	_expect(duplicate_curve.points.size() == 4, "Interior duplicate X points were deduplicated")
 	_expect(duplicate_curve.points[1] == duplicate_a and duplicate_curve.points[2] == duplicate_b, "Interior duplicate X order was not stable")
+	var duplicate_sample := duplicate_curve.sample(0.5)
+	_expect(is_equal_approx(duplicate_sample, duplicate_curve.sample(0.5)), "Interior duplicate X sampling was non-deterministic")
 
 	var left_curve := _make_curve([middle, right, left])
 	var left_winner := EasingCurvePoint.new(Vector2(0.0, 0.8))
