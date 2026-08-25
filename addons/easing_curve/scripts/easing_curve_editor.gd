@@ -12,6 +12,7 @@ var _drag_auto_range := Vector2.ZERO
 var _has_drag_auto_range := false
 
 var use_pending_add := true
+var hide_point_toolbar_for_functions := true
 
 static var _selected_index_by_curve: Dictionary[int, int] = {}
 static var _right_delete_drag_state_by_curve: Dictionary[int, Dictionary] = {}
@@ -766,7 +767,13 @@ func select_point(point: EasingCurvePoint) -> bool:
 
 func update_view_transform() -> void:
 	var margin := 4.0 * _editor_scale
-	var toolbar_height := SELECTION_TOOLBAR_HEIGHT * _editor_scale
+	var toolbar_height := (
+		0.0
+		if hide_point_toolbar_for_functions
+		and _curve != null
+		and _curve.curve_mode == EasingCurve.CurveMode.FUNCTION
+		else SELECTION_TOOLBAR_HEIGHT * _editor_scale
+	)
 
 	# Auto range looks kinda bad; turning off for now
 	#var auto_range = _compute_auto_y_range()
@@ -1299,6 +1306,16 @@ func _create_point_toolbar_control_state_option(
 
 func _update_point_toolbar() -> void:
 	if _point_toolbar == null:
+		return
+
+	var hide_toolbar := (
+		hide_point_toolbar_for_functions
+		and _curve != null
+		and _curve.curve_mode == EasingCurve.CurveMode.FUNCTION
+	)
+	_point_toolbar_panel.visible = not hide_toolbar
+
+	if hide_toolbar:
 		return
 
 	var valid_selection := (
