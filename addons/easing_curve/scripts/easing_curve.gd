@@ -1488,11 +1488,22 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 
 	if changing:
 		_point_snapshot_change_pending = _point_snapshot_change_pending or point_data_changed
-		_point_snapshot_property_list_pending = _point_snapshot_property_list_pending or topology_changed
+		_point_snapshot_property_list_pending = (
+			_point_snapshot_property_list_pending
+			or point_data_changed
+			or topology_changed
+		)
 		return
 
 	var notify_points := point_data_changed or _point_snapshot_change_pending
-	var notify_property_list := topology_changed or _point_snapshot_property_list_pending
+	# Point fields are rendered by the custom Points Inspector section. Refresh it
+	# whenever a completed snapshot publishes changed point data, even when its
+	# topology did not change.
+	var notify_property_list := (
+		notify_points
+		or topology_changed
+		or _point_snapshot_property_list_pending
+	)
 	_point_snapshot_change_pending = false
 	_point_snapshot_property_list_pending = false
 	if notify_points:
@@ -1571,7 +1582,8 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 		return
 
 	var property_list_changed := (
-		topology_changed
+		point_data_changed
+		or topology_changed
 		or locks_changed
 		or ease_type != snapshot_ease
 		or trans_type != snapshot_trans

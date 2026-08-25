@@ -12,6 +12,7 @@ var _checks := 0
 func _init() -> void:
 	_test_bezier_reverse()
 	_test_bezier_invert()
+	_test_handle_mode_transform_state_and_notifications()
 	_test_transform_composition()
 	_test_canonical_presets_and_switching()
 	_test_function_mode()
@@ -77,6 +78,9 @@ func _expect_geometry_snapshot(
 		_expect(_vector_equal_approx(actual_left_controls[index], expected_left_controls[index]), "%s left control %d differs" % [label, index])
 		_expect(_vector_equal_approx(actual_right_controls[index], expected_right_controls[index]), "%s right control %d differs" % [label, index])
 		_expect(actual_locks[index] == expected_locks[index], "%s locks %d differ" % [label, index])
+	_expect(actual.get("handle_modes", PackedInt32Array()) == expected.get("handle_modes", PackedInt32Array()), "%s handle modes differ" % label)
+	_expect(actual.get("left_force_linear", PackedByteArray()) == expected.get("left_force_linear", PackedByteArray()), "%s left Force Linear state differs" % label)
+	_expect(actual.get("right_force_linear", PackedByteArray()) == expected.get("right_force_linear", PackedByteArray()), "%s right Force Linear state differs" % label)
 
 
 func _custom_curve() -> EasingCurve:
@@ -100,6 +104,117 @@ func _custom_curve() -> EasingCurve:
 	return curve
 
 
+func _mode_curve() -> EasingCurve:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	var points: Array[EasingCurvePoint] = []
+	for position in [
+		Vector2(0.0, 0.1),
+		Vector2(0.18, 0.24),
+		Vector2(0.36, 0.42),
+		Vector2(0.54, 0.58),
+		Vector2(0.72, 0.76),
+		Vector2(1.0, 0.9),
+	]:
+		var point := EasingCurvePoint.new(position)
+		point.left_control_point = position + Vector2(-0.08, -0.05)
+		point.right_control_point = position + Vector2(0.12, 0.07)
+		points.append(point)
+
+	points[1].set_handle_display_scale(Vector2(1.8, 0.65))
+	points[1].handle_mode = EasingCurvePoint.HandleMode.BALANCED
+	points[2].handle_mode = EasingCurvePoint.HandleMode.MIRRORED
+	points[3].handle_mode = EasingCurvePoint.HandleMode.LINKED
+	points[4].handle_mode = EasingCurvePoint.HandleMode.LINEAR
+	points[3].set_force_linear_state(true, true)
+	points[5].left_force_linear = true
+	points[0].locked = {"position": true, "left_control_point": false, "right_control_point": false}
+	points[1].locked = {"position": false, "left_control_point": true, "right_control_point": false}
+	points[2].locked = {"position": false, "left_control_point": false, "right_control_point": true}
+	points[3].locked = {"position": false, "left_control_point": true, "right_control_point": true}
+	points[4].locked = {"position": true, "left_control_point": true, "right_control_point": false}
+	points[5].locked = {"position": false, "left_control_point": false, "right_control_point": true}
+	curve.points = points
+	return curve
+
+
+func _expect_handle_mode_invariants(curve: EasingCurve, label: String) -> void:
+	for index in range(curve.points.size()):
+		var point := curve.points[index]
+		_expect(
+			point.position.is_finite()
+			and point.left_control_point.is_finite()
+			and point.right_control_point.is_finite(),
+			"%s point %d has non-finite geometry" % [label, index],
+		)
+		match point.handle_mode:
+			EasingCurvePoint.HandleMode.LINEAR:
+				_expect(
+					point.left_control_point == point.position
+					and point.right_control_point == point.position,
+					"%s Linear point %d did not remain collapsed" % [label, index],
+				)
+			EasingCurvePoint.HandleMode.BALANCED:
+				var left := (point.left_control_point - point.position) * point.handle_display_scale
+				var right := (point.right_control_point - point.position) * point.handle_display_scale
+				_expect(
+					is_equal_approx(left.normalized().dot(right.normalized()), -1.0),
+					"%s Balanced point %d lost its display-space alignment" % [label, index],
+				)
+			EasingCurvePoint.HandleMode.MIRRORED:
+				_expect(
+					point.left_control_point.is_equal_approx(2.0 * point.position - point.right_control_point),
+					"%s Mirrored point %d lost reflection symmetry" % [label, index],
+				)
+			EasingCurvePoint.HandleMode.LINKED:
+				_expect(
+					point.left_control_point == point.right_control_point,
+					"%s Linked point %d lost its shared handle" % [label, index],
+				)
+			EasingCurvePoint.HandleMode.FREE:
+				pass
+
+
+func _test_handle_mode_transform_state_and_notifications() -> void:
+	for property_name: StringName in [&"reverse", &"invert"]:
+		var curve := _mode_curve()
+		var before := EDITOR_UNDO.capture_state(curve)
+		var expected := (
+			_expected_reverse(curve.get_point_snapshot())
+			if property_name == &"reverse"
+			else _expected_invert(curve.get_point_snapshot())
+		)
+		var notifications := {"changed": 0, "points": 0, "property_list": 0}
+		curve.changed.connect(func(): notifications.changed += 1)
+		curve.points_changed.connect(func(_points: Array[EasingCurvePoint]): notifications.points += 1)
+		curve.property_list_changed.connect(func(): notifications.property_list += 1)
+
+		curve.set(property_name, true)
+		var after := EDITOR_UNDO.capture_state(curve)
+		_expect_geometry_snapshot(curve.get_point_snapshot(), expected, "%s did not preserve Handle Mode point state" % property_name)
+		_expect_handle_mode_invariants(curve, "%s transform" % property_name)
+		_expect(notifications.changed == 1 and notifications.points == 1 and notifications.property_list == 1, "%s did not publish one coherent Points-list refresh" % property_name)
+
+		var history := UndoRedo.new()
+		_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Toggle %s" % property_name, before, after), "%s Handle Mode transform did not create an Undo action" % property_name)
+		notifications.changed = 0
+		notifications.points = 0
+		notifications.property_list = 0
+		history.undo()
+		_expect(curve.get_editor_state_snapshot() == before, "%s Undo did not restore complete Handle Mode state" % property_name)
+		_expect_handle_mode_invariants(curve, "%s Undo" % property_name)
+		_expect(notifications.changed == 1 and notifications.points == 1 and notifications.property_list == 1, "%s Undo did not refresh the Points list: %s" % [property_name, notifications])
+		notifications.changed = 0
+		notifications.points = 0
+		notifications.property_list = 0
+		history.redo()
+		_expect(curve.get_editor_state_snapshot() == after, "%s Redo did not restore complete transformed Handle Mode state" % property_name)
+		_expect_handle_mode_invariants(curve, "%s Redo" % property_name)
+		_expect(notifications.changed == 1 and notifications.points == 1 and notifications.property_list == 1, "%s Redo did not refresh the Points list: %s" % [property_name, notifications])
+		history.clear_history(false)
+		history.free()
+
+
 func _expected_reverse(snapshot: Dictionary) -> Dictionary:
 	var result := snapshot.duplicate(true)
 	var positions: PackedVector2Array = snapshot.positions
@@ -110,6 +225,9 @@ func _expected_reverse(snapshot: Dictionary) -> Dictionary:
 	var out_left_controls := PackedVector2Array()
 	var out_right_controls := PackedVector2Array()
 	var out_locks: Array[Dictionary] = []
+	var out_handle_modes := PackedInt32Array()
+	var out_left_force_linear := PackedByteArray()
+	var out_right_force_linear := PackedByteArray()
 	for index in range(positions.size() - 1, -1, -1):
 		var position := positions[index]
 		position.x = 1.0 - position.x
@@ -126,10 +244,16 @@ func _expected_reverse(snapshot: Dictionary) -> Dictionary:
 			"left_control_point": source_locks.right_control_point,
 			"right_control_point": source_locks.left_control_point,
 		})
+		out_handle_modes.append(snapshot.handle_modes[index])
+		out_left_force_linear.append(snapshot.right_force_linear[index])
+		out_right_force_linear.append(snapshot.left_force_linear[index])
 	result.positions = out_positions
 	result.left_control_points = out_left_controls
 	result.right_control_points = out_right_controls
 	result.locks = out_locks
+	result.handle_modes = out_handle_modes
+	result.left_force_linear = out_left_force_linear
+	result.right_force_linear = out_right_force_linear
 	return result
 
 
