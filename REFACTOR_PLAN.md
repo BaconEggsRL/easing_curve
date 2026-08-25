@@ -1770,6 +1770,56 @@ All selected Milestones 2–11.
 
 Evidence that the refactor preserved behavior in the exact form users install.
 
+### Completion record
+
+Validation was run on `dev` at `6cea777` (`11`) with a clean tracked working
+tree. The full `test/run_all_tests.ps1` aggregate completed with exit code 0:
+all 17 registered suites ran and passed, with no `SCRIPT ERROR:` and no hung or
+unexpectedly crashed Godot process. Reported check totals were CSS Linear 86;
+RMB delete 20; manual reorder 75; global transforms 498; v1.0.5 regression
+1056; runtime updates 1050; serialization/transition contracts 413; Tween
+equivalence 84; control editability 15; Position-X drag 60; linear aliases 72;
+Points-list Add 84; Points-list reorder 45; point state 93; selection/refresh
+35; graph gestures 13; and editor Undo/Redo 627. The latter explicitly skips
+native layout fixtures under `--editor --headless`, as documented.
+
+The focused contracts are therefore covered by their dedicated suites:
+historical serialization, flat primitive point storage, Force Linear defaults,
+snapshot identity/topology semantics, snapshot schema, public `points`,
+Constant/Back notification timing, selection synchronization, one-action
+Undo/Redo boundaries, and all characterized point states passed. The dedicated
+RMB delete suite passed, so no `Method expected ... argument(s)` signature
+error was observed in automated coverage.
+
+`build_asset_store.ps1` generated
+`_exports/_asset_store_builds/easing_curve_v1.0.6-dev.zip`. Its own verification
+passed, including canonical README/LICENSE synchronization. Programmatic ZIP
+inspection found 69 entries, zero backslash paths, zero invalid roots, and no
+test, `.git`, `.godot`, `_exports`, log, or `REFACTOR_PLAN.md` entries. All
+entries are rooted at `addons/easing_curve/`; required source, intended `.uid`
+and `.import` files, assets, README, LICENSE, and `plugin.cfg` are included.
+The clean install smoke test extracted that exact archive into a disposable
+project with the plugin enabled. Godot 4.7.1 completed editor import with exit
+code 0, registered the addon's eight global classes, and generated only expected
+disposable `.godot` cache data. The shipped test scene was present. This confirms
+the package does not depend on unshipped `.godot/imported` data.
+
+`plugin.cfg` identifies the plugin as Easing Curve by BaconEggsRL, uses the
+expected editor-plugin script path, and retains version `1.0.6-dev`. No release
+version was chosen or invented. Static hygiene found no TODO/FIXME tags, merge
+markers, accidental absolute local paths, temporary logs, or tracked generated
+cache. Intentional remaining prints are the shipped demo's diagnostic helper,
+guarded non-finite point diagnostics, and the debug-disabled update checker.
+`git diff --check` passed; no production file was changed during validation.
+
+The visible-editor checklist in
+`test/docs/easing_curve_editor_visible_regression_checklist.md` was not run in
+a real visible Godot session in this validation environment. Consequently the
+Points and Curve Editor fold/focus/scroll checks, narrow/wide Inspector layout,
+interactive selection behavior, and add/move/drag/delete with visible Undo/Redo
+remain manual release checks. This is the sole known release-validation blocker;
+the refactor is not marked overall complete until those checks are performed.
+
 # Dependency ordering
 
 ```text
