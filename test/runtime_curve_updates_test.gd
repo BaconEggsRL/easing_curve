@@ -163,13 +163,14 @@ func _test_handle_control_signal_suppression() -> void:
 func _test_resource_free_point_snapshots() -> void:
 	var curve := EasingCurve.new()
 	var counts := _signal_counts(curve)
-	var original_first_point := curve.points[0]
+	var original_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	var changed_snapshot := curve.get_point_snapshot()
 	var changed_positions: PackedVector2Array = changed_snapshot.positions
 	changed_positions[1] = Vector2(1.0, 0.25)
 	changed_snapshot.positions = changed_positions
 	curve.set(EasingCurve.POINT_SNAPSHOT_PROPERTY, changed_snapshot)
-	_expect(curve.points[0] == original_first_point, "Same-size point snapshots replaced existing point resources")
+	for index in range(original_points.size()):
+		_expect(curve.points[index] == original_points[index], "Same-size point snapshots replaced point resource %d" % index)
 	_expect(curve.sample(0.5) < 0.5, "Point snapshot property change did not immediately affect output")
 
 	counts.changed = 0
@@ -195,6 +196,8 @@ func _test_resource_free_point_snapshots() -> void:
 	added_points.sort_custom(func(a: EasingCurvePoint, b: EasingCurvePoint) -> bool: return a.position.x < b.position.x)
 	curve.set(EasingCurve.POINT_SNAPSHOT_PROPERTY, curve.make_point_snapshot(added_points))
 	_expect(curve.points.size() == 3 and curve.sample(0.5) > 0.85, "Point snapshot addition did not immediately affect output")
+	for original_point in original_points:
+		_expect(original_point not in curve.points, "Topology-changing snapshot retained an existing point resource")
 
 	var removed_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	removed_points.remove_at(1)
