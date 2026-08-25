@@ -128,18 +128,19 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 * **Locking Control Points**
   * Vector2 properties can be locked by clicking the lock icon.
-	* Locked properties cannot be changed, except by copy-paste. This can be used to drag a point without affecting its control handles.
+	* Locked properties cannot be changed (except by copy-paste or manual re-ordering of the points list.)
+	* Locking a point's controls (left or right) allows you to drag the point without affecting its control handles.
   * Lockable properties include point position, left control position, and right control position.
 	* Force Linear and Lock control states are available in Free and Linked handle modes.
 
 * **Handle Modes**
   * Each point can use a handle mode to control how its left and right control handles behave:
-    * **Free** -- Each handle moves independently without affecting the other handle.
-    * **Linear** -- Keeps the handles aligned with the neighboring points, creating straight-line segments through the point.
-    * **Balanced** -- Keeps both handles aligned in opposite directions while allowing each handle to have a different length.
-    * **Mirrored** -- Keeps both handles aligned in opposite directions and at the same length. Moving one handle mirrors the other across the point.
-    * **Linked** -- Keeps both controls at a shared position.
-    * Note that control states apply in Free and Linked modes, and are preserved when switching modes.
+		* **Free** -- Each handle moves independently without affecting the other handle.
+		* **Linear** -- Keeps the handles aligned with the neighboring points, creating straight-line segments through the point.
+		* **Balanced** -- Keeps both handles aligned in opposite directions while allowing each handle to have a different length.
+		* **Mirrored** -- Keeps both handles aligned in opposite directions and at the same length. Moving one handle mirrors the other across the point.
+		* **Linked** -- Keeps both controls at a shared position.
+	* Note that control Locked and Forced Linear states apply in Free and Linked modes, and are preserved when switching modes.
   * The selected-point toolbar shows the point number, Handle Mode, L/R control state, and Reset controls.
 
 * **Zoom and Pan**
@@ -172,19 +173,6 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 * See how your changes affect the scene in real time. A restart button is provided in the top-right corner as a fallback.
 
 **&nbsp;**
-
-### Development testing
-
-The Editor-dependent tests `easing_curve_control_editability_test.gd`, `easing_curve_editor_position_x_drag_test.gd`, `easing_curve_linear_control_alias_test.gd`, and `easing_curve_points_list_reorder_editor_test.gd` require an Editor-host launch:
-
-```text
-godot --editor --headless --path . --script res://test/<test_name>.gd
-```
-
-Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can misleadingly report zero checks; it is not a valid result for these tests. `editor_undo_redo_test.gd` also needs an Editor host. Its `FoldableContainer` and responsive-layout fixtures are explicitly skipped under Godot 4.7 `--editor --headless`: the former crashes there and the latter requires a visible Editor layout. Verify those fixtures in a visible Editor session instead.
-
-**&nbsp;**
-
 
 ### **Future feature map:**
 
