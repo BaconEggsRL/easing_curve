@@ -262,6 +262,18 @@ func _create_selectable_point_property_header(
 ) -> PanelContainer:
 	var property_header := PanelContainer.new()
 	property_header.focus_mode = Control.FOCUS_NONE
+	property_header.clip_contents = true
+
+	var reset_width := maxf(
+		reset_btn.get_combined_minimum_size().x,
+		float(reset_btn.icon.get_width())
+			* EditorInterface.get_editor_scale(),
+	)
+
+	property_header.custom_minimum_size.x = (
+		reset_width
+		+ _compact_separation()
+	)
 
 	var property_context_menu := _create_point_property_context_menu(
 		i,
@@ -333,11 +345,6 @@ func _create_selectable_point_property_header(
 	property_label.custom_minimum_size.x = 0.0
 	property_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay_root.add_child(property_label)
-
-	var reset_width := maxf(
-		reset_btn.get_combined_minimum_size().x,
-		float(reset_btn.icon.get_width()) * EditorInterface.get_editor_scale(),
-	)
 	reset_btn.set_meta(&"point_property_label", property_label)
 	reset_btn.set_meta(&"point_reset_width", reset_width)
 	reset_btn.anchor_left = 1.0
@@ -1784,7 +1791,6 @@ func _create_vector2_property(
 		reset_btn,
 	)
 	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
-	property_header.custom_minimum_size.x = 0.0
 	property_grid.add_child(property_header)
 
 	# Value container panel (x/y inputs; lock_btn)
@@ -1793,6 +1799,7 @@ func _create_vector2_property(
 	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
 	value_panel.custom_minimum_size.x = 0.0
+	value_panel.z_index = 1
 	property_grid.add_child(value_panel)
 
 	# HBox for x/y inputs; lock_btn
@@ -2272,6 +2279,7 @@ func _create_handle_mode_property(
 	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
 	value_panel.custom_minimum_size.x = 0.0
+	value_panel.z_index = 1
 	property_grid.add_child(value_panel)
 
 	var option := OptionButton.new()
