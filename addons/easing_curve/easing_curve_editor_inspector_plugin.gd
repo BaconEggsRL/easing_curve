@@ -36,6 +36,9 @@ const POINT_MENU_PASTE_VALUE := 1
 const POINT_MENU_COPY_PATH := 2
 # modified preset indicator
 const SHOW_MODIFIED_ASTERISK := true
+# alignment
+const POINT_PROPERTY_HEADER_RATIO := 0.35
+const POINT_PROPERTY_VALUE_RATIO := 0.65
 
 
 const TRANSITION_GROUPS := [
@@ -1695,18 +1698,21 @@ func _create_vector2_property(
 		reset_btn,
 		not current_vec.is_equal_approx(default_vec)
 	)
+
 	var property_header := _create_selectable_point_property_header(
 		i,
 		StringName(property_name),
 		label_text,
 		reset_btn,
 	)
+	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
 	property_hbox.add_child(property_header)
 
 	# Value container panel (x/y inputs; lock_btn)
 	var value_panel := PanelContainer.new()
 	value_panel.add_theme_stylebox_override("panel", X_STYLEBOX)
 	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
 	property_hbox.add_child(value_panel)
 
 	# HBox for x/y inputs; lock_btn
