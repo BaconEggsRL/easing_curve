@@ -1509,6 +1509,57 @@ Milestones 5–8.
 Any file split is justified by reduced coupling; otherwise the project avoids a
 large move-only diff with no maintenance benefit.
 
+### Completion record
+
+Completed with no production extraction warranted. The current Inspector
+responsibilities are: parse/lifecycle and custom-property routing; transition,
+ease, and preset presentation; parameter-property editing; Points-list and
+point-property UI construction; point selection and refresh restoration;
+point mutation, ordering, and gesture callbacks; Inspector-side Undo/Redo
+commit wiring; and Curve Editor construction/wiring. Milestones 5--8 leave
+those areas locally grouped, with selection writes centralized and the common
+transaction path explicit.
+
+Candidates considered:
+
+- `PointsListContainer` is a cohesive drag/drop view, but its only result is a
+  reorder signal consumed by Inspector-owned point ordering, selection
+  preservation, refresh, and Undo/Redo logic. Moving it would add a file and
+  preload without reducing that behavioral boundary.
+- `PointsFoldableSection` owns native/fallback folding and transient state, but
+  its Inspector use receives four callbacks that close over the authoritative
+  point selection and clipboard operations. Separating it would preserve a
+  callback matrix and split the fold/focus workaround from its only consumer;
+  `_native_section.focus_mode = Control.FOCUS_NONE` remains unchanged.
+- `DeferredParameterEditorProperty` and
+  `GenerateFunctionEditorProperty` are already self-contained nested
+  `EditorProperty` adapters. They share the Inspector's editor-only Undo
+  helper, drag metadata, redraw target, and parsing lifecycle; a file move
+  would be organizational only, not a clearer ownership boundary.
+- `PointsEditorProperty` is a minimal property-chrome adapter. Extracting it
+  alone would be needless one-class-per-file churn.
+- Points-list construction, point-property controls, and Curve Editor section
+  construction require broad Inspector callbacks/state: durable logical
+  selection, rebuilt headers, graph synchronization, point snapshots, gesture
+  timing, resource ownership, and shared transaction wiring. They do not meet
+  the narrow-dependency criterion.
+
+No candidate improves navigation or testing enough to offset those boundaries,
+and no candidate can be extracted without either preserving substantial
+callback wiring or duplicating the Milestone 6 selection and Milestone 7
+Undo/Redo knowledge. Production files changed: none. Behavior, public API,
+runtime sampling, serialization, selection semantics, refresh/reparse,
+Undo/Redo boundaries, point state, and transition presentation remain
+unchanged.
+
+Validation used `test/run_godot.ps1`: selection/refresh (35), graph gestures
+(13), editor Undo/Redo (627), Points-list add (84), Points-list reorder (45),
+point-state characterization (93), and serialization/transition contracts
+(413) passed. `test/run_all_tests.ps1` passed all 17 configured suites through
+the wrapper. The visible-only native FoldableContainer layout fixtures remain
+skipped under `--editor --headless` as documented; Milestone 10 was not
+started.
+
 ## Milestone 10 — Review runtime/editor boundary
 
 ### Goal
