@@ -3,8 +3,7 @@ class_name EasingCurveEditor
 extends Control
 ## Easing Curve Editor
 ##
-## Main script for editing the EasingCurve resource.
-## More info here to come.
+## Graph editor for interactive EasingCurve point and control-handle editing.
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
 const RELOAD_ICON = preload("res://addons/easing_curve/assets/icons/Reload.svg")
@@ -695,7 +694,6 @@ func zoom_to_step(zoom: float) -> int:
 
 func set_slider_container(value: EasingCurveZoomSliderContainer) -> void:
 	_slider = value
-	# print("_slider = ", _slider)
 
 	_slider.slider.min_value = 0
 	_slider.slider.max_value = ZOOM_STEPS

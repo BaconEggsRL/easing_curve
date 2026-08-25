@@ -901,12 +901,13 @@ class PointsFoldableSection:
 		)
 		if ClassDB.class_exists(&"FoldableContainer"):
 			_native_section = ClassDB.instantiate(&"FoldableContainer") as Control
+			# Native focus makes the outer Inspector ScrollContainer follow focus,
+			# which jumps the scroll position when this section is collapsed.
 			_native_section.focus_mode = Control.FOCUS_NONE
 			_native_section.set(&"title", section_title)
 			_native_section.set(&"title_text_overrun_behavior", TextServer.OVERRUN_TRIM_ELLIPSIS)
 			_native_section.set(&"folded", initially_folded)
 			for style_name in [
-				#&"panel",
 				&"title_panel",
 				&"title_collapsed_panel",
 				&"title_hover_panel",

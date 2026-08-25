@@ -303,6 +303,8 @@ var function_callable: Callable:
 			return
 
 		if trans_type == TRANS.CONSTANT:
+			# Preset regeneration can emit the required change itself. Notify only
+			# when the revision did not advance to avoid duplicate changed signals.
 			var revision_before := _change_revision
 			var snapshot := get_canonical_preset_point_snapshot()
 
@@ -330,6 +332,8 @@ var function_callable: Callable:
 		if _applying_editor_state_snapshot:
 			return
 		if trans_type == TRANS.BACK:
+			# Preset regeneration can emit the required change itself. Notify only
+			# when the revision did not advance to avoid duplicate changed signals.
 			var revision_before := _change_revision
 			var snapshot := get_canonical_preset_point_snapshot()
 			if _parameter_edit_depth > 0:
@@ -1469,7 +1473,9 @@ func _restore_point_snapshot_state(
 		right_force_linear: PackedByteArray,
 		locks: Array,
 ) -> void:
-	# Disable per-side Force Linear while restoring exact geometry.
+	# Restore in this order: clear Force Linear, use Free mode, restore geometry
+	# and handle mode, restore Force Linear, then normalize locks. Each step avoids
+	# a point setter changing geometry restored by an earlier step.
 	point.set_force_linear_state(false, false, false)
 
 	# Temporarily use Free so restoring one handle does not modify the opposite.

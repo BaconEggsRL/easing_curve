@@ -1695,6 +1695,28 @@ Low to Medium.
 
 All implemented structural milestones through Milestone 10.
 
+### Completion record
+
+Completed with a deliberately small, behavior-preserving clarity pass. No
+private rename met the threshold for a meaningful improvement without creating
+unnecessary churn. Clarified the graph-editor description and documented the
+native FoldableContainer focus workaround, the Constant/Back revision-gated
+notification guard, and the required snapshot-restore ordering. Removed the
+stale disabled panel-style entry and commented slider debug print. No local
+function reordering was needed.
+
+Public API, exported and serialized property names, snapshot keys, transition
+IDs/order, signal bindings, notification behavior, selection semantics, and
+Undo/Redo behavior are unchanged. No new files, classes, or architecture were
+introduced. Milestone 12 was not started.
+
+Focused validation through `test/run_godot.ps1` passed: selection/refresh (35),
+graph gestures (13), editor Undo/Redo (627; visible-only native layout fixtures
+skipped as documented under Godot 4.7 headless), runtime updates (1050),
+serialization/transition contracts (413), and point-state characterization
+(93). `test/run_all_tests.ps1` passed all 17 registered suites. `git diff
+--check` passed.
+
 ### Expected payoff
 
 The final code communicates current intent and unusual behavior without stale
