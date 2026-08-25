@@ -49,6 +49,7 @@ enum ControlState {
 
 var _left_control_point := Vector2.ZERO
 var _right_control_point := Vector2.ZERO
+var _ignore_control_locks_for_position_change := false
 
 @export var left_control_point: Vector2:
 	get:
@@ -164,8 +165,14 @@ func set_position(value: Vector2) -> void:
 
 	var delta := value - position
 
-	var left_locked := is_lock_active("left_control_point")
-	var right_locked := is_lock_active("right_control_point")
+	var left_locked := (
+		is_lock_active("left_control_point")
+		and not _ignore_control_locks_for_position_change
+	)
+	var right_locked := (
+		is_lock_active("right_control_point")
+		and not _ignore_control_locks_for_position_change
+	)
 
 	if not left_locked:
 		_left_control_point += delta
@@ -181,6 +188,24 @@ func set_position(value: Vector2) -> void:
 	_update_control_point_inputs("right_control_point")
 
 	emit_changed()
+
+
+func move_horizontally(delta_x: float, ignore_control_locks: bool = false) -> void:
+	if is_zero_approx(delta_x):
+		return
+
+	var target_position := Vector2(position.x + delta_x, position.y)
+	if not target_position.is_finite():
+		return
+
+	if not ignore_control_locks:
+		set_position(target_position)
+		return
+
+	var previous_ignore_control_locks := _ignore_control_locks_for_position_change
+	_ignore_control_locks_for_position_change = ignore_control_locks
+	set_position(target_position)
+	_ignore_control_locks_for_position_change = previous_ignore_control_locks
 
 
 func set_left_control_point(value: Vector2) -> void:

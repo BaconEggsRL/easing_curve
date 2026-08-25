@@ -1125,17 +1125,10 @@ func sort_points(notify_change: bool = true) -> void:
 
 
 func swap_properties(p0: EasingCurvePoint, p1: EasingCurvePoint) -> void:
-	var temp_position_x = p0.position.x
-	p0.position.x = p1.position.x
-	p1.position.x = temp_position_x
-
-	var temp_lcp_x = p0.left_control_point.x
-	p0.left_control_point.x = p1.left_control_point.x
-	p1.left_control_point.x = temp_lcp_x
-
-	var temp_rcp_x = p0.right_control_point.x
-	p0.right_control_point.x = p1.right_control_point.x
-	p1.right_control_point.x = temp_rcp_x
+	var p0_x := p0.position.x
+	var p1_x := p1.position.x
+	p0.move_horizontally(p1_x - p0_x, true)
+	p1.move_horizontally(p0_x - p1_x, true)
 
 
 # Swap two points, either by Point references or by indices
