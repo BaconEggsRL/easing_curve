@@ -268,30 +268,48 @@ func _create_selectable_point_property_header(
 		property_name,
 	)
 	property_header.add_child(property_context_menu)
+
 	var property_path := _point_property_path(i, property_name)
 	property_header.tooltip_text = property_path
 	property_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	property_header.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	property_header.add_theme_stylebox_override(&"panel", StyleBoxEmpty.new())
+	property_header.add_theme_stylebox_override(
+		&"panel",
+		StyleBoxEmpty.new(),
+	)
+
 	property_header.gui_input.connect(
 		func(event: InputEvent):
 			if not event is InputEventMouseButton or not event.pressed:
 				return
 
 			if event.button_index == MOUSE_BUTTON_LEFT:
-				_select_point_property(property_header, i, property_name)
+				_select_point_property(
+					property_header,
+					i,
+					property_name,
+				)
 			elif event.button_index == MOUSE_BUTTON_RIGHT:
-				_select_point_property(property_header, i, property_name)
+				_select_point_property(
+					property_header,
+					i,
+					property_name,
+				)
+
 				var paste_index := property_context_menu.get_item_index(
 					POINT_MENU_PASTE_VALUE,
 				)
+
 				property_context_menu.set_item_disabled(
 					paste_index,
 					not _clipboard_has_compatible_point_property_value(
 						property_name,
 					),
 				)
-				property_context_menu.position = DisplayServer.mouse_get_position()
+
+				property_context_menu.position = (
+					DisplayServer.mouse_get_position()
+				)
 				property_context_menu.popup()
 				property_header.accept_event()
 	)
@@ -305,15 +323,22 @@ func _create_selectable_point_property_header(
 
 	var header_hbox := HBoxContainer.new()
 	header_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_hbox.add_theme_constant_override(&"separation", _compact_separation())
+	header_hbox.add_theme_constant_override(
+		&"separation",
+		_compact_separation(),
+	)
 	property_header.add_child(header_hbox)
 
 	var property_label := Label.new()
 	property_label.text = label_text
 	property_label.tooltip_text = property_path
 	_configure_compact_label(property_label)
+	property_label.custom_minimum_size.x = 0.0
 	header_hbox.add_child(property_label)
-	header_hbox.add_child(_create_point_reset_margin(reset_btn))
+
+	reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	header_hbox.add_child(reset_btn)
+
 	return property_header
 
 
@@ -1536,12 +1561,23 @@ static func _set_point_reset_button_available(
 
 static func _create_point_reset_button() -> Button:
 	var reset_btn := Button.new()
-	reset_btn.icon = RELOAD
+
+	var editor_theme := EditorInterface.get_editor_theme()
+	reset_btn.icon = editor_theme.get_icon(
+		&"Reload",
+		&"EditorIcons",
+	)
+
 	reset_btn.tooltip_text = "Reset to default"
-	reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	reset_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	reset_btn.custom_minimum_size = Vector2.ZERO
 	reset_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
-	reset_btn.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
+
+	reset_btn.add_theme_stylebox_override(
+		&"normal",
+		StyleBoxEmpty.new(),
+	)
 	reset_btn.add_theme_stylebox_override(
 		&"hover",
 		reset_btn.get_theme_stylebox(&"hover").duplicate(),
@@ -1550,15 +1586,12 @@ static func _create_point_reset_button() -> Button:
 		&"pressed",
 		reset_btn.get_theme_stylebox(&"pressed").duplicate(),
 	)
-	reset_btn.add_theme_stylebox_override(&"focus", StyleBoxEmpty.new())
+	reset_btn.add_theme_stylebox_override(
+		&"focus",
+		StyleBoxEmpty.new(),
+	)
+
 	return reset_btn
-
-
-static func _create_point_reset_margin(reset_btn: Button) -> MarginContainer:
-	var reset_margin := MarginContainer.new()
-	reset_margin.add_theme_constant_override("margin_right", 2)
-	reset_margin.add_child(reset_btn)
-	return reset_margin
 
 
 func _select_point_property(
