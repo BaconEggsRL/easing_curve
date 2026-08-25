@@ -25,7 +25,7 @@ func _init() -> void:
 		print("PASS: %d EasingCurve global transform checks" % _checks)
 	else:
 		push_error("FAIL: %d of %d EasingCurve global transform checks failed" % [_failures, _checks])
-		quit(_failures)
+	quit(_failures)
 
 
 func _expect(condition: bool, message: String) -> void:

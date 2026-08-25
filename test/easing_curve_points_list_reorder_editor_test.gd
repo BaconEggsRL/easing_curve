@@ -6,21 +6,31 @@ const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_edit
 var _failures := 0
 var _checks := 0
 
+var _completed_fixtures := 0
 
 func _init() -> void:
 	if not EDITOR_HOST.require_inspector_host("easing_curve_points_list_reorder_editor_test.gd"):
 		quit(1)
 		return
+	call_deferred(&"_run")
+
+
+func _run() -> void:
 	_test_repeated_arrow_moves_keep_the_logical_point_selected()
 	_test_committed_drag_reorder_selects_the_dragged_point()
 	_test_handle_mode_reset_uses_the_normal_transition()
 	_test_handle_mode_property_cell_layout_selection_and_copy_paste()
 
+	if _completed_fixtures != 4:
+		_failures += 1
+		push_error(
+			"Only %d of 4 Points-list submitted reorder fixtures completed" % _completed_fixtures
+		)
 	if _failures == 0:
 		print("PASS: %d Points-list submitted reorder checks" % _checks)
 	else:
 		push_error("FAIL: %d of %d Points-list submitted reorder checks failed" % [_failures, _checks])
-		quit(_failures)
+	quit(_failures)
 
 
 func _expect(condition: bool, message: String) -> void:
@@ -43,15 +53,33 @@ func _make_fixture() -> Dictionary:
 	return {"curve": curve, "editor": editor, "inspector": inspector, "points": curve.points.duplicate()}
 
 
-func _get_handle_mode_row_parts(row: HBoxContainer) -> Dictionary:
-	var property_header := row.get_child(0) as PanelContainer
-	var header_hbox := property_header.get_child(1) as HBoxContainer
-	var reset_margin := header_hbox.get_child(1) as MarginContainer
-	var value_panel := row.get_child(1) as PanelContainer
+func _create_handle_mode_fixture(
+	inspector: Object,
+	point: EasingCurvePoint,
+	point_index: int,
+) -> Dictionary:
+	var property_grid := GridContainer.new()
+	property_grid.columns = 2
+	inspector.call("_create_handle_mode_property", point, point_index, property_grid)
+	if property_grid.get_child_count() != 2:
+		return {"property_grid": property_grid}
+	var property_header := property_grid.get_child(0) as PanelContainer
+	var value_panel := property_grid.get_child(1) as PanelContainer
+	if property_header == null or value_panel == null:
+		return {"property_grid": property_grid}
+	if property_header.get_child_count() < 2 or value_panel.get_child_count() < 1:
+		return {"property_grid": property_grid}
+	var overlay_root := property_header.get_child(1) as Control
+	if overlay_root == null or overlay_root.get_child_count() < 2:
+		return {"property_grid": property_grid}
+	var reset_clip := overlay_root.get_child(1) as Control
+	if reset_clip == null or reset_clip.get_child_count() < 1:
+		return {"property_grid": property_grid}
 	return {
+		"property_grid": property_grid,
 		"property_header": property_header,
 		"context_menu": property_header.get_child(0) as PopupMenu,
-		"reset_button": reset_margin.get_child(0) as Button,
+		"reset_button": reset_clip.get_child(0) as Button,
 		"value_panel": value_panel,
 		"option": value_panel.get_child(0) as OptionButton,
 	}
@@ -83,6 +111,7 @@ func _test_repeated_arrow_moves_keep_the_logical_point_selected() -> void:
 	inspector.call("_move_point_up", editor.selected_index)
 	_expect(curve.points == [points[0], points[2], moved, points[3]], "Move Up did not reverse the X-slot swap")
 	_expect(editor.selected_index == 2 and curve.points[editor.selected_index] == moved, "Move Up did not keep the moved logical point selected")
+	_completed_fixtures += 1
 	editor.free()
 
 
@@ -107,6 +136,7 @@ func _test_committed_drag_reorder_selects_the_dragged_point() -> void:
 
 	inspector.call("_move_point", 2, 2)
 	_expect(editor.selected_index == 2 and curve.points[2] == moved, "No-op drag reorder changed normal selection")
+	_completed_fixtures += 1
 	editor.free()
 
 
@@ -116,18 +146,27 @@ func _test_handle_mode_reset_uses_the_normal_transition() -> void:
 	var editor: EasingCurveEditor = fixture.editor
 	var inspector: Object = fixture.inspector
 	var point: EasingCurvePoint = fixture.points[1]
-	var free_row: HBoxContainer = inspector.call("_create_handle_mode_property", point, 1)
-	var free_reset_btn: Button = _get_handle_mode_row_parts(free_row).reset_button
+	var free_parts := _create_handle_mode_fixture(inspector, point, 1)
+	var free_grid: GridContainer = free_parts.property_grid
+	if not free_parts.has("reset_button"):
+		free_grid.free()
+		editor.free()
+		return
+	var free_reset_btn: Button = free_parts.reset_button
 	_expect(is_zero_approx(free_reset_btn.self_modulate.a), "Free Handle Mode showed its reset action")
 	_expect(free_reset_btn.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Free Handle Mode reset action remained enabled")
-	free_row.free()
+	free_grid.free()
 
 	point.right_force_linear = true
 	point.set_locked("position", true)
 	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
 	var before := EDITOR_UNDO.capture_state(curve)
-	var row: HBoxContainer = inspector.call("_create_handle_mode_property", point, 1)
-	var row_parts := _get_handle_mode_row_parts(row)
+	var row_parts := _create_handle_mode_fixture(inspector, point, 1)
+	var property_grid: GridContainer = row_parts.property_grid
+	if not row_parts.has("reset_button"):
+		property_grid.free()
+		editor.free()
+		return
 	var reset_btn: Button = row_parts.reset_button
 	var option: OptionButton = row_parts.option
 	_expect(is_equal_approx(reset_btn.self_modulate.a, 1.0), "Non-Free Handle Mode did not show its reset action")
@@ -150,7 +189,8 @@ func _test_handle_mode_reset_uses_the_normal_transition() -> void:
 	_expect(curve.get_editor_state_snapshot() == after, "Handle Mode reset Redo did not reapply Free geometry")
 	history.clear_history(false)
 	history.free()
-	row.free()
+	_completed_fixtures += 1
+	property_grid.free()
 	editor.free()
 
 
@@ -161,15 +201,25 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	var inspector: Object = fixture.inspector
 	var source: EasingCurvePoint = fixture.points[1]
 	var target: EasingCurvePoint = fixture.points[2]
-	var handle_row: HBoxContainer = inspector.call("_create_handle_mode_property", source, 1)
-	var handle_parts := _get_handle_mode_row_parts(handle_row)
+	var handle_parts := _create_handle_mode_fixture(inspector, source, 1)
+	var handle_grid: GridContainer = handle_parts.property_grid
+	if not handle_parts.has("property_header"):
+		handle_grid.free()
+		editor.free()
+		return
 	var handle_header: PanelContainer = handle_parts.property_header
 	var handle_value_panel: PanelContainer = handle_parts.value_panel
 	var handle_option: OptionButton = handle_parts.option
-	var target_handle_row: HBoxContainer = inspector.call("_create_handle_mode_property", target, 2)
-	var target_handle_header: PanelContainer = _get_handle_mode_row_parts(target_handle_row).property_header
+	var target_handle_parts := _create_handle_mode_fixture(inspector, target, 2)
+	var target_handle_grid: GridContainer = target_handle_parts.property_grid
+	if not target_handle_parts.has("property_header"):
+		handle_grid.free()
+		target_handle_grid.free()
+		editor.free()
+		return
+	var target_handle_header: PanelContainer = target_handle_parts.property_header
 
-	_expect(handle_row.get_child_count() == 2, "Handle Mode row did not use property and value regions")
+	_expect(handle_grid.get_child_count() == 2, "Handle Mode grid did not use property and value regions")
 	_expect(handle_header.size_flags_horizontal == Control.SIZE_EXPAND_FILL, "Handle Mode property cell did not use the shared property-cell width")
 	_expect(handle_value_panel.size_flags_horizontal == Control.SIZE_EXPAND_FILL, "Handle Mode value region did not use the shared property-value width")
 	_expect(handle_option.clip_text and handle_option.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS, "Handle Mode dropdown did not use the compact property-value layout")
@@ -214,6 +264,7 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	_expect(curve.get_editor_state_snapshot() == after, "Handle Mode paste Redo did not reapply geometry")
 	history.clear_history(false)
 	history.free()
-	handle_row.free()
-	target_handle_row.free()
+	_completed_fixtures += 1
+	handle_grid.free()
+	target_handle_grid.free()
 	editor.free()
