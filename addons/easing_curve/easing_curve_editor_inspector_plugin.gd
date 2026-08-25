@@ -262,7 +262,7 @@ func _create_selectable_point_property_header(
 ) -> PanelContainer:
 	var property_header := PanelContainer.new()
 	property_header.focus_mode = Control.FOCUS_NONE
-	property_header.clip_contents = true
+	#property_header.clip_contents = true
 
 	var reset_width := maxf(
 		reset_btn.get_combined_minimum_size().x,
@@ -355,6 +355,7 @@ func _create_selectable_point_property_header(
 	reset_btn.anchor_right = 1.0
 	reset_btn.anchor_top = 0.0
 	reset_btn.anchor_bottom = 1.0
+	reset_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	reset_btn.offset_left = -(reset_width + reset_gap)
 	reset_btn.offset_right = -reset_gap
 
@@ -1656,6 +1657,7 @@ static func _create_point_reset_button() -> Button:
 		&"normal",
 		StyleBoxEmpty.new(),
 	)
+
 	reset_btn.add_theme_stylebox_override(
 		&"hover",
 		reset_btn.get_theme_stylebox(&"hover").duplicate(),
@@ -1664,6 +1666,7 @@ static func _create_point_reset_button() -> Button:
 		&"pressed",
 		reset_btn.get_theme_stylebox(&"pressed").duplicate(),
 	)
+
 	reset_btn.add_theme_stylebox_override(
 		&"focus",
 		StyleBoxEmpty.new(),
