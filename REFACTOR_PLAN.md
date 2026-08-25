@@ -1221,6 +1221,19 @@ Milestones 2C and 3.
 The Inspector becomes reviewable by responsibility and later state cleanup can
 target smaller functions.
 
+### Completion record
+
+Completed. `_create_vector2_property()` now coordinates the unchanged UI tree
+while local helpers construct Force Linear controls, lock controls, and X/Y
+input rows. No production files or classes were added, and selection and
+Undo/Redo architecture remain unchanged. Focused editor-host validation passed:
+selection/refresh characterization (35 checks), graph gestures (13), point
+state (93), Points-list reorder (45), control editability (15), linear control
+aliases (72), and editor Undo/Redo (505). The linear alias test's direct calls
+were updated to match the existing five-parameter callback contract. The
+visible-editor fold, focus, scroll, and narrow/wide layout checks in
+`test/docs/easing_curve_editor_visible_regression_checklist.md` remain manual.
+
 ## Milestone 6 — Centralize editor selection assignments
 
 ### Goal

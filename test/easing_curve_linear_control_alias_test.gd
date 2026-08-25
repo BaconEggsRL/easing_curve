@@ -64,11 +64,9 @@ func _send_x_edit(
 	inspector.call(
 		"_on_x_input_value_changed",
 		value,
-		0,
 		point,
 		input,
 		reset_btn,
-		0.0,
 		property_name,
 	)
 
@@ -84,11 +82,9 @@ func _send_y_edit(
 	inspector.call(
 		"_on_y_input_value_changed",
 		value,
-		0,
 		point,
 		input,
 		reset_btn,
-		0.0,
 		property_name,
 	)
 

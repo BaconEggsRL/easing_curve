@@ -1919,97 +1919,132 @@ func _create_vector2_property(
 	value_hbox.add_child(force_linear_slot)
 
 
-	##############################################
-	# Force Linear button (control handles only)
+	var force_linear_btn := _create_force_linear_button(
+		point,
+		i,
+		property_name,
+	)
+	force_linear_slot.add_child(force_linear_btn)
+
+	var lock_btn := _create_point_lock_button(
+		point,
+		i,
+		property_name,
+		property_header,
+	)
+	value_hbox.add_child(lock_btn)
+
+	var vec: Vector2 = point.get(property_name)
+
+	var x_color := EditorInterface.get_editor_theme().get_color("property_color_x", "Editor")
+	var y_color := EditorInterface.get_editor_theme().get_color("property_color_y", "Editor")
+
+	var x_range := Vector2(0.0, 1.0) if property_name == "position" else Vector2(-1024, 1024)
+	var x_row := _create_vector2_axis_row(
+		point,
+		x_input,
+		"x",
+		vec.x,
+		x_range,
+		x_color,
+		property_name,
+		property_header,
+		reset_btn,
+	)
+	value_vbox.add_child(x_row)
+
+	var y_row := _create_vector2_axis_row(
+		point,
+		y_input,
+		"y",
+		vec.y,
+		x_range,
+		y_color,
+		property_name,
+		property_header,
+		reset_btn,
+	)
+
+	reset_btn.pressed.connect(_on_reset_btn_pressed.bind(point, x_input, y_input, property_name, reset_btn))
+	reset_btn.pressed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
+
+	value_vbox.add_child(y_row)
+
+
+func _create_force_linear_button(
+		point: EasingCurvePoint,
+		i: int,
+		property_name: String,
+) -> Button:
 	var force_linear_btn := Button.new()
 	force_linear_btn.flat = true
 	force_linear_btn.toggle_mode = true
 	force_linear_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	if property_name in ["left_control_point", "right_control_point"]:
-
-		var pressed_color := Color.WHITE
-		force_linear_btn.add_theme_color_override(
-			"icon_pressed_color",
-			pressed_color,
-		)
-		force_linear_btn.add_theme_color_override(
-			"icon_hover_pressed_color",
-			pressed_color,
-		)
-
-		var force_property := (
-			&"left_force_linear"
-			if property_name == "left_control_point"
-			else &"right_force_linear"
-		)
-
-		var force_linear := point.is_control_forced_linear(
-			EasingCurvePoint.ControlSide.LEFT
-			if property_name == "left_control_point"
-			else EasingCurvePoint.ControlSide.RIGHT
-		)
-		force_linear_btn.button_pressed = force_linear
-
-		force_linear_btn.icon = (
-			FORCE_LINEAR_ICON_ON
-			if force_linear
-			else FORCE_LINEAR_ICON_OFF
-		)
-
-		force_linear_btn.modulate.a = 1.0
-
-		force_linear_btn.tooltip_text = (
-			(
-				"Unforce Linear — Handle returns to Free default"
-				if force_linear
-				else "Force Linear — Collapse this handle to the point"
-			)
-			if point.supports_control_state()
-			else "Force Linear — Available in Free or Linked handle mode"
-		)
-
-		var force_linear_available := point.supports_control_state()
-
-		force_linear_btn.disabled = not force_linear_available
-
-		if not force_linear_available:
-			force_linear_btn.modulate.a = 0.25
-		else:
-			force_linear_btn.modulate.a = 1.0
-
-		force_linear_btn.toggled.connect(
-			func(toggled_on: bool):
-
-				force_linear_btn.icon = (
-					FORCE_LINEAR_ICON_ON
-					if toggled_on
-					else FORCE_LINEAR_ICON_OFF
-				)
-
-				force_linear_btn.modulate.a = 1.0
-
-				_apply_point_property_change(
-					i,
-					force_property,
-					toggled_on,
-				)
-
-				easing_curve_editor.queue_redraw()
-		)
-
-	else:
+	if property_name not in ["left_control_point", "right_control_point"]:
 		force_linear_btn.modulate.a = 0.0
 		force_linear_btn.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		force_linear_btn.focus_mode = Control.FOCUS_NONE
+		return force_linear_btn
 
-	#value_hbox.add_child(force_linear_btn)
-	force_linear_slot.add_child(force_linear_btn)
+	var pressed_color := Color.WHITE
+	force_linear_btn.add_theme_color_override(
+		"icon_pressed_color",
+		pressed_color,
+	)
+	force_linear_btn.add_theme_color_override(
+		"icon_hover_pressed_color",
+		pressed_color,
+	)
 
-	##############################################
+	var force_property := (
+		&"left_force_linear"
+		if property_name == "left_control_point"
+		else &"right_force_linear"
+	)
+	var force_linear := point.is_control_forced_linear(
+		EasingCurvePoint.ControlSide.LEFT
+		if property_name == "left_control_point"
+		else EasingCurvePoint.ControlSide.RIGHT
+	)
+	force_linear_btn.button_pressed = force_linear
+	force_linear_btn.icon = (
+		FORCE_LINEAR_ICON_ON if force_linear else FORCE_LINEAR_ICON_OFF
+	)
+	force_linear_btn.modulate.a = 1.0
+	force_linear_btn.tooltip_text = (
+		(
+			"Unforce Linear — Handle returns to Free default"
+			if force_linear
+			else "Force Linear — Collapse this handle to the point"
+		)
+		if point.supports_control_state()
+		else "Force Linear — Available in Free or Linked handle mode"
+	)
+
+	var force_linear_available := point.supports_control_state()
+	force_linear_btn.disabled = not force_linear_available
+	force_linear_btn.modulate.a = 0.25 if not force_linear_available else 1.0
+	force_linear_btn.toggled.connect(
+		func(toggled_on: bool):
+			force_linear_btn.icon = (
+				FORCE_LINEAR_ICON_ON
+				if toggled_on
+				else FORCE_LINEAR_ICON_OFF
+			)
+			force_linear_btn.modulate.a = 1.0
+			_apply_point_property_change(i, force_property, toggled_on)
+			easing_curve_editor.queue_redraw()
+	)
+	return force_linear_btn
 
 
-	# Right side (lock button)
+func _create_point_lock_button(
+		point: EasingCurvePoint,
+		i: int,
+		property_name: String,
+		property_header: PanelContainer,
+) -> Button:
 	var lock_btn := Button.new()
 	lock_btn.icon = LOCK
 	lock_btn.flat = true
@@ -2024,14 +2059,8 @@ func _create_vector2_property(
 	var locked := point.locked[property_name]
 	lock_btn.button_pressed = locked
 	var toggled_on := lock_btn.button_pressed
-
-	var lock_available := (
-		property_name == "position"
-		or point.supports_control_state()
-	)
-
+	var lock_available := property_name == "position" or point.supports_control_state()
 	lock_btn.disabled = not lock_available
-
 	lock_btn.tooltip_text = (
 		(
 			"Unlock — Allow this property to be edited"
@@ -2041,130 +2070,102 @@ func _create_vector2_property(
 		if lock_available
 		else "Lock — Available in Free or Linked handle mode"
 	)
-
 	lock_btn.icon = LOCK if toggled_on else UNLOCK
-
-	if not lock_available:
-		lock_btn.modulate.a = 0.25
-	else:
-		lock_btn.modulate.a = 1.0 if toggled_on else 0.5
-
+	lock_btn.modulate.a = 0.25 if not lock_available else 1.0 if toggled_on else 0.5
 	lock_btn.toggled.connect(
-		func(toggled_on: bool):
+		func(next_toggled_on: bool):
 			_preserve_point_selection_on_refresh = true
-			_select_point_property(
-				property_header,
-				i,
-				StringName(property_name)
-			)
-
-			lock_btn.icon = LOCK if toggled_on else UNLOCK
-			lock_btn.modulate.a = 1.0 if toggled_on else 0.5
+			_select_point_property(property_header, i, StringName(property_name))
+			lock_btn.icon = LOCK if next_toggled_on else UNLOCK
+			lock_btn.modulate.a = 1.0 if next_toggled_on else 0.5
 
 			var locks: Dictionary = curve.points[i].locked.duplicate()
-
 			if (
 				point.handle_mode == EasingCurvePoint.HandleMode.LINKED
-				and property_name in [
-					"left_control_point",
-					"right_control_point",
-				]
+				and property_name in ["left_control_point", "right_control_point"]
 			):
-				locks["left_control_point"] = toggled_on
-				locks["right_control_point"] = toggled_on
+				locks["left_control_point"] = next_toggled_on
+				locks["right_control_point"] = next_toggled_on
 			else:
-				locks[property_name] = toggled_on
-
+				locks[property_name] = next_toggled_on
 			_apply_point_property_change(i, &"locked", locks)
 	)
+	return lock_btn
 
-	value_hbox.add_child(lock_btn)
 
-	var vec: Vector2 = point.get(property_name)
+func _create_vector2_axis_row(
+		point: EasingCurvePoint,
+		input: EditorSpinSlider,
+		axis: String,
+		value: float,
+		input_range: Vector2,
+		axis_color: Color,
+		property_name: String,
+		property_header: PanelContainer,
+		reset_btn: Button,
+) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", -8)
 
-	var x_color := EditorInterface.get_editor_theme().get_color("property_color_x", "Editor")
-	var y_color := EditorInterface.get_editor_theme().get_color("property_color_y", "Editor")
+	var label := Label.new()
+	label.text = axis
+	label.add_theme_color_override("font_color", axis_color)
 
-	# X
-	var x_row := HBoxContainer.new()
-	x_row.add_theme_constant_override("separation", -8)
+	input.min_value = input_range.x
+	input.max_value = input_range.y
+	input.step = SLIDER_INPUT_STEP
+	input.flat = true
+	input.hide_slider = true
+	input.label = ""
+	input.value = value
+	input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	input.custom_minimum_size.x = 0.0
 
-	var x_label := Label.new()
-	x_label.text = "x"
-	x_label.add_theme_color_override("font_color", x_color)
-
-	if property_name == "position":
-		x_input.min_value = 0.0
-		x_input.max_value = 1.0
+	if axis == "x":
+		input.value_changed.connect(
+			_on_x_input_value_changed.bind(point, input, reset_btn, property_name)
+		)
 	else:
-		x_input.min_value = -1024
-		x_input.max_value = 1024
-	x_input.step = SLIDER_INPUT_STEP
-	x_input.flat = true
-	x_input.hide_slider = true
-	x_input.label = ""
-	x_input.value = vec.x
-	x_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	x_input.custom_minimum_size.x = 0.0
-
-	x_input.value_changed.connect(_on_x_input_value_changed.bind(point, x_input, reset_btn, property_name))
-	_connect_point_input_drag_signals(x_input)
-	if property_name == "position":
-		x_input.value_focus_entered.connect(
-			_on_position_x_input_focus_entered.bind(x_input)
+		input.value_changed.connect(
+			_on_y_input_value_changed.bind(point, input, reset_btn, property_name)
 		)
-		x_input.value_focus_exited.connect(
-			_on_position_x_input_focus_exited.bind(x_input)
+	_connect_point_input_drag_signals(input)
+
+	if axis == "x" and property_name == "position":
+		input.value_focus_entered.connect(
+			_on_position_x_input_focus_entered.bind(input)
 		)
-	elif property_name in ["left_control_point", "right_control_point"]:
-		x_input.value_focus_entered.connect(
-			_on_linear_control_x_input_focus_entered.bind(x_input, point)
+		input.value_focus_exited.connect(
+			_on_position_x_input_focus_exited.bind(input)
 		)
-		x_input.value_focus_exited.connect(
-			_on_linear_control_x_input_focus_exited.bind(x_input, point)
+	elif axis == "x" and property_name in ["left_control_point", "right_control_point"]:
+		input.value_focus_entered.connect(
+			_on_linear_control_x_input_focus_entered.bind(input, point)
 		)
-	x_input.grabbed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
-	x_input.focus_entered.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
-	point.set_input_control(property_name, "x", x_input)
+		input.value_focus_exited.connect(
+			_on_linear_control_x_input_focus_exited.bind(input, point)
+		)
 
-	x_row.add_child(x_label)
-	x_row.add_child(x_input)
-	value_vbox.add_child(x_row)
+	input.grabbed.connect(
+		_select_point_property_for_point.bind(
+			property_header,
+			point,
+			StringName(property_name),
+		)
+	)
+	input.focus_entered.connect(
+		_select_point_property_for_point.bind(
+			property_header,
+			point,
+			StringName(property_name),
+		)
+	)
+	point.set_input_control(property_name, axis, input)
 
-	# Y
-	var y_row := HBoxContainer.new()
-	y_row.add_theme_constant_override("separation", -8)
+	row.add_child(label)
+	row.add_child(input)
+	return row
 
-	var y_label := Label.new()
-	y_label.text = "y"
-	y_label.add_theme_color_override("font_color", y_color)
-
-	if property_name == "position":
-		y_input.min_value = 0.0
-		y_input.max_value = 1.0
-	else:
-		y_input.min_value = -1024
-		y_input.max_value = 1024
-	y_input.step = SLIDER_INPUT_STEP
-	y_input.flat = true
-	y_input.hide_slider = true
-	y_input.label = ""
-	y_input.value = vec.y
-	y_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	y_input.custom_minimum_size.x = 0.0
-
-	y_input.value_changed.connect(_on_y_input_value_changed.bind(point, y_input, reset_btn, property_name))
-	_connect_point_input_drag_signals(y_input)
-	y_input.grabbed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
-	y_input.focus_entered.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
-	point.set_input_control(property_name, "y", y_input)
-
-	reset_btn.pressed.connect(_on_reset_btn_pressed.bind(point, x_input, y_input, property_name, reset_btn))
-	reset_btn.pressed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
-
-	y_row.add_child(y_label)
-	y_row.add_child(y_input)
-	value_vbox.add_child(y_row)
 
 func _on_add_point_btn_pressed() -> void:
 	var has_left_endpoint := false
