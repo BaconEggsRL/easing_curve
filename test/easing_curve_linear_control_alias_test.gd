@@ -1,6 +1,6 @@
 extends SceneTree
 
-const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/easing_curve_editor_inspector_plugin.gd")
+const EDITOR_HOST = preload("res://test/editor_host_test_harness.gd")
 const DRAGGING_META := &"_easing_curve_dragging"
 
 var _failures := 0
@@ -8,6 +8,9 @@ var _checks := 0
 
 
 func _init() -> void:
+	if not EDITOR_HOST.require_inspector_host("easing_curve_linear_control_alias_test.gd"):
+		quit(1)
+		return
 	_test_linear_control_x_uses_position_reorder()
 	_test_linear_control_x_drag_crosses_multiple_points()
 	_test_linear_control_y_and_locks()
@@ -36,12 +39,9 @@ func _make_fixture(right_x: float = 0.6) -> Dictionary:
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.CUSTOM
 	curve.points = [a, b, c]
-	var editor := EasingCurveEditor.new()
-	editor.size = Vector2(600.0, 300.0)
-	editor.set_curve(curve)
-	var inspector: EditorInspectorPlugin = INSPECTOR_PLUGIN.new()
-	inspector.set("curve", curve)
-	inspector.set("easing_curve_editor", editor)
+	var editor_context := EDITOR_HOST.create_inspector_context(curve)
+	var editor: EasingCurveEditor = editor_context.editor
+	var inspector: EditorInspectorPlugin = editor_context.inspector
 	return {
 		"curve": curve,
 		"editor": editor,
@@ -142,13 +142,10 @@ func _test_linear_control_x_drag_crosses_multiple_points() -> void:
 	points = curve.points.duplicate()
 	var moved := points[1]
 	moved.handle_mode = EasingCurvePoint.HandleMode.LINEAR
-	var editor := EasingCurveEditor.new()
-	editor.size = Vector2(600.0, 300.0)
-	editor.set_curve(curve)
+	var editor_context := EDITOR_HOST.create_inspector_context(curve)
+	var editor: EasingCurveEditor = editor_context.editor
 	editor.selected_index = 1
-	var inspector: EditorInspectorPlugin = INSPECTOR_PLUGIN.new()
-	inspector.set("curve", curve)
-	inspector.set("easing_curve_editor", editor)
+	var inspector: EditorInspectorPlugin = editor_context.inspector
 	var input := EditorSpinSlider.new()
 	var reset_btn := Button.new()
 	input.set_meta(DRAGGING_META, true)

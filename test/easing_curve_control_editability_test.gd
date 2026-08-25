@@ -1,12 +1,16 @@
 extends SceneTree
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
+const EDITOR_HOST = preload("res://test/editor_host_test_harness.gd")
 
 var _failures := 0
 var _checks := 0
 
 
 func _init() -> void:
+	if not EDITOR_HOST.require_editor_host("easing_curve_control_editability_test.gd"):
+		quit(1)
+		return
 	_test_control_editability_constraints()
 	_test_handle_mode_undo_redo_refreshes_inputs()
 

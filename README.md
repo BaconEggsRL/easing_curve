@@ -181,7 +181,7 @@ The Editor-dependent tests `easing_curve_control_editability_test.gd`, `easing_c
 godot --editor --headless --path . --script res://test/<test_name>.gd
 ```
 
-Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can misleadingly report zero checks; it is not a valid result for these tests. `editor_undo_redo_test.gd` also needs an Editor host, but currently cannot complete on Godot 4.7 because its `FoldableContainer` fixture crashes before assertions run. Treat that run as blocked, not passing.
+Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can misleadingly report zero checks; it is not a valid result for these tests. `editor_undo_redo_test.gd` also needs an Editor host. Its `FoldableContainer` and responsive-layout fixtures are explicitly skipped under Godot 4.7 `--editor --headless`: the former crashes there and the latter requires a visible Editor layout. Verify those fixtures in a visible Editor session instead.
 
 **&nbsp;**
 

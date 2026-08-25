@@ -1,12 +1,15 @@
 extends SceneTree
 
-const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/easing_curve_editor_inspector_plugin.gd")
+const EDITOR_HOST = preload("res://test/editor_host_test_harness.gd")
 
 var _failures := 0
 var _checks := 0
 
 
 func _init() -> void:
+	if not EDITOR_HOST.require_inspector_host("easing_curve_editor_position_x_drag_test.gd"):
+		quit(1)
+		return
 	_test_position_x_drag_defers_list_reorder()
 	_test_position_x_drag_crosses_multiple_points()
 	_test_position_x_drag_continues_through_backtracking()
@@ -37,13 +40,9 @@ func _make_fixture(left_x: float = 0.2, right_x: float = 0.6) -> Dictionary:
 	]
 	curve.set_point_snapshot(curve.make_point_snapshot(points))
 
-	var editor := EasingCurveEditor.new()
-	editor.size = Vector2(600.0, 300.0)
-	editor.set_curve(curve)
-
-	var inspector: EditorInspectorPlugin = INSPECTOR_PLUGIN.new()
-	inspector.set("curve", curve)
-	inspector.set("easing_curve_editor", editor)
+	var editor_context := EDITOR_HOST.create_inspector_context(curve)
+	var editor: EasingCurveEditor = editor_context.editor
+	var inspector: EditorInspectorPlugin = editor_context.inspector
 	return {
 		"curve": curve,
 		"editor": editor,
@@ -147,12 +146,9 @@ func _test_position_x_drag_crosses_multiple_points() -> void:
 	curve.set_point_snapshot(curve.make_point_snapshot(points))
 	points = curve.points.duplicate()
 
-	var editor := EasingCurveEditor.new()
-	editor.size = Vector2(600.0, 300.0)
-	editor.set_curve(curve)
-	var inspector: EditorInspectorPlugin = INSPECTOR_PLUGIN.new()
-	inspector.set("curve", curve)
-	inspector.set("easing_curve_editor", editor)
+	var editor_context := EDITOR_HOST.create_inspector_context(curve)
+	var editor: EasingCurveEditor = editor_context.editor
+	var inspector: EditorInspectorPlugin = editor_context.inspector
 	var moved: EasingCurvePoint = points[1]
 	editor.selected_index = 1
 
@@ -195,13 +191,10 @@ func _test_position_x_drag_continues_through_backtracking() -> void:
 	curve.set_point_snapshot(curve.make_point_snapshot(points))
 	points = curve.points.duplicate()
 	var moved := points[1]
-	var editor := EasingCurveEditor.new()
-	editor.size = Vector2(600.0, 300.0)
-	editor.set_curve(curve)
+	var editor_context := EDITOR_HOST.create_inspector_context(curve)
+	var editor: EasingCurveEditor = editor_context.editor
 	editor.selected_index = 1
-	var inspector: EditorInspectorPlugin = INSPECTOR_PLUGIN.new()
-	inspector.set("curve", curve)
-	inspector.set("easing_curve_editor", editor)
+	var inspector: EditorInspectorPlugin = editor_context.inspector
 	var expected_orders := [
 		[points[0], moved, points[2], points[3], points[4]],
 		[points[0], moved, points[2], points[3], points[4]],

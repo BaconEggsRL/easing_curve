@@ -1,6 +1,6 @@
 extends SceneTree
 
-const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/easing_curve_editor_inspector_plugin.gd")
+const EDITOR_HOST = preload("res://test/editor_host_test_harness.gd")
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 
 var _failures := 0
@@ -8,6 +8,9 @@ var _checks := 0
 
 
 func _init() -> void:
+	if not EDITOR_HOST.require_inspector_host("easing_curve_points_list_reorder_editor_test.gd"):
+		quit(1)
+		return
 	_test_repeated_arrow_moves_keep_the_logical_point_selected()
 	_test_committed_drag_reorder_selects_the_dragged_point()
 	_test_handle_mode_reset_uses_the_normal_transition()
@@ -34,12 +37,9 @@ func _make_fixture() -> Dictionary:
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.CUSTOM
 	curve.points = points
-	var editor := EasingCurveEditor.new()
-	editor.size = Vector2(600.0, 300.0)
-	editor.set_curve(curve)
-	var inspector: EditorInspectorPlugin = INSPECTOR_PLUGIN.new()
-	inspector.set("curve", curve)
-	inspector.set("easing_curve_editor", editor)
+	var editor_context := EDITOR_HOST.create_inspector_context(curve)
+	var editor: EasingCurveEditor = editor_context.editor
+	var inspector: EditorInspectorPlugin = editor_context.inspector
 	return {"curve": curve, "editor": editor, "inspector": inspector, "points": curve.points.duplicate()}
 
 

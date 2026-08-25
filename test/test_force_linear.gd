@@ -1,13 +1,28 @@
 extends Node2D
 
 
-const TEST_PATH := "res://test/presets/test_force_linear_persistence.tres"
+var _test_path := ""
 
 
 func _ready() -> void:
+	_test_path = "user://easing_curve_force_linear_%d.tres" % OS.get_process_id()
+	_cleanup_temp_resource()
 	#_test_force_linear_snapshots()
 	_test_free_persistence()
 	_test_balanced_persistence()
+	_cleanup_temp_resource()
+
+
+func _exit_tree() -> void:
+	_cleanup_temp_resource()
+
+
+func _cleanup_temp_resource() -> void:
+	if _test_path.is_empty() or not FileAccess.file_exists(_test_path):
+		return
+	assert(
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(_test_path)) == OK
+	)
 
 
 func _test_free_persistence() -> void:
@@ -21,12 +36,12 @@ func _test_free_persistence() -> void:
 
 	curve.points = [point]
 
-	var error := ResourceSaver.save(curve, TEST_PATH)
+	var error := ResourceSaver.save(curve, _test_path)
 	assert(error == OK)
 
 	# Prevent ResourceLoader from returning the cached in-memory resource.
 	var loaded := ResourceLoader.load(
-		TEST_PATH,
+		_test_path,
 		"EasingCurve",
 		ResourceLoader.CACHE_MODE_IGNORE,
 	) as EasingCurve
@@ -67,11 +82,11 @@ func _test_balanced_persistence() -> void:
 	var expected_left := point.left_control_point
 	var expected_right := point.right_control_point
 
-	var error := ResourceSaver.save(curve, TEST_PATH)
+	var error := ResourceSaver.save(curve, _test_path)
 	assert(error == OK)
 
 	var loaded := ResourceLoader.load(
-		TEST_PATH,
+		_test_path,
 		"EasingCurve",
 		ResourceLoader.CACHE_MODE_IGNORE,
 	) as EasingCurve
@@ -94,8 +109,8 @@ func _test_balanced_persistence() -> void:
 	)
 	assert(loaded_point.left_force_linear == true)
 	assert(loaded_point.right_force_linear == false)
-	assert(loaded_point.left_control_point == expected_left)
-	assert(loaded_point.right_control_point == expected_right)
+	assert(loaded_point.left_control_point.is_equal_approx(expected_left))
+	assert(loaded_point.right_control_point.is_equal_approx(expected_right))
 
 	print("TEST 6 PASSED")
 

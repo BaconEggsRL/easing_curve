@@ -3,12 +3,16 @@ extends SceneTree
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/easing_curve_editor_inspector_plugin.gd")
 const RELOAD_ICON = preload("res://addons/easing_curve/assets/icons/Reload.svg")
+const EDITOR_HOST = preload("res://test/editor_host_test_harness.gd")
 
 var _failures := 0
 var _checks := 0
 
 
 func _init() -> void:
+	if not EDITOR_HOST.require_inspector_host("editor_undo_redo_test.gd"):
+		quit(1)
+		return
 	seed(948217)
 	_test_editor_snapshot_contract()
 	_test_point_drag()
@@ -26,8 +30,11 @@ func _init() -> void:
 	_test_back_point_property_defaults()
 	_test_preset_reset_layout_stability()
 	_test_css_cubic_bezier_dropdown_order()
-	_test_points_foldable_section()
-	_test_responsive_graph_layout()
+	if EDITOR_HOST.supports_native_layout_fixtures():
+		_test_points_foldable_section()
+		_test_responsive_graph_layout()
+	else:
+		print("SKIP: native layout fixtures require a visible Editor host; Godot 4.7 crashes FoldableContainer and cannot validate responsive layout under --editor --headless")
 	_test_three_point_preset_modified_detection()
 	_test_preset_modified_undo_redo()
 	_test_clean_preset_ease_reset_undo_redo()

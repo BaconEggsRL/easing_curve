@@ -2,6 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $PluginPath = "addons\easing_curve"
 $ConfigPath = "$PluginPath\plugin.cfg"
+$ReadmeSourcePath = "README.md"
+$PackagedReadmePath = "$PluginPath\README.md"
 
 $OutputPath = "_exports\_asset_store_builds"
 $BuildPath = "$OutputPath\_staging"
@@ -23,6 +25,12 @@ $Version = $Matches[1]
 $OutputZip = "$OutputPath\easing_curve_v$Version.zip"
 
 Write-Host "Building Easing Curve v$Version..."
+
+# The root README is canonical; refresh the packaged addon copy before staging.
+if (-not (Test-Path $ReadmeSourcePath -PathType Leaf)) {
+    throw "Could not find canonical README: $ReadmeSourcePath"
+}
+Copy-Item $ReadmeSourcePath $PackagedReadmePath -Force
 
 # Make sure output directory exists.
 New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
@@ -109,6 +117,32 @@ try {
         }
 
         Write-Host "  [OK]   $EntryPath" -ForegroundColor DarkGray
+    }
+
+    $ReadmeEntry = $VerifyZip.GetEntry("addons/easing_curve/README.md")
+    if ($null -eq $ReadmeEntry) {
+        Write-Host "  [FAIL] Missing packaged README" -ForegroundColor Red
+        $VerificationFailed = $true
+    }
+    else {
+        $ReadmeReader = [System.IO.StreamReader]::new($ReadmeEntry.Open())
+        try {
+            $PackagedReadme = $ReadmeReader.ReadToEnd()
+        }
+        finally {
+            $ReadmeReader.Dispose()
+        }
+
+        $CanonicalReadme = [System.IO.File]::ReadAllText(
+            (Resolve-Path $ReadmeSourcePath).Path
+        )
+        if ($PackagedReadme -cne $CanonicalReadme) {
+            Write-Host "  [FAIL] Packaged README differs from root README" -ForegroundColor Red
+            $VerificationFailed = $true
+        }
+        else {
+            Write-Host "  [OK]   Packaged README matches root README" -ForegroundColor Green
+        }
     }
 }
 finally {

@@ -24,13 +24,34 @@ Designed for parity with Godot's Tween system and easing equations.
 
 ### Installation:
 
+#### Godot Asset Library / Asset Store
+
+**Godot 4.7 and newer:**
+* Install **Easing Curve** normally through the Asset Store.
+* The plugin should be installed to `res://addons/easing_curve/`.
+
+**Godot 4.4–4.6:**
+* Download **Easing Curve** through the Asset Library.
+* In the **Configure Asset Before Installing** window, make sure **Ignore asset root** is **unchecked** before installing.
+* Confirm that the installation preview shows the plugin under:
+  `res://addons/easing_curve/`
+* Complete the installation.
+
+#### Manual Installation
+
 * Copy `addons/easing_curve/` into your project's `addons/` folder.
-* Enable **Easing Curve** through **Project > Project Settings > Plugins**.
+* The resulting path should be:
+  `res://addons/easing_curve/`
+
+#### Enable the Plugin
+
+* Open **Project > Project Settings > Plugins**.
+* Enable **Easing Curve**.
 
 ### Create a new EasingCurve:
 
  * Export a variable of type EasingCurve, and create a new EasingCurve resource.
-  * The resource will pre-populate with a linear cubic_bezier curve
+  * The resource will pre-populate with a linear cubic_bezier curve.
 
 **&nbsp;**
 
@@ -38,39 +59,87 @@ Designed for parity with Godot's Tween system and easing equations.
 Select a Curve Preset:
 ---
 
-* Select the **Ease** and **Trans** option buttons to choose from a variety of pre-made curve presets.
-* These presets mimic the behavior of Godot's Tween system (See test_scene/test.tscn to compare.)
-* New function presets not found in the built-in Tween system include:
-  * **Jitter** -- Noisy linear interpolation
-  * **Irregular** -- Stepwise linear with randomness
-  * **Step** -- Stepwise function
-  * **Power** -- Fractional power function
-* The plugin also takes existing presets from the Tween class and adds additional functionality:
-  * **Elastic** -- Specify a custom amplitude and period
-  * More features planned for Bounce, Back, and Spring functions.
+Select the **Ease** and **Transition** options to choose from the built-in presets and additional easing functions.
+
+#### Ease Modes
+
+All supported transitions can use the following ease modes.
+Custom, Linear, Constant, and CSS transitions do not have selectable ease modes.
+Ease modes control **where the easing effect is applied** over the duration of the curve:
+
+* **In** -- Starts slow and ends fast.
+* **Out** -- Starts fast and ends slow.
+* **In Out** -- Starts slow, speeds up towards the middle, and slows down at the end.
+* **Out In** -- Starts fast, slows down towards the middle, and speeds up at the end.
+
+The exact shape and behavior depend on the selected **Transition**.
+For example, an Elastic or Bounce transition may oscillate or overshoot rather than simply accelerate or decelerate.
+
+#### Godot Tween Transitions
+
+These transitions are designed for parity with Godot's built-in Tween easing behavior:
+
+* **Linear** -- Linear interpolation, [Bézier]
+* **Sine** -- Sinusoidal easing, [Bézier]
+* **Quad** -- Quadratic easing, [Bézier]
+* **Cubic** -- Cubic easing, [Bézier]
+* **Quart** -- Quartic easing, [Bézier]
+* **Quint** -- Quintic easing, [Bézier]
+* **Expo** -- Exponential easing, [Bézier]
+* **Circ** -- Circular easing, [Bézier]
+* **Back** -- Back easing, configurable **Overshoot**, [Bézier]
+* **Elastic** -- Elastic oscillation, configurable **Amplitude** and **Period**, [Function]
+* **Bounce** -- Bouncing motion, configurable **Number of Bounces** and **Bounce Damping**, [Function]
+* **Spring** -- Spring-like oscillation, configurable **Frequency** and **Decay**, [Function]
+
+Bézier-backed presets can be edited directly in the curve editor.
+Modifying a preset creates a customized version while retaining the original transition and ease selection.
+
+#### Additional Transitions
+
+Easing Curve also includes transitions beyond Godot's built-in Tween system:
+
+* **Constant** -- Returns a configurable **Constant Value**, [Bézier]
+* **Physics Spring** -- Spring easing using physics (**Stiffness**, **Damping**, **Mass**, and **Velocity**), [Function]
+* **Jitter** -- Noisy linear interpolation with configurable randomness (**Num Points**, **Randomness**) and **Generate Tool Button**, [Function]
+* **Irregular** -- Stepwise linear interpolation with randomized points (**Num Points**, **Randomness**) and **Generate Tool Button**, [Function]
+* **Step** -- Staircase easing (**Steps**, **From Start**, and **Y Offset**), [Function]
+* **Power** -- Fractional power easing (**Power**), [Function]
+
+CSS easing functions can also be used directly:
+
+* **Cubic Bézier** -- Define a CSS-style `cubic-bezier()` easing curve, [Function]
+* **Linear** -- Define a CSS-style `linear()` easing function with custom stops, [Function]
+
 
 **&nbsp;**
-
 Adjust your curve using the Curve Editor:
 ---
 
 Bézier-backed presets, including multi-segment presets, expose all points and handles in the curve editor.
 
-* **Add and Remove Points**
+* **Adding and Removing Points**
   * Left click anywhere on the grid to add a new point, or click the "Add Point" button.
   * Right click a point to delete it, hold right click and drag across points to remove them, or click the trash button icon in the points list.
 
-* **Adjust the Control Points**
+* **Adjusting the Control Points**
   * You can adjust the bezier curve control points by dragging with the mouse or editing the points list.
   * Control handles can be moved outside the grid box, but point positions cannot.
 
 * **Locking Control Points**
   * Vector2 properties can be locked by clicking the lock icon.
-  * Locked properties cannot be changed, except by copy-paste. This can be used to drag a point without affecting its control handles.
+	* Locked properties cannot be changed, except by copy-paste. This can be used to drag a point without affecting its control handles.
+  * Lockable properties include point position, left control position, and right control position.
+	* Force Linear and Lock control states are available in Free and Linked handle modes.
 
-* **Handle Modes and Control States**
-  * Free, Linear, Balanced, Mirrored, and Linked modes control the relationship between the left and right handles.
-  * In Free and Linked modes, each control also supports Force Linear and Lock states.
+* **Handle Modes**
+  * Each point can use a handle mode to control how its left and right control handles behave:
+    * **Free** -- Each handle moves independently without affecting the other handle.
+    * **Linear** -- Keeps the handles aligned with the neighboring points, creating straight-line segments through the point.
+    * **Balanced** -- Keeps both handles aligned in opposite directions while allowing each handle to have a different length.
+    * **Mirrored** -- Keeps both handles aligned in opposite directions and at the same length. Moving one handle mirrors the other across the point.
+    * **Linked** -- Keeps both controls at a shared position.
+    * Note that control states apply in Free and Linked modes, and are preserved when switching modes.
   * The selected-point toolbar shows the point number, Handle Mode, L/R control state, and Reset controls.
 
 * **Zoom and Pan**
@@ -104,12 +173,27 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 **&nbsp;**
 
+### Development testing
+
+The Editor-dependent tests `easing_curve_control_editability_test.gd`, `easing_curve_editor_position_x_drag_test.gd`, `easing_curve_linear_control_alias_test.gd`, and `easing_curve_points_list_reorder_editor_test.gd` require an Editor-host launch:
+
+```text
+godot --editor --headless --path . --script res://test/<test_name>.gd
+```
+
+Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can misleadingly report zero checks; it is not a valid result for these tests. `editor_undo_redo_test.gd` also needs an Editor host. Its `FoldableContainer` and responsive-layout fixtures are explicitly skipped under Godot 4.7 `--editor --headless`: the former crashes there and the latter requires a visible Editor layout. Verify those fixtures in a visible Editor session instead.
+
+**&nbsp;**
+
 
 ### **Future feature map:**
 
 ---
 
 * TBD — open to suggestions!
+* Found a bug? Please open a [Bug Report](https://github.com/BaconEggsRL/easing_curve/issues/new?template=bug_report.yml).
+* Have an idea for a new feature or improvement? Open a [Feature Request](https://github.com/BaconEggsRL/easing_curve/issues/new?template=feature_request.yml).
+* Contributions are welcome! Feel free to open a [Pull Request](https://github.com/BaconEggsRL/easing_curve/pulls).
 
 **&nbsp;**
 
@@ -121,7 +205,8 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 Thank you for using the EasingCurve plugin.
 Please support the development by sharing, starring or commenting if you found it useful.
 
-This is my first plugin, so please feel free to submit an issue or PR if you find anything that needs fixing.
+This is my first plugin, so feedback and contributions are always welcome.
+See the links above to report bugs, suggest features, or contribute changes.
 
 You can find all my addons on my [GitHub profile page](https://github.com/BaconEggsRL/).
 
