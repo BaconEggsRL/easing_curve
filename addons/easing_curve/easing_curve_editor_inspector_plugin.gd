@@ -1595,15 +1595,29 @@ static func _set_point_reset_button_available(
 	_update_point_reset_button_label_margin(reset_btn)
 
 
-static func _update_point_reset_button_label_margin(reset_btn: Button) -> void:
-	var property_label := reset_btn.get_meta(
-		&"point_property_label",
-		null,
-	) as Label
+static func _update_point_reset_button_label_margin(
+	reset_btn: Button,
+) -> void:
+	if (
+		not reset_btn.has_meta(&"point_property_label")
+		or not reset_btn.has_meta(&"point_reset_width")
+	):
+		return
+
+	var property_label := (
+		reset_btn.get_meta(&"point_property_label") as Label
+	)
 	if not is_instance_valid(property_label):
 		return
-	var reset_width := float(reset_btn.get_meta(&"point_reset_width", 0.0))
-	property_label.offset_right = -reset_width if reset_btn.visible else 0.0
+
+	var reset_width := float(
+		reset_btn.get_meta(&"point_reset_width")
+	)
+	property_label.offset_right = (
+		-reset_width
+		if reset_btn.visible
+		else 0.0
+	)
 
 
 static func _create_point_reset_button() -> Button:
