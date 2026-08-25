@@ -12,7 +12,7 @@ var _drag_auto_range := Vector2.ZERO
 var _has_drag_auto_range := false
 
 var use_pending_add := true
-var hide_point_toolbar_for_functions := true
+var hide_point_toolbar_for_functions := false
 
 static var _selected_index_by_curve: Dictionary[int, int] = {}
 static var _right_delete_drag_state_by_curve: Dictionary[int, Dictionary] = {}
