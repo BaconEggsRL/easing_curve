@@ -1611,6 +1611,49 @@ Milestones 2C, 6, 7, and 9.
 Clearer ownership if a simple boundary exists, with explicit permission to
 leave the current bridge when moving it would increase complexity.
 
+### Completion record
+
+Completed with no production boundary move warranted. The current resource and
+editor division remains intentional after the Milestone 4--9 cleanup.
+
+Candidates assessed:
+
+- `EasingCurvePoint._input_controls` and its input update helpers are transient
+  editor-only Control bookkeeping and are not serialized. They remain on the
+  point because the existing public `set_input_control()` bridge lets every
+  runtime point mutation synchronously refresh the bound Inspector values and
+  read-only state without recursive edits. Moving the map into the Inspector
+  would require new point-change/lock-state observation, per-control connection
+  and disconnection lifecycle management, and duplication of the point's
+  mutation/editability rules. The bridge is therefore an intentional,
+  compatibility-preserving compromise rather than runtime behavior to extract.
+- `EasingCurve._last_slider_value`, `_last_zoom`, `_last_pan`, and their
+  curve-editor callbacks are non-serialized, private per-resource view state.
+  The Inspector restores them when its graph is rebuilt, including after a
+  resource switch, without making selection or view state serialized. Moving
+  them to a static editor cache would add a second per-resource state authority
+  and explicit stale-instance cleanup, while the graph would still need the
+  same update/restore contract. Retained on the resource.
+- Graph selection, hover, drag, pan/zoom application, Inspector refresh
+  preservation, property highlight Controls, and Undo/Redo remain editor-owned.
+  Runtime mutation correctness, point change propagation, topology tracking,
+  snapshots, property-list behavior, and notification/revision handling remain
+  resource-owned. No runtime-independent editor state was moved into a
+  resource.
+
+No production files changed. Public API, serialized properties and snapshot
+keys, `changed`/`points_changed` timing, revision/suppression behavior, runtime
+sampling, and the Milestone 4 restore helper are unchanged. The Milestone 6
+selection authority, Milestone 7 Undo/Redo ownership, Milestone 8 transition
+presentation metadata, Milestone 9 no-extraction decision, and
+`_native_section.focus_mode = Control.FOCUS_NONE` remain intact.
+
+Focused validation passed through `test/run_godot.ps1`: serialization/transition
+contracts (413 checks), runtime curve updates (1050), point-state
+characterization (93), selection/refresh characterization (35), and editor
+Undo/Redo (627). `test/run_all_tests.ps1` passed all 17 configured suites.
+`git diff --check` passed. Milestone 11 was not started.
+
 ## Milestone 11 — Final naming, comments, and file organization
 
 ### Goal
