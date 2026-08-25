@@ -1429,6 +1429,24 @@ Milestones 2B, 3, and 5.
 Adding a transition has one fewer independent complete list and missed Inspector
 ease/group edits become test failures.
 
+### Completion record
+
+- Completed. Introduced `TRANSITION_PRESENTATION` in the Inspector as the
+  single source for transition dropdown group/order and Ease availability.
+- Runtime/public transition enums, function registrations, parameter metadata,
+  exports, serialization, and preset behavior remain untouched.
+- Added an Inspector-host contract covering exact dropdown groups, labels,
+  IDs, order, selected item, and Ease availability; existing parameter and
+  modified/reset contracts remain in their runtime/editor tests.
+- Intentional duplication remains in runtime transition/function/parameter
+  tables and runtime contract tests because those are runtime-authoritative,
+  not Inspector presentation metadata.
+- Focused validation passed: Inspector Undo/Redo (627 checks), runtime updates
+  (1050), v1.0.5 regression (1056), serialization/transition contracts (413),
+  control editability (15), linear control aliases (72), selection/refresh
+  characterization (35), graph gestures (13), and the remaining configured
+  test suites in `test/run_all_tests.ps1`.
+
 ## Milestone 9 — Reassess Inspector responsibility extraction
 
 ### Goal

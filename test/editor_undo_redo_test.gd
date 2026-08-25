@@ -30,6 +30,7 @@ func _init() -> void:
 	_test_back_modified_reset_uses_current_overshoot()
 	_test_back_point_property_defaults()
 	_test_preset_reset_layout_stability()
+	_test_transition_presentation_contract()
 	_test_css_cubic_bezier_dropdown_order()
 	if EDITOR_HOST.supports_native_layout_fixtures():
 		_test_points_foldable_section()
@@ -516,14 +517,11 @@ func _test_preset_reset_layout_stability() -> void:
 
 
 func _test_css_cubic_bezier_dropdown_order() -> void:
-	var transition_option := INSPECTOR_PLUGIN._create_option(
-		EasingCurve.TRANS,
-		EasingCurve.TRANS.CSS_CUBIC_BEZIER,
-	)
+	var transition_option := INSPECTOR_PLUGIN._create_transition_option(EasingCurve.TRANS.CSS_CUBIC_BEZIER)
 	var linear_index := transition_option.get_item_index(EasingCurve.TRANS.CSS_LINEAR)
 	var cubic_index := transition_option.get_item_index(EasingCurve.TRANS.CSS_CUBIC_BEZIER)
 	_expect(linear_index >= 0, "CSS Linear is missing from the Transition dropdown")
-	_expect(cubic_index == linear_index + 1, "CSS Cubic Bezier is not directly below CSS Linear")
+	_expect(linear_index == cubic_index + 1, "CSS Linear is not directly below CSS Cubic Bezier")
 	_expect(
 		transition_option.get_selected_id() == EasingCurve.TRANS.CSS_CUBIC_BEZIER,
 		"CSS Cubic Bezier could not be selected in the Transition dropdown",
@@ -533,6 +531,50 @@ func _test_css_cubic_bezier_dropdown_order() -> void:
 		"CSS Cubic Bezier unexpectedly enables the Ease dropdown",
 	)
 	transition_option.free()
+
+
+func _test_transition_presentation_contract() -> void:
+	var expected_groups := [
+		{"name": "Basic", "items": [EasingCurve.TRANS.LINEAR, EasingCurve.TRANS.CONSTANT]},
+		{"name": "Polynomial", "items": [EasingCurve.TRANS.QUAD, EasingCurve.TRANS.CUBIC, EasingCurve.TRANS.QUART, EasingCurve.TRANS.QUINT, EasingCurve.TRANS.POWER]},
+		{"name": "Smooth", "items": [EasingCurve.TRANS.SINE, EasingCurve.TRANS.CIRC, EasingCurve.TRANS.EXPO]},
+		{"name": "Springy", "items": [EasingCurve.TRANS.BACK, EasingCurve.TRANS.ELASTIC, EasingCurve.TRANS.BOUNCE, EasingCurve.TRANS.SPRING, EasingCurve.TRANS.PHYSICS_SPRING]},
+		{"name": "Discrete", "items": [EasingCurve.TRANS.STEP, EasingCurve.TRANS.JITTER, EasingCurve.TRANS.IRREGULAR]},
+		{"name": "CSS", "items": [EasingCurve.TRANS.CSS_CUBIC_BEZIER, EasingCurve.TRANS.CSS_LINEAR]},
+		{"name": "Custom", "items": [EasingCurve.TRANS.CUSTOM]},
+	]
+	var expected_without_ease := [
+		EasingCurve.TRANS.CUSTOM,
+		EasingCurve.TRANS.CONSTANT,
+		EasingCurve.TRANS.LINEAR,
+		EasingCurve.TRANS.STEP,
+		EasingCurve.TRANS.CSS_LINEAR,
+		EasingCurve.TRANS.CSS_CUBIC_BEZIER,
+	]
+	var option := INSPECTOR_PLUGIN._create_transition_option(EasingCurve.TRANS.CSS_LINEAR)
+	var popup := option.get_popup()
+	var expected_index := 0
+	var seen := []
+
+	for group: Dictionary in expected_groups:
+		_expect(popup.is_item_separator(expected_index), "%s group separator is missing" % group["name"])
+		_expect(popup.get_item_text(expected_index) == group["name"], "%s group label changed" % group["name"])
+		expected_index += 1
+		for transition: EasingCurve.TRANS in group["items"]:
+			var expected_label := String(EasingCurve.TRANS.keys()[transition]).to_lower().capitalize().replace("_", " ")
+			_expect(not popup.is_item_separator(expected_index), "%s became a separator" % expected_label)
+			_expect(option.get_item_id(expected_index) == transition, "%s dropdown ID or order changed" % expected_label)
+			_expect(option.get_item_text(expected_index) == expected_label, "%s dropdown label changed" % expected_label)
+			seen.append(transition)
+			expected_index += 1
+
+	_expect(expected_index == popup.item_count, "Transition dropdown item count changed")
+	_expect(seen.size() == EasingCurve.TRANS.size(), "Transition dropdown does not include every transition exactly once")
+	for transition: EasingCurve.TRANS in EasingCurve.TRANS.values():
+		_expect(seen.count(transition) == 1, "%s dropdown membership changed" % EasingCurve.TRANS.keys()[transition])
+		_expect(INSPECTOR_PLUGIN._transition_supports_ease(transition) == (transition not in expected_without_ease), "%s Ease availability changed" % EasingCurve.TRANS.keys()[transition])
+	_expect(option.get_selected_id() == EasingCurve.TRANS.CSS_LINEAR, "Transition dropdown selected ID changed")
+	option.free()
 
 
 func _test_responsive_graph_layout() -> void:
