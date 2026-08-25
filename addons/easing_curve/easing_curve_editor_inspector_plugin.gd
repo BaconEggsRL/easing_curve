@@ -2194,10 +2194,15 @@ func _create_handle_mode_property(
 	value_panel.custom_minimum_size.x = 0.0
 	row.add_child(value_panel)
 
+	var option_container := Control.new()
+	option_container.custom_minimum_size.x = 0.0
+	option_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	value_panel.add_child(option_container)
+
 	var option := OptionButton.new()
 	_configure_compact_option(option)
-	option.custom_minimum_size.x = 0.0
-	value_panel.add_child(option)
+	option.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	option_container.add_child(option)
 
 	option.add_item("Free", EasingCurvePoint.HandleMode.FREE)
 	option.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
