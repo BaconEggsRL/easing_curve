@@ -321,23 +321,35 @@ func _create_selectable_point_property_header(
 		_selected_point_property_header = property_header
 		_set_point_property_selected(property_header, true)
 
-	var header_hbox := HBoxContainer.new()
-	header_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_hbox.add_theme_constant_override(
-		&"separation",
-		_compact_separation(),
-	)
-	property_header.add_child(header_hbox)
+	var overlay_root := Control.new()
+	overlay_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	overlay_root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	property_header.add_child(overlay_root)
 
 	var property_label := Label.new()
 	property_label.text = label_text
 	property_label.tooltip_text = property_path
 	_configure_compact_label(property_label)
 	property_label.custom_minimum_size.x = 0.0
-	header_hbox.add_child(property_label)
+	property_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay_root.add_child(property_label)
 
-	reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
-	header_hbox.add_child(reset_btn)
+	var reset_width := maxf(
+		reset_btn.get_combined_minimum_size().x,
+		float(reset_btn.icon.get_width()) * EditorInterface.get_editor_scale(),
+	)
+	reset_btn.set_meta(&"point_property_label", property_label)
+	reset_btn.set_meta(&"point_reset_width", reset_width)
+	reset_btn.anchor_left = 1.0
+	reset_btn.anchor_right = 1.0
+	reset_btn.anchor_top = 0.0
+	reset_btn.anchor_bottom = 1.0
+	reset_btn.offset_left = -reset_width
+	reset_btn.offset_right = 0.0
+	reset_btn.offset_top = 0.0
+	reset_btn.offset_bottom = 0.0
+	overlay_root.add_child(reset_btn)
+	_update_point_reset_button_label_margin(reset_btn)
 
 	return property_header
 
@@ -1383,7 +1395,7 @@ func _on_reset_btn_pressed(
 		point if edit_property_name == &"position" else null,
 	)
 
-	reset_btn.visible = false
+	_set_point_reset_button_available(reset_btn, false)
 
 
 func _on_remove_btn_pressed(_point_list: VBoxContainer, _i: int, _point_panel: PanelContainer, p: EasingCurvePoint) -> void:
@@ -1565,8 +1577,9 @@ static func _set_point_reset_button_available(
 	available: bool,
 ) -> void:
 	var tint := reset_btn.self_modulate
-	tint.a = 1.0 if available else 0.0
+	tint.a = 1.0
 	reset_btn.self_modulate = tint
+	reset_btn.visible = available
 
 	reset_btn.mouse_filter = (
 		Control.MOUSE_FILTER_STOP
@@ -1579,6 +1592,18 @@ static func _set_point_reset_button_available(
 		if available
 		else Control.FOCUS_NONE
 	)
+	_update_point_reset_button_label_margin(reset_btn)
+
+
+static func _update_point_reset_button_label_margin(reset_btn: Button) -> void:
+	var property_label := reset_btn.get_meta(
+		&"point_property_label",
+		null,
+	) as Label
+	if not is_instance_valid(property_label):
+		return
+	var reset_width := float(reset_btn.get_meta(&"point_reset_width", 0.0))
+	property_label.offset_right = -reset_width if reset_btn.visible else 0.0
 
 
 static func _create_point_reset_button() -> Button:
