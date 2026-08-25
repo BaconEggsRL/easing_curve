@@ -1763,7 +1763,9 @@ func _create_vector2_property(
 	value_panel.add_child(value_hbox)
 
 	var force_linear_slot := Control.new()
-	force_linear_slot.custom_minimum_size.x = 24.0 * EditorInterface.get_editor_scale()
+	force_linear_slot.custom_minimum_size.x = (
+		24.0 * EditorInterface.get_editor_scale()
+	)
 	force_linear_slot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
 	# Left side (the X/Y stack)
@@ -1782,8 +1784,6 @@ func _create_vector2_property(
 	var force_linear_btn := Button.new()
 	force_linear_btn.flat = true
 	force_linear_btn.toggle_mode = true
-	#force_linear_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	#force_linear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	force_linear_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	if property_name in ["left_control_point", "right_control_point"]:
