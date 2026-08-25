@@ -105,8 +105,7 @@ func _parse_begin(object: Object) -> void:
 	if not object is EasingCurve:
 		return
 
-	if _preserve_point_selection_on_refresh:
-		_preserve_point_selection_on_refresh = false
+	if _consume_point_selection_refresh_preservation():
 		return
 
 	_clear_point_property_selection()
@@ -326,8 +325,7 @@ func _create_selectable_point_property_header(
 		_selected_point_index == i
 		and _selected_point_property_name == property_name
 	):
-		_selected_point_property_header = property_header
-		_set_point_property_selected(property_header, true)
+		_attach_selected_point_property_header(property_header)
 
 	var overlay_root := Control.new()
 	overlay_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1036,6 +1034,47 @@ var _preserve_point_selection_on_refresh := false
 var _position_x_order_preview_point: EasingCurvePoint
 
 
+func _request_point_selection_refresh_preservation() -> void:
+	_preserve_point_selection_on_refresh = true
+
+
+func _consume_point_selection_refresh_preservation() -> bool:
+	if not _preserve_point_selection_on_refresh:
+		return false
+	_preserve_point_selection_on_refresh = false
+	return true
+
+
+func _assign_logical_point_selection(
+		point_index: int,
+		property_name: StringName,
+) -> void:
+	_selected_point_index = point_index
+	_selected_point_resource_id = (
+		curve.points[point_index].get_instance_id()
+		if curve != null and point_index >= 0 and point_index < curve.points.size()
+		else 0
+	)
+	_selected_point_property_name = property_name
+
+
+func _detach_selected_point_property_header() -> void:
+	_selected_point_property_header = null
+
+
+func _attach_selected_point_property_header(
+		property_header: PanelContainer,
+) -> void:
+	_detach_selected_point_property_header()
+	_selected_point_property_header = property_header
+	_set_point_property_selected(property_header, true)
+
+
+func _sync_graph_selected_point_index(point_index: int) -> void:
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.selected_index = point_index
+
+
 func _clear_point_property_selection() -> void:
 	if is_instance_valid(_selected_point_property_header):
 		_set_point_property_selected(
@@ -1043,10 +1082,8 @@ func _clear_point_property_selection() -> void:
 			false
 		)
 
-	_selected_point_property_header = null
-	_selected_point_index = -1
-	_selected_point_property_name = StringName()
-	_selected_point_resource_id = 0
+	_detach_selected_point_property_header()
+	_assign_logical_point_selection(-1, StringName())
 
 
 func _capture_point_selection_state() -> Dictionary:
@@ -1086,8 +1123,7 @@ func _capture_point_selection_state() -> Dictionary:
 func _restore_point_selection_state(selection: Dictionary) -> void:
 	if not bool(selection.get("has_selection", false)):
 		_clear_point_property_selection()
-		if is_instance_valid(easing_curve_editor):
-			easing_curve_editor.selected_index = -1
+		_sync_graph_selected_point_index(-1)
 		return
 
 	var point_index := int(selection.get("point_index", -1))
@@ -1102,15 +1138,13 @@ func _restore_point_selection_state(selection: Dictionary) -> void:
 		_restore_point_selection_state({"has_selection": false})
 		return
 
-	_preserve_point_selection_on_refresh = true
-	_selected_point_property_header = null
-	_selected_point_index = point_index
-	_selected_point_resource_id = curve.points[point_index].get_instance_id()
-	_selected_point_property_name = StringName(
-		selection.get("property_name", StringName())
+	_request_point_selection_refresh_preservation()
+	_detach_selected_point_property_header()
+	_assign_logical_point_selection(
+		point_index,
+		StringName(selection.get("property_name", StringName())),
 	)
-	if is_instance_valid(easing_curve_editor):
-		easing_curve_editor.selected_index = point_index
+	_sync_graph_selected_point_index(point_index)
 
 func handle_points(curve: EasingCurve) -> VBoxContainer:
 	# Contains the list of points
@@ -1465,7 +1499,7 @@ func _on_reset_btn_pressed(
 	var i := _get_current_point_index(point)
 	if i == -1:
 		return
-	_preserve_point_selection_on_refresh = true
+	_request_point_selection_refresh_preservation()
 	var edit_property_name := _get_point_input_edit_property(point, property_name)
 	var new_default := curve.get_default_for_property(i, edit_property_name)
 
@@ -1614,11 +1648,12 @@ func _select_reordered_point(point: EasingCurvePoint) -> void:
 	var point_index := _get_current_point_index(point)
 	if point_index == -1:
 		return
-	_preserve_point_selection_on_refresh = true
-	_selected_point_index = point_index
-	_selected_point_resource_id = point.get_instance_id()
-	if easing_curve_editor != null:
-		easing_curve_editor.select_point(point)
+	_request_point_selection_refresh_preservation()
+	_assign_logical_point_selection(
+		point_index,
+		_selected_point_property_name,
+	)
+	_sync_graph_selected_point_index(point_index)
 
 
 # remember bind() arguments are at the end
@@ -1768,16 +1803,8 @@ func _select_point_property(
 			false
 		)
 
-	_selected_point_property_header = property_header
-	_selected_point_index = point_index
-	_selected_point_property_name = property_name
-	_selected_point_resource_id = (
-		curve.points[point_index].get_instance_id()
-		if point_index >= 0 and point_index < curve.points.size()
-		else 0
-	)
-
-	_set_point_property_selected(property_header, true)
+	_assign_logical_point_selection(point_index, property_name)
+	_attach_selected_point_property_header(property_header)
 
 
 func _select_point_property_for_point(
@@ -1814,9 +1841,11 @@ func _reorder_position_edited_point(
 		easing_curve_editor._set_position_x_order_preview(point)
 		return
 
-	_selected_point_index = point_index
-	_selected_point_resource_id = point.get_instance_id()
-	easing_curve_editor.selected_index = point_index
+	_assign_logical_point_selection(
+		point_index,
+		_selected_point_property_name,
+	)
+	_sync_graph_selected_point_index(point_index)
 
 	if curve.points != point_order:
 		curve.points = point_order
@@ -2074,7 +2103,7 @@ func _create_point_lock_button(
 	lock_btn.modulate.a = 0.25 if not lock_available else 1.0 if toggled_on else 0.5
 	lock_btn.toggled.connect(
 		func(next_toggled_on: bool):
-			_preserve_point_selection_on_refresh = true
+			_request_point_selection_refresh_preservation()
 			_select_point_property(property_header, i, StringName(property_name))
 			lock_btn.icon = LOCK if next_toggled_on else UNLOCK
 			lock_btn.modulate.a = 1.0 if next_toggled_on else 0.5
@@ -2206,7 +2235,7 @@ func _on_add_point_btn_pressed() -> void:
 
 
 func _add_points_list_point(point: EasingCurvePoint) -> void:
-	_preserve_point_selection_on_refresh = true
+	_request_point_selection_refresh_preservation()
 	_add_point(
 		point,
 		_capture_point_selection_state(),
@@ -2631,7 +2660,7 @@ func _apply_point_property_change(
 ) -> void:
 	if i < 0 or i >= curve.points.size():
 		return
-	_preserve_point_selection_on_refresh = true
+	_request_point_selection_refresh_preservation()
 	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	if changing and _point_edit_before_state.is_empty():
 		_point_edit_before_state = before

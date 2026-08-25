@@ -1280,6 +1280,29 @@ Milestones 2C and 5.
 Future topology and transaction changes have one understandable selection
 authority instead of scattered coordinated assignments.
 
+### Completion record
+
+Completed. The Inspector now uses private helpers to request/consume one-shot
+refresh preservation, assign durable logical point/property selection,
+attach/detach rebuilt property headers, and mirror derived point indexes to the
+graph. Point Resource identity plus property name remain the durable refresh
+state; point index, property header, and graph selection remain derived where
+the existing behavior permits. Direct Inspector field writes now remain only
+inside those helper internals, while the graph editor continues to own its
+existing `selected_index` setter and `_selected_index_by_curve` cache for
+per-resource graph persistence. Refresh rebuilds detach old headers and attach
+the recreated matching header without retaining a stale Control reference.
+Undo/Redo restoration, add/remove/reorder, Position-X topology reconciliation,
+and resource switching keep their existing call order and semantics.
+
+Focused validation passed: selection/refresh characterization (35 checks),
+graph gestures (13), Position-X drag (60), Points-list add (84), Points-list
+reorder (45), editor Undo/Redo (505; native-layout fixtures skipped as
+documented for Godot 4.7 headless), point state (93), control editability (15),
+and linear control aliases (72). Visible-editor fold, focus, scroll, and
+narrow/wide layout checks in `test/docs/easing_curve_editor_visible_regression_checklist.md`
+remain manual.
+
 ## Milestone 7 — Simplify explicit Undo/Redo transaction boilerplate
 
 ### Goal
