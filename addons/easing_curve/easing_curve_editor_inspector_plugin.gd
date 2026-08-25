@@ -1840,8 +1840,6 @@ func _create_vector2_property(
 	x_input.grabbed.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 	x_input.focus_entered.connect(_select_point_property_for_point.bind(property_header, point, StringName(property_name)))
 	point.set_input_control(property_name, "x", x_input)
-	x_input.read_only = point.locked[property_name]
-	y_input.read_only = point.locked[property_name]
 
 	x_row.add_child(x_label)
 	x_row.add_child(x_input)

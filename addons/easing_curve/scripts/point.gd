@@ -120,16 +120,48 @@ func is_lock_active(property_name: StringName) -> bool:
 
 
 func _update_input_lock_state(property_name: String) -> void:
-	var read_only := is_lock_active(StringName(property_name))
+	var read_only := not is_position_input_editable(property_name)
 
 	var x_input := _get_input(property_name, "x")
 	var y_input := _get_input(property_name, "y")
 
-	if x_input:
-		x_input.read_only = read_only
+	_set_input_read_only(x_input, read_only)
+	_set_input_read_only(y_input, read_only)
 
-	if y_input:
-		y_input.read_only = read_only
+
+func _set_input_read_only(input: Object, read_only: bool) -> void:
+	if input == null:
+		return
+
+	for property in input.get_property_list():
+		if property.name == &"read_only":
+			input.set(&"read_only", read_only)
+			return
+
+
+func is_position_input_editable(property_name: String) -> bool:
+	if property_name == "position":
+		return not is_lock_active(&"position")
+
+	var side := (
+		ControlSide.LEFT
+		if property_name == "left_control_point"
+		else ControlSide.RIGHT
+	)
+	return is_control_position_editable(side)
+
+
+func is_control_position_editable(side: ControlSide) -> bool:
+	var property_name := (
+		&"left_control_point"
+		if side == ControlSide.LEFT
+		else &"right_control_point"
+	)
+	return (
+		handle_mode != HandleMode.LINEAR
+		and not is_lock_active(property_name)
+		and not is_control_force_linear_active(side)
+	)
 
 
 func set_locked(property_name: String, toggled_on: bool) -> void:
@@ -380,6 +412,7 @@ func set_input_control(property_name: String, axis: String, control: Object) -> 
 	if not _input_controls.has(id):
 		_input_controls[id] = {}
 	_input_controls[id][property_name + axis] = weakref(control)
+	_update_input_lock_state(property_name)
 
 
 func _get_input(property_name: String, axis: String) -> Object:
@@ -632,6 +665,8 @@ func _set_control_force_linear(
 		else:
 			_initialize_default_handle(side)
 
+	_update_input_lock_state("left_control_point")
+	_update_input_lock_state("right_control_point")
 	emit_changed()
 
 
@@ -700,6 +735,8 @@ func set_force_linear_state(
 		else:
 			_apply_free_force_linear_state()
 
+	_update_input_lock_state("left_control_point")
+	_update_input_lock_state("right_control_point")
 	emit_changed()
 
 
