@@ -1158,7 +1158,7 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 		remove_btn.flat = true
 		remove_btn.tooltip_text = "Remove Point"
 		remove_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		remove_btn.pressed.connect(_on_remove_btn_pressed.bind(point_list, i, point_panel, point))
+		remove_btn.pressed.connect(_on_remove_btn_pressed.bind(point))
 
 		point_main_hbox.add_child(remove_btn)
 
