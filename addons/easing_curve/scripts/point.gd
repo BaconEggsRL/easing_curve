@@ -157,9 +157,11 @@ func is_control_position_editable(side: ControlSide) -> bool:
 		if side == ControlSide.LEFT
 		else &"right_control_point"
 	)
+	if handle_mode == HandleMode.LINEAR:
+		return not bool(locked.get(String(property_name), false))
+
 	return (
-		handle_mode != HandleMode.LINEAR
-		and not is_lock_active(property_name)
+		not is_lock_active(property_name)
 		and not is_control_force_linear_active(side)
 	)
 

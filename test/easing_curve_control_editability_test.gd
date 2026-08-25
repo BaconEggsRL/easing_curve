@@ -54,10 +54,17 @@ func _test_control_editability_constraints() -> void:
 
 	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
 	_expect(
-		_control_inputs_are_read_only(inputs, "left_control_point")
-		and _control_inputs_are_read_only(inputs, "right_control_point"),
-		"Linear mode did not disable both control-position inputs",
+		not _control_inputs_are_read_only(inputs, "left_control_point")
+		and not _control_inputs_are_read_only(inputs, "right_control_point"),
+		"Linear mode did not keep both control-position inputs editable",
 	)
+	point.set_locked("left_control_point", true)
+	_expect(
+		_control_inputs_are_read_only(inputs, "left_control_point")
+		and not _control_inputs_are_read_only(inputs, "right_control_point"),
+		"Linear mode bypassed the existing left-control lock",
+	)
+	point.set_locked("left_control_point", false)
 
 	point.handle_mode = EasingCurvePoint.HandleMode.FREE
 	_expect(
@@ -110,14 +117,14 @@ func _test_handle_mode_undo_redo_refreshes_inputs() -> void:
 		EDITOR_UNDO.commit_applied_action(history, curve, "Change Easing Curve Handle Mode", before, after),
 		"Handle mode change did not create an Undo/Redo action",
 	)
-	_expect(_control_inputs_are_read_only(inputs, "left_control_point"), "Linear mode did not disable inputs before Undo")
+	_expect(not _control_inputs_are_read_only(inputs, "left_control_point"), "Linear mode did not keep inputs editable before Undo")
 	history.undo()
 	_expect(
 		not _control_inputs_are_read_only(inputs, "left_control_point"),
 		"Undo did not restore control-position editability",
 	)
 	history.redo()
-	_expect(_control_inputs_are_read_only(inputs, "left_control_point"), "Redo did not restore disabled control-position inputs")
+	_expect(not _control_inputs_are_read_only(inputs, "left_control_point"), "Redo did not restore Linear control-position editability")
 	history.clear_history(false)
 	history.free()
 	_free_inputs(inputs)
