@@ -1456,7 +1456,10 @@ with `SEM_FAILCRITICALERRORS` and `SEM_NOGPFAULTERRORBOX` enabled for the test
 process tree. It suppresses Windows native application-error dialogs only;
 Godot stdout, stderr, and exact non-zero exit codes remain visible to the
 aggregate runner. Automated tests should use this wrapper, while direct Godot
-execution remains valid for manual debugging. Milestone 9 scope is unchanged.
+execution remains valid for manual debugging. The wrapper also supplies a
+unique workspace-local `.godot/test_logs` `--log-file` unless a caller supplies
+one, so sandboxed test runs do not depend on `user://logs`. Milestone 9 scope
+is unchanged.
 Validation: `runtime_curve_updates_test.gd` passed with 1050 checks through the
 wrapper and exit code 0. A nonexistent test script produced Godot exit code 1,
 which the wrapper propagated unchanged. The updated aggregate runner passed all

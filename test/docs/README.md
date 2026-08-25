@@ -29,10 +29,16 @@ Run every headless and Editor-host suite independently with:
 
 `test/run_godot.ps1` launches the configured Godot 4.7.1 console executable
 with Windows native application-error dialogs suppressed for that test process
-tree only. It preserves Godot stdout, stderr, and exact exit codes; a non-zero
-Godot exit remains a test failure. Direct Godot execution remains valid for
-manual debugging. The runner returns a non-zero exit code if any suite times
-out, exits unsuccessfully, lacks a PASS marker, or logs a script error.
+tree only. All automated Godot tests must use this wrapper; do not invoke Godot
+directly for routine test validation. The wrapper supplies a unique,
+sandbox-writable `--log-file` under `.godot/test_logs` unless the caller has
+already supplied `--log-file`. Do not request privileged execution solely
+because `user://logs` is inaccessible; only escalate if the wrapper encounters
+a different sandbox restriction. It preserves Godot stdout, stderr, and exact
+exit codes; a non-zero Godot exit remains a test failure. Direct Godot
+execution remains valid for manual debugging. The runner returns a non-zero
+exit code if any suite times out, exits unsuccessfully, lacks a PASS marker, or
+logs a script error.
 
 Under Godot 4.7 `--editor --headless`, `editor_undo_redo_test.gd` skips its
 `FoldableContainer` fixture because it crashes in that environment and its
