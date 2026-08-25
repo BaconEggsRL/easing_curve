@@ -1917,6 +1917,7 @@ func _create_vector2_property(
 	x_input.label = ""
 	x_input.value = vec.x
 	x_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	x_input.custom_minimum_size.x = 0.0
 
 	x_input.value_changed.connect(_on_x_input_value_changed.bind(i, point, x_input, reset_btn, default_vec.x, property_name))
 	_connect_point_input_drag_signals(x_input)
@@ -1962,6 +1963,7 @@ func _create_vector2_property(
 	y_input.label = ""
 	y_input.value = vec.y
 	y_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	y_input.custom_minimum_size.x = 0.0
 
 	y_input.value_changed.connect(_on_y_input_value_changed.bind(i, point, y_input, reset_btn, default_vec.y, property_name))
 	_connect_point_input_drag_signals(y_input)
