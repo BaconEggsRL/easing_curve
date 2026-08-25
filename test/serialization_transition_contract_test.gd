@@ -20,6 +20,7 @@ func _init() -> void:
 
 	if _failures == 0:
 		print("PASS: %d serialization and transition contract checks" % _checks)
+		quit(0)
 	else:
 		push_error("FAIL: %d of %d serialization and transition contract checks failed" % [_failures, _checks])
 		quit(_failures)
@@ -65,7 +66,7 @@ func _expect_property(
 
 
 func _test_legacy_resource_fixtures() -> void:
-	# Exact historical resource forms from commits cefdbd4 (pre-flat) and 2feaa6f
+	# Historical resource data from commits cefdbd4 (pre-flat) and 2feaa6f
 	# (flat storage before handle mode and Force Linear fields).
 	_expect(
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(ROUND_TRIP_DIRECTORY)) == OK,

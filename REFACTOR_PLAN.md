@@ -992,6 +992,17 @@ Milestone 2A.
 
 Later cleanup cannot silently change files, enums, defaults, or sampling paths.
 
+### Completion record
+
+Completed. `test/serialization_transition_contract_test.gd` adds 413 passing
+contract checks, backed by immutable historical pre-flat `Array[Resource]` and
+flat missing-Force-Linear fixtures under `test/presets/`. The suite locks enum
+IDs; exported property metadata, defaults, storage, and editor visibility;
+primitive point-storage and snapshot schemas; transition registrations,
+callables, parameter order, and generated-data metadata; plus load, sample,
+current-format save, and reload compatibility. The aggregate baseline now
+includes this suite.
+
 ## Milestone 2C — Add editor selection, point-state, and gesture characterization
 
 ### Goal
