@@ -2141,12 +2141,15 @@ func _create_handle_mode_property(
 		"Handle Mode",
 		reset_btn,
 	)
+	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
 	row.add_child(property_header)
 
 	var value_panel := PanelContainer.new()
 	value_panel.add_theme_stylebox_override(&"panel", X_STYLEBOX)
 	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
 	row.add_child(value_panel)
+
 	var option := OptionButton.new()
 	_configure_compact_option(option)
 	value_panel.add_child(option)
