@@ -1759,7 +1759,6 @@ func _create_vector2_property(
 	var force_linear_slot := Control.new()
 	force_linear_slot.custom_minimum_size.x = 24.0 * EditorInterface.get_editor_scale()
 	force_linear_slot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	value_hbox.add_child(force_linear_slot)
 
 	# Left side (the X/Y stack)
 	var value_vbox := VBoxContainer.new()
@@ -1769,6 +1768,7 @@ func _create_vector2_property(
 	value_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_vbox.add_theme_constant_override("separation", 0)
 	value_hbox.add_child(value_vbox)
+	value_hbox.add_child(force_linear_slot)
 
 
 	##############################################
