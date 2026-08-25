@@ -270,9 +270,11 @@ func _create_selectable_point_property_header(
 			* EditorInterface.get_editor_scale(),
 	)
 
+	var reset_gap := float(_compact_separation())
+
 	property_header.custom_minimum_size.x = (
 		reset_width
-		+ _compact_separation()
+		+ reset_gap * 2.0
 	)
 
 	var property_context_menu := _create_point_property_context_menu(
@@ -345,14 +347,17 @@ func _create_selectable_point_property_header(
 	property_label.custom_minimum_size.x = 0.0
 	property_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay_root.add_child(property_label)
+
 	reset_btn.set_meta(&"point_property_label", property_label)
 	reset_btn.set_meta(&"point_reset_width", reset_width)
+	reset_btn.set_meta(&"point_reset_gap", reset_gap)
 	reset_btn.anchor_left = 1.0
 	reset_btn.anchor_right = 1.0
 	reset_btn.anchor_top = 0.0
 	reset_btn.anchor_bottom = 1.0
-	reset_btn.offset_left = -reset_width
-	reset_btn.offset_right = 0.0
+	reset_btn.offset_left = -(reset_width + reset_gap)
+	reset_btn.offset_right = -reset_gap
+
 	reset_btn.offset_top = 0.0
 	reset_btn.offset_bottom = 0.0
 	overlay_root.add_child(reset_btn)
@@ -1608,6 +1613,7 @@ static func _update_point_reset_button_label_margin(
 	if (
 		not reset_btn.has_meta(&"point_property_label")
 		or not reset_btn.has_meta(&"point_reset_width")
+		or not reset_btn.has_meta(&"point_reset_gap")
 	):
 		return
 
@@ -1620,8 +1626,12 @@ static func _update_point_reset_button_label_margin(
 	var reset_width := float(
 		reset_btn.get_meta(&"point_reset_width")
 	)
+	var reset_gap := float(
+		reset_btn.get_meta(&"point_reset_gap")
+	)
+
 	property_label.offset_right = (
-		-reset_width
+		-(reset_width + reset_gap)
 		if reset_btn.visible
 		else 0.0
 	)
