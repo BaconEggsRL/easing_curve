@@ -333,6 +333,7 @@ func _create_selectable_point_property_header(
 	var overlay_root := Control.new()
 	overlay_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	overlay_root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	overlay_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	property_header.add_child(overlay_root)
 
 	var property_label := Label.new()
@@ -340,6 +341,7 @@ func _create_selectable_point_property_header(
 	property_label.tooltip_text = property_path
 	_configure_compact_label(property_label)
 	property_label.custom_minimum_size.x = 0.0
+	property_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	property_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay_root.add_child(property_label)
 
@@ -350,6 +352,7 @@ func _create_selectable_point_property_header(
 
 	var reset_clip := Control.new()
 	reset_clip.clip_contents = true
+	reset_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	reset_clip.anchor_left = 1.0
 	reset_clip.anchor_right = 1.0
 	reset_clip.anchor_top = 0.0
