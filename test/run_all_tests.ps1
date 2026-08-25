@@ -15,6 +15,7 @@ $suites = @(
 	@{ Name = "easing_curve_transform_test.gd"; Editor = $false },
 	@{ Name = "easing_curve_v105_regression_test.gd"; Editor = $false },
 	@{ Name = "runtime_curve_updates_test.gd"; Editor = $false },
+	@{ Name = "serialization_transition_contract_test.gd"; Editor = $false },
 	@{ Name = "tween_equivalence_test.gd"; Editor = $false },
 	@{ Name = "easing_curve_control_editability_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_editor_position_x_drag_test.gd"; Editor = $true },
