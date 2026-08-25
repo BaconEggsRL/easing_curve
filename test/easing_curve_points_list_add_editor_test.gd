@@ -12,6 +12,7 @@ func _init() -> void:
 		quit(1)
 		return
 	_test_points_list_add_preserves_endpoints()
+	_test_points_list_remove_button_undo_redo()
 
 	if _failures == 0:
 		print("PASS: %d Points-list Add checks" % _checks)
@@ -31,6 +32,49 @@ func _test_points_list_add_preserves_endpoints() -> void:
 	_test_missing_endpoint_defaults()
 	_test_interior_point_adds()
 	_test_graph_point_adds()
+
+
+func _test_points_list_remove_button_undo_redo() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	curve.points = [
+		EasingCurvePoint.new(Vector2.ZERO),
+		EasingCurvePoint.new(Vector2(0.5, 0.75)),
+		EasingCurvePoint.new(Vector2.ONE),
+	]
+	var editor_context := EDITOR_HOST.create_inspector_context(curve)
+	var editor: EasingCurveEditor = editor_context.editor
+	var inspector: EditorInspectorPlugin = editor_context.inspector
+	var before := EDITOR_UNDO.capture_state(curve)
+
+	var remove_button := Button.new()
+	remove_button.pressed.connect(
+		inspector._on_remove_btn_pressed.bind(curve.points[1])
+	)
+	remove_button.pressed.emit()
+	var after := EDITOR_UNDO.capture_state(curve)
+	_expect(curve.points.size() == 2, "Remove Point button did not remove its point")
+
+	var history := UndoRedo.new()
+	_expect(
+		EDITOR_UNDO.commit_applied_action(
+			history,
+			curve,
+			"Remove Easing Curve Point",
+			before,
+			after,
+		),
+		"Remove Point button result did not create an Undo action",
+	)
+	history.undo()
+	_expect(curve.points.size() == 3, "Remove Point button Undo did not restore the point")
+	history.redo()
+	_expect(curve.points.size() == 2, "Remove Point button Redo did not remove the point")
+
+	remove_button.free()
+	history.clear_history(false)
+	history.free()
+	editor.free()
 
 
 func _test_missing_endpoint_defaults() -> void:
