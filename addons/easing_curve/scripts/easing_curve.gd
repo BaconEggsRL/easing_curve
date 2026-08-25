@@ -303,6 +303,7 @@ var function_callable: Callable:
 			return
 
 		if trans_type == TRANS.CONSTANT:
+			var revision_before := _change_revision
 			var snapshot := get_canonical_preset_point_snapshot()
 
 			if _parameter_edit_depth > 0:
@@ -310,7 +311,10 @@ var function_callable: Callable:
 
 			set_point_snapshot(snapshot)
 
-		_notify_parameter_changed()
+			if _change_revision == revision_before:
+				_notify_parameter_changed()
+		else:
+			_notify_parameter_changed()
 
 
 # ------------------
@@ -326,11 +330,15 @@ var function_callable: Callable:
 		if _applying_editor_state_snapshot:
 			return
 		if trans_type == TRANS.BACK:
+			var revision_before := _change_revision
 			var snapshot := get_canonical_preset_point_snapshot()
 			if _parameter_edit_depth > 0:
 				snapshot["changing"] = true
 			set_point_snapshot(snapshot)
-		_notify_parameter_changed()
+			if _change_revision == revision_before:
+				_notify_parameter_changed()
+		else:
+			_notify_parameter_changed()
 
 # ------------------
 # POINTS

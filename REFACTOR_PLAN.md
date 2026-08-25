@@ -1161,6 +1161,20 @@ Milestones 2B and 3.
 
 One restoration rule for existing and newly created point resources.
 
+### Completion record
+
+Completed. `EasingCurve._restore_point_snapshot_state()` now consolidates the
+exact per-point restoration sequence, including Force Linear suspension,
+temporary Free mode, geometry, handle mode, restored Force Linear state, and
+lock normalization. The same-topology branch retains its existing point
+Resource identities; the topology-changing branch continues to create and
+replace point Resources. Point storage and snapshot schemas are unchanged, and
+the Milestone 3 revision-gated notification behavior remains intact. Focused
+validation passed: runtime updates (1050 checks), serialization/transition
+contracts (413), point-state characterization (93), v1.0.5 regressions (1056),
+transforms (498), and editor Undo/Redo (505; native layout fixtures skipped as
+documented for Godot 4.7 headless).
+
 ## Milestone 5 — Organize and locally split the Inspector
 
 ### Goal
