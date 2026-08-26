@@ -197,7 +197,15 @@ func _test_inspector_snapshot_state_precedence_and_reset() -> void:
 		_expect(not bool(curve.points[1].get(force_property)), "Inspector Lock did not win over active %s Force Linear" % property_name)
 		_expect(curve.points[1].get(property_name).is_equal_approx(curve.points[1].position + offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH), "Inspector Lock did not restore %s default geometry" % property_name)
 
+	inspector.call("_apply_point_property_change", 1, &"left_force_linear", true)
+	inspector.call("_apply_point_property_change", 1, &"left_control_lock", true)
+	_expect(curve.points[1].locked["left_control_point"], "Synthetic Free control lock did not lock the left control")
+	_expect(not curve.points[1].left_force_linear, "Synthetic Free control lock did not win over Force Linear")
+	_expect(curve.points[1].left_control_point.is_equal_approx(curve.points[1].position + Vector2.LEFT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH), "Synthetic Free control lock did not restore the left default handle")
+
 	inspector.call("_apply_point_property_change", 1, &"handle_mode", EasingCurvePoint.HandleMode.LINKED)
+	inspector.call("_apply_point_property_change", 1, &"left_control_lock", true)
+	_expect(curve.points[1].locked["left_control_point"] and curve.points[1].locked["right_control_point"], "Synthetic Linked control lock did not apply to both controls")
 	inspector.call("_apply_point_property_change", 1, &"right_force_linear", true)
 	_expect(
 		curve.points[1].is_control_forced_linear(EasingCurvePoint.ControlSide.LEFT)
@@ -205,6 +213,11 @@ func _test_inspector_snapshot_state_precedence_and_reset() -> void:
 		"Inspector Linked Force Linear did not apply to both controls",
 	)
 	_expect(curve.points[1].left_control_point == curve.points[1].position and curve.points[1].right_control_point == curve.points[1].position, "Inspector Linked Force Linear did not collapse both controls")
+	inspector.call("_apply_point_property_change", 1, &"right_control_lock", true)
+	_expect(not curve.points[1].left_force_linear and not curve.points[1].right_force_linear, "Synthetic Linked lock did not clear shared Force Linear")
+	_expect(curve.points[1].locked["left_control_point"] and curve.points[1].locked["right_control_point"], "Synthetic Linked lock did not keep both controls locked")
+	inspector.call("_apply_point_property_change", 1, &"left_control_lock", false)
+	_expect(not curve.points[1].locked["left_control_point"] and not curve.points[1].locked["right_control_point"], "Unlocking a synthetic Linked control lock did not unlock both controls")
 	inspector.call("_apply_point_property_change", 1, &"toolbar_options_reset", true)
 	_expect(curve.points[1].handle_mode == EasingCurvePoint.HandleMode.FREE, "Toolbar reset did not restore Free handle mode")
 	_expect(not curve.points[1].left_force_linear and not curve.points[1].right_force_linear, "Toolbar reset did not clear Force Linear state")

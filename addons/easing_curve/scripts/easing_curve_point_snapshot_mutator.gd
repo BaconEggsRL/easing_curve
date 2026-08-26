@@ -5,24 +5,6 @@ extends RefCounted
 ## The Inspector supplies user intent. This helper owns the Handle Mode,
 ## Control State, Force Linear, and Lock precedence rules.
 
-const PROPERTIES := [
-	&"handle_mode",
-	&"left_control_state",
-	&"right_control_state",
-	&"toolbar_options_reset",
-	&"left_force_linear",
-	&"right_force_linear",
-	&"locked",
-	&"position_lock",
-	&"left_control_lock",
-	&"right_control_lock",
-]
-
-
-static func handles(property_name: StringName) -> bool:
-	return property_name in PROPERTIES
-
-
 static func apply(
 	snapshot: Dictionary,
 	point: EasingCurvePoint,
@@ -81,10 +63,10 @@ static func apply(
 
 static func _read(snapshot: Dictionary, i: int) -> Dictionary:
 	return {
-		"position": snapshot["positions"][i],
-		"left_control_point": snapshot["left_control_points"][i],
-		"right_control_point": snapshot["right_control_points"][i],
-		"handle_mode": snapshot["handle_modes"][i],
+		"position": Vector2(snapshot["positions"][i]),
+		"left_control_point": Vector2(snapshot["left_control_points"][i]),
+		"right_control_point": Vector2(snapshot["right_control_points"][i]),
+		"handle_mode": int(snapshot["handle_modes"][i]),
 		"locks": snapshot["locks"][i].duplicate(true),
 		"left_force_linear": bool(snapshot["left_force_linear"][i]),
 		"right_force_linear": bool(snapshot["right_force_linear"][i]),
@@ -99,9 +81,9 @@ static func _write(snapshot: Dictionary, i: int, state: Dictionary) -> void:
 	var left_linear: PackedByteArray = snapshot["left_force_linear"]
 	var right_linear: PackedByteArray = snapshot["right_force_linear"]
 
-	left_controls[i] = state.left_control_point
-	right_controls[i] = state.right_control_point
-	modes[i] = state.handle_mode
+	left_controls[i] = Vector2(state.left_control_point)
+	right_controls[i] = Vector2(state.right_control_point)
+	modes[i] = int(state.handle_mode)
 	locks[i] = state.locks.duplicate(true)
 	left_linear[i] = int(state.left_force_linear)
 	right_linear[i] = int(state.right_force_linear)
@@ -122,8 +104,8 @@ static func _set_handle_mode(state: Dictionary, point: EasingCurvePoint, mode: i
 			bool(state.locks.get("left_control_point", false))
 			or bool(state.locks.get("right_control_point", false))
 		)
-		var shared_force_linear := (
-			state.left_force_linear or state.right_force_linear
+		var shared_force_linear: bool = (
+			bool(state.left_force_linear) or bool(state.right_force_linear)
 		)
 
 		state.locks["left_control_point"] = shared_locked
@@ -150,7 +132,7 @@ static func _set_control_state(
 	side: EasingCurvePoint.ControlSide,
 	control_state: int,
 ) -> void:
-	var linked := state.handle_mode == EasingCurvePoint.HandleMode.LINKED
+	var linked: bool = int(state.handle_mode) == EasingCurvePoint.HandleMode.LINKED
 	var sides: Array[EasingCurvePoint.ControlSide] = [side]
 	if linked:
 		sides = [
@@ -158,8 +140,8 @@ static func _set_control_state(
 			EasingCurvePoint.ControlSide.RIGHT,
 		]
 
-	var had_force_linear := (
-		state.left_force_linear
+	var had_force_linear: bool = (
+		bool(state.left_force_linear)
 		if linked
 		else _force_linear(state, side)
 	)
@@ -188,7 +170,7 @@ static func _set_force_linear(
 	side: EasingCurvePoint.ControlSide,
 	enabled: bool,
 ) -> void:
-	if state.handle_mode == EasingCurvePoint.HandleMode.LINKED:
+	if int(state.handle_mode) == EasingCurvePoint.HandleMode.LINKED:
 		state.left_force_linear = enabled
 		state.right_force_linear = enabled
 
@@ -213,8 +195,8 @@ static func _set_force_linear(
 
 static func _set_locks(state: Dictionary, locks: Dictionary) -> void:
 	var previous: Dictionary = state.locks
-	var next := locks.duplicate(true)
-	var linked := state.handle_mode == EasingCurvePoint.HandleMode.LINKED
+	var next: Dictionary = locks.duplicate(true)
+	var linked: bool = int(state.handle_mode) == EasingCurvePoint.HandleMode.LINKED
 	var cleared_linked_linear := false
 
 	for side in [
@@ -222,9 +204,9 @@ static func _set_locks(state: Dictionary, locks: Dictionary) -> void:
 		EasingCurvePoint.ControlSide.RIGHT,
 	]:
 		var property_name := _control_property(side)
-		var newly_locked := (
-			not previous.get(property_name, false)
-			and next.get(property_name, false)
+		var newly_locked: bool = (
+			not bool(previous.get(property_name, false))
+			and bool(next.get(property_name, false))
 		)
 		if not newly_locked or not _force_linear(state, side):
 			continue
@@ -243,7 +225,7 @@ static func _set_lock(state: Dictionary, property_name: StringName, enabled: boo
 	var locks: Dictionary = state.locks.duplicate(true)
 	locks[property_name] = enabled
 	if (
-		state.handle_mode == EasingCurvePoint.HandleMode.LINKED
+		int(state.handle_mode) == EasingCurvePoint.HandleMode.LINKED
 		and property_name in [&"left_control_point", &"right_control_point"]
 	):
 		locks["left_control_point"] = enabled
@@ -263,23 +245,28 @@ static func _set_control(
 
 
 static func _set_default_control(state: Dictionary, side: EasingCurvePoint.ControlSide) -> void:
+	var position: Vector2 = state.position
+	var default_control: Vector2 = (
+		position + _offset(side) * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+	)
 	_set_control(
 		state,
 		side,
-		state.position + _offset(side) * EasingCurvePoint.DEFAULT_HANDLE_LENGTH,
+		default_control,
 	)
 
 
 static func _set_linked_default(state: Dictionary) -> void:
-	var linked_default := (
-		state.position + Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+	var position: Vector2 = state.position
+	var linked_default: Vector2 = (
+		position + Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
 	)
 	state.left_control_point = linked_default
 	state.right_control_point = linked_default
 
 
 static func _force_linear(state: Dictionary, side: EasingCurvePoint.ControlSide) -> bool:
-	return state.left_force_linear if side == EasingCurvePoint.ControlSide.LEFT else state.right_force_linear
+	return bool(state.left_force_linear) if side == EasingCurvePoint.ControlSide.LEFT else bool(state.right_force_linear)
 
 
 static func _set_force_linear_value(
