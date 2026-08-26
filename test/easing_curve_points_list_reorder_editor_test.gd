@@ -16,16 +16,17 @@ func _init() -> void:
 
 
 func _run() -> void:
+	await _test_drop_reorder_is_next_frame()
 	_test_repeated_arrow_moves_keep_the_logical_point_selected()
 	_test_committed_drag_reorder_selects_the_dragged_point()
 	_test_reorder_undo_redo_follows_the_selected_resource()
 	_test_handle_mode_reset_uses_the_normal_transition()
 	_test_handle_mode_property_cell_layout_selection_and_copy_paste()
 
-	if _completed_fixtures != 5:
+	if _completed_fixtures != 6:
 		_failures += 1
 		push_error(
-			"Only %d of 5 Points-list submitted reorder fixtures completed" % _completed_fixtures
+			"Only %d of 6 Points-list submitted reorder fixtures completed" % _completed_fixtures
 		)
 	if _failures == 0:
 		print("PASS: %d Points-list submitted reorder checks" % _checks)
@@ -52,6 +53,28 @@ func _make_fixture() -> Dictionary:
 	var editor: EasingCurveEditor = editor_context.editor
 	var inspector: EditorInspectorPlugin = editor_context.inspector
 	return {"curve": curve, "editor": editor, "inspector": inspector, "points": curve.points.duplicate()}
+
+
+func _test_drop_reorder_is_next_frame() -> void:
+	var point_list := EDITOR_HOST.INSPECTOR_PLUGIN.PointsListContainer.new()
+	get_root().add_child(point_list)
+
+	var request_count := 0
+	var requested_from := -1
+	var requested_to := -1
+	point_list.point_swap_requested.connect(
+		func(from_index: int, to_index: int) -> void:
+			request_count += 1
+			requested_from = from_index
+			requested_to = to_index
+	)
+	point_list._defer_point_swap(0, 1)
+	_expect(request_count == 0, "Points-list drop scheduling emitted the reorder synchronously")
+	await process_frame
+	_expect(request_count == 1, "Points-list drop scheduling did not emit the reorder on the next frame")
+	_expect(requested_from == 0 and requested_to == 1, "Points-list drop scheduling changed the deferred reorder indices")
+	point_list.queue_free()
+	_completed_fixtures += 1
 
 
 func _create_handle_mode_fixture(

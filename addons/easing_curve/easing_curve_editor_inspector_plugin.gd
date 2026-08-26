@@ -742,7 +742,14 @@ class PointsListContainer:
 		clear_drop_index()
 
 		if to_index >= 0 and from_index != to_index:
-			point_swap_requested.emit(from_index, to_index)
+			_defer_point_swap(from_index, to_index)
+
+
+	func _defer_point_swap(from_index: int, to_index: int) -> void:
+		get_tree().process_frame.connect(
+			point_swap_requested.emit.bind(from_index, to_index),
+			CONNECT_ONE_SHOT,
+		)
 
 
 	func set_drop_index(to_index: int, after: bool) -> void:
