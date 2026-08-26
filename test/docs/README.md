@@ -27,7 +27,7 @@ Run every headless and Editor-host suite independently with:
 ./test/scripts/run_all_tests.ps1
 ```
 
-`test/run_godot.ps1` launches the configured Godot 4.7.1 console executable
+`test/scripts/run_godot.ps1` launches the configured Godot 4.7.1 console executable
 with Windows native application-error dialogs suppressed for that test process
 tree only. All automated Godot tests must use this wrapper; do not invoke Godot
 directly for routine test validation. The wrapper supplies a unique,
