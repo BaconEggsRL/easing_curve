@@ -18,6 +18,8 @@ static func commit_applied_action(
 		selection_restorer: Callable = Callable(),
 		before_selection: Dictionary = {},
 		after_selection: Dictionary = {},
+		before_point_resource_ids: PackedInt64Array = PackedInt64Array(),
+		after_point_resource_ids: PackedInt64Array = PackedInt64Array(),
 ) -> bool:
 	if curve == null:
 		return false
@@ -29,16 +31,54 @@ static func commit_applied_action(
 		return false
 
 	undo_redo.create_action(action_name)
-	undo_redo.add_do_property(
-		curve,
-		EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY,
-		after.duplicate(true),
+	var restores_point_resource_order := (
+		before_point_resource_ids.size() == curve.points.size()
+		and after_point_resource_ids.size() == curve.points.size()
 	)
-	undo_redo.add_undo_property(
-		curve,
-		EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY,
-		before.duplicate(true),
-	)
+	if restores_point_resource_order:
+		if undo_redo is EditorUndoRedoManager:
+			undo_redo.add_do_method(
+				curve,
+				"_set_editor_state_snapshot_with_point_resource_order",
+				after.duplicate(true),
+				after_point_resource_ids.duplicate(),
+			)
+			undo_redo.add_undo_method(
+				curve,
+				"_set_editor_state_snapshot_with_point_resource_order",
+				before.duplicate(true),
+				before_point_resource_ids.duplicate(),
+			)
+		else:
+			undo_redo.add_do_method(
+				Callable(
+					curve,
+					"_set_editor_state_snapshot_with_point_resource_order",
+				).bind(
+					after.duplicate(true),
+					after_point_resource_ids.duplicate(),
+				),
+			)
+			undo_redo.add_undo_method(
+				Callable(
+					curve,
+					"_set_editor_state_snapshot_with_point_resource_order",
+				).bind(
+					before.duplicate(true),
+					before_point_resource_ids.duplicate(),
+				),
+			)
+	else:
+		undo_redo.add_do_property(
+			curve,
+			EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY,
+			after.duplicate(true),
+		)
+		undo_redo.add_undo_property(
+			curve,
+			EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY,
+			before.duplicate(true),
+		)
 	var inspector := _find_parent_inspector(source_property)
 	if inspector != null and undo_redo is EditorUndoRedoManager:
 		# Match native Inspector actions so live debugging receives the same complete

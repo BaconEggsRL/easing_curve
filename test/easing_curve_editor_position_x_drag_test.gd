@@ -1,6 +1,7 @@
 extends SceneTree
 
 const EDITOR_HOST = preload("res://test/editor_host_test_harness.gd")
+const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 
 var _failures := 0
 var _checks := 0
@@ -148,11 +149,32 @@ func _test_position_x_reorder_undo_redo_follows_the_selected_resource() -> void:
 	var selected := points[1]
 	var property_header := PanelContainer.new()
 	var history := UndoRedo.new()
-	inspector.set("editor_undo_redo", history)
 	inspector.call("_select_point_property", property_header, 1, &"position")
 
+	var before := EDITOR_UNDO.capture_state(curve)
+	var selection_before: Dictionary = inspector.call("_capture_point_selection_state")
+	var point_resource_ids_before := curve._get_editor_point_resource_ids()
 	_drag_position_x(inspector, curve, selected, 0.8)
 	_finish_position_x(inspector, curve, selected, 0.8)
+	var after := EDITOR_UNDO.capture_state(curve)
+	var selection_after: Dictionary = inspector.call("_capture_point_selection_state")
+	var point_resource_ids_after := curve._get_editor_point_resource_ids()
+	_expect(
+		EDITOR_UNDO.commit_applied_action(
+			history,
+			curve,
+			"Move Easing Curve Point",
+			before,
+			after,
+			null,
+			Callable(inspector, "_restore_point_selection_state"),
+			selection_before,
+			selection_after,
+			point_resource_ids_before,
+			point_resource_ids_after,
+		),
+		"Position-X reorder did not create an Undo action",
+	)
 	_expect(curve.points[2] == selected, "Position-X reorder did not move the selected Resource")
 	_expect(editor.selected_index == 2, "Position-X reorder did not update the graph selection index")
 	history.undo()

@@ -1517,7 +1517,6 @@ func get_editor_state_snapshot() -> Dictionary:
 		"invert": invert,
 		"bezier_parameter_snapshot": _get_bezier_parameter_snapshot(),
 		"point_snapshot": get_point_snapshot(),
-		"point_resource_ids": _get_editor_point_resource_ids(),
 		"function_snapshot": get_function_snapshot(),
 	}
 
@@ -1558,6 +1557,15 @@ func _restore_editor_point_resource_order(
 	return true
 
 
+func _set_editor_state_snapshot_with_point_resource_order(
+		snapshot: Dictionary,
+		point_resource_ids: PackedInt64Array,
+) -> void:
+	var editor_snapshot := snapshot.duplicate(true)
+	editor_snapshot["point_resource_ids"] = point_resource_ids
+	set_editor_state_snapshot(editor_snapshot)
+
+
 func _get_bezier_parameter_snapshot() -> Dictionary:
 	var snapshot := {}
 
@@ -1595,7 +1603,6 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	var resource_order_changed := _restore_editor_point_resource_order(
 		point_resource_ids
 	)
-	print("DEBUG restore ids=", point_resource_ids, " changed=", resource_order_changed)
 	var topology_changed := positions.size() != _points.size() or _points.has(null)
 	var point_data_changed := _point_snapshot_differs(
 		positions,

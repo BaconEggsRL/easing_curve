@@ -150,14 +150,34 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 	var selected := points[1]
 	var property_header := PanelContainer.new()
 	var history := UndoRedo.new()
-	inspector.set("editor_undo_redo", history)
 	inspector.call("_select_point_property", property_header, 1, &"position")
 
+	var move_down_before := EDITOR_UNDO.capture_state(curve)
+	var move_down_selection_before: Dictionary = inspector.call("_capture_point_selection_state")
+	var move_down_point_resource_ids_before := curve._get_editor_point_resource_ids()
 	inspector.call("_move_point_down", 1)
+	var move_down_after := EDITOR_UNDO.capture_state(curve)
+	var move_down_selection_after: Dictionary = inspector.call("_capture_point_selection_state")
+	var move_down_point_resource_ids_after := curve._get_editor_point_resource_ids()
+	_expect(
+		EDITOR_UNDO.commit_applied_action(
+			history,
+			curve,
+			"Reorder Easing Curve Points",
+			move_down_before,
+			move_down_after,
+			null,
+			Callable(inspector, "_restore_point_selection_state"),
+			move_down_selection_before,
+			move_down_selection_after,
+			move_down_point_resource_ids_before,
+			move_down_point_resource_ids_after,
+		),
+		"Move Down did not create an Undo action",
+	)
 	_expect(curve.points[2] == selected, "Move Down did not move the selected Resource")
 	_expect(editor.selected_index == 2, "Move Down did not update the graph selection index")
 	history.undo()
-	print("DEBUG reorder undo ids: ", curve.get_editor_state_snapshot().point_resource_ids, " selected=", selected.get_instance_id(), " points=", curve.points.map(func(point: EasingCurvePoint): return point.get_instance_id()))
 	_expect(curve.points[1] == selected, "Move Down Undo did not return the selected Resource to P2")
 	_expect(editor.selected_index == 1, "Move Down Undo did not resolve the graph index from the selected Resource")
 	_expect(inspector.get("_selected_point_index") == 1, "Move Down Undo retained a stale Inspector index")
@@ -168,7 +188,29 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 	_expect(editor.selected_index == 2, "Move Down Redo did not resolve the graph index from the selected Resource")
 	_expect(inspector.get("_selected_point_index") == 2, "Move Down Redo retained a stale Inspector index")
 
+	var drag_before := EDITOR_UNDO.capture_state(curve)
+	var drag_selection_before: Dictionary = inspector.call("_capture_point_selection_state")
+	var drag_point_resource_ids_before := curve._get_editor_point_resource_ids()
 	inspector.call("_move_point", 2, 0)
+	var drag_after := EDITOR_UNDO.capture_state(curve)
+	var drag_selection_after: Dictionary = inspector.call("_capture_point_selection_state")
+	var drag_point_resource_ids_after := curve._get_editor_point_resource_ids()
+	_expect(
+		EDITOR_UNDO.commit_applied_action(
+			history,
+			curve,
+			"Reorder Easing Curve Points",
+			drag_before,
+			drag_after,
+			null,
+			Callable(inspector, "_restore_point_selection_state"),
+			drag_selection_before,
+			drag_selection_after,
+			drag_point_resource_ids_before,
+			drag_point_resource_ids_after,
+		),
+		"Drag reorder did not create an Undo action",
+	)
 	_expect(curve.points[0] == selected, "Drag reorder did not move the selected Resource")
 	history.undo()
 	_expect(curve.points[2] == selected, "Drag reorder Undo did not restore the selected Resource identity")

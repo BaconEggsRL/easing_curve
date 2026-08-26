@@ -1820,6 +1820,50 @@ interactive selection behavior, and add/move/drag/delete with visible Undo/Redo
 remain manual release checks. This is the sole known release-validation blocker;
 the refactor is not marked overall complete until those checks are performed.
 
+### Post-validation release-blocker record
+
+The subsequent visible-editor check passed fold/focus, responsive layout,
+selection, handles, and transition controls, but found a release-blocking
+reorder Undo/Redo selection failure in Move Up/Down, Points-list drag reorder,
+and Position-X reorder. The selected point Resource was correctly moved during
+the initial reorder, but the standard editor-state snapshot restored primitive
+point fields by current array slot. On Undo, that left the selected Resource in
+the reordered slot carrying the old slot's data; the centralized selection
+restorer then correctly found that Resource at the wrong logical point. Position-X
+completed edits also had no selection-restoration payload.
+
+The fix keeps the normal editor/runtime snapshot schema and serialized point
+storage unchanged. Reorder actions now carry a separate editor-only ordered list
+of point instance IDs through `EasingCurveEditorUndo`. Before applying the
+primitive snapshot on Do/Undo/Redo, that payload restores the existing point
+Resources to the saved order; the Milestone 6 selection restorer then resolves
+the selected Resource's current index and restores its selected property. The
+same continuous-point transaction now captures and restores selection and point
+order, covering completed Position-X reorders without changing gesture/action
+boundaries. Add/remove and non-reorder actions retain their prior snapshot path.
+
+Regression coverage was added to Points-list reorder (Move Down and drag
+reorder) and Position-X reorder tests. Each asserts the selected Resource
+identity, current point order, Inspector index, graph index, and `position`
+property selection across Do, Undo, and Redo. The new cases failed before the
+fix and now pass: Points-list reorder 62 checks and Position-X drag 69 checks.
+Focused validation also passed selection/refresh 35, graph gestures 13, editor
+Undo/Redo 627, Points-list Add 84, and point-state characterization 93. The
+full `test/run_all_tests.ps1` aggregate passed all 17 registered suites with
+exit code 0 and no `SCRIPT ERROR:`. `git diff --check` passed.
+
+The visible inspection found two non-blocking items that remain intentionally
+unchanged: at minimum Inspector width, the point-property reset button can be
+narrower than requested so all controls fit on one row; Curve Editor and Linear
+point dragging can feel slow and are future performance work. No version bump
+was made; `plugin.cfg` remains `1.0.6-dev`.
+
+Release readiness remains blocked pending a manual recheck of: (1) Move Up/Down
+with Undo/Redo, (2) Points-list drag reorder with Undo/Redo, and (3) Position-X
+reorder with Undo/Redo. In each check, the same logical point Resource must
+remain selected while the displayed point number and property panel follow its
+current index.
+
 # Dependency ordering
 
 ```text

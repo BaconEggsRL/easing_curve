@@ -1006,6 +1006,7 @@ var curve: EasingCurve
 var _instantiating_default_property := false
 var _point_edit_before_state: Dictionary
 var _point_edit_selection_before: Dictionary
+var _point_edit_point_resource_ids_before := PackedInt64Array()
 var _point_edit_action_name := "Edit Easing Curve Point"
 var _selected_point_property_header: PanelContainer
 var _selected_point_index := -1
@@ -1305,6 +1306,7 @@ func handle_easing_curve_editor(object) -> Control:
 		curve = object
 		_point_edit_before_state = {}
 		_point_edit_selection_before = {}
+		_point_edit_point_resource_ids_before = PackedInt64Array()
 		_point_edit_action_name = "Edit Easing Curve Point"
 		# Connect ease/trans preset selected signals
 		ease_option.item_selected.connect(
@@ -1610,10 +1612,12 @@ func _move_point(from_index: int, to_index: int) -> void:
 
 	var selection_before := _capture_point_selection_state()
 	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	var point_resource_ids_before := curve._get_editor_point_resource_ids()
 	var moved_point := curve.points[from_index]
 	curve.swap_points(from_index, to_index)
 	_select_reordered_point(moved_point)
 	var selection_after := _capture_point_selection_state()
+	var point_resource_ids_after := curve._get_editor_point_resource_ids()
 	_commit_curve_action(
 		"Reorder Easing Curve Points",
 		before,
@@ -1621,6 +1625,8 @@ func _move_point(from_index: int, to_index: int) -> void:
 		Callable(self, "_restore_point_selection_state"),
 		selection_before,
 		selection_after,
+		point_resource_ids_before,
+		point_resource_ids_after,
 	)
 
 func _select_reordered_point(point: EasingCurvePoint) -> void:
@@ -2289,14 +2295,17 @@ func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
 		return
 	var before := _point_edit_before_state
 	var selection_before := _point_edit_selection_before
+	var point_resource_ids_before := _point_edit_point_resource_ids_before
 	var action_name := _point_edit_action_name
 	_point_edit_before_state = {}
 	_point_edit_selection_before = {}
+	_point_edit_point_resource_ids_before = PackedInt64Array()
 	_point_edit_action_name = "Edit Easing Curve Point"
 	if not point_order.is_empty() and curve.points != point_order:
 		curve.points = point_order
 	var after := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	var selection_after := _capture_point_selection_state()
+	var point_resource_ids_after := curve._get_editor_point_resource_ids()
 	# Flush the draft point notifications once at the drag boundary.
 	curve.set_point_snapshot(curve.get_point_snapshot())
 	_commit_curve_action(
@@ -2306,6 +2315,8 @@ func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
 		Callable(self, "_restore_point_selection_state"),
 		selection_before,
 		selection_after,
+		point_resource_ids_before,
+		point_resource_ids_after,
 	)
 
 
@@ -2316,6 +2327,8 @@ func _commit_curve_action(
 		selection_restorer: Callable = Callable(),
 		before_selection: Dictionary = {},
 		after_selection: Dictionary = {},
+		before_point_resource_ids: PackedInt64Array = PackedInt64Array(),
+		after_point_resource_ids: PackedInt64Array = PackedInt64Array(),
 ) -> bool:
 	return EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 		editor_undo_redo,
@@ -2327,6 +2340,8 @@ func _commit_curve_action(
 		selection_restorer,
 		before_selection,
 		after_selection,
+		before_point_resource_ids,
+		after_point_resource_ids,
 	)
 
 
@@ -2668,6 +2683,7 @@ func _apply_point_property_change(
 	if changing and _point_edit_before_state.is_empty():
 		_point_edit_before_state = before
 		_point_edit_selection_before = _capture_point_selection_state()
+		_point_edit_point_resource_ids_before = curve._get_editor_point_resource_ids()
 		_point_edit_action_name = _point_action_name(property_name)
 	var snapshot := curve.get_point_snapshot()
 	match property_name:
