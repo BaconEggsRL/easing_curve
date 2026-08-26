@@ -123,16 +123,24 @@ func is_lock_active(property_name: StringName) -> bool:
 	return locked.get(String(property_name), false)
 
 
+func is_lockable_property(property_name: StringName) -> bool:
+	return locked.has(String(property_name))
+
+
 func is_position_input_editable(property_name: String) -> bool:
+	if not is_lockable_property(StringName(property_name)):
+		return true
+
 	if property_name == "position":
 		return not is_lock_active(&"position")
 
-	var side := (
-		ControlSide.LEFT
-		if property_name == "left_control_point"
-		else ControlSide.RIGHT
-	)
-	return is_control_position_editable(side)
+	if property_name == "left_control_point":
+		return is_control_position_editable(ControlSide.LEFT)
+
+	if property_name == "right_control_point":
+		return is_control_position_editable(ControlSide.RIGHT)
+
+	return true
 
 
 func is_control_position_editable(side: ControlSide) -> bool:
@@ -151,6 +159,9 @@ func is_control_position_editable(side: ControlSide) -> bool:
 
 
 func set_locked(property_name: String, toggled_on: bool) -> void:
+	if not is_lockable_property(StringName(property_name)):
+		return
+
 	if locked.get(property_name, false) == toggled_on:
 		return
 
