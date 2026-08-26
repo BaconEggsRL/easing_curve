@@ -452,13 +452,27 @@ static func _append_point_snapshot_value(values: Variant, property_type: int, va
 	return false
 
 
-static func _reverse_point_snapshot_values(values: Variant, property_type: int) -> Variant:
+static func _reverse_point_snapshot_values(
+		values: Variant,
+		property_type: int,
+) -> Variant:
 	var reversed_values := _create_point_snapshot_values(property_type)
 	if reversed_values == null:
 		return null
+
 	for index in range(values.size() - 1, -1, -1):
-		if not _append_point_snapshot_value(reversed_values, property_type, values[index]):
+		var value: Variant = values[index]
+
+		if property_type == TYPE_BOOL and values is PackedByteArray:
+			value = bool(value)
+
+		if not _append_point_snapshot_value(
+			reversed_values,
+			property_type,
+			value,
+		):
 			return null
+
 	return reversed_values
 
 
