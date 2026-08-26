@@ -56,9 +56,7 @@ const min_value := 0.0
 const max_value := 1.0
 const EASING_LIBRARY := preload("res://addons/easing_curve/scripts/easing.gd")
 
-# Authoritative transition mode, generated-data, and Ease-support metadata.
-# Existing class, parameter, and editor-property tables remain authoritative
-# consumers until their later migration slices.
+# Authoritative runtime metadata for EasingCurve transitions.
 const TRANSITION_DEFINITIONS := {
 	TRANS.CUSTOM: {"mode": CurveMode.BEZIER, "supports_ease": false},
 	TRANS.CONSTANT: {
@@ -70,7 +68,7 @@ const TRANSITION_DEFINITIONS := {
 	TRANS.JITTER: {
 		"mode": CurveMode.FUNCTION,
 		"supports_ease": true,
-		"class": EASING_LIBRARY.Jitter,
+		"class": EASING_LIBRARY.Irregular,
 		"extended": false,
 		"parameters": [&"num_points", &"randomness"],
 		"generated": true,
@@ -700,7 +698,7 @@ var points: Array[EasingCurvePoint]:
 		_update_irregular_parameter()
 ## Controls the amplitude of random variations.
 ## Higher values create more dramatic jumps between steps (default: 1).
-@export_range(0.0, 4.0, 0.1) var randomness: float = 3.5:
+@export_range(0.0, 4.0, 0.01) var randomness: float = 3.5:
 	set(value):
 		if randomness == value:
 			return

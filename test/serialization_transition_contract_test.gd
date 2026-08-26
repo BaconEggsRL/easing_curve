@@ -153,7 +153,7 @@ func _test_transition_catalog_contract() -> void:
 	var generated: Array[EasingCurve.TRANS] = [EasingCurve.TRANS.JITTER, EasingCurve.TRANS.IRREGULAR]
 	var function_classes: Array[EasingCurve.TRANS] = [EasingCurve.TRANS.JITTER, EasingCurve.TRANS.IRREGULAR, EasingCurve.TRANS.STEP, EasingCurve.TRANS.POWER, EasingCurve.TRANS.ELASTIC, EasingCurve.TRANS.BOUNCE, EasingCurve.TRANS.SPRING, EasingCurve.TRANS.PHYSICS_SPRING, EasingCurve.TRANS.CSS_LINEAR, EasingCurve.TRANS.CSS_CUBIC_BEZIER]
 	var function_class_contracts := {
-		EasingCurve.TRANS.JITTER: {"class": EasingCurve.EASING_LIBRARY.Jitter, "extended": false},
+		EasingCurve.TRANS.JITTER: {"class": EasingCurve.EASING_LIBRARY.Irregular, "extended": false},
 		EasingCurve.TRANS.IRREGULAR: {"class": EasingCurve.EASING_LIBRARY.Irregular, "extended": false},
 		EasingCurve.TRANS.STEP: {"class": EasingCurve.EASING_LIBRARY.Step, "extended": false},
 		EasingCurve.TRANS.POWER: {"class": EasingCurve.EASING_LIBRARY.Power, "extended": false},
@@ -208,6 +208,23 @@ func _test_transition_catalog_contract() -> void:
 			_expect(not is_nan(curve.sample(0.37)) and not is_inf(curve.sample(0.37)), "%s callable produced a non-finite sample" % EasingCurve.TRANS.keys()[transition])
 		_expect(EasingCurve.get_transition_parameters(transition) == parameters.get(transition, []), "%s transition parameter order changed" % EasingCurve.TRANS.keys()[transition])
 		_expect(EasingCurve.get_transition_editor_properties(transition) == editor_properties.get(transition, []), "%s transition editor property order changed" % EasingCurve.TRANS.keys()[transition])
+	var jitter_curve := EasingCurve.new()
+	jitter_curve.trans_type = EasingCurve.TRANS.JITTER
+	var jitter_points_x: Array[float] = jitter_curve._irregular_points_x
+	var jitter_points_y: Array[float] = jitter_curve._irregular_points_y
+	for sample_x: float in [0.15, 0.42, 0.8]:
+		var expected_sample: float = float(EasingCurve.EASING_LIBRARY.Irregular.easeIn(
+			sample_x,
+			0.0,
+			1.0,
+			1.0,
+			jitter_points_x,
+			jitter_points_y,
+		))
+		_expect(
+			is_equal_approx(jitter_curve.sample(sample_x), expected_sample),
+			"JITTER no longer uses the generated-array Irregular backend",
+		)
 	_expect(EasingCurve.NON_DEFERRED_FUNCTION_PARAMETERS == [&"from_start"], "Non-deferred parameter contract changed")
 
 
