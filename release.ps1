@@ -553,7 +553,7 @@ function Invoke-Republish {
         Write-Host "  - refresh the release title, target, notes, and Latest status"
         Write-Host ""
 
-        $Answer = Read-Host "Force-update and republish existing $Tag? [y/N]"
+        $Answer = Read-Host "Force-update and republish existing ${Tag}? [y/N]"
         if ($Answer -notmatch '^[Yy]$') {
             throw "Republishing cancelled."
         }
