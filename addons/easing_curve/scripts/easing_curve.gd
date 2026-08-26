@@ -188,6 +188,7 @@ const POINT_STORAGE_COUNT := &"_point_count"
 const POINT_STORAGE_PREFIX := "_point_"
 const POINT_EDITOR_KIND_VECTOR2 := &"vector2"
 const POINT_EDITOR_KIND_HANDLE_MODE := &"handle_mode"
+const POINT_SNAPSHOT_LIFECYCLE_ORDINARY := &"ordinary"
 const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
 		"name": &"position",
@@ -287,6 +288,63 @@ static func get_point_property_definition(
 static func get_point_property_snapshot_key(property_name: StringName) -> StringName:
 	var definition := get_point_property_definition(property_name)
 	return definition.get("snapshot_key", StringName())
+
+
+static func is_point_property_snapshot_lifecycle_ordinary(property_name: StringName) -> bool:
+	var definition := get_point_property_definition(property_name)
+	return definition.get("snapshot_lifecycle", StringName()) == POINT_SNAPSHOT_LIFECYCLE_ORDINARY
+
+
+static func _create_point_snapshot_values(property_type: int) -> Variant:
+	match property_type:
+		TYPE_VECTOR2:
+			return PackedVector2Array()
+		TYPE_INT:
+			return PackedInt32Array()
+		TYPE_BOOL:
+			return PackedByteArray()
+		TYPE_DICTIONARY:
+			return []
+	return null
+
+
+static func _append_point_snapshot_value(values: Variant, property_type: int, value: Variant) -> bool:
+	match property_type:
+		TYPE_VECTOR2:
+			if values is PackedVector2Array and value is Vector2:
+				values.append(value)
+				return true
+		TYPE_INT:
+			if values is PackedInt32Array and value is int:
+				values.append(value)
+				return true
+		TYPE_BOOL:
+			if values is PackedByteArray and value is bool:
+				values.append(int(value))
+				return true
+		TYPE_DICTIONARY:
+			if values is Array and value is Dictionary:
+				values.append(value.duplicate(true))
+				return true
+	return false
+
+
+static func _reverse_point_snapshot_values(values: Variant, property_type: int) -> Variant:
+	var reversed_values := _create_point_snapshot_values(property_type)
+	if reversed_values == null:
+		return null
+	for index in range(values.size() - 1, -1, -1):
+		if not _append_point_snapshot_value(reversed_values, property_type, values[index]):
+			return null
+	return reversed_values
+
+
+static func _get_ordinary_point_property_definitions() -> Array[Dictionary]:
+	var definitions: Array[Dictionary] = []
+	for definition in POINT_PROPERTY_DEFINITIONS:
+		if definition.get("snapshot_lifecycle", StringName()) == POINT_SNAPSHOT_LIFECYCLE_ORDINARY:
+			definitions.append(definition)
+	return definitions
 
 
 static func get_point_snapshot_property_value(
@@ -1406,7 +1464,7 @@ func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 		left_force_linear.append(int(point.left_force_linear))
 		right_force_linear.append(int(point.right_force_linear))
 
-	return {
+	var snapshot := {
 		"positions": positions,
 		"left_control_points": left_control_points,
 		"right_control_points": right_control_points,
@@ -1415,6 +1473,25 @@ func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 		"left_force_linear": left_force_linear,
 		"right_force_linear": right_force_linear,
 	}
+	_capture_ordinary_point_snapshot_values(snapshot, point_values)
+	return snapshot
+
+
+func _capture_ordinary_point_snapshot_values(snapshot: Dictionary, point_values: Array[EasingCurvePoint]) -> void:
+	for definition in _get_ordinary_point_property_definitions():
+		var property_name: StringName = definition["name"]
+		var snapshot_key: StringName = definition["snapshot_key"]
+		var property_type: int = definition["type"]
+		var values := _create_point_snapshot_values(property_type)
+		if values == null:
+			continue
+		for point in point_values:
+			var value: Variant = point.get(property_name) if point != null else definition["default"]
+			if not _append_point_snapshot_value(values, property_type, value):
+				values = null
+				break
+		if values != null:
+			snapshot[snapshot_key] = values
 
 
 func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
@@ -1507,8 +1584,21 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 	result["handle_modes"] = reversed_handle_modes
 	result["left_force_linear"] = reversed_left_force_linear
 	result["right_force_linear"] = reversed_right_force_linear
+	_reverse_ordinary_point_snapshot_values(snapshot, result)
 
 	return result
+
+
+func _reverse_ordinary_point_snapshot_values(source: Dictionary, result: Dictionary) -> void:
+	for definition in _get_ordinary_point_property_definitions():
+		var snapshot_key: StringName = definition["snapshot_key"]
+		var property_type: int = definition["type"]
+		var values: Variant = source.get(snapshot_key, null)
+		if values == null or values.size() != _points.size():
+			continue
+		var reversed_values := _reverse_point_snapshot_values(values, property_type)
+		if reversed_values != null:
+			result[snapshot_key] = reversed_values
 
 
 func _invert_point_snapshot(snapshot: Dictionary) -> Dictionary:
@@ -1577,6 +1667,7 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 		locks,
 		left_force_linear,
 		right_force_linear,
+		snapshot,
 	)
 	_suppress_point_notifications += 1
 	if not topology_changed:
@@ -1593,6 +1684,7 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 				right_force_linear,
 				locks,
 			)
+			_restore_ordinary_point_snapshot_values(point, i, snapshot)
 	else:
 		var new_points: Array[EasingCurvePoint] = []
 		for i in range(positions.size()):
@@ -1608,6 +1700,7 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 				right_force_linear,
 				locks,
 			)
+			_restore_ordinary_point_snapshot_values(point, i, snapshot)
 			new_points.append(point)
 		_disconnect_point_signals()
 		_points = new_points
@@ -1686,6 +1779,18 @@ func _restore_point_snapshot_state(
 			"left_control_point": bool(lock_values.get("left_control_point", false)),
 			"right_control_point": bool(lock_values.get("right_control_point", false)),
 		}
+
+
+func _restore_ordinary_point_snapshot_values(
+		point: EasingCurvePoint,
+		index: int,
+		snapshot: Dictionary,
+) -> void:
+	for definition in _get_ordinary_point_property_definitions():
+		var property_name: StringName = definition["name"]
+		var value := get_point_snapshot_property_value(snapshot, property_name, index)
+		if value != null:
+			point.set(property_name, value)
 
 
 func get_editor_state_snapshot() -> Dictionary:
@@ -1793,6 +1898,7 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 		locks,
 		left_force_linear,
 		right_force_linear,
+		point_snapshot,
 	)
 	var locks_changed := _point_snapshot_locks_differ(locks)
 	var bezier_parameters_changed := (
@@ -1952,6 +2058,7 @@ func _point_snapshot_differs(
 		locks: Array,
 		left_force_linear: PackedByteArray,
 		right_force_linear: PackedByteArray,
+		snapshot: Dictionary,
 ) -> bool:
 	if positions.size() != _points.size() or _points.has(null):
 		return true
@@ -1984,6 +2091,11 @@ func _point_snapshot_differs(
 			return true
 		if point.right_force_linear != snapshot_right_force:
 			return true
+		for definition in _get_ordinary_point_property_definitions():
+			var property_name: StringName = definition["name"]
+			var snapshot_value := get_point_snapshot_property_value(snapshot, property_name, i)
+			if snapshot_value == null or point.get(property_name) != snapshot_value:
+				return true
 	return false
 
 

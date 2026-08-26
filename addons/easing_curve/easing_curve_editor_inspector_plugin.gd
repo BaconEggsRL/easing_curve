@@ -3273,7 +3273,11 @@ func _apply_point_property_change(
 				snapshot["right_control_points"] = right_control_points
 
 		_:
-			return
+			if (
+				not EasingCurve.is_point_property_snapshot_lifecycle_ordinary(property_name)
+				or not EasingCurve.set_point_snapshot_property_value(snapshot, property_name, i, value)
+			):
+				return
 
 	var defer_notification := position_reorder_point != null
 	snapshot["changing"] = changing or defer_notification
