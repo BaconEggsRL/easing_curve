@@ -101,8 +101,8 @@ Easing Curve also includes transitions beyond Godot's built-in Tween system:
 
 * **Constant** -- Returns a configurable **Constant Value**, [Bézier]
 * **Physics Spring** -- Spring easing using physics (**Stiffness**, **Damping**, **Mass**, and **Velocity**), [Function]
-* **Jitter** -- Noisy linear interpolation with configurable randomness (**Num Points**, **Randomness**) and **Generate Tool Button**, [Function]
-* **Irregular** -- Stepwise linear interpolation with randomized points (**Num Points**, **Randomness**) and **Generate Tool Button**, [Function]
+* **Jitter** -- Stronger persistent-amplitude random variation; more points primarily increase jitter frequency (**Num Points**, **Randomness**) and **Generate Tool Button**, [Function]
+* **Irregular** -- Noisy linear interpolation whose deviations shrink with more points / lower randomness (**Num Points**, **Randomness**) and **Generate Tool Button**, [Function]
 * **Step** -- Staircase easing (**Steps**, **From Start**, and **Y Offset**), [Function]
 * **Power** -- Fractional power easing (**Power**), [Function]
 

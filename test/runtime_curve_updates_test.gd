@@ -24,6 +24,7 @@ func _init() -> void:
 	_test_css_cubic_bezier()
 	_test_flat_storage_and_round_trip()
 	_test_generated_curve_round_trip()
+	_test_generated_transition_semantics()
 	_test_function_parameters()
 	_test_every_transition_and_runtime_switching()
 
@@ -233,7 +234,7 @@ func _test_parameter_drag_transactions() -> void:
 			var original_snapshot := mode_curve.get_function_snapshot()
 			mode_curve._begin_editor_parameter_edit()
 			mode_curve.set(property_name, {&"num_points": 6, &"randomness": 1.5}[property_name])
-			var expected_point_count := mode_curve.num_points + 1 if transition == EasingCurve.TRANS.JITTER else mode_curve.num_points
+			var expected_point_count := mode_curve.num_points if transition == EasingCurve.TRANS.JITTER else mode_curve.num_points + 1
 			_expect(mode_curve._irregular_points_x.size() == expected_point_count, "%s %s drag did not regenerate graph data" % [EasingCurve.TRANS.keys()[transition], property_name])
 			_expect(mode_counts.changed == 0, "%s %s drag emitted a restart signal" % [EasingCurve.TRANS.keys()[transition], property_name])
 			var final_snapshot := mode_curve.get_function_snapshot()
@@ -713,6 +714,71 @@ func _test_generated_curve_round_trip() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(GENERATED_ROUND_TRIP_PATH))
 
 
+func _test_generated_transition_semantics() -> void:
+	var sample_positions: Array[float] = [0.13, 0.37, 0.61, 0.87]
+	for transition: EasingCurve.TRANS in [EasingCurve.TRANS.JITTER, EasingCurve.TRANS.IRREGULAR]:
+		var curve := EasingCurve.new()
+		curve.trans_type = transition
+		curve.num_points = 8
+		curve.randomness = 3.0
+		seed(1024 + int(transition))
+		curve.generate_irregular()
+		var points_x: Array[float] = curve._irregular_points_x
+		var points_y: Array[float] = curve._irregular_points_y
+		for sample_x in sample_positions:
+			var expected: float = float(EasingCurve.EASING_LIBRARY.Irregular.easeIn(
+				sample_x,
+				0.0,
+				1.0,
+				1.0,
+				points_x,
+				points_y,
+			))
+			var first_sample := curve.sample(sample_x)
+			_expect(is_equal_approx(first_sample, curve.sample(sample_x)), "%s changed between samples without regeneration" % EasingCurve.TRANS.keys()[transition])
+			_expect(is_equal_approx(first_sample, expected), "%s no longer uses the generated-array Irregular backend" % EasingCurve.TRANS.keys()[transition])
+
+		curve.randomness = 0.0
+		seed(2048 + int(transition))
+		curve.generate_irregular()
+		for sample_x in sample_positions:
+			_expect(is_equal_approx(curve.sample(sample_x), sample_x), "%s with zero randomness did not generate a linear curve" % EasingCurve.TRANS.keys()[transition])
+
+	var irregular_low := EasingCurve.new()
+	irregular_low.trans_type = EasingCurve.TRANS.IRREGULAR
+	irregular_low.num_points = 4
+	irregular_low.randomness = 3.5
+	seed(4096)
+	irregular_low.generate_irregular()
+	var irregular_high := EasingCurve.new()
+	irregular_high.trans_type = EasingCurve.TRANS.IRREGULAR
+	irregular_high.num_points = 40
+	irregular_high.randomness = 3.5
+	seed(4096)
+	irregular_high.generate_irregular()
+	var low_deviation := 0.0
+	var high_deviation := 0.0
+	for i in range(1, 10):
+		var sample_x := float(i) / 10.0
+		low_deviation += absf(irregular_low.sample(sample_x) - sample_x)
+		high_deviation += absf(irregular_high.sample(sample_x) - sample_x)
+	_expect(high_deviation < low_deviation * 0.6, "Irregular deviations did not shrink materially with more points")
+
+	var jitter := EasingCurve.new()
+	jitter.trans_type = EasingCurve.TRANS.JITTER
+	jitter.num_points = 40
+	jitter.randomness = 3.5
+	seed(8192)
+	jitter.generate_irregular()
+	var maximum_jitter_deviation := 0.0
+	for i in range(1, jitter._irregular_points_y.size() - 1):
+		maximum_jitter_deviation = maxf(
+			maximum_jitter_deviation,
+			absf(jitter._irregular_points_y[i] - jitter._irregular_points_x[i]),
+		)
+	_expect(maximum_jitter_deviation > 0.1, "Jitter offsets were scaled down by point count")
+
+
 func _test_function_parameters() -> void:
 	var curve := EasingCurve.new()
 	var counts := _signal_counts(curve)
@@ -748,9 +814,9 @@ func _test_function_parameters() -> void:
 	curve.trans_type = EasingCurve.TRANS.IRREGULAR
 	curve.num_points = 5
 	curve.randomness = 2.0
-	_expect(curve._irregular_points_x.size() == 5 and curve._irregular_points_y.size() == 5, "Irregular parameters did not rebuild generated data")
+	_expect(curve._irregular_points_x.size() == 6 and curve._irregular_points_y.size() == 6, "Irregular parameters did not rebuild generated data")
 	curve.num_points = 2
-	_expect(curve._irregular_points_x.size() == 2 and curve._irregular_points_y.size() == 2, "Irregular two-point fallback did not rebuild generated data")
+	_expect(curve._irregular_points_x.size() == 3 and curve._irregular_points_y.size() == 3, "Irregular density-scaled generation did not rebuild generated data")
 	_expect(_is_finite(curve.sample(0.4)), "Irregular output became invalid after parameter updates")
 
 	curve.trans_type = EasingCurve.TRANS.JITTER

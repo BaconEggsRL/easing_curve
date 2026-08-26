@@ -689,7 +689,7 @@ var points: Array[EasingCurvePoint]:
 # IRREGULAR
 # ------------------
 ## Represents the number of random points to generate. Must be a positive integer >= 2.
-## Irregular mode converges to a linear equation for num_points == 2, no matter how high the randomness is.
+## Irregular deviations shrink with more points; Jitter uses persistent-amplitude variation.
 @export_range(2, 100, 1) var num_points: int = 3:
 	set(value):
 		if num_points == value:
@@ -697,7 +697,7 @@ var points: Array[EasingCurvePoint]:
 		num_points = value
 		_update_irregular_parameter()
 ## Controls the amplitude of random variations.
-## Higher values create more dramatic jumps between steps (default: 1).
+## Higher values increase deviations from linear interpolation.
 @export_range(0.0, 4.0, 0.01) var randomness: float = 3.5:
 	set(value):
 		if randomness == value:
@@ -2651,7 +2651,7 @@ func _generate_irregular() -> Dictionary:
 	var points_x: Array[float] = []
 	var points_y: Array[float] = []
 
-	if trans_type == TRANS.JITTER:
+	if trans_type == TRANS.IRREGULAR:
 		var jitter_steps := maxi(num_points, 1)
 		for i in range(jitter_steps + 1):
 			var x := float(i) / float(jitter_steps)
@@ -2723,14 +2723,14 @@ func _set_easing_class_function(
 func _init_function() -> void:
 	if trans_type == TRANS.JITTER:
 		if (
-			_irregular_points_x.size() != num_points + 1
-			or _irregular_points_y.size() != num_points + 1
+			_irregular_points_x.size() != num_points
+			or _irregular_points_y.size() != num_points
 		):
 			_generate_irregular()
 	elif trans_type == TRANS.IRREGULAR:
 		if (
-			_irregular_points_x.size() != num_points
-			or _irregular_points_y.size() != num_points
+			_irregular_points_x.size() != num_points + 1
+			or _irregular_points_y.size() != num_points + 1
 		):
 			_generate_irregular()
 
