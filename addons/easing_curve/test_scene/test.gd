@@ -14,18 +14,19 @@ const DROPDOWN_MAX_WIDTH := 120.0
 
 @export var tween_ease: Tween.EaseType = 0:
 	set(value):
-	if tween_ease == value:
-			return
+		if tween_ease == value:
+				return
 		tween_ease = value
 		_restart_running_tweens()
 
 
 @export var tween_trans: Tween.TransitionType = 0:
 	set(value):
-	if tween_trans == value:
-			return
+		if tween_trans == value:
+				return
 		tween_trans = value
 		_restart_running_tweens()
+
 
 @export var easing_curve: EasingCurve = EasingCurve.new():
 	set = set_easing_curve
