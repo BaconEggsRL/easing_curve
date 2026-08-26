@@ -46,40 +46,6 @@ enum ControlState {
 	LOCKED,
 }
 
-
-var _test_secondary_flag := false
-var test_secondary_flag: bool:
-	get:
-		return _test_secondary_flag
-	set(value):
-		if _test_secondary_flag == value:
-			return
-		_test_secondary_flag = value
-		emit_changed()
-
-
-var _test_enabled := false
-var test_enabled: bool:
-	get:
-		return _test_enabled
-	set(value):
-		if _test_enabled == value:
-			return
-		_test_enabled = value
-		emit_changed()
-
-
-var _test_vector: Vector2 = Vector2.ZERO
-var test_vector: Vector2:
-	get:
-		return _test_vector
-	set(value):
-		if _test_vector == value:
-			return
-		_test_vector = value
-		emit_changed()
-
-
 @export var position: Vector2 = Vector2.ZERO: set = set_position
 
 var _left_control_point := Vector2.ZERO

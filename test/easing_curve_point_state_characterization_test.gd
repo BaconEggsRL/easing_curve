@@ -13,7 +13,6 @@ func _init() -> void:
 	_test_handle_mode_transition_matrix()
 	_test_display_space_relationships()
 	_test_lock_force_linear_precedence()
-	_test_ordinary_property_lock_capabilities()
 	_test_inspector_snapshot_state_precedence_and_reset()
 
 	if _failures == 0:
@@ -130,24 +129,6 @@ func _test_display_space_relationships() -> void:
 	_expect(
 		((mirrored.right_control_point - mirrored.position) * mirrored.handle_display_scale).is_equal_approx(-((mirrored.left_control_point - mirrored.position) * mirrored.handle_display_scale)),
 		"Mirrored drag did not use the non-uniform display scale relationship",
-	)
-
-
-func _test_ordinary_property_lock_capabilities() -> void:
-	var point := _point()
-	var ordinary_property := &"test_vector"
-	_expect(
-		not point.is_lockable_property(ordinary_property),
-		"An ordinary property unexpectedly became lockable",
-	)
-	_expect(
-		point.is_position_input_editable(String(ordinary_property)),
-		"An ordinary property was not editable by default",
-	)
-	point.set_locked(String(ordinary_property), true)
-	_expect(
-		not point.locked.has(String(ordinary_property)),
-		"Setting an ordinary property lock changed the fixed lock schema",
 	)
 
 

@@ -18,6 +18,7 @@ func _init() -> void:
 	_test_point_storage_schema()
 	_test_point_property_snapshot_lifecycle_contract()
 	_test_point_snapshot_property_access()
+	_test_bool_snapshot_value_support()
 	_cleanup()
 
 	if _failures == 0:
@@ -226,7 +227,6 @@ func _test_point_storage_schema() -> void:
 	curve.set("_point_count", 3)
 	var expected_names: Array[StringName] = [EasingCurve.POINT_STORAGE_COUNT]
 	var expected_definitions: Array[Dictionary] = [
-		{"name": &"test_vector", "type": TYPE_VECTOR2, "snapshot_key": &"test_vectors", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_ORDINARY},
 		{"name": &"position", "type": TYPE_VECTOR2, "snapshot_key": &"positions", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC},
 		{"name": &"left_control_point", "type": TYPE_VECTOR2, "snapshot_key": &"left_control_points", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC},
 		{"name": &"right_control_point", "type": TYPE_VECTOR2, "snapshot_key": &"right_control_points", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC},
@@ -257,7 +257,7 @@ func _test_point_storage_schema() -> void:
 	for index in range(3):
 		for property_name in EasingCurve.POINT_PROPERTIES:
 			expected_names.append(StringName("_point_%d/%s" % [index, property_name]))
-	_expect(EasingCurve.POINT_PROPERTIES == [&"test_vector", &"position", &"left_control_point", &"right_control_point", &"locked", &"handle_mode", &"left_force_linear", &"right_force_linear"], "POINT_PROPERTIES schema order changed")
+	_expect(EasingCurve.POINT_PROPERTIES == [&"position", &"left_control_point", &"right_control_point", &"locked", &"handle_mode", &"left_force_linear", &"right_force_linear"], "POINT_PROPERTIES schema order changed")
 	for property_name in expected_names:
 		var property := _property_by_name(curve, property_name)
 		_expect(not property.is_empty(), "%s is missing from the primitive point schema" % property_name)
@@ -271,7 +271,7 @@ func _test_point_storage_schema() -> void:
 	var points_property := _property_by_name(curve, &"points")
 	_expect(not points_property.is_empty() and bool(points_property.usage & PROPERTY_USAGE_EDITOR) and not bool(points_property.usage & PROPERTY_USAGE_STORAGE), "points no longer remains editor-visible and non-storage")
 	var snapshot := curve.get_point_snapshot()
-	for key in [&"test_vectors", &"positions", &"left_control_points", &"right_control_points", &"handle_modes", &"locks", &"left_force_linear", &"right_force_linear"]:
+	for key in [&"positions", &"left_control_points", &"right_control_points", &"handle_modes", &"locks", &"left_force_linear", &"right_force_linear"]:
 		_expect(snapshot.has(key), "Point snapshot key %s is missing" % key)
 	_expect(not EasingCurve.POINT_PROPERTIES.has(&"changing"), "Snapshot changing metadata became a point property")
 
@@ -322,7 +322,6 @@ func _test_point_snapshot_property_access() -> void:
 	var curve := EasingCurve.new()
 	var snapshot := curve.get_point_snapshot()
 	var values := {
-		&"test_vector": Vector2(0.4, 0.6),
 		&"position": Vector2(0.25, 0.75),
 		&"left_control_point": Vector2(0.1, 0.2),
 		&"right_control_point": Vector2(0.9, 0.8),
@@ -342,6 +341,16 @@ func _test_point_snapshot_property_access() -> void:
 	_expect(not EasingCurve.set_point_snapshot_property_value(snapshot, &"position", 99, Vector2.ZERO), "Snapshot setter accepted an invalid index")
 	_expect(not EasingCurve.set_point_snapshot_property_value(snapshot, &"position", 0, true), "Snapshot setter accepted an invalid value type")
 	_expect(EasingCurve.get_point_snapshot_property_value(snapshot, &"unknown", 0) == null and not EasingCurve.set_point_snapshot_property_value(snapshot, &"unknown", 0, 0), "Unknown snapshot property was accepted")
+
+
+func _test_bool_snapshot_value_support() -> void:
+	var values: Variant = EasingCurve._create_point_snapshot_values(TYPE_BOOL)
+	_expect(values is PackedByteArray, "Boolean snapshot values no longer use PackedByteArray")
+	_expect(EasingCurve._append_point_snapshot_value(values, TYPE_BOOL, false), "Boolean snapshot values rejected false")
+	_expect(EasingCurve._append_point_snapshot_value(values, TYPE_BOOL, true), "Boolean snapshot values rejected true")
+	var reversed: Variant = EasingCurve._reverse_point_snapshot_values(values, TYPE_BOOL)
+	_expect(reversed is PackedByteArray, "Reversed Boolean snapshot values changed storage type")
+	_expect(reversed == PackedByteArray([1, 0]), "Boolean snapshot reversal did not normalize PackedByteArray values")
 
 
 func _samples(curve: EasingCurve) -> PackedFloat64Array:
