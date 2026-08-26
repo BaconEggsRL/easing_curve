@@ -188,12 +188,16 @@ func _stop_tunnel() -> void:
 func _pid_is_tunnel_client(pid: int) -> bool:
 	var output: Array = []
 	var command := (
-		"$p = Get-CimInstance Win32_Process -Filter \"ProcessId = %d\" "
+		"$pidToCheck = %d; "
+		+ "for ($i = 0; $i -lt 8 -and $pidToCheck -gt 0; $i++) { "
+		+ "$p = Get-CimInstance Win32_Process "
+		+ "-Filter \"ProcessId = $pidToCheck\" "
 		+ "-ErrorAction SilentlyContinue; "
-		+ "if ($p) { "
+		+ "if (-not $p) { break }; "
 		+ "Write-Output $p.Name; "
 		+ "Write-Output $p.ExecutablePath; "
-		+ "Write-Output $p.CommandLine "
+		+ "Write-Output $p.CommandLine; "
+		+ "$pidToCheck = [int]$p.ParentProcessId "
 		+ "}"
 	) % pid
 
