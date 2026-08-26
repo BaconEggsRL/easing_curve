@@ -61,7 +61,9 @@ foreach ($suite in $suites) {
 		$launcherProcess = Start-Process @startProcessArguments
 		$completed = $launcherProcess.WaitForExit([int]($suiteTimeout * 1000))
 		if ($completed) {
-			$launcherProcess.Refresh()
+			# Process is already exited; this final wait ensures Process state /
+			# redirected-stream completion is fully synchronized before ExitCode.
+			$launcherProcess.WaitForExit()
 			$suiteExitCode = $launcherProcess.ExitCode
 		} else {
 			$timedOut = $true
