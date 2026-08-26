@@ -51,63 +51,63 @@ const POINT_INSPECTOR_PROPERTY_ORDER: Array[StringName] = [
 const DEBUG_POINT_LIST_DRAG := false
 
 
-## Inspector-only transition ordering, grouping, and Ease availability.
-## Runtime transition IDs, behavior, and parameter metadata remain in EasingCurve.
+## Inspector-only transition grouping, ordering, and presentation.
+## Runtime transition IDs, behavior, and metadata remain in EasingCurve.
 const TRANSITION_PRESENTATION := [
 	{
 		"name": "Basic",
 		"items": [
-			{"transition": EasingCurve.TRANS.LINEAR, "supports_ease": false},
-			{"transition": EasingCurve.TRANS.CONSTANT, "supports_ease": false},
+			{"transition": EasingCurve.TRANS.LINEAR},
+			{"transition": EasingCurve.TRANS.CONSTANT},
 		],
 	},
 	{
 		"name": "Polynomial",
 		"items": [
-			{"transition": EasingCurve.TRANS.QUAD, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.CUBIC, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.QUART, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.QUINT, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.POWER, "supports_ease": true},
+			{"transition": EasingCurve.TRANS.QUAD},
+			{"transition": EasingCurve.TRANS.CUBIC},
+			{"transition": EasingCurve.TRANS.QUART},
+			{"transition": EasingCurve.TRANS.QUINT},
+			{"transition": EasingCurve.TRANS.POWER},
 		],
 	},
 	{
 		"name": "Smooth",
 		"items": [
-			{"transition": EasingCurve.TRANS.SINE, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.CIRC, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.EXPO, "supports_ease": true},
+			{"transition": EasingCurve.TRANS.SINE},
+			{"transition": EasingCurve.TRANS.CIRC},
+			{"transition": EasingCurve.TRANS.EXPO},
 		],
 	},
 	{
 		"name": "Springy",
 		"items": [
-			{"transition": EasingCurve.TRANS.BACK, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.ELASTIC, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.BOUNCE, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.SPRING, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.PHYSICS_SPRING, "supports_ease": true},
+			{"transition": EasingCurve.TRANS.BACK},
+			{"transition": EasingCurve.TRANS.ELASTIC},
+			{"transition": EasingCurve.TRANS.BOUNCE},
+			{"transition": EasingCurve.TRANS.SPRING},
+			{"transition": EasingCurve.TRANS.PHYSICS_SPRING},
 		],
 	},
 	{
 		"name": "Discrete",
 		"items": [
-			{"transition": EasingCurve.TRANS.STEP, "supports_ease": false},
-			{"transition": EasingCurve.TRANS.JITTER, "supports_ease": true},
-			{"transition": EasingCurve.TRANS.IRREGULAR, "supports_ease": true},
+			{"transition": EasingCurve.TRANS.STEP},
+			{"transition": EasingCurve.TRANS.JITTER},
+			{"transition": EasingCurve.TRANS.IRREGULAR},
 		],
 	},
 	{
 		"name": "CSS",
 		"items": [
-			{"transition": EasingCurve.TRANS.CSS_CUBIC_BEZIER, "supports_ease": false},
-			{"transition": EasingCurve.TRANS.CSS_LINEAR, "supports_ease": false},
+			{"transition": EasingCurve.TRANS.CSS_CUBIC_BEZIER},
+			{"transition": EasingCurve.TRANS.CSS_LINEAR},
 		],
 	},
 	{
 		"name": "Custom",
 		"items": [
-			{"transition": EasingCurve.TRANS.CUSTOM, "supports_ease": false},
+			{"transition": EasingCurve.TRANS.CUSTOM},
 		],
 	},
 ]
@@ -3185,11 +3185,7 @@ static func _update_preset_state_ui(
 
 
 static func _transition_supports_ease(transition: EasingCurve.TRANS) -> bool:
-	for group: Dictionary in TRANSITION_PRESENTATION:
-		for item: Dictionary in group["items"]:
-			if item["transition"] == transition:
-				return item["supports_ease"]
-	return false
+	return EasingCurve.transition_supports_ease(transition)
 
 
 static func _set_transition_display(

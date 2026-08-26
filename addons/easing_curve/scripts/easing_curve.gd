@@ -180,6 +180,101 @@ const DEFAULT_SLIDER_VALUE := floor(ZOOM_STEPS / 2.0)
 const min_value := 0.0
 const max_value := 1.0
 const EASING_LIBRARY := preload("res://addons/easing_curve/scripts/easing.gd")
+
+# Authoritative transition mode, generated-data, and Ease-support metadata.
+# Existing class, parameter, and editor-property tables remain authoritative
+# consumers until their later migration slices.
+const TRANSITION_DEFINITIONS := {
+	TRANS.CUSTOM: {"mode": CurveMode.BEZIER, "supports_ease": false},
+	TRANS.CONSTANT: {
+		"mode": CurveMode.BEZIER,
+		"supports_ease": false,
+		"parameters": [&"constant_value"],
+	},
+	TRANS.LINEAR: {"mode": CurveMode.BEZIER, "supports_ease": false},
+	TRANS.JITTER: {
+		"mode": CurveMode.FUNCTION,
+		"supports_ease": true,
+		"parameters": [&"num_points", &"randomness"],
+		"generated": true,
+		"editor_properties": [&"generate_tool_button"],
+	},
+	TRANS.IRREGULAR: {
+		"mode": CurveMode.FUNCTION,
+		"supports_ease": true,
+		"parameters": [&"num_points", &"randomness"],
+		"generated": true,
+		"editor_properties": [&"generate_tool_button"],
+	},
+	TRANS.STEP: {
+		"mode": CurveMode.FUNCTION,
+		"supports_ease": false,
+		"class": EASING_LIBRARY.Step,
+		"extended": false,
+		"parameters": [&"steps", &"from_start", &"y_offset"],
+	},
+	TRANS.POWER: {
+		"mode": CurveMode.FUNCTION,
+		"supports_ease": true,
+		"class": EASING_LIBRARY.Power,
+		"extended": false,
+		"parameters": [&"power"],
+	},
+	TRANS.QUAD: {"mode": CurveMode.BEZIER, "supports_ease": true},
+	TRANS.CUBIC: {"mode": CurveMode.BEZIER, "supports_ease": true},
+	TRANS.QUART: {"mode": CurveMode.BEZIER, "supports_ease": true},
+	TRANS.QUINT: {"mode": CurveMode.BEZIER, "supports_ease": true},
+	TRANS.EXPO: {"mode": CurveMode.BEZIER, "supports_ease": true},
+	TRANS.CIRC: {"mode": CurveMode.BEZIER, "supports_ease": true},
+	TRANS.BACK: {
+		"mode": CurveMode.BEZIER,
+		"supports_ease": true,
+		"parameters": [&"overshoot"],
+	},
+	TRANS.ELASTIC: {
+		"mode": CurveMode.FUNCTION,
+		"supports_ease": true,
+		"class": EASING_LIBRARY.Elastic,
+		"extended": true,
+		"parameters": [&"amplitude", &"period"],
+	},
+	TRANS.BOUNCE: {
+		"mode": CurveMode.FUNCTION,
+		"supports_ease": true,
+		"class": EASING_LIBRARY.Bounce,
+		"extended": true,
+		"parameters": [&"num_bounces", &"bounce_damping"],
+	},
+	TRANS.SPRING: {
+		"mode": CurveMode.FUNCTION,
+		"supports_ease": true,
+		"class": EASING_LIBRARY.Spring,
+		"extended": true,
+		"parameters": [&"frequency", &"decay"],
+	},
+	TRANS.PHYSICS_SPRING: {
+		"mode": CurveMode.FUNCTION,
+		"supports_ease": true,
+		"class": EASING_LIBRARY.PhysicsSpring,
+		"extended": true,
+		"parameters": [&"stiffness", &"damping", &"mass", &"velocity"],
+	},
+	TRANS.CSS_LINEAR: {
+		"mode": CurveMode.FUNCTION,
+		"supports_ease": false,
+		"class": EASING_LIBRARY.CSSLinear,
+		"extended": true,
+		"editor_properties": [&"css_linear"],
+	},
+	TRANS.SINE: {"mode": CurveMode.BEZIER, "supports_ease": true},
+	TRANS.CSS_CUBIC_BEZIER: {
+		"mode": CurveMode.FUNCTION,
+		"supports_ease": false,
+		"class": EASING_LIBRARY.CSSCubicBezier,
+		"extended": true,
+		"editor_properties": [&"css_cubic_bezier"],
+	},
+}
 ## Editor/live-debug bridge containing only primitive values, never point Resources.
 const POINT_SNAPSHOT_PROPERTY := &"_point_snapshot"
 const FUNCTION_SNAPSHOT_PROPERTY := &"_function_snapshot"
@@ -1162,11 +1257,19 @@ func _is_function_property(property_name: StringName) -> bool:
 	return false
 
 
+static func get_transition_definition(transition: TRANS) -> Dictionary:
+	var definition: Dictionary = TRANSITION_DEFINITIONS.get(transition, {})
+	return definition
+
+
+static func transition_supports_ease(transition: TRANS) -> bool:
+	var definition := get_transition_definition(transition)
+	return bool(definition.get("supports_ease", false))
+
+
 static func is_function_transition(transition: TRANS) -> bool:
-	return (
-		FUNCTION_CLASSES.has(transition)
-		or transition in GENERATED_FUNCTION_TRANSITIONS
-	)
+	var definition := get_transition_definition(transition)
+	return int(definition.get("mode", CurveMode.BEZIER)) == CurveMode.FUNCTION
 
 
 static func get_all_function_parameters() -> Array[StringName]:
@@ -1245,7 +1348,8 @@ static func is_deferred_parameter(property_name: StringName) -> bool:
 static func uses_generated_function_data(
 		transition: TRANS,
 ) -> bool:
-	return transition in GENERATED_FUNCTION_TRANSITIONS
+	var definition := get_transition_definition(transition)
+	return bool(definition.get("generated", false))
 
 
 func _update_irregular_parameter() -> void:
