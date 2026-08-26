@@ -75,3 +75,47 @@ OVERALL: PASS
 FINAL TEST RESULTS:
 Investigate failures in Point operations. This is a release blocker.
 Note non-blocking Layout findings and Handles findings for future work.
+
+
+
+
+# Release-blocker manual recheck
+
+## 1. Move Up / Move Down
+- Select P2
+- Move it above/below another point
+- Confirm same logical point remains selected
+- Undo
+- Confirm same point is still selected and its displayed P-number/property panel updates to its restored index
+- Redo
+- Confirm the same again
+RESULT: PASS
+
+
+## 2. Points-list drag reorder
+- Select a point
+- Drag it across another point
+- Confirm same logical point remains selected
+- Undo
+- Confirm its displayed P-number/property panel follows the restored index
+- Redo
+- Confirm it follows the reordered index again
+
+RESULT: PASS*
+
+FINDINGS:
+Script error on points list drag completion: (error observed for Linear preset only; may be unrelated.)
+I would consider this error another release blocker.
+ERROR: core/object/message_queue.cpp:220 - Error calling deferred method: 'Window::Viewport::_drop_mouse_over': Cannot convert argument 1 from Object to Object.
+
+
+## 3. Position-X reorder
+- Select P2
+- Drag Position X across P1
+- Finish the drag
+- Confirm the same logical point remains selected at its new index
+- Undo
+- Confirm the same point is selected and its panel updates back to P2
+- Redo
+- Confirm it returns to the reordered index/panel
+RESULT: PASS
