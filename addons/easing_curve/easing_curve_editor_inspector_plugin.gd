@@ -183,12 +183,14 @@ static func _is_point_property_value_compatible(
 	property_name: StringName,
 	value: Variant,
 ) -> bool:
+	var definition := EasingCurve.get_point_property_definition(property_name)
+	if definition.is_empty() or typeof(value) != definition["type"]:
+		return false
+
 	if property_name == &"handle_mode":
-		return (
-			value is int
-			and int(value) in EasingCurvePoint.HandleMode.values()
-		)
-	return value is Vector2
+		return int(value) in EasingCurvePoint.HandleMode.values()
+
+	return true
 
 
 static func _clipboard_has_compatible_point_property_value(

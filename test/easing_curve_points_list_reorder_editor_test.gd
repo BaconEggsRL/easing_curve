@@ -420,6 +420,7 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 		_expect(inspector.call("_is_point_property_value_compatible", &"handle_mode", mode), "Handle Mode copy value was not accepted for %s" % EasingCurvePoint.HandleMode.keys()[mode])
 		inspector.call("_apply_pasted_point_property_value", 2, &"handle_mode", mode)
 		_expect(target.handle_mode == mode, "Handle Mode paste did not apply %s" % EasingCurvePoint.HandleMode.keys()[mode])
+	_expect(not inspector.call("_is_point_property_value_compatible", &"handle_mode", 99), "Handle Mode paste accepted an out-of-range integer")
 
 	var before := EDITOR_UNDO.capture_state(curve)
 	source.handle_mode = EasingCurvePoint.HandleMode.LINEAR

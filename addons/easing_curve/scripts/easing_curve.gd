@@ -186,15 +186,64 @@ const FUNCTION_SNAPSHOT_PROPERTY := &"_function_snapshot"
 const EDITOR_STATE_SNAPSHOT_PROPERTY := &"_editor_state_snapshot"
 const POINT_STORAGE_COUNT := &"_point_count"
 const POINT_STORAGE_PREFIX := "_point_"
-const POINT_PROPERTIES: Array[StringName] = [
-	&"position",
-	&"left_control_point",
-	&"right_control_point",
-	&"locked",
-	&"handle_mode",
-	&"left_force_linear",
-	&"right_force_linear",
+const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
+	{
+		"name": &"position",
+		"type": TYPE_VECTOR2,
+		"default": Vector2.ZERO,
+	},
+	{
+		"name": &"left_control_point",
+		"type": TYPE_VECTOR2,
+		"default": Vector2.ZERO,
+	},
+	{
+		"name": &"right_control_point",
+		"type": TYPE_VECTOR2,
+		"default": Vector2.ZERO,
+	},
+	{
+		"name": &"locked",
+		"type": TYPE_DICTIONARY,
+		"default": {
+			"position": false,
+			"left_control_point": false,
+			"right_control_point": false,
+		},
+	},
+	{
+		"name": &"handle_mode",
+		"type": TYPE_INT,
+		"default": EasingCurvePoint.HandleMode.FREE,
+	},
+	{
+		"name": &"left_force_linear",
+		"type": TYPE_BOOL,
+		"default": false,
+	},
+	{
+		"name": &"right_force_linear",
+		"type": TYPE_BOOL,
+		"default": false,
+	},
 ]
+static var POINT_PROPERTIES: Array[StringName] = _get_point_property_names()
+
+
+static func _get_point_property_names() -> Array[StringName]:
+	var names: Array[StringName] = []
+	for definition in POINT_PROPERTY_DEFINITIONS:
+		names.append(definition["name"])
+	return names
+
+
+static func get_point_property_definition(
+	property_name: StringName,
+) -> Dictionary:
+	for definition in POINT_PROPERTY_DEFINITIONS:
+		if definition["name"] == property_name:
+			return definition
+	return {}
 
 ## Zoom slider variables
 var _last_slider_value: float = DEFAULT_SLIDER_VALUE
@@ -679,19 +728,9 @@ func _get_property_list() -> Array[Dictionary]:
 	]
 
 	for i in range(_points.size()):
-		for property_name in POINT_PROPERTIES:
-			var property_type := TYPE_VECTOR2
-
-			match property_name:
-				&"locked":
-					property_type = TYPE_DICTIONARY
-				&"handle_mode":
-					property_type = TYPE_INT
-				&"left_force_linear":
-					property_type = TYPE_BOOL
-				&"right_force_linear":
-					property_type = TYPE_BOOL
-
+		for definition in POINT_PROPERTY_DEFINITIONS:
+			var property_name: StringName = definition["name"]
+			var property_type: int = definition["type"]
 			properties.append(
 				{
 					"name": _get_point_storage_name(i, property_name),
@@ -782,7 +821,7 @@ func _parse_point_storage_name(property: StringName) -> Dictionary:
 		return {}
 
 	var property_name := StringName(parts[1])
-	if property_name not in POINT_PROPERTIES:
+	if get_point_property_definition(property_name).is_empty():
 		return {}
 
 	return {"index": parts[0].to_int(), "name": property_name}
@@ -1178,7 +1217,7 @@ func set_point(i: int, p: EasingCurvePoint) -> void:
 
 
 func set_point_property(i: int, property_name: StringName, value: Variant) -> void:
-	if i < 0 or i >= _points.size() or property_name not in POINT_PROPERTIES:
+	if i < 0 or i >= _points.size() or get_point_property_definition(property_name).is_empty():
 		return
 	set(_get_point_storage_name(i, property_name), value)
 

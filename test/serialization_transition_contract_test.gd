@@ -223,6 +223,21 @@ func _test_point_storage_schema() -> void:
 	var curve := EasingCurve.new()
 	curve.set("_point_count", 3)
 	var expected_names: Array[StringName] = [EasingCurve.POINT_STORAGE_COUNT]
+	var expected_definitions: Array[Dictionary] = [
+		{"name": &"position", "type": TYPE_VECTOR2},
+		{"name": &"left_control_point", "type": TYPE_VECTOR2},
+		{"name": &"right_control_point", "type": TYPE_VECTOR2},
+		{"name": &"locked", "type": TYPE_DICTIONARY},
+		{"name": &"handle_mode", "type": TYPE_INT},
+		{"name": &"left_force_linear", "type": TYPE_BOOL},
+		{"name": &"right_force_linear", "type": TYPE_BOOL},
+	]
+	_expect(EasingCurve.POINT_PROPERTY_DEFINITIONS.size() == expected_definitions.size(), "Point property definition count changed")
+	for definition_index in range(expected_definitions.size()):
+		var expected_definition := expected_definitions[definition_index]
+		var definition: Dictionary = EasingCurve.POINT_PROPERTY_DEFINITIONS[definition_index]
+		_expect(definition.get("name") == expected_definition.name, "Point property definition order changed at index %d" % definition_index)
+		_expect(definition.get("type") == expected_definition.type, "Point property type changed for %s" % expected_definition.name)
 	for index in range(3):
 		for property_name in EasingCurve.POINT_PROPERTIES:
 			expected_names.append(StringName("_point_%d/%s" % [index, property_name]))
@@ -233,6 +248,10 @@ func _test_point_storage_schema() -> void:
 		if not property.is_empty():
 			_expect(bool(property.usage & PROPERTY_USAGE_STORAGE), "%s is no longer stored" % property_name)
 			_expect(not bool(property.usage & PROPERTY_USAGE_EDITOR), "%s unexpectedly became an Inspector field" % property_name)
+			if property_name != EasingCurve.POINT_STORAGE_COUNT:
+				var parsed_name := String(property_name).get_slice("/", 1)
+				var definition := EasingCurve.get_point_property_definition(parsed_name)
+				_expect(not definition.is_empty() and property.type == definition.type, "%s storage type no longer matches its descriptor" % property_name)
 	var points_property := _property_by_name(curve, &"points")
 	_expect(not points_property.is_empty() and bool(points_property.usage & PROPERTY_USAGE_EDITOR) and not bool(points_property.usage & PROPERTY_USAGE_STORAGE), "points no longer remains editor-visible and non-storage")
 	var snapshot := curve.get_point_snapshot()
