@@ -38,6 +38,8 @@ const SHOW_MODIFIED_ASTERISK := true
 # alignment
 const POINT_PROPERTY_HEADER_RATIO := 0.35
 const POINT_PROPERTY_VALUE_RATIO := 0.65
+# debug
+const DEBUG_POINT_LIST_DRAG := false
 
 
 ## Inspector-only transition ordering, grouping, and Ease availability.
@@ -654,6 +656,9 @@ class PointsListContainer:
 
 
 	func _debug_drag_event(event: String, details: String = "") -> void:
+		if not DEBUG_POINT_LIST_DRAG:
+			return
+
 		print(
 			"[EC LIST DRAG] frame=%d usec=%d list=%d event=%s %s"
 			% [
@@ -1750,15 +1755,16 @@ func _move_point_down(i: int) -> void:
 
 
 func _move_point(from_index: int, to_index: int) -> void:
-	print(
-		"[EC LIST DRAG] frame=%d usec=%d event=MOVE_POINT from=%d to=%d"
-		% [
-			Engine.get_process_frames(),
-			Time.get_ticks_usec(),
-			from_index,
-			to_index,
-		]
-	)
+	if DEBUG_POINT_LIST_DRAG:
+		print(
+			"[EC LIST DRAG] frame=%d usec=%d event=MOVE_POINT from=%d to=%d"
+			% [
+				Engine.get_process_frames(),
+				Time.get_ticks_usec(),
+				from_index,
+				to_index,
+			]
+		)
 
 	if (
 		from_index == to_index
