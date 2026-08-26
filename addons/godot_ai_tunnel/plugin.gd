@@ -190,7 +190,11 @@ func _pid_is_tunnel_client(pid: int) -> bool:
 	var command := (
 		"$p = Get-CimInstance Win32_Process -Filter \"ProcessId = %d\" "
 		+ "-ErrorAction SilentlyContinue; "
-		+ "if ($p) { Write-Output $p.Name }"
+		+ "if ($p) { "
+		+ "Write-Output $p.Name; "
+		+ "Write-Output $p.ExecutablePath; "
+		+ "Write-Output $p.CommandLine "
+		+ "}"
 	) % pid
 
 	var exit_code := OS.execute(
@@ -209,7 +213,8 @@ func _pid_is_tunnel_client(pid: int) -> bool:
 	if exit_code != 0 or output.is_empty():
 		return false
 
-	return str(output[0]).strip_edges().to_lower() == "tunnel-client.exe"
+	var process_info := "\n".join(output).to_lower()
+	return "tunnel-client" in process_info
 
 
 func _find_health_listener_pid(health_listen_addr: String) -> int:
