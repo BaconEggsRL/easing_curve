@@ -16,7 +16,7 @@ func _init() -> void:
 
 
 func _run() -> void:
-	await _test_drop_reorder_is_next_frame()
+	await _test_drop_reorder_waits_for_safe_drag_completion()
 	_test_repeated_arrow_moves_keep_the_logical_point_selected()
 	_test_committed_drag_reorder_selects_the_dragged_point()
 	_test_reorder_undo_redo_follows_the_selected_resource()
@@ -55,24 +55,89 @@ func _make_fixture() -> Dictionary:
 	return {"curve": curve, "editor": editor, "inspector": inspector, "points": curve.points.duplicate()}
 
 
-func _test_drop_reorder_is_next_frame() -> void:
+func _test_drop_reorder_waits_for_safe_drag_completion() -> void:
 	var point_list := EDITOR_HOST.INSPECTOR_PLUGIN.PointsListContainer.new()
 	get_root().add_child(point_list)
+
+	var child := Control.new()
+	var grandchild := Control.new()
+
+	point_list.mouse_filter = Control.MOUSE_FILTER_STOP
+	child.mouse_filter = Control.MOUSE_FILTER_STOP
+	grandchild.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	point_list.add_child(child)
+	child.add_child(grandchild)
 
 	var request_count := 0
 	var requested_from := -1
 	var requested_to := -1
+
 	point_list.point_swap_requested.connect(
 		func(from_index: int, to_index: int) -> void:
 			request_count += 1
 			requested_from = from_index
 			requested_to = to_index
 	)
-	point_list._defer_point_swap(0, 1)
-	_expect(request_count == 0, "Points-list drop scheduling emitted the reorder synchronously")
+
+	# A drag end without a submitted reorder must not disable the list.
+	point_list.notification(Control.NOTIFICATION_DRAG_END)
+
+	_expect(
+		point_list.mouse_filter == Control.MOUSE_FILTER_STOP,
+		"Points-list drag end without a pending reorder disabled mouse input",
+	)
+
+	point_list._pending_swap_from = 0
+	point_list._pending_swap_to = 1
+
+	point_list.notification(Control.NOTIFICATION_DRAG_END)
+
+	_expect(
+		request_count == 0,
+		"Points-list drag end emitted the reorder synchronously",
+	)
+	_expect(
+		point_list.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"Points-list drag completion did not disable mouse input on the retiring list",
+	)
+	_expect(
+		child.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"Points-list drag completion did not disable mouse input on child controls",
+	)
+	_expect(
+		grandchild.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"Points-list drag completion did not disable mouse input recursively",
+	)
+
+	# The drag-end handler first defers arming the process-frame callback.
+	# Two frames let that asynchronous path settle without depending on
+	# exact MessageQueue/process_frame ordering in the editor test host.
 	await process_frame
-	_expect(request_count == 1, "Points-list drop scheduling did not emit the reorder on the next frame")
-	_expect(requested_from == 0 and requested_to == 1, "Points-list drop scheduling changed the deferred reorder indices")
+	await process_frame
+
+	_expect(
+		request_count == 1,
+		"Points-list drag completion did not emit exactly one reorder",
+	)
+	_expect(
+		requested_from == 0 and requested_to == 1,
+		"Points-list drag completion changed the requested reorder indices",
+	)
+	_expect(
+		point_list._pending_swap_from == -1
+		and point_list._pending_swap_to == -1,
+		"Points-list drag completion did not clear the pending reorder",
+	)
+
+	# Make sure the one-shot scheduling cannot emit the same reorder again.
+	await process_frame
+
+	_expect(
+		request_count == 1,
+		"Points-list drag completion emitted the reorder more than once",
+	)
+
 	point_list.queue_free()
 	_completed_fixtures += 1
 

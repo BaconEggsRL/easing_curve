@@ -108,6 +108,8 @@ Script error on points list drag completion: (error observed for Linear preset o
 I would consider this error another release blocker.
 ERROR: core/object/message_queue.cpp:220 - Error calling deferred method: 'Window::Viewport::_drop_mouse_over': Cannot convert argument 1 from Object to Object.
 
+UPDATE: Fixed on 972b6f9
+
 
 ## 3. Position-X reorder
 - Select P2
@@ -119,3 +121,7 @@ ERROR: core/object/message_queue.cpp:220 - Error calling deferred method: 'Windo
 - Redo
 - Confirm it returns to the reordered index/panel
 RESULT: PASS
+
+
+FINAL TEST RESULTS:
+Fixed final blocker on 972b6f9.
