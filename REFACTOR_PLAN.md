@@ -1,14 +1,34 @@
 # Easing Curve Refactor Plan
 
-## Audit status
+## Audit and current status
+
+### Original audit baseline
 
 - Audit date: 2026-08-25.
 - Baseline branch: `dev`, tracking `origin/dev`.
 - Baseline commit: `5ece891` (`Update easing_curve_editor_undo.gd`).
 - Baseline before this document: clean worktree; no staged or unstaged changes.
 - Project engine: Godot 4.7 project configuration; baseline tests used Godot 4.7.1 stable.
-- Plugin version: `1.0.6-dev`.
-- Document scope: Milestone 1 only. No production code or tests were changed.
+- Plugin version at audit and after refactor validation: `1.0.6-dev`.
+- Milestone 1 changed only this document; later milestones implemented and validated
+  the behavior-preserving refactor described below.
+
+### Current refactor status
+
+- Milestones 2A through 12 are complete.
+- Milestone 9 concluded that no Inspector class/file extraction was warranted.
+- Milestone 10 concluded that no runtime/editor ownership move was warranted.
+- Final visible-editor validation passes fold/focus, responsive layout, selection,
+  point operations, handles, and transition controls.
+- The reorder Undo/Redo selection blocker was fixed and manually revalidated.
+- The native Points-list drag teardown `_drop_mouse_over` blocker was fixed in
+  `972b6f9` and subsequently stress-tested without reproduction.
+- Regression coverage for the final drag fix was updated under `16611c3`.
+- `test/run_all_tests.ps1` passes all 17 registered suites with exit code 0,
+  PASS markers, and no `SCRIPT ERROR:`.
+- `git diff --check` passes.
+- No known release blocker remains from this refactor.
+- Version remains `1.0.6-dev`; release/versioning work is separate.
 
 This document is the contract for later behavior-preserving refactor runs. A
 future run must implement only the named milestone or sub-milestone, preserve
@@ -159,6 +179,19 @@ the synthetic `_editor_state_snapshot` property for both do and undo. With a
 real `EditorUndoRedoManager`, it also invokes the parent Inspector's private
 `_edit_request_change` path and emits `property_edited` so live debugging sees
 the same complete state on initial edit, Undo, and Redo.
+
+Reorder actions have an additional editor-only identity contract. Primitive
+point snapshots describe point values by array slot, so they are insufficient
+by themselves when existing `EasingCurvePoint` Resources have changed order.
+
+For reorder-capable Undo/Redo actions, `EasingCurveEditorUndo` therefore carries
+the saved point Resource order separately from the normal resource-free editor
+snapshot. That order is restored before the primitive snapshot is applied.
+Selection restoration then resolves the selected logical point Resource against
+the restored order and derives its current Inspector/graph index.
+
+This order payload is editor-only. It must not be added to serialized
+`EasingCurve` storage or to the normal runtime/editor snapshot schema.
 
 The curve coordinates notification suppression with:
 
@@ -356,7 +389,21 @@ The README advertises Godot 4.4.0 as the verified loading minimum and Godot
 - portable `res://addons/easing_curve/...` paths;
 - self-contained archive contents under `addons/easing_curve/`.
 
-# Test baseline
+# Original Milestone 1 test baseline
+
+The results in this section are the historical Milestone 1 baseline. They are
+retained for before/after comparison and are not the current aggregate totals.
+
+Current automated Godot tests must run through:
+
+`test/run_godot.ps1`
+
+Use:
+
+`test/run_all_tests.ps1`
+
+for aggregate validation. Do not invoke the Godot executable directly for
+routine automated tests.
 
 ## Commands and environment
 
@@ -830,6 +877,54 @@ refactors. Existing tests should be extended rather than replaced.
   example run, save/reload, and disable.
 
 # Recommended Not To Refactor
+
+## Points-list native drag hover teardown
+
+Points-list native drag reorder must not rebuild/free the retiring Inspector
+Control subtree while that subtree still participates in the Viewport mouse-over
+hierarchy.
+
+A successful Points-list drop therefore:
+
+1. records the pending reorder without emitting it synchronously;
+2. waits for `NOTIFICATION_DRAG_END`;
+3. recursively sets the retiring Points-list Control subtree to
+   `MOUSE_FILTER_IGNORE`;
+4. defers the pending reorder path;
+5. verifies that `gui_get_hovered_control()` is no longer the list or one of its
+   descendants before emitting the reorder request;
+6. only then allows the Inspector reorder/rebuild to free the old Controls.
+
+This prevents Godot from later servicing a deferred `Viewport::_drop_mouse_over`
+call with a Control that was freed during Inspector reconstruction.
+
+Do not simplify this back to synchronous `_drop_data()` emission, scheduling
+directly from `_drop_data()`, or merely waiting for `DRAG_END`. Those variants
+were tested and still reproduced the engine error.
+
+Drag lifecycle diagnostics are intentionally retained behind
+`DEBUG_POINT_LIST_DRAG`; keep the flag disabled for normal use rather than
+removing the instrumentation.
+
+## Reorder Undo/Redo Resource-order restoration
+
+Do not remove the separate editor-only point-order payload from reorder actions
+or assume that restoring the primitive point snapshot is sufficient.
+
+Primitive snapshots intentionally store values rather than Resource objects.
+After a manual reorder, applying those values by the current array slot without
+first restoring Resource order can preserve the array size while attaching the
+wrong logical data to an `EasingCurvePoint` Resource.
+
+For reorder actions the required sequence is:
+
+1. restore existing point Resource order;
+2. apply the primitive editor-state snapshot;
+3. resolve selection from point Resource identity plus property name;
+4. derive the current point index/header/graph selection.
+
+Do not serialize the Resource-order payload or generalize it to actions that do
+not reorder existing point Resources.
 
 ## Primitive point storage and resource-free snapshots
 
@@ -1708,7 +1803,8 @@ function reordering was needed.
 Public API, exported and serialized property names, snapshot keys, transition
 IDs/order, signal bindings, notification behavior, selection semantics, and
 Undo/Redo behavior are unchanged. No new files, classes, or architecture were
-introduced. Milestone 12 was not started.
+introduced. At the time of this Milestone 11 completion record, Milestone 12 had not yet
+started.
 
 Focused validation through `test/run_godot.ps1` passed: selection/refresh (35),
 graph gestures (13), editor Undo/Redo (627; visible-only native layout fixtures
@@ -1731,8 +1827,12 @@ runtime, serialization, and actual distribution form.
 
 ### Current behavior
 
-The working-tree automated baseline is known with explicit gaps; manual and
-archive validation are unverified.
+Automated, archive, clean-project, and visible-editor validation are complete.
+The initial visible-editor pass exposed two release blockers in sequence:
+reorder Undo/Redo point-identity restoration and native Points-list drag
+teardown. Both were fixed, regression-tested, and manually revalidated.
+
+No remaining refactor release blocker is known.
 
 ### Exact scope
 
@@ -1858,11 +1958,57 @@ narrower than requested so all controls fit on one row; Curve Editor and Linear
 point dragging can feel slow and are future performance work. No version bump
 was made; `plugin.cfg` remains `1.0.6-dev`.
 
-Release readiness remains blocked pending a manual recheck of: (1) Move Up/Down
-with Undo/Redo, (2) Points-list drag reorder with Undo/Redo, and (3) Position-X
-reorder with Undo/Redo. In each check, the same logical point Resource must
-remain selected while the displayed point number and property panel follow its
-current index.
+### Final manual release-blocker recheck
+
+The required reorder-selection rechecks were subsequently completed:
+
+- **Move Up / Move Down:** PASS. The same logical point Resource remains selected
+  across reorder, Undo, and Redo, while the displayed P-number/property panel
+  follows the Resource's current index.
+- **Points-list drag reorder:** selection/Undo/Redo behavior PASS. During this
+  recheck, native drag completion exposed a separate intermittent Godot
+  `Viewport::_drop_mouse_over` deferred-call error.
+- **Position-X reorder:** PASS. The same logical point Resource and selected
+  property are restored across completed drag, Undo, and Redo.
+
+The native Points-list drag error was isolated to retiring Inspector Controls
+remaining in the Viewport hover hierarchy during reconstruction. The final
+mouse-quarantine/hover-clear fix was committed in `972b6f9`. Repeated visible
+drag-reorder stress testing after that fix produced no further errors.
+
+The drag lifecycle regression test was then updated under `16611c3`. The focused
+Points-list reorder suite passes 71 checks.
+
+Final aggregate validation through `test/run_all_tests.ps1` passes all 17
+registered suites. Current relevant totals include Position-X drag 69 checks,
+Points-list reorder 71 checks, and editor Undo/Redo 627 checks. Every suite
+reports exit code 0, a PASS marker, and no `SCRIPT ERROR:`. `git diff --check`
+also passes.
+
+Final visible-editor status:
+
+- Fold / focus: PASS.
+- Responsive layout: PASS.
+- Selection: PASS.
+- Point operations including Add, delete, Move Up/Down, Points-list drag reorder,
+  Position-X reorder, Undo, and Redo: PASS.
+- Handles / Lock / Force Linear: PASS.
+- Transition controls: PASS.
+- No remaining release blocker was found.
+
+Two non-blocking findings remain intentionally unchanged:
+
+1. At very small Inspector widths, the Curve Editor point-property reset-button
+   requested width is not always respected. This is an intentional layout
+   compromise required to keep the property controls on one row and approach the
+   native minimum Inspector width.
+2. Point dragging in the Curve Editor, particularly Linear points, can feel
+   somewhat slow. This is future performance work and was not changed during the
+   behavior-preserving refactor.
+
+Milestone 12 and the behavior-preserving refactor are therefore complete.
+`plugin.cfg` remains `1.0.6-dev`; release versioning, tagging, and publishing are
+separate work.
 
 # Dependency ordering
 
@@ -1906,10 +2052,47 @@ is demonstrated.
 | File extraction | Medium | More coupling/import churn without clarity | Dependency gate and no-change option |
 | Packaging | Medium | Development dependency or UID/import failure | Exact archive inspection and clean-project install |
 
-# Milestone 1 completion statement
+# Original Milestone 1 completion statement
 
 This audit intentionally made no production-code or test changes. The only
 planned repository change for Milestone 1 is this `REFACTOR_PLAN.md` document.
 No public API, enum, exported property, default, signal, snapshot schema,
 serialized resource format, sample result, editor UX, selection behavior, or
 Undo/Redo behavior was modified.
+
+# Overall refactor completion statement
+
+The planned behavior-preserving refactor is complete.
+
+Milestones 2A through 8 implemented the selected test, runtime, Inspector,
+selection, Undo/Redo, and transition-presentation cleanup. Milestone 9 found no
+Inspector extraction with a better ownership boundary, and Milestone 10 found
+no runtime/editor state move that reduced complexity without weakening current
+behavior. Milestone 11 completed the final rationale/comment review.
+
+Milestone 12 validated the addon through the automated suite, package/archive
+inspection, clean-project installation, and visible-editor manual checks.
+Release-blocking reorder identity and native Points-list drag teardown issues
+found during manual validation were fixed and regression-tested.
+
+Final validation:
+
+- Godot 4.7.1.
+- `test/run_all_tests.ps1`: 17 / 17 suites PASS.
+- Points-list submitted reorder: 71 checks PASS.
+- Position-X drag: 69 checks PASS.
+- Editor Undo/Redo: 627 checks PASS.
+- No `SCRIPT ERROR:` in the aggregate result.
+- `git diff --check`: PASS.
+- Final visible-editor checklist: PASS.
+- No known refactor release blocker remains.
+
+The intentional compatibility boundaries documented above remain in force,
+including primitive point serialization, resource-free snapshots, exact
+snapshot restoration ordering, Resource-identity selection, reorder Resource
+order restoration, native Points-list drag hover teardown, Constant/Back
+revision-gated notifications, FoldableContainer focus handling, and explicit
+Inspector Undo/Redo notifications.
+
+The plugin version remains `1.0.6-dev`. This refactor completion does not by
+itself authorize a version bump, tag, release, or store submission.
