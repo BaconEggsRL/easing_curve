@@ -69,15 +69,17 @@ func _test_drop_reorder_waits_for_safe_drag_completion() -> void:
 	point_list.add_child(child)
 	child.add_child(grandchild)
 
-	var request_count := 0
-	var requested_from := -1
-	var requested_to := -1
+	var request := {
+		"count": 0,
+		"from": -1,
+		"to": -1,
+	}
 
 	point_list.point_swap_requested.connect(
 		func(from_index: int, to_index: int) -> void:
-			request_count += 1
-			requested_from = from_index
-			requested_to = to_index
+			request["count"] = int(request["count"]) + 1
+			request["from"] = from_index
+			request["to"] = to_index
 	)
 
 	# A drag end without a submitted reorder must not disable the list.
@@ -94,7 +96,7 @@ func _test_drop_reorder_waits_for_safe_drag_completion() -> void:
 	point_list.notification(Control.NOTIFICATION_DRAG_END)
 
 	_expect(
-		request_count == 0,
+		int(request["count"]) == 0,
 		"Points-list drag end emitted the reorder synchronously",
 	)
 	_expect(
@@ -117,11 +119,11 @@ func _test_drop_reorder_waits_for_safe_drag_completion() -> void:
 	await process_frame
 
 	_expect(
-		request_count == 1,
+		int(request["count"]) == 1,
 		"Points-list drag completion did not emit exactly one reorder",
 	)
 	_expect(
-		requested_from == 0 and requested_to == 1,
+		int(request["from"]) == 0 and int(request["to"]) == 1,
 		"Points-list drag completion changed the requested reorder indices",
 	)
 	_expect(
@@ -134,7 +136,7 @@ func _test_drop_reorder_waits_for_safe_drag_completion() -> void:
 	await process_frame
 
 	_expect(
-		request_count == 1,
+		int(request["count"]) == 1,
 		"Points-list drag completion emitted the reorder more than once",
 	)
 
