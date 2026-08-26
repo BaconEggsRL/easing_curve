@@ -691,9 +691,7 @@ class PointsListContainer:
 					"drag=%d" % _debug_drag_id,
 				)
 
-				# Remove this soon-to-be-rebuilt Points list and all of its children
-				# from the Viewport's mouse-over hierarchy while they are still alive.
-				mouse_behavior_recursive = Control.MOUSE_BEHAVIOR_DISABLED
+				_disable_mouse_for_subtree(self)
 
 				call_deferred(
 					"_arm_pending_point_swap_next_frame",
@@ -706,6 +704,14 @@ class PointsListContainer:
 			"TREE_EXIT",
 			"drag=%d" % _debug_drag_id,
 		)
+
+
+	func _disable_mouse_for_subtree(control: Control) -> void:
+		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		for child in control.get_children():
+			if child is Control:
+				_disable_mouse_for_subtree(child)
 
 
 	func enable_drop_forwarding(control: Control) -> void:
