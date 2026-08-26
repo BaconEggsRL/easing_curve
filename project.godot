@@ -28,7 +28,7 @@ window/stretch/mode="canvas_items"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/easing_curve/plugin.cfg", "res://addons/godot_ai/plugin.cfg")
+enabled=PackedStringArray("res://addons/easing_curve/plugin.cfg", "res://addons/godot_ai/plugin.cfg", "res://addons/godot_ai_tunnel/plugin.cfg")
 
 [physics]
 

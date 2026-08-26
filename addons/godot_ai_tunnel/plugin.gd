@@ -94,6 +94,8 @@ func _start_tunnel(
 	health_listen_addr: String,
 	settings: EditorSettings,
 ) -> void:
+	print("Godot AI Tunnel | starting tunnel-client...")
+
 	_tunnel_pid = OS.create_process(
 		executable,
 		PackedStringArray([
@@ -104,6 +106,11 @@ func _start_tunnel(
 			health_listen_addr,
 		]),
 		false,
+	)
+
+	print(
+		"Godot AI Tunnel | tunnel-client launch returned PID %d"
+		% _tunnel_pid
 	)
 
 	if _tunnel_pid <= 0:
