@@ -1,5 +1,7 @@
 [CmdletBinding()]
 param(
+	[string]$ExitCodeFile = "",
+
 	[Parameter(ValueFromRemainingArguments = $true)]
 	[string[]]$GodotArgs
 )
@@ -66,6 +68,13 @@ $exitCode = $LASTEXITCODE
 
 if ($testLogPath -and $exitCode -eq 0) {
 	Remove-Item -LiteralPath $testLogPath -Force -ErrorAction SilentlyContinue
+}
+
+if ($ExitCodeFile) {
+	[IO.File]::WriteAllText(
+		$ExitCodeFile,
+		[string]$exitCode
+	)
 }
 
 exit $exitCode

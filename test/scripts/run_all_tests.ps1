@@ -40,6 +40,7 @@ foreach ($suite in $suites) {
 	)
 	$stdoutPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stdout" -f [guid]::NewGuid())
 	$stderrPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stderr" -f [guid]::NewGuid())
+	$exitCodePath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.exitcode" -f [guid]::NewGuid())
 	$suiteExitCode = -1
 	$timedOut = $false
 	try {
@@ -47,7 +48,8 @@ foreach ($suite in $suites) {
 		$launcherArguments = @(
 			"-NoProfile",
 			"-ExecutionPolicy", "Bypass",
-			"-File", $godotLauncher
+			"-File", $godotLauncher,
+			"-ExitCodeFile", $exitCodePath
 		) + $arguments
 		$startProcessArguments = @{
 			FilePath = $powerShellExecutable
@@ -61,10 +63,18 @@ foreach ($suite in $suites) {
 		$launcherProcess = Start-Process @startProcessArguments
 		$completed = $launcherProcess.WaitForExit([int]($suiteTimeout * 1000))
 		if ($completed) {
-			# Process is already exited; this final wait ensures Process state /
-			# redirected-stream completion is fully synchronized before ExitCode.
+			# Process is already exited; this final wait synchronizes redirected streams.
 			$launcherProcess.WaitForExit()
-			$suiteExitCode = $launcherProcess.ExitCode
+			if (Test-Path -LiteralPath $exitCodePath) {
+				$exitCodeText = (Get-Content -Raw -LiteralPath $exitCodePath).Trim()
+				if ($exitCodeText -match '^-?\d+$') {
+					$suiteExitCode = [int]$exitCodeText
+				} else {
+					Write-Warning "Invalid exit code from $($suite.Name): '$exitCodeText'"
+				}
+			} else {
+				Write-Warning "No exit code was reported for $($suite.Name)."
+			}
 		} else {
 			$timedOut = $true
 			Write-Host "Timed out after $suiteTimeout seconds; terminating process tree rooted at PID $($launcherProcess.Id)." -ForegroundColor Yellow
@@ -96,6 +106,7 @@ foreach ($suite in $suites) {
 	} finally {
 		Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
 		Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
+		Remove-Item -LiteralPath $exitCodePath -Force -ErrorAction SilentlyContinue
 	}
 }
 
