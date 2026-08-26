@@ -1,4 +1,5 @@
 # Development testing
+---
 
 ## Editor-host tests
 
@@ -46,7 +47,71 @@ responsive-layout fixtures because they require a visible Editor layout. Verify
 those fixtures in a visible Editor session instead.
 
 
-## Adding a New Function Transition
+# Feature development
+
+---
+
+
+## Add a new EasingCurvePoint property
+
+There are two categories of point properties.
+
+### Ordinary property
+
+Use this path for a bool, a non-geometry enum, or another option with no graph,
+transform, or point-geometry semantics.
+
+1. Add normal state/getter/setter behavior to `EasingCurvePoint`. Point Resources
+   must not own Inspector Controls.
+2. Add one `EasingCurve.POINT_PROPERTY_DEFINITIONS` entry with `name`, `type`,
+   `default`, `inspector_visible`, `resettable`, `copy_paste_enabled`,
+   `inspector_label`, `editor_kind`, and `snapshot_key` as applicable. Mark an
+   ordinary snapshot participant with
+   `snapshot_lifecycle: EasingCurve.POINT_SNAPSHOT_LIFECYCLE_ORDINARY`.
+3. If visible, add it to `POINT_INSPECTOR_PROPERTY_ORDER`. Presentation order is
+   intentionally separate from serialized descriptor order.
+4. Reuse an existing editor kind when possible. A new UI category needs one
+   editor-kind builder, not a property-specific normal-row implementation.
+5. Use the existing Inspector transaction path. Ordinary values use
+   `EasingCurve.set_point_snapshot_property_value()` and the descriptor-backed
+   typed snapshot lifecycle; do not create another Undo/Redo mechanism.
+6. Add descriptor, storage round-trip, snapshot capture/restore, Undo/Redo, and
+   visible-editor tests as applicable.
+
+Ordinary property checklist:
+
+- [ ] Add point state/setter
+- [ ] Add one descriptor entry
+- [ ] Mark ordinary snapshot lifecycle when appropriate
+- [ ] Add intentional presentation placement if visible
+- [ ] Reuse or add one editor kind
+- [ ] Add focused tests, run the aggregate, and smoke-test UI changes
+
+### Semantic / geometry-affecting property
+
+`handle_mode` is not an ordinary enum: it changes control geometry and interacts
+with locks and Force Linear. A property with comparable semantics may also need
+explicit `EasingCurvePoint` transitions, Inspector mutation handling, reset
+consequences, graph behavior, snapshot restore ordering, reverse/invert policy,
+selection/reorder considerations, and Undo/Redo characterization.
+
+These explicit branches are intentional. Do not hide real geometry semantics in
+descriptor metadata.
+
+Semantic property checklist:
+
+- [ ] Complete ordinary-property steps where applicable
+- [ ] Define geometry/state semantics and restore ordering
+- [ ] Define reverse/invert and graph/editor behavior
+- [ ] Cover lock/Force Linear interactions where relevant
+- [ ] Add Undo/Redo and characterization tests
+- [ ] Run visible Editor validation
+
+
+---
+
+
+## Add a new function transition
 
 For a normal parameterized function transition:
 
