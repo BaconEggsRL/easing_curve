@@ -3,7 +3,7 @@
 Release entries are ordered newest to oldest. Add future releases above the
 current top entry.
 
-## v1.0.5 (pending release)
+## v1.0.5
 
 ### Added
 
