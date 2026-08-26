@@ -2,21 +2,42 @@
 
 ---
 
-## Editor-host tests
+## Automated suites
 
-The following tests require an Editor-host launch:
+`test/scripts/run_all_tests.ps1` is the source of truth for the explicit
+automated-suite manifest. It currently registers 17 suites: eight headless and
+nine Editor-host. Do not infer an automated suite or its mode from its filename.
+
+### Headless suites
+
+- `css_linear_test.gd`
+- `easing_curve_editor_rmb_delete_test.gd`
+- `easing_curve_manual_reorder_test.gd`
+- `easing_curve_transform_test.gd`
+- `easing_curve_v105_regression_test.gd`
+- `runtime_curve_updates_test.gd`
+- `serialization_transition_contract_test.gd`
+- `tween_equivalence_test.gd`
+
+### Editor-host suites
+
+The following suites require an Editor-host launch:
 
 - `easing_curve_control_editability_test.gd`
 - `easing_curve_editor_position_x_drag_test.gd`
 - `easing_curve_linear_control_alias_test.gd`
+- `easing_curve_points_list_add_editor_test.gd`
 - `easing_curve_points_list_reorder_editor_test.gd`
+- `easing_curve_point_state_characterization_test.gd`
+- `easing_curve_selection_refresh_characterization_test.gd`
+- `easing_curve_editor_gesture_characterization_test.gd`
 - `editor_undo_redo_test.gd`
 
 Run an Editor-dependent test with:
 
 ```text
 ./test/scripts/run_godot.ps1 --editor --headless --path . --script res://test/<test_name>.gd
-````
+```
 
 Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can
 misleadingly report zero checks. It is not a valid result for these tests.
@@ -50,6 +71,54 @@ Under Godot 4.7 `--editor --headless`, `editor_undo_redo_test.gd` skips its
 `FoldableContainer` fixture because it crashes in that environment and its
 responsive-layout fixtures because they require a visible Editor layout. Verify
 those fixtures in a visible Editor session instead.
+
+## Test-asset ownership
+
+Only the 17 scripts in the explicit runner manifest above are release-gating
+automated suites. The following assets are intentionally documented by their
+observed repository role; none is registered by `run_all_tests.ps1`.
+
+### Shared automated-test harness and fixtures
+
+- `editor_host_test_harness.gd` is preloaded by the nine Editor-host suites to
+  require an Editor/Inspector host and create their Inspector contexts.
+- `presets/legacy_pre_flat_triangle.tres` and
+  `presets/legacy_flat_without_force_linear.tres` are serialization fixtures
+  loaded by `serialization_transition_contract_test.gd`.
+- `scripts/run_godot.ps1` is the shared launcher used by the complete-suite
+  runner; it is not a suite entrypoint.
+
+### Manual regression fixture
+
+- `test_foldable_container.tscn` is a native `FoldableContainer` scene for
+  visible-Editor layout/focus checking. It is not safe to validate under
+  `--editor --headless`; use the visible-Editor checklist in
+  `docs/_test_plans/_archive/v1.0.5/easing_curve_editor_visible_regression_checklist.md`.
+
+### Exploratory/development utilities
+
+- `export_array_resource.gd`, `export_array_test.gd`, and
+  `export_array_test.tscn` are an Inspector/exported-array experiment with a
+  reloadable scene.
+- `elastic_func.gd` and `elastic_func.tscn` are an interactive elastic-easing
+  preview.
+- `rand_test.gd` and `rand_test.tscn` print deterministic global and local RNG
+  sequences.
+- `test_force_linear.gd` and `test_force_linear.tscn` are a manually launched
+  Force Linear persistence/snapshot experiment; its snapshot branch is
+  currently disabled in the script. `presets/test_force_linear_persistence.tres`
+  is its associated saved-resource fixture.
+
+### Historical or uncertain assets
+
+- `foo.gd` is an unreferenced tool `Resource` experiment for propagating
+  `EasingCurvePoint` changes. Its current consumer and retention purpose are
+  unclassified.
+- `anim_test.tscn` loads `presets/_TestAnimation.res` into an `AnimationPlayer`,
+  but neither asset is referenced by a registered suite. Their intended manual
+  regression or development purpose is uncertain.
+- The `.uid` files beside test scripts are Godot script identifiers, not
+  independent test entrypoints.
 
 # Feature development
 
