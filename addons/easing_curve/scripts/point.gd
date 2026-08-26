@@ -47,6 +47,17 @@ enum ControlState {
 }
 
 
+var _test_secondary_flag := false
+var test_secondary_flag: bool:
+	get:
+		return _test_secondary_flag
+	set(value):
+		if _test_secondary_flag == value:
+			return
+		_test_secondary_flag = value
+		emit_changed()
+
+
 var _test_enabled := false
 var test_enabled: bool:
 	get:

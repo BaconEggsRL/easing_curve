@@ -216,6 +216,18 @@ const POINT_SNAPSHOT_LIFECYCLES: Array[StringName] = [
 # }
 const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
+		"name": &"test_secondary_flag",
+		"type": TYPE_BOOL,
+		"default": false,
+		"inspector_label": "Test Secondary Flag",
+		"inspector_visible": true,
+		"resettable": true,
+		"copy_paste_enabled": true,
+		"editor_kind": POINT_EDITOR_KIND_BOOL,
+		"snapshot_key": &"test_secondary_flag_values",
+		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+	},
+	{
 		"name": &"test_enabled",
 		"type": TYPE_BOOL,
 		"default": false,
