@@ -369,6 +369,7 @@ function Write-PostPublishSteps {
     Write-Host "2. Return to the development branch:"
     Write-Host "   git checkout dev"
     Write-Host "   git pull --ff-only origin dev"
+	Write-Host "   git merge --ff-only $ReleaseBranch"
     Write-Host ""
     Write-Host "3. Start the next development version:"
     Write-Host "   Update addons/easing_curve/plugin.cfg:"
