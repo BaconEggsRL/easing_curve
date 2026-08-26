@@ -46,7 +46,6 @@ enum ControlState {
 	LOCKED,
 }
 
-@export var position: Vector2 = Vector2.ZERO: set = set_position
 
 var _test_vector: Vector2 = Vector2.ZERO
 var test_vector: Vector2:
@@ -57,6 +56,9 @@ var test_vector: Vector2:
 			return
 		_test_vector = value
 		emit_changed()
+
+
+@export var position: Vector2 = Vector2.ZERO: set = set_position
 
 var _left_control_point := Vector2.ZERO
 @export var left_control_point: Vector2:

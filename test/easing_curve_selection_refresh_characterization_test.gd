@@ -131,6 +131,7 @@ func _test_normal_property_row_order() -> void:
 	var inspector: Object = context.inspector
 	for point_index in range(curve.points.size()):
 		var expected_row: Array[StringName] = [
+			&"test_vector",
 			&"position",
 			&"handle_mode",
 		]
@@ -157,7 +158,7 @@ func _test_property_selection_survives_reparse() -> void:
 	var editor: EasingCurveEditor = context.editor
 	var inspector: Object = context.inspector
 	var selected_point: EasingCurvePoint = curve.points[2]
-	for property_name in [&"position", &"handle_mode", &"left_control_point", &"right_control_point"]:
+	for property_name in [&"test_vector", &"position", &"handle_mode", &"left_control_point", &"right_control_point"]:
 		var first := _create_property_header(inspector, selected_point, 2, property_name)
 		var first_header: PanelContainer = first.header
 		_expect(first_header != null, "%s did not create a selectable property header" % property_name)

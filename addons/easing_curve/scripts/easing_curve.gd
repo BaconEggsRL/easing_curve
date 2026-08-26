@@ -329,9 +329,34 @@ static func get_point_property_snapshot_key(property_name: StringName) -> String
 	return definition.get("snapshot_key", StringName())
 
 
-static func is_point_property_snapshot_lifecycle_ordinary(property_name: StringName) -> bool:
+static func get_point_property_snapshot_lifecycle(
+		property_name: StringName,
+) -> StringName:
 	var definition := get_point_property_definition(property_name)
-	return definition.get("snapshot_lifecycle", StringName()) == POINT_SNAPSHOT_LIFECYCLE_ORDINARY
+	if definition.is_empty():
+		return StringName()
+	return get_point_property_definition_snapshot_lifecycle(definition)
+
+
+static func get_point_property_definition_snapshot_lifecycle(
+		definition: Dictionary,
+) -> StringName:
+	if not definition.has("snapshot_lifecycle"):
+		return StringName()
+	var lifecycle: Variant = definition["snapshot_lifecycle"]
+	if lifecycle not in [
+		POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+		POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
+	]:
+		return StringName()
+	return lifecycle
+
+
+static func is_point_property_snapshot_lifecycle_ordinary(property_name: StringName) -> bool:
+	return (
+		get_point_property_snapshot_lifecycle(property_name)
+		== POINT_SNAPSHOT_LIFECYCLE_ORDINARY
+	)
 
 
 static func _create_point_snapshot_values(property_type: int) -> Variant:
@@ -381,7 +406,10 @@ static func _reverse_point_snapshot_values(values: Variant, property_type: int) 
 static func _get_ordinary_point_property_definitions() -> Array[Dictionary]:
 	var definitions: Array[Dictionary] = []
 	for definition in POINT_PROPERTY_DEFINITIONS:
-		if definition.get("snapshot_lifecycle", StringName()) == POINT_SNAPSHOT_LIFECYCLE_ORDINARY:
+		if (
+			get_point_property_definition_snapshot_lifecycle(definition)
+			== POINT_SNAPSHOT_LIFECYCLE_ORDINARY
+		):
 			definitions.append(definition)
 	return definitions
 
@@ -2113,7 +2141,7 @@ func _point_snapshot_differs(
 			return true
 		if i < locks.size() and locks[i] is Dictionary:
 			var lock_values: Dictionary = locks[i]
-			for property_name in POINT_PROPERTIES.slice(0, 3):
+			for property_name in point.locked:
 				if bool(point.locked.get(property_name, false)) != bool(lock_values.get(property_name, false)):
 					return true
 		var snapshot_left_force := (
@@ -2145,7 +2173,7 @@ func _point_snapshot_locks_differ(locks: Array) -> bool:
 		if locks[i] is not Dictionary or _points[i] == null:
 			return true
 		var lock_values: Dictionary = locks[i]
-		for property_name in POINT_PROPERTIES.slice(0, 3):
+		for property_name in _points[i].locked:
 			if bool(_points[i].locked.get(property_name, false)) != bool(lock_values.get(property_name, false)):
 				return true
 	return false
@@ -2176,7 +2204,7 @@ func _point_snapshot_matches(snapshot: Dictionary, tolerance: float) -> bool:
 		if locks[i] is not Dictionary:
 			return false
 		var lock_values: Dictionary = locks[i]
-		for property_name in POINT_PROPERTIES.slice(0, 3):
+		for property_name in point.locked:
 			if bool(point.locked.get(property_name, false)) != bool(lock_values.get(property_name, false)):
 				return false
 	return true

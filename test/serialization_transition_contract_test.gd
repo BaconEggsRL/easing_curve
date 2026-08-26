@@ -16,6 +16,7 @@ func _init() -> void:
 	_test_transition_catalog_contract()
 	_test_exported_property_contract()
 	_test_point_storage_schema()
+	_test_point_property_snapshot_lifecycle_contract()
 	_test_point_snapshot_property_access()
 	_cleanup()
 
@@ -225,13 +226,14 @@ func _test_point_storage_schema() -> void:
 	curve.set("_point_count", 3)
 	var expected_names: Array[StringName] = [EasingCurve.POINT_STORAGE_COUNT]
 	var expected_definitions: Array[Dictionary] = [
-		{"name": &"position", "type": TYPE_VECTOR2, "snapshot_key": &"positions", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
-		{"name": &"left_control_point", "type": TYPE_VECTOR2, "snapshot_key": &"left_control_points", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
-		{"name": &"right_control_point", "type": TYPE_VECTOR2, "snapshot_key": &"right_control_points", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
-		{"name": &"locked", "type": TYPE_DICTIONARY, "snapshot_key": &"locks", "default": {"position": false, "left_control_point": false, "right_control_point": false}, "inspector_visible": false},
-		{"name": &"handle_mode", "type": TYPE_INT, "snapshot_key": &"handle_modes", "default": EasingCurvePoint.HandleMode.FREE, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_HANDLE_MODE},
-		{"name": &"left_force_linear", "type": TYPE_BOOL, "snapshot_key": &"left_force_linear", "default": false, "inspector_visible": false},
-		{"name": &"right_force_linear", "type": TYPE_BOOL, "snapshot_key": &"right_force_linear", "default": false, "inspector_visible": false},
+		{"name": &"test_vector", "type": TYPE_VECTOR2, "snapshot_key": &"test_vectors", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_ORDINARY},
+		{"name": &"position", "type": TYPE_VECTOR2, "snapshot_key": &"positions", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC},
+		{"name": &"left_control_point", "type": TYPE_VECTOR2, "snapshot_key": &"left_control_points", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC},
+		{"name": &"right_control_point", "type": TYPE_VECTOR2, "snapshot_key": &"right_control_points", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC},
+		{"name": &"locked", "type": TYPE_DICTIONARY, "snapshot_key": &"locks", "default": {"position": false, "left_control_point": false, "right_control_point": false}, "inspector_visible": false, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC},
+		{"name": &"handle_mode", "type": TYPE_INT, "snapshot_key": &"handle_modes", "default": EasingCurvePoint.HandleMode.FREE, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_HANDLE_MODE, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC},
+		{"name": &"left_force_linear", "type": TYPE_BOOL, "snapshot_key": &"left_force_linear", "default": false, "inspector_visible": false, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC},
+		{"name": &"right_force_linear", "type": TYPE_BOOL, "snapshot_key": &"right_force_linear", "default": false, "inspector_visible": false, "snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC},
 	]
 	_expect(EasingCurve.POINT_PROPERTY_DEFINITIONS.size() == expected_definitions.size(), "Point property definition count changed")
 	for definition_index in range(expected_definitions.size()):
@@ -241,6 +243,7 @@ func _test_point_storage_schema() -> void:
 		_expect(definition.get("type") == expected_definition.type, "Point property type changed for %s" % expected_definition.name)
 		_expect(definition.get("snapshot_key") == expected_definition.snapshot_key, "Point property snapshot key changed for %s" % expected_definition.name)
 		_expect(EasingCurve.get_point_property_snapshot_key(expected_definition.name) == expected_definition.snapshot_key, "Point property snapshot key lookup changed for %s" % expected_definition.name)
+		_expect(EasingCurve.get_point_property_snapshot_lifecycle(expected_definition.name) == expected_definition.snapshot_lifecycle, "Point property snapshot lifecycle changed for %s" % expected_definition.name)
 		_expect(definition.get("default") == expected_definition.default, "Point property default changed for %s" % expected_definition.name)
 		_expect(definition.get("inspector_visible") == expected_definition.inspector_visible, "Point property Inspector visibility changed for %s" % expected_definition.name)
 		if expected_definition.has("editor_kind"):
@@ -254,7 +257,7 @@ func _test_point_storage_schema() -> void:
 	for index in range(3):
 		for property_name in EasingCurve.POINT_PROPERTIES:
 			expected_names.append(StringName("_point_%d/%s" % [index, property_name]))
-	_expect(EasingCurve.POINT_PROPERTIES == [&"position", &"left_control_point", &"right_control_point", &"locked", &"handle_mode", &"left_force_linear", &"right_force_linear"], "POINT_PROPERTIES schema order changed")
+	_expect(EasingCurve.POINT_PROPERTIES == [&"test_vector", &"position", &"left_control_point", &"right_control_point", &"locked", &"handle_mode", &"left_force_linear", &"right_force_linear"], "POINT_PROPERTIES schema order changed")
 	for property_name in expected_names:
 		var property := _property_by_name(curve, property_name)
 		_expect(not property.is_empty(), "%s is missing from the primitive point schema" % property_name)
@@ -268,15 +271,58 @@ func _test_point_storage_schema() -> void:
 	var points_property := _property_by_name(curve, &"points")
 	_expect(not points_property.is_empty() and bool(points_property.usage & PROPERTY_USAGE_EDITOR) and not bool(points_property.usage & PROPERTY_USAGE_STORAGE), "points no longer remains editor-visible and non-storage")
 	var snapshot := curve.get_point_snapshot()
-	for key in [&"positions", &"left_control_points", &"right_control_points", &"handle_modes", &"locks", &"left_force_linear", &"right_force_linear"]:
+	for key in [&"test_vectors", &"positions", &"left_control_points", &"right_control_points", &"handle_modes", &"locks", &"left_force_linear", &"right_force_linear"]:
 		_expect(snapshot.has(key), "Point snapshot key %s is missing" % key)
 	_expect(not EasingCurve.POINT_PROPERTIES.has(&"changing"), "Snapshot changing metadata became a point property")
+
+
+func _test_point_property_snapshot_lifecycle_contract() -> void:
+	for definition: Dictionary in EasingCurve.POINT_PROPERTY_DEFINITIONS:
+		var property_name: StringName = definition["name"]
+		_expect(definition.has("snapshot_lifecycle"), "%s is missing snapshot lifecycle metadata" % property_name)
+		_expect(
+			EasingCurve.get_point_property_snapshot_lifecycle(property_name) in [
+				EasingCurve.POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+				EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
+			],
+			"%s has an invalid snapshot lifecycle" % property_name,
+		)
+	_expect(
+		EasingCurve.get_point_property_definition_snapshot_lifecycle({
+			"name": &"malformed_missing_lifecycle",
+		}) == StringName(),
+		"Missing snapshot lifecycle was accepted",
+	)
+	_expect(
+		EasingCurve.get_point_property_definition_snapshot_lifecycle({
+			"name": &"malformed_invalid_lifecycle",
+			"snapshot_lifecycle": &"invalid",
+		}) == StringName(),
+		"Invalid snapshot lifecycle was accepted",
+	)
+	_expect(
+		EasingCurve.get_point_property_definition_snapshot_lifecycle({
+			"snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+		}) == EasingCurve.POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+		"Valid ordinary snapshot lifecycle was rejected",
+	)
+	_expect(
+		EasingCurve.get_point_property_definition_snapshot_lifecycle({
+			"snapshot_lifecycle": EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
+		}) == EasingCurve.POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
+		"Valid semantic snapshot lifecycle was rejected",
+	)
+	_expect(
+		EasingCurve.get_point_property_snapshot_lifecycle(&"unknown") == StringName(),
+		"Unknown point property lifecycle was accepted",
+	)
 
 
 func _test_point_snapshot_property_access() -> void:
 	var curve := EasingCurve.new()
 	var snapshot := curve.get_point_snapshot()
 	var values := {
+		&"test_vector": Vector2(0.4, 0.6),
 		&"position": Vector2(0.25, 0.75),
 		&"left_control_point": Vector2(0.1, 0.2),
 		&"right_control_point": Vector2(0.9, 0.8),
