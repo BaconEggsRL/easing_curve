@@ -47,6 +47,17 @@ enum ControlState {
 }
 
 
+var _test_enabled := false
+var test_enabled: bool:
+	get:
+		return _test_enabled
+	set(value):
+		if _test_enabled == value:
+			return
+		_test_enabled = value
+		emit_changed()
+
+
 var _test_vector: Vector2 = Vector2.ZERO
 var test_vector: Vector2:
 	get:

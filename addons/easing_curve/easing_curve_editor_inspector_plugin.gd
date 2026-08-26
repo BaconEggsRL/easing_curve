@@ -40,6 +40,7 @@ const POINT_PROPERTY_HEADER_RATIO := 0.35
 const POINT_PROPERTY_VALUE_RATIO := 0.65
 const POINT_INSPECTOR_PROPERTY_ORDER: Array[StringName] = [
 	&"test_vector",
+	&"test_enabled",
 	&"position",
 	&"handle_mode",
 	&"left_control_point",
@@ -1495,6 +1496,13 @@ func _create_normal_point_property_rows(
 		point_count,
 	):
 		match StringName(definition["editor_kind"]):
+			EasingCurve.POINT_EDITOR_KIND_BOOL:
+				_create_bool_property(
+					point,
+					point_index,
+					definition,
+					property_grid,
+				)
 			EasingCurve.POINT_EDITOR_KIND_VECTOR2:
 				_create_vector2_property(
 					point,
@@ -2191,6 +2199,97 @@ func _create_normal_point_property_row(
 		"property_header": property_header,
 		"value_panel": value_panel,
 	}
+
+
+func _create_bool_property(
+		point: EasingCurvePoint,
+		i: int,
+		definition: Dictionary,
+		property_grid: GridContainer,
+) -> void:
+	var property_name: StringName = definition["name"]
+	if not EasingCurve.is_point_property_inspector_visible(property_name):
+		return
+
+	var default_value := bool(
+		EasingCurve.get_point_property_default(property_name)
+	)
+	var current_value := bool(point.get(property_name))
+
+	var reset_btn := _create_point_reset_button()
+	_set_point_reset_button_available(
+		reset_btn,
+		current_value != default_value,
+	)
+
+	var check_box := CheckBox.new()
+	check_box.text = "On"
+	check_box.button_pressed = current_value
+	check_box.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	check_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	check_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	var row := _create_normal_point_property_row(
+		i,
+		definition,
+		reset_btn,
+		check_box,
+		property_grid,
+	)
+	var property_header: PanelContainer = row["property_header"]
+
+	check_box.toggled.connect(
+		func(toggled_on: bool):
+			var point_index := _get_current_point_index(point)
+			if point_index == -1:
+				return
+
+			_select_point_property(
+				property_header,
+				point_index,
+				property_name,
+			)
+			_apply_point_property_change(
+				point_index,
+				property_name,
+				toggled_on,
+			)
+			_set_point_reset_button_available(
+				reset_btn,
+				toggled_on != default_value,
+			)
+	)
+
+	check_box.focus_entered.connect(
+		_select_point_property_for_point.bind(
+			property_header,
+			point,
+			property_name,
+		)
+	)
+
+	reset_btn.pressed.connect(
+		func():
+			var point_index := _get_current_point_index(point)
+			if point_index == -1:
+				return
+
+			check_box.set_pressed_no_signal(default_value)
+			_apply_point_property_change(
+				point_index,
+				property_name,
+				default_value,
+			)
+			_set_point_reset_button_available(reset_btn, false)
+	)
+
+	reset_btn.pressed.connect(
+		_select_point_property_for_point.bind(
+			property_header,
+			point,
+			property_name,
+		)
+	)
 
 
 func _create_vector2_property(

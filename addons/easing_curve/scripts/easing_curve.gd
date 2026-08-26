@@ -186,6 +186,7 @@ const FUNCTION_SNAPSHOT_PROPERTY := &"_function_snapshot"
 const EDITOR_STATE_SNAPSHOT_PROPERTY := &"_editor_state_snapshot"
 const POINT_STORAGE_COUNT := &"_point_count"
 const POINT_STORAGE_PREFIX := "_point_"
+const POINT_EDITOR_KIND_BOOL := &"bool"
 const POINT_EDITOR_KIND_VECTOR2 := &"vector2"
 const POINT_EDITOR_KIND_HANDLE_MODE := &"handle_mode"
 const POINT_SNAPSHOT_LIFECYCLE_ORDINARY := &"ordinary"
@@ -214,6 +215,18 @@ const POINT_SNAPSHOT_LIFECYCLES: Array[StringName] = [
 # 	"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
 # }
 const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
+	{
+		"name": &"test_enabled",
+		"type": TYPE_BOOL,
+		"default": false,
+		"inspector_label": "Test Enabled",
+		"inspector_visible": true,
+		"resettable": true,
+		"copy_paste_enabled": true,
+		"editor_kind": POINT_EDITOR_KIND_BOOL,
+		"snapshot_key": &"test_enabled_values",
+		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+	},
 	{
 		"name": &"test_vector",
 		"type": TYPE_VECTOR2,
