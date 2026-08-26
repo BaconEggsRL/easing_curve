@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://54rs4upbtc6f"]
+
+[ext_resource type="Script" uid="uid://up6vtqsyslmp" path="res://test/null_string_test.gd" id="1_rwta3"]
+
+[node name="NullStringTest" type="Node2D" unique_id=756523390]
+script = ExtResource("1_rwta3")
