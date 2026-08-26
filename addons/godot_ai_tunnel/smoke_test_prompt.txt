@@ -1,0 +1,9 @@
+Using godot-ai, inspect the current Godot editor state.
+
+Report if the godot-ai plugin is unavailable and this action cannot be completed.
+
+Timeout if the request cannot be completed in 30 seconds.
+
+Report only the active scene and the currently selected node/resource.
+
+Do not modify anything.
