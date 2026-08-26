@@ -14,7 +14,6 @@ func _init() -> void:
 	seed(123456)
 	_test_legacy_resources_and_nested_changes()
 	_test_bezier_point_operations()
-	_test_handle_control_signal_suppression()
 	_test_resource_free_point_snapshots()
 	_test_parameter_drag_transactions()
 	_test_preset_parameter_notification_counts()
@@ -139,25 +138,6 @@ func _test_bezier_point_operations() -> void:
 	_expect(curve.sample(0.5) > 0.85, "Flattened runtime point updates did not immediately affect output")
 	curve.set("_point_count", 2)
 	_expect(curve.points.size() == 2, "Flattened runtime point removal did not resize the point list")
-
-
-func _test_handle_control_signal_suppression() -> void:
-	var point := EasingCurvePoint.new()
-	var x_input := SpinBox.new()
-	var y_input := SpinBox.new()
-	x_input.step = 0.001
-	y_input.step = 0.001
-	var emitted := {"x": 0, "y": 0}
-	x_input.value_changed.connect(func(_value: float) -> void: emitted.x += 1)
-	y_input.value_changed.connect(func(_value: float) -> void: emitted.y += 1)
-	point.set_input_control("right_control_point", "x", x_input)
-	point.set_input_control("right_control_point", "y", y_input)
-
-	point.right_control_point = Vector2(0.4, 0.6)
-	_expect(x_input.value == 0.4 and y_input.value == 0.6, "Control handle edit did not refresh Inspector inputs")
-	_expect(emitted.x == 0 and emitted.y == 0, "Control handle refresh recursively emitted another Inspector edit")
-	x_input.free()
-	y_input.free()
 
 
 func _test_resource_free_point_snapshots() -> void:

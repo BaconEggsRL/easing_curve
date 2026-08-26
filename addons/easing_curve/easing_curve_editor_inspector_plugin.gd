@@ -112,6 +112,8 @@ const TRANSITION_PRESENTATION := [
 
 
 func _parse_begin(object: Object) -> void:
+	_clear_point_input_bindings()
+
 	if not object is EasingCurve:
 		return
 
@@ -1191,6 +1193,90 @@ var _selected_point_property_name := StringName()
 var _selected_point_resource_id := 0
 var _preserve_point_selection_on_refresh := false
 var _position_x_order_preview_point: EasingCurvePoint
+var _point_input_bindings: Dictionary[int, Dictionary] = {}
+
+
+func _clear_point_input_bindings() -> void:
+	for binding in _point_input_bindings.values():
+		var point: EasingCurvePoint = binding.get("point")
+		var changed_callback: Callable = binding.get("changed_callback", Callable())
+		if (
+			point != null
+			and changed_callback.is_valid()
+			and point.changed.is_connected(changed_callback)
+		):
+			point.changed.disconnect(changed_callback)
+	_point_input_bindings.clear()
+
+
+func _register_point_input_binding(
+		point: EasingCurvePoint,
+		property_name: StringName,
+		axis: String,
+		input: EditorSpinSlider,
+) -> void:
+	if point == null or input == null:
+		return
+
+	var point_id := point.get_instance_id()
+	if not _point_input_bindings.has(point_id):
+		var changed_callback := _on_bound_point_changed.bind(point_id)
+		_point_input_bindings[point_id] = {
+			"point": point,
+			"changed_callback": changed_callback,
+			"inputs": {},
+		}
+		point.changed.connect(changed_callback)
+
+	var binding: Dictionary = _point_input_bindings[point_id]
+	var inputs: Dictionary = binding["inputs"]
+	inputs[property_name + axis] = {
+		"property_name": property_name,
+		"axis": axis,
+		"input": weakref(input),
+	}
+	binding["inputs"] = inputs
+	_point_input_bindings[point_id] = binding
+	_refresh_point_input_bindings(point_id)
+
+
+func _on_bound_point_changed(point_id: int) -> void:
+	_refresh_point_input_bindings(point_id)
+
+
+func _refresh_point_input_bindings(point_id: int) -> void:
+	if not _point_input_bindings.has(point_id):
+		return
+
+	var binding: Dictionary = _point_input_bindings[point_id]
+	var point: EasingCurvePoint = binding.get("point")
+	if point == null:
+		_point_input_bindings.erase(point_id)
+		return
+
+	var inputs: Dictionary = binding["inputs"]
+	for input_key in inputs.keys():
+		var input_binding: Dictionary = inputs[input_key]
+		var input_ref: WeakRef = input_binding["input"]
+		var input := input_ref.get_ref() if input_ref != null else null
+		if input == null:
+			inputs.erase(input_key)
+			continue
+
+		var property_name: StringName = input_binding["property_name"]
+		var value: Vector2 = point.get(property_name)
+		input.set_value_no_signal(value.x if input_binding["axis"] == "x" else value.y)
+		input.read_only = not point.is_position_input_editable(String(property_name))
+
+	if inputs.is_empty():
+		var changed_callback: Callable = binding["changed_callback"]
+		if point.changed.is_connected(changed_callback):
+			point.changed.disconnect(changed_callback)
+		_point_input_bindings.erase(point_id)
+		return
+
+	binding["inputs"] = inputs
+	_point_input_bindings[point_id] = binding
 
 
 func _request_point_selection_refresh_preservation() -> void:
@@ -2403,7 +2489,7 @@ func _create_vector2_axis_row(
 			StringName(property_name),
 		)
 	)
-	point.set_input_control(property_name, axis, input)
+	_register_point_input_binding(point, StringName(property_name), axis, input)
 
 	row.add_child(label)
 	row.add_child(input)

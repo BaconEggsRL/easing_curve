@@ -2,6 +2,7 @@ extends SceneTree
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 const EDITOR_HOST = preload("res://test/editor_host_test_harness.gd")
+const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/easing_curve_editor_inspector_plugin.gd")
 
 var _failures := 0
 var _checks := 0
@@ -13,6 +14,7 @@ func _init() -> void:
 		return
 	_test_control_editability_constraints()
 	_test_handle_mode_undo_redo_refreshes_inputs()
+	_test_snapshot_refreshes_bindings_without_input_signals()
 
 	if _failures == 0:
 		print("PASS: %d EasingCurve control editability checks" % _checks)
@@ -29,12 +31,21 @@ func _expect(condition: bool, message: String) -> void:
 		push_error(message)
 
 
-func _register_control_inputs(point: EasingCurvePoint) -> Dictionary:
+func _register_control_inputs(point: EasingCurvePoint, inspector: Object) -> Dictionary:
 	var inputs := {}
 	for property_name in ["left_control_point", "right_control_point"]:
 		for axis in ["x", "y"]:
 			var input := EditorSpinSlider.new()
-			point.set_input_control(property_name, axis, input)
+			input.min_value = -1024.0
+			input.max_value = 1024.0
+			input.step = 0.001
+			inspector.call(
+				"_register_point_input_binding",
+				point,
+				StringName(property_name),
+				axis,
+				input,
+			)
 			inputs[property_name + axis] = input
 	return inputs
 
@@ -43,18 +54,57 @@ func _control_inputs_are_read_only(inputs: Dictionary, property_name: String) ->
 	return inputs[property_name + "x"].read_only and inputs[property_name + "y"].read_only
 
 
+func _control_inputs_match_point(inputs: Dictionary, point: EasingCurvePoint, property_name: String) -> bool:
+	var value: Vector2 = point.get(property_name)
+	return (
+		is_equal_approx(inputs[property_name + "x"].value, value.x)
+		and is_equal_approx(inputs[property_name + "y"].value, value.y)
+	)
+
+
 func _free_inputs(inputs: Dictionary) -> void:
 	for input in inputs.values():
-		input.free()
+		if is_instance_valid(input):
+			input.free()
 
 
 func _test_control_editability_constraints() -> void:
 	var point := EasingCurvePoint.new(Vector2(0.5, 0.5))
-	var inputs := _register_control_inputs(point)
+	var inspector := INSPECTOR_PLUGIN.new()
+	var inputs := _register_control_inputs(point, inspector)
 	_expect(
 		not _control_inputs_are_read_only(inputs, "left_control_point")
 		and not _control_inputs_are_read_only(inputs, "right_control_point"),
 		"Free control positions started read-only",
+	)
+	point.left_control_point = Vector2(0.2, 0.3)
+	point.handle_mode = EasingCurvePoint.HandleMode.BALANCED
+	point.left_control_point = Vector2(0.1, 0.7)
+	_expect(
+		_control_inputs_match_point(inputs, point, "left_control_point")
+		and _control_inputs_match_point(inputs, point, "right_control_point"),
+		"Balanced control edit did not synchronously refresh both bound inputs",
+	)
+	point.handle_mode = EasingCurvePoint.HandleMode.MIRRORED
+	point.right_control_point = Vector2(0.9, 0.6)
+	_expect(
+		_control_inputs_match_point(inputs, point, "left_control_point")
+		and _control_inputs_match_point(inputs, point, "right_control_point"),
+		"Mirrored control edit did not synchronously refresh both bound inputs",
+	)
+	point.handle_mode = EasingCurvePoint.HandleMode.LINKED
+	point.left_control_point = Vector2(0.25, 0.75)
+	_expect(
+		_control_inputs_match_point(inputs, point, "left_control_point")
+		and _control_inputs_match_point(inputs, point, "right_control_point"),
+		"Linked control edit did not synchronously refresh both bound inputs",
+	)
+	point.handle_mode = EasingCurvePoint.HandleMode.FREE
+	point.position = Vector2(0.6, 0.4)
+	_expect(
+		_control_inputs_match_point(inputs, point, "left_control_point")
+		and _control_inputs_match_point(inputs, point, "right_control_point"),
+		"Position change did not synchronously refresh moved control inputs",
 	)
 
 	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
@@ -112,7 +162,8 @@ func _test_handle_mode_undo_redo_refreshes_inputs() -> void:
 		point,
 		EasingCurvePoint.new(Vector2.ONE),
 	]
-	var inputs := _register_control_inputs(point)
+	var inspector := INSPECTOR_PLUGIN.new()
+	var inputs := _register_control_inputs(point, inspector)
 	var history := UndoRedo.new()
 	var before := EDITOR_UNDO.capture_state(curve)
 
@@ -132,4 +183,45 @@ func _test_handle_mode_undo_redo_refreshes_inputs() -> void:
 	_expect(not _control_inputs_are_read_only(inputs, "left_control_point"), "Redo did not restore Linear control-position editability")
 	history.clear_history(false)
 	history.free()
+	_free_inputs(inputs)
+
+
+func _test_snapshot_refreshes_bindings_without_input_signals() -> void:
+	var point := EasingCurvePoint.new(Vector2(0.5, 0.5))
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	curve.points = [
+		EasingCurvePoint.new(Vector2.ZERO),
+		point,
+		EasingCurvePoint.new(Vector2.ONE),
+	]
+	var inspector := INSPECTOR_PLUGIN.new()
+	var inputs := _register_control_inputs(point, inspector)
+	var emitted := 0
+	inputs["left_control_pointx"].value_changed.connect(
+		func(_value: float): emitted += 1
+	)
+	inputs["right_control_pointx"].value_changed.connect(
+		func(_value: float): emitted += 1
+	)
+
+	var snapshot := curve.get_point_snapshot()
+	var left_controls: PackedVector2Array = snapshot["left_control_points"]
+	var right_controls: PackedVector2Array = snapshot["right_control_points"]
+	left_controls[1] = Vector2(0.2, 0.3)
+	right_controls[1] = Vector2(0.8, 0.7)
+	snapshot["left_control_points"] = left_controls
+	snapshot["right_control_points"] = right_controls
+	snapshot["changing"] = true
+	curve.set_point_snapshot(snapshot)
+
+	_expect(
+		is_equal_approx(inputs["left_control_pointx"].value, 0.2)
+		and is_equal_approx(inputs["right_control_pointx"].value, 0.8),
+		"Changing snapshot did not synchronously refresh bound Inspector inputs",
+	)
+	_expect(emitted == 0, "Bound Inspector refresh emitted a recursive input signal")
+
+	inputs["left_control_pointx"].free()
+	point.left_control_point = Vector2(0.3, 0.4)
 	_free_inputs(inputs)

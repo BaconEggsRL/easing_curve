@@ -82,9 +82,6 @@ var right_force_linear: bool:
 	set(value):
 		set_right_force_linear(value)
 
-## Stores editor-only Vector2 input sliders outside the resource property graph.
-static var _input_controls: Dictionary[int, Dictionary] = {}
-
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR)
 var locked: Dictionary[String, bool] = {
 	"position": false,
@@ -119,26 +116,6 @@ func is_lock_active(property_name: StringName) -> bool:
 	return locked.get(String(property_name), false)
 
 
-func _update_input_lock_state(property_name: String) -> void:
-	var read_only := not is_position_input_editable(property_name)
-
-	var x_input := _get_input(property_name, "x")
-	var y_input := _get_input(property_name, "y")
-
-	_set_input_read_only(x_input, read_only)
-	_set_input_read_only(y_input, read_only)
-
-
-func _set_input_read_only(input: Object, read_only: bool) -> void:
-	if input == null:
-		return
-
-	for property in input.get_property_list():
-		if property.name == &"read_only":
-			input.set(&"read_only", read_only)
-			return
-
-
 func is_position_input_editable(property_name: String) -> bool:
 	if property_name == "position":
 		return not is_lock_active(&"position")
@@ -171,7 +148,6 @@ func set_locked(property_name: String, toggled_on: bool) -> void:
 		return
 
 	locked[property_name] = toggled_on
-	_update_input_lock_state(property_name)
 
 	lock_changed.emit(property_name, toggled_on)
 	emit_changed()
@@ -182,10 +158,6 @@ func set_locks(value: Dictionary[String, bool]) -> void:
 		return
 
 	locked = value
-
-	_update_input_lock_state("position")
-	_update_input_lock_state("left_control_point")
-	_update_input_lock_state("right_control_point")
 
 	emit_changed()
 
@@ -216,11 +188,6 @@ func set_position(value: Vector2) -> void:
 
 	position = value
 
-	_set_input_value("position", "x", value.x)
-	_set_input_value("position", "y", value.y)
-	_update_control_point_inputs("left_control_point")
-	_update_control_point_inputs("right_control_point")
-
 	emit_changed()
 
 
@@ -248,16 +215,6 @@ func set_left_control_point(value: Vector2) -> void:
 
 func set_right_control_point(value: Vector2) -> void:
 	_set_control_point(ControlSide.RIGHT, value)
-
-
-func _update_control_point_inputs(property_name: String) -> void:
-	var value := (
-		_left_control_point
-		if property_name == "left_control_point"
-		else _right_control_point
-	)
-	_set_input_value(property_name, "x", value.x)
-	_set_input_value(property_name, "y", value.y)
 
 
 func get_control_point_pair(
@@ -403,29 +360,7 @@ func _set_control_point(
 	_left_control_point = left
 	_right_control_point = right
 
-	_update_control_point_inputs("left_control_point")
-	_update_control_point_inputs("right_control_point")
-
 	emit_changed()
-
-
-func set_input_control(property_name: String, axis: String, control: Object) -> void:
-	var id := get_instance_id()
-	if not _input_controls.has(id):
-		_input_controls[id] = {}
-	_input_controls[id][property_name + axis] = weakref(control)
-	_update_input_lock_state(property_name)
-
-
-func _get_input(property_name: String, axis: String) -> Object:
-	var input_ref: WeakRef = _input_controls.get(get_instance_id(), {}).get(property_name + axis)
-	return input_ref.get_ref() if input_ref else null
-
-
-func _set_input_value(property_name: String, axis: String, value: float) -> void:
-	var input := _get_input(property_name, axis)
-	if input != null and input.has_method("set_value_no_signal"):
-		input.call("set_value_no_signal", value)
 
 
 func set_handle_mode(value: HandleMode) -> void:
@@ -438,13 +373,6 @@ func set_handle_mode(value: HandleMode) -> void:
 	_right_control_point = handles["right"]
 
 	_apply_free_force_linear_state()
-
-	_update_control_point_inputs("left_control_point")
-	_update_control_point_inputs("right_control_point")
-
-	_update_input_lock_state("position")
-	_update_input_lock_state("left_control_point")
-	_update_input_lock_state("right_control_point")
 
 	emit_changed()
 
@@ -667,8 +595,6 @@ func _set_control_force_linear(
 		else:
 			_initialize_default_handle(side)
 
-	_update_input_lock_state("left_control_point")
-	_update_input_lock_state("right_control_point")
 	emit_changed()
 
 
@@ -678,10 +604,8 @@ func _set_control_point_direct(
 ) -> void:
 	if side == ControlSide.LEFT:
 		_left_control_point = value
-		_update_control_point_inputs("left_control_point")
 	else:
 		_right_control_point = value
-		_update_control_point_inputs("right_control_point")
 
 
 func _initialize_default_handle(side: ControlSide) -> void:
@@ -737,8 +661,6 @@ func set_force_linear_state(
 		else:
 			_apply_free_force_linear_state()
 
-	_update_input_lock_state("left_control_point")
-	_update_input_lock_state("right_control_point")
 	emit_changed()
 
 
