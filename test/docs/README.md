@@ -40,7 +40,18 @@ a different sandbox restriction. It preserves Godot stdout, stderr, and exact
 exit codes; a non-zero Godot exit remains a test failure. Direct Godot
 execution remains valid for manual debugging. The runner returns a non-zero
 exit code if any suite times out, exits unsuccessfully, lacks a PASS marker, or
-logs a script error.
+logs a script error. Each suite has a 60-second timeout; a timeout is reported
+separately in the summary, terminates that suite's launcher process tree, and
+the runner continues with later suites. Update checks are suppressed for
+headless Editor-host tests, while the Easing Curve plugin and Inspector remain
+enabled for those tests.
+
+To verify timeout handling without adding the fixture to the normal 17-suite
+run, use:
+
+```powershell
+./test/scripts/run_all_tests.ps1 -TimeoutSelfTest
+```
 
 Under Godot 4.7 `--editor --headless`, `editor_undo_redo_test.gd` skips its
 `FoldableContainer` fixture because it crashes in that environment and its

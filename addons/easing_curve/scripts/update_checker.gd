@@ -25,6 +25,7 @@ extends Node
 ## prevent the plugin itself from loading.
 
 const DEBUG_UPDATE_CHECKER := false
+const REQUEST_TIMEOUT_SECONDS := 10.0
 
 const SETTING_ENABLED := "easing_curve/update_checker/enabled"
 const SETTING_IGNORED_VERSIONS := "easing_curve/update_checker/ignored_versions"
@@ -86,6 +87,9 @@ func setup_editor_settings() -> void:
 ## Checks GitHub for the latest Easing Curve release.
 ## Does nothing when automatic update checks are disabled.
 func check(current_version: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
 	var settings := EditorInterface.get_editor_settings()
 
 	if settings.has_setting(SETTING_ENABLED):
@@ -96,6 +100,7 @@ func check(current_version: String) -> void:
 		return
 
 	_request = HTTPRequest.new()
+	_request.timeout = REQUEST_TIMEOUT_SECONDS
 	add_child(_request)
 
 	_request.request_completed.connect(

@@ -1,6 +1,13 @@
+[CmdletBinding()]
+param(
+	[switch]$TimeoutSelfTest
+)
+
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $godotLauncher = Join-Path $PSScriptRoot "run_godot.ps1"
+$suiteTimeoutSeconds = 60
+$powerShellExecutable = (Get-Command powershell.exe -ErrorAction Stop).Source
 
 $suites = @(
 	@{ Name = "css_linear_test.gd"; Editor = $false },
@@ -22,6 +29,13 @@ $suites = @(
 	@{ Name = "editor_undo_redo_test.gd"; Editor = $true }
 )
 
+if ($TimeoutSelfTest) {
+	$suites = @(
+		@{ Name = "runner_timeout_fixture.gd"; Editor = $false; TimeoutSeconds = 1 },
+		@{ Name = "css_linear_test.gd"; Editor = $false }
+	)
+}
+
 $results = @()
 foreach ($suite in $suites) {
 	$mode = if ($suite.Editor) { "editor-host" } else { "headless" }
@@ -38,12 +52,32 @@ foreach ($suite in $suites) {
 	$stdoutPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stdout" -f [guid]::NewGuid())
 	$stderrPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stderr" -f [guid]::NewGuid())
 	$suiteExitCode = -1
+	$timedOut = $false
 	try {
-		$previousErrorActionPreference = $ErrorActionPreference
-		$ErrorActionPreference = "Continue"
-		& $godotLauncher @arguments 1> $stdoutPath 2> $stderrPath
-		$suiteExitCode = $LASTEXITCODE
-		$ErrorActionPreference = $previousErrorActionPreference
+		$suiteTimeout = if ($suite.ContainsKey("TimeoutSeconds")) { $suite.TimeoutSeconds } else { $suiteTimeoutSeconds }
+		$launcherArguments = @(
+			"-NoProfile",
+			"-ExecutionPolicy", "Bypass",
+			"-File", $godotLauncher
+		) + $arguments
+		$startProcessArguments = @{
+			FilePath = $powerShellExecutable
+			ArgumentList = $launcherArguments
+			WorkingDirectory = $projectRoot
+			RedirectStandardOutput = $stdoutPath
+			RedirectStandardError = $stderrPath
+			PassThru = $true
+		}
+		$launcherProcess = Start-Process @startProcessArguments
+		if ($launcherProcess.WaitForExit([int]($suiteTimeout * 1000))) {
+			$launcherProcess.Refresh()
+			$suiteExitCode = $launcherProcess.ExitCode
+		} else {
+			$timedOut = $true
+			Write-Host "Timed out after $suiteTimeout seconds; terminating process tree rooted at PID $($launcherProcess.Id)." -ForegroundColor Yellow
+			& taskkill.exe /PID $launcherProcess.Id /T /F | Out-Null
+			$launcherProcess.WaitForExit()
+		}
 		$stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -Raw -LiteralPath $stdoutPath } else { "" }
 		$stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -Raw -LiteralPath $stderrPath } else { "" }
 		$output = "$stdout`n$stderr"
@@ -51,11 +85,12 @@ foreach ($suite in $suites) {
 		if ($stderr) { Write-Host $stderr.TrimEnd() }
 		$hasPass = $output -match '(?m)^PASS:'
 		$hasScriptError = $output -match 'SCRIPT ERROR:'
-		$passed = $suiteExitCode -eq 0 -and $hasPass -and -not $hasScriptError
+		$passed = -not $timedOut -and $suiteExitCode -eq 0 -and $hasPass -and -not $hasScriptError
 		$results += [pscustomobject]@{
 			Suite = $suite.Name
 			Mode = $mode
 			ExitCode = $suiteExitCode
+			TimedOut = $timedOut
 			PassMarker = $hasPass
 			ScriptError = $hasScriptError
 			Passed = $passed
