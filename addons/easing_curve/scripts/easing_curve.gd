@@ -192,6 +192,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
 		"name": &"position",
 		"type": TYPE_VECTOR2,
+		"snapshot_key": &"positions",
 		"default": Vector2.ZERO,
 		"inspector_visible": true,
 		"resettable": true,
@@ -202,6 +203,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
 		"name": &"left_control_point",
 		"type": TYPE_VECTOR2,
+		"snapshot_key": &"left_control_points",
 		"default": Vector2.ZERO,
 		"inspector_visible": true,
 		"resettable": true,
@@ -212,6 +214,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
 		"name": &"right_control_point",
 		"type": TYPE_VECTOR2,
+		"snapshot_key": &"right_control_points",
 		"default": Vector2.ZERO,
 		"inspector_visible": true,
 		"resettable": true,
@@ -222,6 +225,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
 		"name": &"locked",
 		"type": TYPE_DICTIONARY,
+		"snapshot_key": &"locks",
 		"default": {
 			"position": false,
 			"left_control_point": false,
@@ -234,6 +238,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
 		"name": &"handle_mode",
 		"type": TYPE_INT,
+		"snapshot_key": &"handle_modes",
 		"default": EasingCurvePoint.HandleMode.FREE,
 		"inspector_visible": true,
 		"resettable": true,
@@ -244,6 +249,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
 		"name": &"left_force_linear",
 		"type": TYPE_BOOL,
+		"snapshot_key": &"left_force_linear",
 		"default": false,
 		"inspector_visible": false,
 		"resettable": false,
@@ -252,6 +258,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
 		"name": &"right_force_linear",
 		"type": TYPE_BOOL,
+		"snapshot_key": &"right_force_linear",
 		"default": false,
 		"inspector_visible": false,
 		"resettable": false,
@@ -275,6 +282,80 @@ static func get_point_property_definition(
 		if definition["name"] == property_name:
 			return definition
 	return {}
+
+
+static func get_point_property_snapshot_key(property_name: StringName) -> StringName:
+	var definition := get_point_property_definition(property_name)
+	return definition.get("snapshot_key", StringName())
+
+
+static func get_point_snapshot_property_value(
+		snapshot: Dictionary,
+		property_name: StringName,
+		point_index: int,
+) -> Variant:
+	var definition := get_point_property_definition(property_name)
+	var snapshot_key: StringName = definition.get("snapshot_key", StringName())
+	if definition.is_empty() or snapshot_key.is_empty() or point_index < 0:
+		return null
+
+	match int(definition["type"]):
+		TYPE_VECTOR2:
+			var values: PackedVector2Array = snapshot.get(snapshot_key, PackedVector2Array())
+			return values[point_index] if point_index < values.size() else null
+		TYPE_INT:
+			var values: PackedInt32Array = snapshot.get(snapshot_key, PackedInt32Array())
+			return values[point_index] if point_index < values.size() else null
+		TYPE_BOOL:
+			var values: PackedByteArray = snapshot.get(snapshot_key, PackedByteArray())
+			return bool(values[point_index]) if point_index < values.size() else null
+		TYPE_DICTIONARY:
+			var values: Array = snapshot.get(snapshot_key, [])
+			return values[point_index].duplicate(true) if point_index < values.size() and values[point_index] is Dictionary else null
+	return null
+
+
+static func set_point_snapshot_property_value(
+		snapshot: Dictionary,
+		property_name: StringName,
+		point_index: int,
+		value: Variant,
+) -> bool:
+	var definition := get_point_property_definition(property_name)
+	var snapshot_key: StringName = definition.get("snapshot_key", StringName())
+	if definition.is_empty() or snapshot_key.is_empty() or point_index < 0:
+		return false
+
+	match int(definition["type"]):
+		TYPE_VECTOR2:
+			var values: PackedVector2Array = snapshot.get(snapshot_key, PackedVector2Array())
+			if value is not Vector2 or point_index >= values.size():
+				return false
+			values[point_index] = value
+			snapshot[snapshot_key] = values
+			return true
+		TYPE_INT:
+			var values: PackedInt32Array = snapshot.get(snapshot_key, PackedInt32Array())
+			if value is not int or point_index >= values.size():
+				return false
+			values[point_index] = value
+			snapshot[snapshot_key] = values
+			return true
+		TYPE_BOOL:
+			var values: PackedByteArray = snapshot.get(snapshot_key, PackedByteArray())
+			if value is not bool or point_index >= values.size():
+				return false
+			values[point_index] = int(value)
+			snapshot[snapshot_key] = values
+			return true
+		TYPE_DICTIONARY:
+			var values: Array = snapshot.get(snapshot_key, [])
+			if value is not Dictionary or point_index >= values.size():
+				return false
+			values[point_index] = value.duplicate(true)
+			snapshot[snapshot_key] = values
+			return true
+	return false
 
 
 static func get_point_property_default(property_name: StringName) -> Variant:

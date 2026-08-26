@@ -16,6 +16,7 @@ func _init() -> void:
 	_test_transition_catalog_contract()
 	_test_exported_property_contract()
 	_test_point_storage_schema()
+	_test_point_snapshot_property_access()
 	_cleanup()
 
 	if _failures == 0:
@@ -224,13 +225,13 @@ func _test_point_storage_schema() -> void:
 	curve.set("_point_count", 3)
 	var expected_names: Array[StringName] = [EasingCurve.POINT_STORAGE_COUNT]
 	var expected_definitions: Array[Dictionary] = [
-		{"name": &"position", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
-		{"name": &"left_control_point", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
-		{"name": &"right_control_point", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
-		{"name": &"locked", "type": TYPE_DICTIONARY, "default": {"position": false, "left_control_point": false, "right_control_point": false}, "inspector_visible": false},
-		{"name": &"handle_mode", "type": TYPE_INT, "default": EasingCurvePoint.HandleMode.FREE, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_HANDLE_MODE},
-		{"name": &"left_force_linear", "type": TYPE_BOOL, "default": false, "inspector_visible": false},
-		{"name": &"right_force_linear", "type": TYPE_BOOL, "default": false, "inspector_visible": false},
+		{"name": &"position", "type": TYPE_VECTOR2, "snapshot_key": &"positions", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
+		{"name": &"left_control_point", "type": TYPE_VECTOR2, "snapshot_key": &"left_control_points", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
+		{"name": &"right_control_point", "type": TYPE_VECTOR2, "snapshot_key": &"right_control_points", "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
+		{"name": &"locked", "type": TYPE_DICTIONARY, "snapshot_key": &"locks", "default": {"position": false, "left_control_point": false, "right_control_point": false}, "inspector_visible": false},
+		{"name": &"handle_mode", "type": TYPE_INT, "snapshot_key": &"handle_modes", "default": EasingCurvePoint.HandleMode.FREE, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_HANDLE_MODE},
+		{"name": &"left_force_linear", "type": TYPE_BOOL, "snapshot_key": &"left_force_linear", "default": false, "inspector_visible": false},
+		{"name": &"right_force_linear", "type": TYPE_BOOL, "snapshot_key": &"right_force_linear", "default": false, "inspector_visible": false},
 	]
 	_expect(EasingCurve.POINT_PROPERTY_DEFINITIONS.size() == expected_definitions.size(), "Point property definition count changed")
 	for definition_index in range(expected_definitions.size()):
@@ -238,6 +239,8 @@ func _test_point_storage_schema() -> void:
 		var definition: Dictionary = EasingCurve.POINT_PROPERTY_DEFINITIONS[definition_index]
 		_expect(definition.get("name") == expected_definition.name, "Point property definition order changed at index %d" % definition_index)
 		_expect(definition.get("type") == expected_definition.type, "Point property type changed for %s" % expected_definition.name)
+		_expect(definition.get("snapshot_key") == expected_definition.snapshot_key, "Point property snapshot key changed for %s" % expected_definition.name)
+		_expect(EasingCurve.get_point_property_snapshot_key(expected_definition.name) == expected_definition.snapshot_key, "Point property snapshot key lookup changed for %s" % expected_definition.name)
 		_expect(definition.get("default") == expected_definition.default, "Point property default changed for %s" % expected_definition.name)
 		_expect(definition.get("inspector_visible") == expected_definition.inspector_visible, "Point property Inspector visibility changed for %s" % expected_definition.name)
 		if expected_definition.has("editor_kind"):
@@ -267,6 +270,32 @@ func _test_point_storage_schema() -> void:
 	var snapshot := curve.get_point_snapshot()
 	for key in [&"positions", &"left_control_points", &"right_control_points", &"handle_modes", &"locks", &"left_force_linear", &"right_force_linear"]:
 		_expect(snapshot.has(key), "Point snapshot key %s is missing" % key)
+	_expect(not EasingCurve.POINT_PROPERTIES.has(&"changing"), "Snapshot changing metadata became a point property")
+
+
+func _test_point_snapshot_property_access() -> void:
+	var curve := EasingCurve.new()
+	var snapshot := curve.get_point_snapshot()
+	var values := {
+		&"position": Vector2(0.25, 0.75),
+		&"left_control_point": Vector2(0.1, 0.2),
+		&"right_control_point": Vector2(0.9, 0.8),
+		&"locked": {"position": true, "left_control_point": false, "right_control_point": true},
+		&"handle_mode": EasingCurvePoint.HandleMode.MIRRORED,
+		&"left_force_linear": true,
+		&"right_force_linear": false,
+	}
+	for property_name: StringName in values:
+		_expect(EasingCurve.set_point_snapshot_property_value(snapshot, property_name, 0, values[property_name]), "Snapshot setter rejected %s" % property_name)
+		_expect(EasingCurve.get_point_snapshot_property_value(snapshot, property_name, 0) == values[property_name], "Snapshot getter/setter changed %s" % property_name)
+	_expect(snapshot["positions"] is PackedVector2Array and snapshot["handle_modes"] is PackedInt32Array and snapshot["left_force_linear"] is PackedByteArray and snapshot["locks"] is Array, "Snapshot helper changed existing storage types")
+	var locks: Dictionary = values[&"locked"]
+	locks["position"] = false
+	_expect(bool(EasingCurve.get_point_snapshot_property_value(snapshot, &"locked", 0).get("position", false)), "Snapshot lock value unexpectedly aliased caller Dictionary")
+	_expect(not EasingCurve.set_point_snapshot_property_value(snapshot, &"position", -1, Vector2.ZERO), "Snapshot setter accepted a negative index")
+	_expect(not EasingCurve.set_point_snapshot_property_value(snapshot, &"position", 99, Vector2.ZERO), "Snapshot setter accepted an invalid index")
+	_expect(not EasingCurve.set_point_snapshot_property_value(snapshot, &"position", 0, true), "Snapshot setter accepted an invalid value type")
+	_expect(EasingCurve.get_point_snapshot_property_value(snapshot, &"unknown", 0) == null and not EasingCurve.set_point_snapshot_property_value(snapshot, &"unknown", 0, 0), "Unknown snapshot property was accepted")
 
 
 func _samples(curve: EasingCurve) -> PackedFloat64Array:

@@ -3097,9 +3097,13 @@ func _apply_point_property_change(
 		&"left_force_linear", &"right_force_linear":
 			var point := curve.points[i]
 			var linked := point.handle_mode == EasingCurvePoint.HandleMode.LINKED
-			var force_values: PackedByteArray = snapshot[property_name]
-			force_values[i] = int(value)
-			snapshot[property_name] = force_values
+			if not EasingCurve.set_point_snapshot_property_value(
+				snapshot,
+				property_name,
+				i,
+				value,
+			):
+				return
 
 			var control_property := (
 				&"left_control_points"
