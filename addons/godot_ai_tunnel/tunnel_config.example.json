@@ -1,10 +1,10 @@
 {
   "_comment": "Local configuration for the Godot AI tunnel plugin and tunnel_manager.ps1. Copy this file to tunnel_config.json before use. tunnel_config.json is git-ignored and should not be committed because executable_path is machine-specific.",
   "_instructions": [
-    "1. Copy tunnel_config.example.json to tunnel_config.json in this same folder.",
-    "2. Set executable_path to the full path of tunnel-client.exe on this machine.",
-    "3. Keep profile and health_listen_addr aligned with your tunnel-client profile unless you intentionally changed them.",
-    "4. Set enabled to false to prevent the Godot editor plugin from starting or adopting the tunnel automatically.",
+	"1. Copy tunnel_config.example.json to tunnel_config.json in this same folder.",
+	"2. Set executable_path to the full path of tunnel-client.exe on this machine.",
+	"3. Keep profile and health_listen_addr aligned with your tunnel-client profile unless you intentionally changed them.",
+	"4. Set enabled to false to prevent the Godot editor plugin from starting or adopting the tunnel automatically.",
     "5. tunnel_manager.ps1 and plugin.gd both require tunnel_config.json and will stop with an error if it is missing or invalid."
   ],
   "enabled": true,
