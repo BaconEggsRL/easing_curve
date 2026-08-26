@@ -189,55 +189,78 @@ const POINT_STORAGE_PREFIX := "_point_"
 const POINT_EDITOR_KIND_VECTOR2 := &"vector2"
 const POINT_EDITOR_KIND_HANDLE_MODE := &"handle_mode"
 const POINT_SNAPSHOT_LIFECYCLE_ORDINARY := &"ordinary"
+const POINT_SNAPSHOT_LIFECYCLE_SEMANTIC := &"semantic"
+# Point-property definition key order:
+# name, type, default, inspector_label, inspector_visible, resettable,
+# copy_paste_enabled, editor_kind, snapshot_key, snapshot_lifecycle
+#
+# Omit keys that do not apply, but preserve the relative order of the remaining keys.
+#
+# Example:
+# {
+# 	"name": &"example_value",
+# 	"type": TYPE_VECTOR2,
+# 	"default": Vector2.ZERO,
+# 	"inspector_label": "Example Value",
+# 	"inspector_visible": true,
+# 	"resettable": true,
+# 	"copy_paste_enabled": true,
+# 	"editor_kind": POINT_EDITOR_KIND_VECTOR2,
+# 	"snapshot_key": &"example_values",
+# 	"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+# }
 const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
 		"name": &"test_vector",
 		"type": TYPE_VECTOR2,
-		"snapshot_key": &"test_vectors",
 		"default": Vector2.ZERO,
+		"inspector_label": "Test Vector",
 		"inspector_visible": true,
 		"resettable": true,
 		"copy_paste_enabled": true,
 		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
-		"inspector_label": "Test Vector",
+		"snapshot_key": &"test_vectors",
+		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
 	},
 	{
 		"name": &"position",
 		"type": TYPE_VECTOR2,
-		"snapshot_key": &"positions",
 		"default": Vector2.ZERO,
+		"inspector_label": "Position",
 		"inspector_visible": true,
 		"resettable": true,
 		"copy_paste_enabled": true,
 		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
-		"inspector_label": "Position",
+		"snapshot_key": &"positions",
+		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
 		"name": &"left_control_point",
 		"type": TYPE_VECTOR2,
-		"snapshot_key": &"left_control_points",
 		"default": Vector2.ZERO,
+		"inspector_label": "Left Control",
 		"inspector_visible": true,
 		"resettable": true,
 		"copy_paste_enabled": true,
 		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
-		"inspector_label": "Left Control",
+		"snapshot_key": &"left_control_points",
+		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
 		"name": &"right_control_point",
 		"type": TYPE_VECTOR2,
-		"snapshot_key": &"right_control_points",
 		"default": Vector2.ZERO,
+		"inspector_label": "Right Control",
 		"inspector_visible": true,
 		"resettable": true,
 		"copy_paste_enabled": true,
 		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
-		"inspector_label": "Right Control",
+		"snapshot_key": &"right_control_points",
+		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
 		"name": &"locked",
 		"type": TYPE_DICTIONARY,
-		"snapshot_key": &"locks",
 		"default": {
 			"position": false,
 			"left_control_point": false,
@@ -246,35 +269,40 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"inspector_visible": false,
 		"resettable": false,
 		"copy_paste_enabled": false,
+		"snapshot_key": &"locks",
+		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
 		"name": &"handle_mode",
 		"type": TYPE_INT,
-		"snapshot_key": &"handle_modes",
 		"default": EasingCurvePoint.HandleMode.FREE,
+		"inspector_label": "Handle Mode",
 		"inspector_visible": true,
 		"resettable": true,
 		"copy_paste_enabled": true,
 		"editor_kind": POINT_EDITOR_KIND_HANDLE_MODE,
-		"inspector_label": "Handle Mode",
+		"snapshot_key": &"handle_modes",
+		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
 		"name": &"left_force_linear",
 		"type": TYPE_BOOL,
-		"snapshot_key": &"left_force_linear",
 		"default": false,
 		"inspector_visible": false,
 		"resettable": false,
 		"copy_paste_enabled": false,
+		"snapshot_key": &"left_force_linear",
+		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
 		"name": &"right_force_linear",
 		"type": TYPE_BOOL,
-		"snapshot_key": &"right_force_linear",
 		"default": false,
 		"inspector_visible": false,
 		"resettable": false,
 		"copy_paste_enabled": false,
+		"snapshot_key": &"right_force_linear",
+		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 ]
 static var POINT_PROPERTIES: Array[StringName] = _get_point_property_names()

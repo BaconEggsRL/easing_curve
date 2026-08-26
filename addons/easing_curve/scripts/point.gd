@@ -10,9 +10,10 @@ extends Resource
 signal lock_changed(property_name: String, locked: bool)
 
 const DEFAULT_HANDLE_LENGTH := 0.1
-
-var use_display_space_handles := true
 var handle_display_scale := Vector2.ONE
+
+var _ignore_control_locks_for_position_change := false
+var use_display_space_handles := true
 
 # TRUE:
 # Free → Balanced: longer handle determines orientation; individual lengths remain unchanged.
@@ -48,22 +49,23 @@ enum ControlState {
 @export var position: Vector2 = Vector2.ZERO: set = set_position
 
 var _test_vector: Vector2 = Vector2.ZERO
-var _left_control_point := Vector2.ZERO
-var _right_control_point := Vector2.ZERO
-var _ignore_control_locks_for_position_change := false
-
-@export var test_vector: Vector2:
+var test_vector: Vector2:
 	get:
 		return _test_vector
 	set(value):
-		set_test_vector(value)
+		if _test_vector == value:
+			return
+		_test_vector = value
+		emit_changed()
 
+var _left_control_point := Vector2.ZERO
 @export var left_control_point: Vector2:
 	get:
 		return _left_control_point
 	set(value):
 		set_left_control_point(value)
 
+var _right_control_point := Vector2.ZERO
 @export var right_control_point: Vector2:
 	get:
 		return _right_control_point
@@ -225,12 +227,6 @@ func move_horizontally(delta_x: float, ignore_control_locks: bool = false) -> vo
 	_ignore_control_locks_for_position_change = ignore_control_locks
 	set_position(target_position)
 	_ignore_control_locks_for_position_change = previous_ignore_control_locks
-
-
-
-func set_test_vector(value: Vector2) -> void:
-	emit_changed()
-
 
 
 func set_left_control_point(value: Vector2) -> void:
