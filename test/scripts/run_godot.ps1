@@ -1,8 +1,9 @@
 [CmdletBinding()]
 param(
 	[string]$ExitCodeFile = "",
+	[string]$GodotPath = "",
 
-	[Parameter(ValueFromRemainingArguments = $true)]
+	[Parameter(Position = 0, ValueFromRemainingArguments = $true)]
 	[string[]]$GodotArgs
 )
 
@@ -19,7 +20,31 @@ public static class ErrorMode {
 # SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX
 [ErrorMode]::SetErrorMode(0x0001 -bor 0x0002) | Out-Null
 
-$Godot = "C:\Godot\4.7\engine\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64_console.exe"
+$fallbackGodotPath = "C:\Godot\4.7\engine\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64_console.exe"
+$godotPathSource = "explicit -GodotPath"
+if ([string]::IsNullOrWhiteSpace($GodotPath)) {
+	$GodotPath = $env:EASING_CURVE_GODOT_PATH
+	$godotPathSource = "EASING_CURVE_GODOT_PATH"
+}
+if ([string]::IsNullOrWhiteSpace($GodotPath)) {
+	$GodotPath = $fallbackGodotPath
+	$godotPathSource = "local fallback"
+}
+
+if (-not (Test-Path -LiteralPath $GodotPath -PathType Leaf)) {
+	throw (
+		"Godot executable was not found: $GodotPath. Supply -GodotPath '<path-to-godot>' " +
+		"or set EASING_CURVE_GODOT_PATH."
+	)
+}
+
+$Godot = (Resolve-Path -LiteralPath $GodotPath -ErrorAction Stop).Path
+Write-Host "Godot executable ($godotPathSource): $Godot"
+$godotVersion = (& $Godot --version | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) {
+	throw "Could not query Godot version from: $Godot"
+}
+Write-Host "Godot version: $godotVersion"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 for ($index = 0; $index -lt $GodotArgs.Count; $index += 1) {

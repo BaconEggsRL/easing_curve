@@ -1,3 +1,8 @@
+[CmdletBinding()]
+param(
+	[string]$GodotPath = ""
+)
+
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $godotLauncher = Join-Path $PSScriptRoot "run_godot.ps1"
@@ -50,7 +55,11 @@ foreach ($suite in $suites) {
 			"-ExecutionPolicy", "Bypass",
 			"-File", $godotLauncher,
 			"-ExitCodeFile", $exitCodePath
-		) + $arguments
+		)
+		if (-not [string]::IsNullOrWhiteSpace($GodotPath)) {
+			$launcherArguments += @("-GodotPath", $GodotPath)
+		}
+		$launcherArguments += $arguments
 		$startProcessArguments = @{
 			FilePath = $powerShellExecutable
 			ArgumentList = $launcherArguments
