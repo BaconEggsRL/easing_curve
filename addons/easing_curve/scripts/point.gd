@@ -631,11 +631,6 @@ func _initialize_default_handle(side: ControlSide) -> void:
 	)
 
 
-func _initialize_default_handles() -> void:
-	_initialize_default_handle(ControlSide.LEFT)
-	_initialize_default_handle(ControlSide.RIGHT)
-
-
 func _apply_free_force_linear_state() -> void:
 	if not supports_control_state():
 		return

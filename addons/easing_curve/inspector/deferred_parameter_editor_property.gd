@@ -11,7 +11,6 @@ var property_name: StringName
 var curve_editor: EasingCurveEditor
 var drag_original_snapshot: Dictionary
 var undo_redo: Object
-var reset_button: Button
 
 
 func setup(
@@ -65,7 +64,6 @@ func _update_property() -> void:
 	var object := get_edited_object() as EasingCurve
 	if object != null and input != null:
 		input.set_value_no_signal(float(object.get(property_name)))
-		_update_reset_button(object.get(property_name))
 
 
 func _on_grabbed() -> void:
@@ -98,32 +96,7 @@ func _on_value_changed(value: float) -> void:
 		object.set(property_name, property_value)
 	else:
 		_commit_value(object, property_value)
-	_update_reset_button(property_value)
 	_queue_curve_redraw()
-
-
-func _on_reset_pressed() -> void:
-	var object := get_edited_object() as EasingCurve
-	if object == null or not EasingCurve.has_parameter_default(property_name):
-		return
-
-	var default_value := EasingCurve.get_parameter_default(property_name)
-	_commit_value(
-		object,
-		default_value,
-		"Reset Easing Curve %s" % String(property_name).capitalize(),
-	)
-
-	input.set_value_no_signal(float(default_value))
-	_update_reset_button(default_value)
-	_queue_curve_redraw()
-
-
-func _update_reset_button(value: Variant) -> void:
-	if reset_button == null or not EasingCurve.has_parameter_default(property_name):
-		return
-	var default_value: Variant = EasingCurve.get_parameter_default(property_name)
-	reset_button.visible = value != default_value
 
 
 func _on_tree_exiting() -> void:

@@ -20,7 +20,6 @@ var easing_curve_editor_inspector_plugin
 var update_checker: EasingCurveUpdateChecker
 var editor_undo_redo: EditorUndoRedoManager = get_undo_redo()
 
-var _pending_update := {}
 var _last_update_checks_enabled := true
 
 

@@ -307,7 +307,6 @@ func _create_selectable_point_property_header(
 ) -> PanelContainer:
 	var property_header := PanelContainer.new()
 	property_header.focus_mode = Control.FOCUS_NONE
-	#property_header.clip_contents = true
 
 	var reset_width := 24.0 * EditorInterface.get_editor_scale()
 	var reset_gap := float(_compact_separation())
@@ -716,9 +715,6 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 		add_point_btn.pressed.connect(_on_add_point_btn_pressed)
 		point_list.add_child(add_point_btn)
 
-	# Add a gap below the Points contents.
-	# point_list.add_spacer(true)
-
 	return point_list
 
 
@@ -954,8 +950,6 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 			var property_editor := GenerateFunctionEditorProperty.new()
 			property_editor.setup(easing_curve_editor, editor_undo_redo)
 			add_custom_control(property_editor)
-		return true
-	if object is EasingCurve and name == "generate_tool_button":
 		return true
 	if (
 		object is EasingCurve
@@ -1196,7 +1190,6 @@ func _select_reordered_point(point: EasingCurvePoint) -> void:
 func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: PanelContainer, point: EasingCurvePoint) -> VBoxContainer:
 	var side_vbox = VBoxContainer.new()
 	side_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	# side_vbox.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
 	# Move Up Button
 	var move_up_btn = Button.new()

@@ -168,7 +168,6 @@ func _handle_pan_motion(event: InputEventMouseMotion) -> void:
 	var delta = event.position - last_mouse_pos
 	pan_offset += delta
 	last_mouse_pos = event.position
-	# _user_panned = true
 	queue_redraw()
 	get_viewport().set_input_as_handled()
 	pan_changed.emit(pan_offset)
@@ -1009,11 +1008,6 @@ func _draw_bezier_segment(
 		if i > 0:
 			draw_line(previous, current, LINE_COLOR, 2)
 		previous = current
-
-
-func _bezier(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
-	var omt = 1.0 - t
-	return omt * omt * omt * p0 + 3 * omt * omt * t * p1 + 3 * omt * t * t * p2 + t * t * t * p3
 
 
 func _draw_function_curve():
