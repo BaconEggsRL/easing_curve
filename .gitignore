@@ -8,3 +8,4 @@
 .env
 .env.*
 !.env.example
+addons/godot_ai_tunnel/tunnel_config.json

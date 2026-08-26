@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "executable_path": "C:\\path\\to\\tunnel-client.exe",
+  "profile": "godot-ai",
+  "health_listen_addr": "127.0.0.1:18080"
+}
