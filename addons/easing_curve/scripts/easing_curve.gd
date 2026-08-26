@@ -190,6 +190,10 @@ const POINT_EDITOR_KIND_VECTOR2 := &"vector2"
 const POINT_EDITOR_KIND_HANDLE_MODE := &"handle_mode"
 const POINT_SNAPSHOT_LIFECYCLE_ORDINARY := &"ordinary"
 const POINT_SNAPSHOT_LIFECYCLE_SEMANTIC := &"semantic"
+const POINT_SNAPSHOT_LIFECYCLES: Array[StringName] = [
+	POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+	POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
+]
 # Point-property definition key order:
 # name, type, default, inspector_label, inspector_visible, resettable,
 # copy_paste_enabled, editor_kind, snapshot_key, snapshot_lifecycle
@@ -220,7 +224,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"copy_paste_enabled": true,
 		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
 		"snapshot_key": &"test_vectors",
-		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+		"snapshot_lifecycle":  POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
 	},
 	{
 		"name": &"position",
@@ -334,22 +338,52 @@ static func get_point_property_snapshot_lifecycle(
 ) -> StringName:
 	var definition := get_point_property_definition(property_name)
 	if definition.is_empty():
+		push_error(
+			"Unknown point property '%s'." % property_name
+		)
 		return StringName()
+
 	return get_point_property_definition_snapshot_lifecycle(definition)
 
 
 static func get_point_property_definition_snapshot_lifecycle(
 		definition: Dictionary,
 ) -> StringName:
+	var property_name: StringName = definition.get("name", &"<unnamed>")
 	if not definition.has("snapshot_lifecycle"):
+		push_error(
+			(
+				"Point property '%s' is missing required 'snapshot_lifecycle'. "
+				+ "Allowed values: %s."
+			)
+			% [
+				property_name,
+				_format_point_snapshot_lifecycles(),
+			]
+		)
 		return StringName()
 	var lifecycle: Variant = definition["snapshot_lifecycle"]
-	if lifecycle not in [
-		POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
-		POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
-	]:
+	if lifecycle not in POINT_SNAPSHOT_LIFECYCLES:
+		push_error(
+			(
+				"Point property '%s' has invalid snapshot lifecycle '%s'. "
+				+ "Allowed values: %s."
+			)
+			% [
+				property_name,
+				lifecycle,
+				_format_point_snapshot_lifecycles(),
+			]
+		)
 		return StringName()
 	return lifecycle
+
+
+static func _format_point_snapshot_lifecycles() -> String:
+	var values := PackedStringArray()
+	for lifecycle in POINT_SNAPSHOT_LIFECYCLES:
+		values.append("'%s'" % lifecycle)
+	return ", ".join(values)
 
 
 static func is_point_property_snapshot_lifecycle_ordinary(property_name: StringName) -> bool:
