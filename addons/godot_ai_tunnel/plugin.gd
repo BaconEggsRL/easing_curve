@@ -188,17 +188,8 @@ func _stop_tunnel() -> void:
 func _pid_is_tunnel_client(pid: int) -> bool:
 	var output: Array = []
 	var command := (
-		"$pidToCheck = %d; "
-		+ "for ($i = 0; $i -lt 8 -and $pidToCheck -gt 0; $i++) { "
-		+ "$p = Get-CimInstance Win32_Process "
-		+ "-Filter \"ProcessId = $pidToCheck\" "
-		+ "-ErrorAction SilentlyContinue; "
-		+ "if (-not $p) { break }; "
-		+ "Write-Output $p.Name; "
-		+ "Write-Output $p.ExecutablePath; "
-		+ "Write-Output $p.CommandLine; "
-		+ "$pidToCheck = [int]$p.ParentProcessId "
-		+ "}"
+		"$p = Get-Process -Id %d -ErrorAction SilentlyContinue; "
+		+ "if ($p) { Write-Output $p.ProcessName }"
 	) % pid
 
 	var exit_code := OS.execute(
@@ -217,8 +208,7 @@ func _pid_is_tunnel_client(pid: int) -> bool:
 	if exit_code != 0 or output.is_empty():
 		return false
 
-	var process_info := "\n".join(output).to_lower()
-	return "tunnel-client" in process_info
+	return str(output[0]).strip_edges().to_lower() == "tunnel-client"
 
 
 func _find_health_listener_pid(health_listen_addr: String) -> int:
