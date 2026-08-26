@@ -648,6 +648,43 @@ class PointsListContainer:
 	var drop_index := -1
 	var drop_after := false
 
+	var _debug_drag_id := 0
+
+
+	func _debug_drag_event(event: String, details: String = "") -> void:
+		print(
+			"[EC LIST DRAG] frame=%d usec=%d list=%d event=%s %s"
+			% [
+				Engine.get_process_frames(),
+				Time.get_ticks_usec(),
+				get_instance_id(),
+				event,
+				details,
+			]
+		)
+
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_DRAG_BEGIN:
+			_debug_drag_id += 1
+			_debug_drag_event(
+				"DRAG_BEGIN",
+				"drag=%d" % _debug_drag_id,
+			)
+		elif what == NOTIFICATION_DRAG_END:
+			_debug_drag_event(
+				"DRAG_END",
+				"drag=%d" % _debug_drag_id,
+			)
+
+
+	func _exit_tree() -> void:
+		_debug_drag_event(
+			"TREE_EXIT",
+			"drag=%d" % _debug_drag_id,
+		)
+
+
 	func enable_drop_forwarding(control: Control) -> void:
 		control.set_drag_forwarding(
 			Callable(),
@@ -739,6 +776,12 @@ class PointsListContainer:
 		var from_index: int = data["index"]
 		var to_index := _get_drop_target_index(position.y, point_panels)
 
+		_debug_drag_event(
+			"DROP_DATA",
+			"drag=%d from=%d to=%d"
+			% [_debug_drag_id, from_index, to_index],
+		)
+
 		clear_drop_index()
 
 		if to_index >= 0 and from_index != to_index:
@@ -746,10 +789,34 @@ class PointsListContainer:
 
 
 	func _defer_point_swap(from_index: int, to_index: int) -> void:
+		_debug_drag_event(
+			"SCHEDULE_SWAP",
+			"drag=%d from=%d to=%d"
+			% [_debug_drag_id, from_index, to_index],
+		)
+
 		get_tree().process_frame.connect(
-			point_swap_requested.emit.bind(from_index, to_index),
+			_emit_deferred_point_swap.bind(
+				from_index,
+				to_index,
+				_debug_drag_id,
+			),
 			CONNECT_ONE_SHOT,
 		)
+
+
+	func _emit_deferred_point_swap(
+		from_index: int,
+		to_index: int,
+		drag_id: int,
+	) -> void:
+		_debug_drag_event(
+			"EMIT_SWAP",
+			"drag=%d from=%d to=%d"
+			% [drag_id, from_index, to_index],
+		)
+
+		point_swap_requested.emit(from_index, to_index)
 
 
 	func set_drop_index(to_index: int, after: bool) -> void:
@@ -1608,6 +1675,16 @@ func _move_point_down(i: int) -> void:
 
 
 func _move_point(from_index: int, to_index: int) -> void:
+	print(
+		"[EC LIST DRAG] frame=%d usec=%d event=MOVE_POINT from=%d to=%d"
+		% [
+			Engine.get_process_frames(),
+			Time.get_ticks_usec(),
+			from_index,
+			to_index,
+		]
+	)
+
 	if (
 		from_index == to_index
 		or from_index < 0
