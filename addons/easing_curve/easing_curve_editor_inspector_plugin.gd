@@ -686,9 +686,9 @@ class PointsListContainer:
 			)
 
 			if _pending_swap_from >= 0 and _pending_swap_to >= 0:
-				get_tree().process_frame.connect(
-					_emit_pending_point_swap.bind(_debug_drag_id),
-					CONNECT_ONE_SHOT,
+				call_deferred(
+					"_arm_pending_point_swap_next_frame",
+					_debug_drag_id,
 				)
 
 
@@ -807,6 +807,26 @@ class PointsListContainer:
 				"drag=%d from=%d to=%d"
 				% [_debug_drag_id, from_index, to_index],
 			)
+
+
+	func _arm_pending_point_swap_next_frame(drag_id: int) -> void:
+		if _pending_swap_from < 0 or _pending_swap_to < 0:
+			return
+
+		_debug_drag_event(
+			"ARM_NEXT_FRAME",
+			"drag=%d pending=%d->%d"
+			% [
+				drag_id,
+				_pending_swap_from,
+				_pending_swap_to,
+			],
+		)
+
+		get_tree().process_frame.connect(
+			_emit_pending_point_swap.bind(drag_id),
+			CONNECT_ONE_SHOT,
+		)
 
 
 	func _emit_pending_point_swap(drag_id: int) -> void:
