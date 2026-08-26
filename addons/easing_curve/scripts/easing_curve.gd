@@ -39,135 +39,10 @@ enum TRANS {
 	CSS_CUBIC_BEZIER,
 }
 
-# List of functions (non-bezier presets)
-const FUNCTION_TRANSITIONS := [
-	TRANS.JITTER,
-	TRANS.IRREGULAR,
-	TRANS.STEP,
-	TRANS.POWER,
-	TRANS.ELASTIC,
-	TRANS.BOUNCE,
-	TRANS.SPRING,
-	TRANS.PHYSICS_SPRING,
-	TRANS.CSS_LINEAR,
-	TRANS.CSS_CUBIC_BEZIER,
-]
-
-# Normal function implementations.
-const FUNCTION_CLASSES := {
-	TRANS.STEP: {
-		"class": EASING_LIBRARY.Step,
-		"extended": false,
-	},
-	TRANS.POWER: {
-		"class": EASING_LIBRARY.Power,
-		"extended": false,
-	},
-	TRANS.ELASTIC: {
-		"class": EASING_LIBRARY.Elastic,
-		"extended": true,
-	},
-	TRANS.BOUNCE: {
-		"class": EASING_LIBRARY.Bounce,
-		"extended": true,
-	},
-	TRANS.SPRING: {
-		"class": EASING_LIBRARY.Spring,
-		"extended": true,
-	},
-	TRANS.PHYSICS_SPRING: {
-		"class": EASING_LIBRARY.PhysicsSpring,
-		"extended": true,
-	},
-	TRANS.CSS_LINEAR: {
-		"class": EASING_LIBRARY.CSSLinear,
-		"extended": true,
-	},
-	TRANS.CSS_CUBIC_BEZIER: {
-		"class": EASING_LIBRARY.CSSCubicBezier,
-		"extended": true,
-	},
-}
-
-
-# Editable values passed to Bezier curve implementations.
-# These are exported properties; see "BEZIER PARAMETERS" section below.
-const BEZIER_PARAMETERS := {
-	TRANS.CONSTANT: [
-		&"constant_value",
-	],
-	TRANS.BACK: [
-		&"overshoot",
-	],
-}
-
-
-# Editable values passed to function implementations.
-# These are exported properties; see "FUNCTION PARAMETERS" section below.
-const FUNCTION_PARAMETERS := {
-	TRANS.JITTER: [
-		&"num_points",
-		&"randomness",
-	],
-	TRANS.IRREGULAR: [
-		&"num_points",
-		&"randomness",
-	],
-	TRANS.STEP: [
-		&"steps",
-		&"from_start",
-		&"y_offset",
-	],
-	TRANS.POWER: [
-		&"power",
-	],
-	TRANS.ELASTIC: [
-		&"amplitude",
-		&"period",
-	],
-	TRANS.BOUNCE: [
-		&"num_bounces",
-		&"bounce_damping",
-	],
-	TRANS.SPRING: [
-		&"frequency",
-		&"decay",
-	],
-	TRANS.PHYSICS_SPRING: [
-		&"stiffness",
-		&"damping",
-		&"mass",
-		&"velocity",
-	],
-}
-
 # Non-deferred parameters (no slider--bools for example.)
 const NON_DEFERRED_FUNCTION_PARAMETERS := [
 	&"from_start",
 ]
-
-# Functions that use generated internal data instead of directly
-# passing FUNCTION_PARAMETERS to their Callable.
-const GENERATED_FUNCTION_TRANSITIONS := [
-	TRANS.JITTER,
-	TRANS.IRREGULAR,
-]
-
-# Extra inspector controls associated with the function
-const FUNCTION_EDITOR_PROPERTIES := {
-	TRANS.JITTER: [
-		&"generate_tool_button",
-	],
-	TRANS.IRREGULAR: [
-		&"generate_tool_button",
-	],
-	TRANS.CSS_LINEAR: [
-		&"css_linear",
-	],
-	TRANS.CSS_CUBIC_BEZIER: [
-		&"css_cubic_bezier",
-	],
-}
 
 const ZOOM_MIN := 0.1
 const ZOOM_MAX := 10.0
@@ -195,6 +70,8 @@ const TRANSITION_DEFINITIONS := {
 	TRANS.JITTER: {
 		"mode": CurveMode.FUNCTION,
 		"supports_ease": true,
+		"class": EASING_LIBRARY.Jitter,
+		"extended": false,
 		"parameters": [&"num_points", &"randomness"],
 		"generated": true,
 		"editor_properties": [&"generate_tool_button"],
@@ -202,6 +79,8 @@ const TRANSITION_DEFINITIONS := {
 	TRANS.IRREGULAR: {
 		"mode": CurveMode.FUNCTION,
 		"supports_ease": true,
+		"class": EASING_LIBRARY.Irregular,
+		"extended": false,
 		"parameters": [&"num_points", &"randomness"],
 		"generated": true,
 		"editor_properties": [&"generate_tool_button"],
@@ -1231,27 +1110,33 @@ func _property_belongs_to_transition(
 		transition: TRANS,
 ) -> bool:
 	return (
-		property_name in BEZIER_PARAMETERS.get(transition, [])
-		or property_name in FUNCTION_PARAMETERS.get(transition, [])
-		or property_name in FUNCTION_EDITOR_PROPERTIES.get(transition, [])
+		property_name in get_transition_parameters(transition)
+		or property_name in get_transition_editor_properties(transition)
 	)
 
 
 func _is_bezier_property(property_name: StringName) -> bool:
-	for properties in BEZIER_PARAMETERS.values():
-		if property_name in properties:
+	for transition in TRANS.values():
+		if (
+			int(get_transition_definition(transition).get("mode", -1))
+			== CurveMode.BEZIER
+			and property_name in get_transition_parameters(transition)
+		):
 			return true
 
 	return false
 
 
 func _is_function_property(property_name: StringName) -> bool:
-	for properties in FUNCTION_PARAMETERS.values():
-		if property_name in properties:
-			return true
-
-	for properties in FUNCTION_EDITOR_PROPERTIES.values():
-		if property_name in properties:
+	for transition in TRANS.values():
+		if (
+			int(get_transition_definition(transition).get("mode", -1))
+			== CurveMode.FUNCTION
+			and (
+				property_name in get_transition_parameters(transition)
+				or property_name in get_transition_editor_properties(transition)
+			)
+		):
 			return true
 
 	return false
@@ -1267,6 +1152,26 @@ static func transition_supports_ease(transition: TRANS) -> bool:
 	return bool(definition.get("supports_ease", false))
 
 
+static func get_transition_parameters(transition: TRANS) -> Array[StringName]:
+	var definition := get_transition_definition(transition)
+	var values: Array = definition.get("parameters", [])
+	var result: Array[StringName] = []
+	for value in values:
+		result.append(StringName(value))
+	return result
+
+
+static func get_transition_editor_properties(
+		transition: TRANS,
+) -> Array[StringName]:
+	var definition := get_transition_definition(transition)
+	var values: Array = definition.get("editor_properties", [])
+	var result: Array[StringName] = []
+	for value in values:
+		result.append(StringName(value))
+	return result
+
+
 static func is_function_transition(transition: TRANS) -> bool:
 	var definition := get_transition_definition(transition)
 	return int(definition.get("mode", CurveMode.BEZIER)) == CurveMode.FUNCTION
@@ -1275,8 +1180,10 @@ static func is_function_transition(transition: TRANS) -> bool:
 static func get_all_function_parameters() -> Array[StringName]:
 	var result: Array[StringName] = []
 
-	for parameters in FUNCTION_PARAMETERS.values():
-		for property_name: StringName in parameters:
+	for transition in TRANS.values():
+		if not is_function_transition(transition):
+			continue
+		for property_name in get_transition_parameters(transition):
 			if property_name not in result:
 				result.append(property_name)
 
@@ -1286,8 +1193,10 @@ static func get_all_function_parameters() -> Array[StringName]:
 static func get_all_bezier_parameters() -> Array[StringName]:
 	var result: Array[StringName] = []
 
-	for parameters in BEZIER_PARAMETERS.values():
-		for property_name: StringName in parameters:
+	for transition in TRANS.values():
+		if is_function_transition(transition):
+			continue
+		for property_name in get_transition_parameters(transition):
 			if property_name not in result:
 				result.append(property_name)
 
@@ -1428,7 +1337,7 @@ func has_builtin_bezier_preset() -> bool:
 
 func _create_canonical_preset() -> EasingCurve:
 	var preset := EasingCurve.new()
-	for property_name in BEZIER_PARAMETERS.get(trans_type, []):
+	for property_name in get_transition_parameters(trans_type):
 		preset.set(property_name, get(property_name))
 	preset.set_ease(ease_type)
 	preset.set_trans(trans_type)
@@ -1459,11 +1368,11 @@ func is_selected_preset_modified(
 	if curve_mode == CurveMode.FUNCTION:
 		var default_curve := EasingCurve.new()
 
-		for property_name in FUNCTION_PARAMETERS.get(trans_type, []):
+		for property_name in get_transition_parameters(trans_type):
 			if get(property_name) != default_curve.get(property_name):
 				return true
 
-		for property_name in FUNCTION_EDITOR_PROPERTIES.get(trans_type, []):
+		for property_name in get_transition_editor_properties(trans_type):
 			if property_name == &"generate_tool_button":
 				continue
 			if get(property_name) != default_curve.get(property_name):
@@ -1489,10 +1398,10 @@ func reset_selected_preset() -> bool:
 
 		_parameter_update_depth += 1
 
-		for property_name in FUNCTION_PARAMETERS.get(trans_type, []):
+		for property_name in get_transition_parameters(trans_type):
 			set(property_name, default_curve.get(property_name))
 
-		for property_name in FUNCTION_EDITOR_PROPERTIES.get(trans_type, []):
+		for property_name in get_transition_editor_properties(trans_type):
 			if property_name == &"generate_tool_button":
 				continue
 			set(property_name, default_curve.get(property_name))
@@ -2529,7 +2438,7 @@ func _get_function_arguments(offset: float) -> Array:
 	elif trans_type == TRANS.CSS_CUBIC_BEZIER:
 		args.append(_css_cubic_bezier_controls)
 	else:
-		for property_name in FUNCTION_PARAMETERS.get(trans_type, []):
+		for property_name in get_transition_parameters(trans_type):
 			args.append(get(property_name))
 
 	return args
@@ -2820,37 +2729,21 @@ func _init_function() -> void:
 			or _irregular_points_y.size() != num_points + 1
 		):
 			_generate_irregular()
-
-		_set_easing_class_function(
-			EASING_LIBRARY.Irregular,
-			false,
-		)
-		return
-
-	if trans_type == TRANS.IRREGULAR:
+	elif trans_type == TRANS.IRREGULAR:
 		if (
 			_irregular_points_x.size() != num_points
 			or _irregular_points_y.size() != num_points
 		):
 			_generate_irregular()
 
-		_set_easing_class_function(
-			EASING_LIBRARY.Irregular,
-			false,
-		)
-		return
-
-	var config: Dictionary = FUNCTION_CLASSES.get(
-		trans_type,
-		{},
-	)
-
-	if config.is_empty():
+	var definition := get_transition_definition(trans_type)
+	var easing_class: Variant = definition.get("class", null)
+	if easing_class == null:
 		return
 
 	_set_easing_class_function(
-		config["class"],
-		config["extended"],
+		easing_class,
+		bool(definition.get("extended", false)),
 	)
 
 

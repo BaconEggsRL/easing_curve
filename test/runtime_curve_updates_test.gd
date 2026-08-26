@@ -278,13 +278,8 @@ func _test_back_overshoot_contract() -> void:
 		"Back Overshoot is not displayed above the Points section",
 	)
 	_expect(is_equal_approx(curve.overshoot, 1.70158), "Back Overshoot lost its legacy default")
-	_expect(
-		EasingCurve.BEZIER_PARAMETERS.get(EasingCurve.TRANS.BACK, []) == [&"overshoot"],
-		"Back Overshoot is not registered as a Bezier parameter",
-	)
-	_expect(EasingCurve.TRANS.BACK not in EasingCurve.FUNCTION_TRANSITIONS, "Back was added to FUNCTION_TRANSITIONS")
-	_expect(not EasingCurve.FUNCTION_CLASSES.has(EasingCurve.TRANS.BACK), "Back was added to FUNCTION_CLASSES")
-	_expect(not EasingCurve.FUNCTION_PARAMETERS.has(EasingCurve.TRANS.BACK), "Back was added to FUNCTION_PARAMETERS")
+	_expect(EasingCurve.get_transition_definition(EasingCurve.TRANS.BACK).get("mode") == EasingCurve.CurveMode.BEZIER, "Back was not registered as a Bezier transition")
+	_expect(EasingCurve.get_transition_parameters(EasingCurve.TRANS.BACK) == [&"overshoot"], "Back Overshoot is not registered as a transition parameter")
 	_expect(not EasingCurve.is_function_transition(EasingCurve.TRANS.BACK), "Back was classified as a function transition")
 	_expect(not curve.get_function_snapshot().has(&"overshoot"), "Back Overshoot leaked into the function snapshot")
 	_expect(EasingCurve.has_parameter_default(&"overshoot"), "Overshoot is missing its Inspector reset default")

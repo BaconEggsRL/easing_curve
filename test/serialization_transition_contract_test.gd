@@ -151,8 +151,10 @@ func _test_enum_numeric_contracts() -> void:
 func _test_transition_catalog_contract() -> void:
 	var function_transitions: Array[EasingCurve.TRANS] = [EasingCurve.TRANS.JITTER, EasingCurve.TRANS.IRREGULAR, EasingCurve.TRANS.STEP, EasingCurve.TRANS.POWER, EasingCurve.TRANS.ELASTIC, EasingCurve.TRANS.BOUNCE, EasingCurve.TRANS.SPRING, EasingCurve.TRANS.PHYSICS_SPRING, EasingCurve.TRANS.CSS_LINEAR, EasingCurve.TRANS.CSS_CUBIC_BEZIER]
 	var generated: Array[EasingCurve.TRANS] = [EasingCurve.TRANS.JITTER, EasingCurve.TRANS.IRREGULAR]
-	var function_classes: Array[EasingCurve.TRANS] = [EasingCurve.TRANS.STEP, EasingCurve.TRANS.POWER, EasingCurve.TRANS.ELASTIC, EasingCurve.TRANS.BOUNCE, EasingCurve.TRANS.SPRING, EasingCurve.TRANS.PHYSICS_SPRING, EasingCurve.TRANS.CSS_LINEAR, EasingCurve.TRANS.CSS_CUBIC_BEZIER]
+	var function_classes: Array[EasingCurve.TRANS] = [EasingCurve.TRANS.JITTER, EasingCurve.TRANS.IRREGULAR, EasingCurve.TRANS.STEP, EasingCurve.TRANS.POWER, EasingCurve.TRANS.ELASTIC, EasingCurve.TRANS.BOUNCE, EasingCurve.TRANS.SPRING, EasingCurve.TRANS.PHYSICS_SPRING, EasingCurve.TRANS.CSS_LINEAR, EasingCurve.TRANS.CSS_CUBIC_BEZIER]
 	var function_class_contracts := {
+		EasingCurve.TRANS.JITTER: {"class": EasingCurve.EASING_LIBRARY.Jitter, "extended": false},
+		EasingCurve.TRANS.IRREGULAR: {"class": EasingCurve.EASING_LIBRARY.Irregular, "extended": false},
 		EasingCurve.TRANS.STEP: {"class": EasingCurve.EASING_LIBRARY.Step, "extended": false},
 		EasingCurve.TRANS.POWER: {"class": EasingCurve.EASING_LIBRARY.Power, "extended": false},
 		EasingCurve.TRANS.ELASTIC: {"class": EasingCurve.EASING_LIBRARY.Elastic, "extended": true},
@@ -189,22 +191,12 @@ func _test_transition_catalog_contract() -> void:
 		var expected_generated: bool = transition in generated
 		_expect(bool(definition.get("generated", false)) == expected_generated, "%s transition definition generated-data contract changed" % EasingCurve.TRANS.keys()[transition])
 		_expect(EasingCurve.uses_generated_function_data(transition) == expected_generated, "%s generated-data registration changed" % EasingCurve.TRANS.keys()[transition])
-		var expected_class: Dictionary = EasingCurve.FUNCTION_CLASSES.get(transition, {})
+		var expected_class: Dictionary = function_class_contracts.get(transition, {})
 		_expect(definition.get("class") == expected_class.get("class"), "%s transition definition class changed" % EasingCurve.TRANS.keys()[transition])
 		_expect(bool(definition.get("extended", false)) == bool(expected_class.get("extended", false)), "%s transition definition extended class flag changed" % EasingCurve.TRANS.keys()[transition])
-		var expected_parameters: Array = EasingCurve.FUNCTION_PARAMETERS.get(transition, []) if expected_function else EasingCurve.BEZIER_PARAMETERS.get(transition, [])
+		var expected_parameters: Array = parameters.get(transition, [])
 		_expect(definition.get("parameters", []) == expected_parameters, "%s transition definition parameters changed" % EasingCurve.TRANS.keys()[transition])
-		_expect(definition.get("editor_properties", []) == EasingCurve.FUNCTION_EDITOR_PROPERTIES.get(transition, []), "%s transition definition editor properties changed" % EasingCurve.TRANS.keys()[transition])
-	_expect(EasingCurve.FUNCTION_TRANSITIONS == function_transitions, "FUNCTION_TRANSITIONS registration or order changed")
-	_expect(EasingCurve.GENERATED_FUNCTION_TRANSITIONS == generated, "Generated transition registration changed")
-	_expect(EasingCurve.FUNCTION_CLASSES.keys().size() == function_classes.size(), "FUNCTION_CLASSES membership changed")
-	for transition in function_classes:
-		_expect(EasingCurve.FUNCTION_CLASSES.has(transition), "%s lost its function class" % EasingCurve.TRANS.keys()[transition])
-		if EasingCurve.FUNCTION_CLASSES.has(transition):
-			var actual_class: Dictionary = EasingCurve.FUNCTION_CLASSES[transition]
-			var expected_class: Dictionary = function_class_contracts[transition]
-			_expect(actual_class.get("class") == expected_class.class, "%s function class changed" % EasingCurve.TRANS.keys()[transition])
-			_expect(actual_class.get("extended") == expected_class.extended, "%s callable ease variant changed" % EasingCurve.TRANS.keys()[transition])
+		_expect(definition.get("editor_properties", []) == editor_properties.get(transition, []), "%s transition definition editor properties changed" % EasingCurve.TRANS.keys()[transition])
 	for transition in EasingCurve.TRANS.values():
 		var expected_function: bool = transition in function_transitions
 		_expect(EasingCurve.is_function_transition(transition) == expected_function, "%s function-mode registration changed" % EasingCurve.TRANS.keys()[transition])
@@ -214,11 +206,8 @@ func _test_transition_catalog_contract() -> void:
 		if expected_function:
 			_expect(curve.function_callable.is_valid(), "%s callable was not initialized" % EasingCurve.TRANS.keys()[transition])
 			_expect(not is_nan(curve.sample(0.37)) and not is_inf(curve.sample(0.37)), "%s callable produced a non-finite sample" % EasingCurve.TRANS.keys()[transition])
-		var expected_bezier: Array = parameters.get(transition, [])
-		_expect(EasingCurve.BEZIER_PARAMETERS.get(transition, []) == expected_bezier if transition in [EasingCurve.TRANS.CONSTANT, EasingCurve.TRANS.BACK] else EasingCurve.BEZIER_PARAMETERS.get(transition, []) == [], "%s Bezier parameter registration changed" % EasingCurve.TRANS.keys()[transition])
-		var expected_function_parameters: Array = parameters.get(transition, []) if expected_function else []
-		_expect(EasingCurve.FUNCTION_PARAMETERS.get(transition, []) == expected_function_parameters, "%s function parameter order changed" % EasingCurve.TRANS.keys()[transition])
-		_expect(EasingCurve.FUNCTION_EDITOR_PROPERTIES.get(transition, []) == editor_properties.get(transition, []), "%s editor property registration changed" % EasingCurve.TRANS.keys()[transition])
+		_expect(EasingCurve.get_transition_parameters(transition) == parameters.get(transition, []), "%s transition parameter order changed" % EasingCurve.TRANS.keys()[transition])
+		_expect(EasingCurve.get_transition_editor_properties(transition) == editor_properties.get(transition, []), "%s transition editor property order changed" % EasingCurve.TRANS.keys()[transition])
 	_expect(EasingCurve.NON_DEFERRED_FUNCTION_PARAMETERS == [&"from_start"], "Non-deferred parameter contract changed")
 
 

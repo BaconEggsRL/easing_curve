@@ -318,15 +318,19 @@ For a normal parameterized function transition:
    * `scripts/easing_curve.gd`
    * Add `TRANS.<NEW_MODE>` to `EasingCurve.TRANS`.
 
-2. **Register the function**
+2. **Add one transition definition**
 
-   * `scripts/easing_curve.gd` → `FUNCTION_CLASSES`
-   * Map the transition to its easing class and set `extended` for `*Ex` functions.
+   * `scripts/easing_curve.gd` → `TRANSITION_DEFINITIONS`
+   * Include `mode`, `supports_ease`, `class`, `extended`, and ordered
+     `parameters`. Add `generated: true` and `editor_properties` only when needed.
 
    ```gdscript
    TRANS.WOBBLE: {
-   	"class": EASING_LIBRARY.Wobble,
-   	"extended": true,
+	"mode": CurveMode.FUNCTION,
+	"supports_ease": true,
+	"class": EASING_LIBRARY.Wobble,
+	"extended": true,
+	"parameters": [&"wobble_frequency", &"wobble_strength"],
    },
    ```
 
@@ -337,20 +341,19 @@ For a normal parameterized function transition:
    * Setters must call `_notify_parameter_changed()`.
    * Exported defaults are automatically used by the Inspector reset infrastructure.
 
-4. **Register parameters**
-
-   * `scripts/easing_curve.gd` → `FUNCTION_PARAMETERS`
-   * Order must match the easing-function arguments.
-
-   ```gdscript
-   TRANS.WOBBLE: [&"wobble_frequency", &"wobble_strength"],
-   ```
-
-5. **Add easing equations**
+4. **Add easing equations**
 
    * Easing-equation script loaded by `easing_curve.gd`
    * Add `easeInEx()`, `easeOutEx()`, `easeInOutEx()`, and `easeOutInEx()` as needed.
-   * Arguments after `t, b, c, d` must match `FUNCTION_PARAMETERS` order.
+   * Arguments after `t, b, c, d` must match the registry parameter order.
+
+5. **Add Inspector presentation**
+
+   * Add the transition to the desired `TRANSITION_PRESENTATION` group and order.
+   * That table owns category/order/presentation only; Ease support comes from
+     `TRANSITION_DEFINITIONS`.
+
+6. **Add or update tests**
 
 Everything else is automatic for normal numeric parameters: function-mode detection,
 Inspector visibility, deferred editing, `sample()` arguments, defaults/reset handling,
@@ -358,12 +361,11 @@ snapshots, Undo/Redo, Callable mapping, and runtime updates.
 
 ### Special cases
 
-* **No normal Ease support:** update `TRANSITION_PRESENTATION::supports_ease` in
-  `easing_curve_editor_inspector_plugin.gd`.
-* **Extra Inspector controls:** register them in `FUNCTION_EDITOR_PROPERTIES`.
-* **Generated internal data:** add the transition to
-  `GENERATED_FUNCTION_TRANSITIONS`; if it adds new generated state, update
-  `_get_generated_function_snapshot()` and its restore/parsing helper.
+* **Extra Inspector controls:** add `editor_properties` to the transition
+  definition.
+* **Generated internal data:** add `generated: true` to the transition definition;
+  if it adds new generated state, update `_get_generated_function_snapshot()` and
+  its restore/parsing helper.
 
 A normal new function should **not** require changes to `_update_preset()`,
 `_init_function()`, `sample()`, `_validate_property()`, `get_function_snapshot()`,
