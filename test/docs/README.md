@@ -1,4 +1,5 @@
 # Development testing
+
 ---
 
 ## Editor-host tests
@@ -15,7 +16,7 @@ Run an Editor-dependent test with:
 
 ```text
 ./test/scripts/run_godot.ps1 --editor --headless --path . --script res://test/<test_name>.gd
-```
+````
 
 Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can
 misleadingly report zero checks. It is not a valid result for these tests.
@@ -46,20 +47,70 @@ Under Godot 4.7 `--editor --headless`, `editor_undo_redo_test.gd` skips its
 responsive-layout fixtures because they require a visible Editor layout. Verify
 those fixtures in a visible Editor session instead.
 
-
 # Feature development
 
 ---
-
 
 ## Add a new EasingCurvePoint property
 
 There are two categories of point properties:
 
-- **Ordinary properties** use the generic descriptor-backed storage, Inspector, and
+* **Ordinary properties** use the generic descriptor-backed storage, Inspector, and
   snapshot lifecycle.
-- **Semantic / geometry-affecting properties** require explicit behavior in addition
-  to the generic infrastructure.
+* **Semantic / geometry-affecting properties** use explicit snapshot and behavior
+  handling where generic restoration is not sufficient.
+
+Every point-property definition must explicitly declare its snapshot lifecycle:
+
+```gdscript
+"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+```
+
+or:
+
+```gdscript
+"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
+```
+
+Do not omit `snapshot_lifecycle`. Making the lifecycle explicit prevents a missing
+field from silently determining how a property is handled.
+
+### Descriptor key order
+
+Keep descriptor keys in this relative order:
+
+```text
+name
+type
+default
+inspector_label
+inspector_visible
+resettable
+copy_paste_enabled
+editor_kind
+snapshot_key
+snapshot_lifecycle
+```
+
+Keys that do not apply may be omitted, but preserve the relative order of the
+remaining keys.
+
+For example:
+
+```gdscript
+{
+	"name": &"example_value",
+	"type": TYPE_VECTOR2,
+	"default": Vector2.ZERO,
+	"inspector_label": "Example Value",
+	"inspector_visible": true,
+	"resettable": true,
+	"copy_paste_enabled": true,
+	"editor_kind": POINT_EDITOR_KIND_VECTOR2,
+	"snapshot_key": &"example_values",
+	"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+},
+```
 
 ### Ordinary property
 
@@ -68,23 +119,23 @@ another option with no graph, transform, or point-geometry semantics.
 
 > **Important:** None of the existing built-in point properties currently uses the
 > ordinary snapshot lifecycle. Position, control points, Handle Mode, locks, and
-> Force Linear all have special semantic handling.
+> Force Linear all have special semantic handling and are explicitly marked
+> `POINT_SNAPSHOT_LIFECYCLE_SEMANTIC`.
 >
-> A new ordinary property must explicitly opt in with:
+> A new ordinary property must explicitly use:
 >
 > ```gdscript
 > "snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
 > ```
 >
-> Omitting this field means the property will **not** use the generic ordinary
-> snapshot capture, comparison, restoration, mutation, and point-order reversal
-> path.
+> This enables the generic ordinary snapshot capture, comparison, restoration,
+> Inspector mutation, and point-order reversal path.
 
 1. **Add domain state to `EasingCurvePoint`**
 
    Add normal state/getter/setter behavior to `scripts/point.gd`.
 
-   The setter must actually store the new value before emitting `changed`.
+   The setter must store the new value before emitting `changed`.
 
    For example:
 
@@ -99,9 +150,9 @@ another option with no graph, transform, or point-geometry semantics.
    			return
    		_example_value = value
    		emit_changed()
-	```
+   ```
 
-	Point Resources must not own Inspector Controls.
+   Point Resources must not own Inspector Controls.
 
 2. **Add one `EasingCurve.POINT_PROPERTY_DEFINITIONS` entry**
 
@@ -112,10 +163,10 @@ another option with no graph, transform, or point-geometry semantics.
    	"name": &"example_value",
    	"type": TYPE_VECTOR2,
    	"default": Vector2.ZERO,
+   	"inspector_label": "Example Value",
    	"inspector_visible": true,
    	"resettable": true,
    	"copy_paste_enabled": true,
-   	"inspector_label": "Example Value",
    	"editor_kind": POINT_EDITOR_KIND_VECTOR2,
    	"snapshot_key": &"example_values",
    	"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
@@ -127,14 +178,14 @@ another option with no graph, transform, or point-geometry semantics.
    * `name` — point property name.
    * `type` — Variant/storage type.
    * `default` — serialized/reset default.
+   * `inspector_label` — displayed Points-list label.
    * `inspector_visible` — whether it participates in normal Points-list rows.
    * `resettable` — whether the normal reset infrastructure applies.
    * `copy_paste_enabled` — whether normal property copy/paste applies.
-   * `inspector_label` — displayed Points-list label.
    * `editor_kind` — editor control category.
    * `snapshot_key` — typed point-snapshot array key.
-   * `snapshot_lifecycle` — set to `POINT_SNAPSHOT_LIFECYCLE_ORDINARY`
-     for ordinary properties.
+   * `snapshot_lifecycle` — explicitly selects ordinary or semantic snapshot
+     handling.
 
 3. **Add Inspector presentation placement**
 
@@ -147,11 +198,16 @@ another option with no graph, transform, or point-geometry semantics.
    A Vector2 property should reuse `POINT_EDITOR_KIND_VECTOR2`.
 
    If a new UI category is needed, such as a bool checkbox, add one reusable
-   editor-kind builder for that category rather than a property-specific row
+   editor-kind builder for that category rather than a property-specific normal-row
    implementation.
 
-   Editor kind describes only the input widget. It does not imply geometry, lock,
-   Force Linear, or graph semantics.
+   `editor_kind` describes only the input widget. It does not imply:
+
+   * point geometry;
+   * lock support;
+   * Force Linear support;
+   * left/right control semantics;
+   * graph interaction.
 
 5. **Use the existing Inspector transaction path**
 
@@ -169,8 +225,11 @@ another option with no graph, transform, or point-geometry semantics.
    * point-order reversal;
    * ordinary Inspector mutation.
 
-   Ordinary properties are not automatically transformed by invert, and point-order
-   reversal changes only value ordering, not the values themselves.
+   Ordinary properties are not automatically transformed by invert.
+
+   Reversing point order reverses the property's snapshot value order so values
+   remain associated with the corresponding points; it does not transform the
+   property values themselves.
 
 6. **Add tests**
 
@@ -191,7 +250,7 @@ another option with no graph, transform, or point-geometry semantics.
 * [ ] Setter stores the supplied value before `emit_changed()`
 * [ ] Add one `POINT_PROPERTY_DEFINITIONS` entry
 * [ ] Add a unique `snapshot_key`
-* [ ] Add `snapshot_lifecycle: POINT_SNAPSHOT_LIFECYCLE_ORDINARY`
+* [ ] Set `snapshot_lifecycle` to `POINT_SNAPSHOT_LIFECYCLE_ORDINARY`
 * [ ] Add intentional presentation placement if visible
 * [ ] Reuse or add one editor kind
 * [ ] Add focused tests
@@ -200,30 +259,47 @@ another option with no graph, transform, or point-geometry semantics.
 
 ### Semantic / geometry-affecting property
 
-`handle_mode` is not an ordinary enum. It changes control geometry and interacts
-with locks and Force Linear, so it intentionally uses explicit semantic code rather
-than `POINT_SNAPSHOT_LIFECYCLE_ORDINARY`.
+Use `POINT_SNAPSHOT_LIFECYCLE_SEMANTIC` when a property's snapshot behavior cannot
+be handled correctly by the generic ordinary lifecycle.
 
-A property with comparable semantics may additionally need:
+For example, `handle_mode` is not an ordinary enum. It changes control geometry and
+interacts with locks and Force Linear, so its descriptor explicitly uses:
+
+```gdscript
+"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
+```
+
+Position, left/right control points, locks, and Force Linear are also semantic
+properties because their snapshot restoration or transform behavior has additional
+meaning beyond storing and restoring a value.
+
+A semantic property may additionally need:
 
 * `EasingCurvePoint` state-transition or geometry logic;
 * Inspector semantic mutation handling;
 * reset consequences;
 * graph rendering or interaction behavior;
+* snapshot capture/restoration handling;
 * snapshot restore ordering;
 * reverse/invert policy;
 * lock or Force Linear interactions;
 * selection/reorder considerations;
 * Undo/Redo characterization.
 
-These explicit branches are intentional. The goal is to eliminate duplicated generic
-bookkeeping, not to hide real geometry semantics inside descriptor metadata.
+Semantic properties should remain explicit where those branches represent real
+behavior.
+
+The goal is to eliminate duplicated generic bookkeeping, not to hide geometry or
+state-transition semantics inside descriptor metadata.
 
 #### Semantic property checklist
 
-* [ ] Complete ordinary-property metadata/UI steps where applicable
-* [ ] Do **not** mark the property ordinary if generic restoration is insufficient
+* [ ] Add point state/getter/setter
+* [ ] Add the property descriptor
+* [ ] Set `snapshot_lifecycle` to `POINT_SNAPSHOT_LIFECYCLE_SEMANTIC`
+* [ ] Add Inspector metadata/presentation where applicable
 * [ ] Define geometry/state semantics
+* [ ] Define snapshot capture/restoration behavior where generic handling is insufficient
 * [ ] Define snapshot restoration ordering
 * [ ] Define reverse/invert behavior
 * [ ] Define graph/editor behavior
@@ -231,9 +307,7 @@ bookkeeping, not to hide real geometry semantics inside descriptor metadata.
 * [ ] Add Undo/Redo and characterization tests
 * [ ] Run visible Editor validation
 
-
 ---
-
 
 ## Add a new function transition
 
@@ -278,12 +352,20 @@ For a normal parameterized function transition:
    * Add `easeInEx()`, `easeOutEx()`, `easeInOutEx()`, and `easeOutInEx()` as needed.
    * Arguments after `t, b, c, d` must match `FUNCTION_PARAMETERS` order.
 
-Everything else is automatic for normal numeric parameters: function-mode detection, Inspector visibility, deferred editing, `sample()` arguments, defaults/reset handling, snapshots, Undo/Redo, Callable mapping, and runtime updates.
+Everything else is automatic for normal numeric parameters: function-mode detection,
+Inspector visibility, deferred editing, `sample()` arguments, defaults/reset handling,
+snapshots, Undo/Redo, Callable mapping, and runtime updates.
 
 ### Special cases
 
-* **No normal Ease support:** update 'TRANSITION_PRESENTATION::supports_ease' field in `easing_curve_editor_inspector_plugin.gd`.
+* **No normal Ease support:** update `TRANSITION_PRESENTATION::supports_ease` in
+  `easing_curve_editor_inspector_plugin.gd`.
 * **Extra Inspector controls:** register them in `FUNCTION_EDITOR_PROPERTIES`.
-* **Generated internal data:** add the transition to `GENERATED_FUNCTION_TRANSITIONS`; if it adds new generated state, update `_get_generated_function_snapshot()` and its restore/parsing helper.
+* **Generated internal data:** add the transition to
+  `GENERATED_FUNCTION_TRANSITIONS`; if it adds new generated state, update
+  `_get_generated_function_snapshot()` and its restore/parsing helper.
 
-A normal new function should **not** require changes to `_update_preset()`, `_init_function()`, `sample()`, `_validate_property()`, `get_function_snapshot()`, `set_function_snapshot()`, `DeferredParameterEditorProperty`, or `easing_curve_editor_undo.gd`.
+A normal new function should **not** require changes to `_update_preset()`,
+`_init_function()`, `sample()`, `_validate_property()`, `get_function_snapshot()`,
+`set_function_snapshot()`, `DeferredParameterEditorProperty`, or
+`easing_curve_editor_undo.gd`.
