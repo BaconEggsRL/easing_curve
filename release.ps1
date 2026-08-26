@@ -335,7 +335,7 @@ function Invoke-PrepareCommit {
     git diff --cached --stat
     Assert-LastExitCode "git diff --cached --stat"
 
-    git commit -m "Release v$Version"
+    git commit -m "Release $Tag"
     Assert-LastExitCode "git commit"
 
     Write-Host "Release commit created." -ForegroundColor Green
@@ -363,6 +363,7 @@ function Write-PostPublishSteps {
     Write-Host ""
     Write-Host "1. Verify the published release:"
     Write-Host "   git status --short"
+    Write-Host "   git log -1 --oneline"
     Write-Host "   git tag --points-at HEAD"
     Write-Host "   gh release view $Tag"
     Write-Host ""
@@ -395,6 +396,19 @@ function Invoke-Publish {
 
     if (-not (Test-GitClean)) {
         throw "Working tree must be clean before publishing."
+    }
+
+    $DesiredCommitMessage = "Release $Tag"
+    $CurrentCommitMessage = (
+        git log -1 --pretty=%s $ReleaseBranch
+    ).Trim()
+    Assert-LastExitCode "git log"
+
+    if ($CurrentCommitMessage -ne $DesiredCommitMessage) {
+        throw (
+            "Release commit must be named '$DesiredCommitMessage'. " +
+            "Current commit is '$CurrentCommitMessage'."
+        )
     }
 
     git fetch origin
@@ -445,7 +459,7 @@ function Invoke-Publish {
             throw "Publishing cancelled."
         }
 
-        git tag -a $Tag -m "Release $Tag"
+        git tag -a $Tag -m "$Tag"
         Assert-LastExitCode "git tag"
 
         git push origin $ReleaseBranch
@@ -517,6 +531,12 @@ function Invoke-Republish {
     $ReleaseHead = (git rev-parse $ReleaseBranch).Trim()
     Assert-LastExitCode "git rev-parse"
 
+    $DesiredCommitMessage = "Release $Tag"
+    $CurrentCommitMessage = (
+        git log -1 --pretty=%s $ReleaseBranch
+    ).Trim()
+    Assert-LastExitCode "git log"
+
     $CurrentTagCommit = git rev-list -n 1 $Tag 2>$null
     if ($LASTEXITCODE -eq 0 -and $CurrentTagCommit) {
         $CurrentTagCommit = $CurrentTagCommit.Trim()
@@ -542,13 +562,18 @@ function Invoke-Republish {
         Write-Host "  $Tag"
         Write-Host "Current tag commit:"
         Write-Host "  $CurrentTagCommit"
-        Write-Host "New release commit:"
+        Write-Host "Current release branch commit:"
         Write-Host "  $ReleaseHead"
+        Write-Host "Current commit message:"
+        Write-Host "  $CurrentCommitMessage"
+        Write-Host "Release commit message:"
+        Write-Host "  $DesiredCommitMessage"
         Write-Host "Replacement asset:"
         Write-Host "  $ZipPath"
         Write-Host ""
         Write-Host "This will:"
-        Write-Host "  - push '$ReleaseBranch' if it is ahead of origin"
+        Write-Host "  - ensure the release commit message is '$DesiredCommitMessage'"
+        Write-Host "  - update '$ReleaseBranch' using force-with-lease if necessary"
         Write-Host "  - force-move '$Tag' to the current '$ReleaseBranch' commit"
         Write-Host "  - replace the existing ZIP asset"
         Write-Host "  - refresh the release title, target, notes, and Latest status"
@@ -559,8 +584,27 @@ function Invoke-Republish {
             throw "Republishing cancelled."
         }
 
-        # Ensure master itself is published first.
-        git push origin $ReleaseBranch
+        if ($CurrentCommitMessage -ne $DesiredCommitMessage) {
+            Write-Host ""
+            Write-Host "Updating release commit message:"
+            Write-Host "  $CurrentCommitMessage -> $DesiredCommitMessage"
+
+            git commit --amend -m $DesiredCommitMessage
+            Assert-LastExitCode "git commit --amend"
+        }
+        else {
+            Write-Host ""
+            Write-Host "Release commit already uses '$DesiredCommitMessage'." `
+                -ForegroundColor Green
+        }
+
+        # Amending changes the commit SHA, so resolve it again here.
+        $ReleaseHead = (git rev-parse $ReleaseBranch).Trim()
+        Assert-LastExitCode "git rev-parse"
+
+        # The release commit may have been amended, which changes its SHA.
+        # --force-with-lease protects against overwriting unexpected remote changes.
+        git push --force-with-lease origin $ReleaseBranch
         Assert-LastExitCode "git push branch"
 
         # Recreate the annotated tag at the current master commit.
