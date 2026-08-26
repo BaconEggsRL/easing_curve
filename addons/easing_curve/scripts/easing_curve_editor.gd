@@ -132,313 +132,259 @@ func _gui_input(event: InputEvent) -> void:
 	if _curve == null:
 		return
 
-	# Middle mouse pressed → start panning
 	if event is InputEventMouseButton:
-		# Always end an RMB delete gesture before any later button branch can return.
-		if (
-			not event.pressed
-			and event.button_index == MOUSE_BUTTON_RIGHT
-		):
-			_set_right_delete_dragging(false)
+		if _handle_mouse_button_prepass(event):
 			return
 
-		if event.button_index == MOUSE_BUTTON_MIDDLE:
-			if event.pressed:
-				is_panning = true
-				last_mouse_pos = event.position
-				get_viewport().set_input_as_handled() # stop editor from stealing input
-			else:
-				is_panning = false
-				get_viewport().set_input_as_handled()
-	# Mouse motion → pan
-	elif event is InputEventMouseMotion and is_panning:
-		var delta = event.position - last_mouse_pos
-		pan_offset += delta
-		last_mouse_pos = event.position
-		# _user_panned = true
-		queue_redraw()
-		get_viewport().set_input_as_handled()
-		pan_changed.emit(pan_offset)
-
-	# =========================
-	# MOUSE MOTION (drag points/controls)
-	# =========================
 	if event is InputEventMouseMotion:
-		if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
-			return
+		_handle_pan_motion(event)
+		_handle_mouse_motion(event)
+		return
 
-		if is_right_delete_dragging:
-			if event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
-				_try_remove_point_at(event.position)
-				return
-			_set_right_delete_dragging(false)
-
-		if pending_add_point != null:
-			var world_pos := get_world_pos(event.position)
-
-			if not world_pos.is_finite():
-				return
-
-			var clamped_pos := world_pos.clamp(
-				Vector2(0, _curve.min_value),
-				Vector2(1.0, _curve.max_value),
-			)
-			pending_add_point.position = clamped_pos
-			queue_redraw()
-			return
-
-		# ----- DRAGGING -----
-		if dragging_point != -1:
-			var p = _curve.points[dragging_point]
-			if dragging_control != ControlIndex.NONE:
-				p.set_handle_display_scale(
-					get_world_to_view_scale()
-				)
-			var world_pos = get_world_pos(event.position)
-
-			if not world_pos.is_finite():
-				return
-
-			# Block main point movement
-			if dragging_control == ControlIndex.NONE and p.is_lock_active(&"position"):
-				return
-
-			# Block left control
-			if dragging_control == ControlIndex.LEFT and p.is_lock_active(&"left_control_point"):
-				return
-
-			# Block right control
-			if dragging_control == ControlIndex.RIGHT and p.is_lock_active(&"right_control_point"):
-				return
-
-			match dragging_control:
-				ControlIndex.LEFT:
-					if dragging_point != 0: # ignore left control for first point
-						_request_point_property_change(dragging_point, &"left_control_point", world_pos, true)
-				ControlIndex.RIGHT:
-					if dragging_point != _curve.points.size() - 1: # ignore right control for last point
-						_request_point_property_change(dragging_point, &"right_control_point", world_pos, true)
-				ControlIndex.NONE: # dragging main point
-					var clamped_pos = world_pos.clamp(Vector2(0, _curve.min_value), Vector2(1.0, _curve.max_value))
-
-					var delta = clamped_pos - p.position
-					var left_control: Vector2 = p.left_control_point
-					var right_control: Vector2 = p.right_control_point
-					_request_point_property_change(dragging_point, &"position", clamped_pos, true)
-
-					# Only move controls if they are NOT locked
-					if not p.is_lock_active(&"left_control_point"):
-						_request_point_property_change(dragging_point, &"left_control_point", left_control + delta, true)
-
-					if not p.is_lock_active(&"right_control_point"):
-						_request_point_property_change(dragging_point, &"right_control_point", right_control + delta, true)
-
-			point_changed.emit(dragging_point, p)
-			queue_redraw()
-
-		# ----- HOVER DETECTION -----
-		if dragging_point == -1:
-			var control = get_control_at(event.position)
-
-			if control[0] != -1:
-				hovered_index = control[0]
-				hovered_control_index = control[1]
-			else:
-				hovered_control_index = ControlIndex.NONE
-				hovered_index = get_point_at(event.position)
-
-			queue_redraw()
-
-			# Cursor feedback
-			if hovered_control_index != ControlIndex.NONE:
-				mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-			elif hovered_index != -1:
-				mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-			else:
-				mouse_default_cursor_shape = Control.CURSOR_ARROW
-
-	# =========================
-	# MOUSE BUTTONS
-	# =========================
 	if event is InputEventMouseButton:
-		# --- Mouse Wheel Zoom ---
-		if (
-			event.pressed
-			and event.button_index == MOUSE_BUTTON_WHEEL_UP
-		):
-			_zoom_at_view_pos(1, event.position)
-			accept_event()
+		_handle_mouse_button(event)
+
+
+func _handle_mouse_button_prepass(event: InputEventMouseButton) -> bool:
+	# Always end an RMB delete gesture before any later button branch can return.
+	if not event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		_set_right_delete_dragging(false)
+		return true
+
+	if event.button_index == MOUSE_BUTTON_MIDDLE:
+		if event.pressed:
+			is_panning = true
+			last_mouse_pos = event.position
+			get_viewport().set_input_as_handled() # stop editor from stealing input
+		else:
+			is_panning = false
+			get_viewport().set_input_as_handled()
+	return false
+
+
+func _handle_pan_motion(event: InputEventMouseMotion) -> void:
+	if not is_panning:
+		return
+	var delta = event.position - last_mouse_pos
+	pan_offset += delta
+	last_mouse_pos = event.position
+	# _user_panned = true
+	queue_redraw()
+	get_viewport().set_input_as_handled()
+	pan_changed.emit(pan_offset)
+
+
+func _handle_mouse_motion(event: InputEventMouseMotion) -> void:
+	if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
+		return
+
+	if is_right_delete_dragging:
+		if event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
+			_try_remove_point_at(event.position)
 			return
+		_set_right_delete_dragging(false)
 
-		elif (
-			event.pressed
-			and event.button_index == MOUSE_BUTTON_WHEEL_DOWN
-		):
-			_zoom_at_view_pos(-1, event.position)
-			accept_event()
-			return
+	if pending_add_point != null:
+		_handle_pending_add_motion(event)
+		return
 
-		if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
-			return
+	if dragging_point != -1:
+		_handle_drag_motion(event)
 
-		# --- LEFT CLICK ---
-		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			var control = get_control_at(event.position)
-			var point_idx = get_point_at(event.position)
-
-			if (
-				control[0] != -1
-				and _curve.points[control[0]].handle_mode
-					== EasingCurvePoint.HandleMode.LINEAR
-			):
-				point_idx = control[0]
-				control = [-1, ControlIndex.NONE]
-
-			# --- If we hit a control ---
-			if control[0] != -1:
-				var p = _curve.points[control[0]]
-				var can_drag_control := false
-
-				match control[1]:
-					ControlIndex.LEFT:
-						can_drag_control = not p.is_lock_active(&"left_control_point")
-					ControlIndex.RIGHT:
-						can_drag_control = not p.is_lock_active(&"right_control_point")
-
-				# Always select the point
-				selected_index = control[0]
-
-				# Only allow dragging if the control is not locked
-				if can_drag_control:
-					dragging_point = control[0]
-					dragging_control = control[1]
-				else:
-					# Try dragging main point if under cursor
-					if point_idx != -1 and not _curve.points[point_idx].is_lock_active(&"position"):
-						dragging_point = point_idx
-						dragging_control = ControlIndex.NONE
-
-				queue_redraw()
-				return
-
-			# --- If we hit only a main point ---
-			if point_idx != -1:
-				var p = _curve.points[point_idx]
-				if not p.is_lock_active(&"position"):
-					dragging_point = point_idx
-					dragging_control = ControlIndex.NONE
-				selected_index = point_idx
-				queue_redraw()
-				return
+	if dragging_point == -1:
+		_update_hover_from_mouse(event.position)
 
 
-			# --- If we hit nothing, add a new point ---
-			var world_pos := get_world_pos(event.position)
-
-			if not world_pos.is_finite():
-				return
-
-			var clamped_pos := world_pos.clamp(
-				Vector2(0, _curve.min_value),
-				Vector2(1.0, _curve.max_value),
-			)
-
-			if use_pending_add:
-				pending_add_point = EasingCurvePoint.new()
-
-				pending_add_point.position = clamped_pos
-				pending_add_point.left_control_point = (
-					clamped_pos + Vector2(-0.1, 0.0)
-				)
-				pending_add_point.right_control_point = (
-					clamped_pos + Vector2(0.1, 0.0)
-				)
-
-				queue_redraw()
-				accept_event()
-				return
-
-			var new_point := EasingCurvePoint.new()
-
-			new_point.position = clamped_pos
-			new_point.left_control_point = (
-				clamped_pos + Vector2(-0.1, 0.0)
-			)
-			new_point.right_control_point = (
-				clamped_pos + Vector2(0.1, 0.0)
-			)
-
-			_request_point_add(new_point)
-
-			selected_index = -1
-
-			for i in range(_curve.points.size()):
-				if _curve.points[i].position == clamped_pos:
-					selected_index = i
-					break
-
-			if selected_index != -1:
-				dragging_point = selected_index
-				dragging_control = ControlIndex.NONE
-			queue_redraw()
-			return
+func _handle_pending_add_motion(event: InputEventMouseMotion) -> void:
+	var world_pos := get_world_pos(event.position)
+	if not world_pos.is_finite():
+		return
+	var clamped_pos := world_pos.clamp(
+		Vector2(0, _curve.min_value),
+		Vector2(1.0, _curve.max_value),
+	)
+	pending_add_point.position = clamped_pos
+	queue_redraw()
 
 
-		# --- RIGHT CLICK / DELETE DRAG ---
-		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
-			if pending_add_point != null:
-				_cancel_pending_add()
-				accept_event()
-				return
+func _handle_drag_motion(event: InputEventMouseMotion) -> void:
+	var p = _curve.points[dragging_point]
+	if dragging_control != ControlIndex.NONE:
+		p.set_handle_display_scale(get_world_to_view_scale())
+	var world_pos = get_world_pos(event.position)
+	if not world_pos.is_finite():
+		return
+	if dragging_control == ControlIndex.NONE and p.is_lock_active(&"position"):
+		return
+	if dragging_control == ControlIndex.LEFT and p.is_lock_active(&"left_control_point"):
+		return
+	if dragging_control == ControlIndex.RIGHT and p.is_lock_active(&"right_control_point"):
+		return
 
-			_right_delete_requires_exit = false
-			_set_right_delete_dragging(true)
+	match dragging_control:
+		ControlIndex.LEFT:
+			if dragging_point != 0:
+				_request_point_property_change(dragging_point, &"left_control_point", world_pos, true)
+		ControlIndex.RIGHT:
+			if dragging_point != _curve.points.size() - 1:
+				_request_point_property_change(dragging_point, &"right_control_point", world_pos, true)
+		ControlIndex.NONE:
+			var clamped_pos = world_pos.clamp(Vector2(0, _curve.min_value), Vector2(1.0, _curve.max_value))
+			var delta = clamped_pos - p.position
+			var left_control: Vector2 = p.left_control_point
+			var right_control: Vector2 = p.right_control_point
+			_request_point_property_change(dragging_point, &"position", clamped_pos, true)
+			if not p.is_lock_active(&"left_control_point"):
+				_request_point_property_change(dragging_point, &"left_control_point", left_control + delta, true)
+			if not p.is_lock_active(&"right_control_point"):
+				_request_point_property_change(dragging_point, &"right_control_point", right_control + delta, true)
 
-			if _try_remove_point_at(event.position):
-				return
-
-			# Right-clicking empty graph space clears the point selection.
-			selected_index = -1
-			selected_control_index = ControlIndex.NONE
-			queue_redraw()
-			return
+	point_changed.emit(dragging_point, p)
+	queue_redraw()
 
 
-		# Reset dragging state only when left mouse button is released.
-		elif (
-			not event.pressed
-			and event.button_index == MOUSE_BUTTON_LEFT
-		):
-			if pending_add_point != null:
-				var point := pending_add_point
-				var point_position := point.position
-				pending_add_point = null
-				_request_point_add(point)
+func _update_hover_from_mouse(position: Vector2) -> void:
+	var control = get_control_at(position)
+	if control[0] != -1:
+		hovered_index = control[0]
+		hovered_control_index = control[1]
+	else:
+		hovered_control_index = ControlIndex.NONE
+		hovered_index = get_point_at(position)
+	queue_redraw()
+	if hovered_control_index != ControlIndex.NONE:
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	elif hovered_index != -1:
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	else:
+		mouse_default_cursor_shape = Control.CURSOR_ARROW
 
-				selected_index = -1
-				for i in range(_curve.points.size()):
-					if _curve.points[i].position == point_position:
-						selected_index = i
-						break
 
-				dragging_point = -1
-				dragging_control = ControlIndex.NONE
-				queue_redraw()
-				return
+func _handle_mouse_button(event: InputEventMouseButton) -> void:
+	if _handle_wheel(event):
+		return
+	if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
+		return
+	if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_handle_left_pressed(event)
+	elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		_handle_right_pressed(event)
+	elif not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_handle_left_released()
 
-			var finish_point_edit := dragging_point != -1
-			var point_order: Array[EasingCurvePoint] = []
-			if finish_point_edit and dragging_control == ControlIndex.NONE:
-				var dragged_point := _curve.points[dragging_point]
-				point_order = _get_display_points()
-				selected_index = point_order.find(dragged_point)
 
-			dragging_point = -1
+func _handle_wheel(event: InputEventMouseButton) -> bool:
+	if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		_zoom_at_view_pos(1, event.position)
+		accept_event()
+		return true
+	elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		_zoom_at_view_pos(-1, event.position)
+		accept_event()
+		return true
+	return false
+
+
+func _handle_left_pressed(event: InputEventMouseButton) -> void:
+	var control = get_control_at(event.position)
+	var point_idx = get_point_at(event.position)
+	if control[0] != -1 and _curve.points[control[0]].handle_mode == EasingCurvePoint.HandleMode.LINEAR:
+		point_idx = control[0]
+		control = [-1, ControlIndex.NONE]
+	if control[0] != -1:
+		var p = _curve.points[control[0]]
+		var can_drag_control := false
+		match control[1]:
+			ControlIndex.LEFT:
+				can_drag_control = not p.is_lock_active(&"left_control_point")
+			ControlIndex.RIGHT:
+				can_drag_control = not p.is_lock_active(&"right_control_point")
+		selected_index = control[0]
+		if can_drag_control:
+			dragging_point = control[0]
+			dragging_control = control[1]
+		elif point_idx != -1 and not _curve.points[point_idx].is_lock_active(&"position"):
+			dragging_point = point_idx
 			dragging_control = ControlIndex.NONE
+		queue_redraw()
+		return
+	if point_idx != -1:
+		var p = _curve.points[point_idx]
+		if not p.is_lock_active(&"position"):
+			dragging_point = point_idx
+			dragging_control = ControlIndex.NONE
+		selected_index = point_idx
+		queue_redraw()
+		return
 
-			if finish_point_edit:
-				point_edit_finished.emit(point_order)
-			queue_redraw()
+	var world_pos := get_world_pos(event.position)
+	if not world_pos.is_finite():
+		return
+	var clamped_pos := world_pos.clamp(Vector2(0, _curve.min_value), Vector2(1.0, _curve.max_value))
+	if use_pending_add:
+		pending_add_point = EasingCurvePoint.new()
+		pending_add_point.position = clamped_pos
+		pending_add_point.left_control_point = clamped_pos + Vector2(-0.1, 0.0)
+		pending_add_point.right_control_point = clamped_pos + Vector2(0.1, 0.0)
+		queue_redraw()
+		accept_event()
+		return
+	var new_point := EasingCurvePoint.new()
+	new_point.position = clamped_pos
+	new_point.left_control_point = clamped_pos + Vector2(-0.1, 0.0)
+	new_point.right_control_point = clamped_pos + Vector2(0.1, 0.0)
+	_request_point_add(new_point)
+	selected_index = -1
+	for i in range(_curve.points.size()):
+		if _curve.points[i].position == clamped_pos:
+			selected_index = i
+			break
+	if selected_index != -1:
+		dragging_point = selected_index
+		dragging_control = ControlIndex.NONE
+	queue_redraw()
+
+
+func _handle_right_pressed(event: InputEventMouseButton) -> void:
+	if pending_add_point != null:
+		_cancel_pending_add()
+		accept_event()
+		return
+	_right_delete_requires_exit = false
+	_set_right_delete_dragging(true)
+	if _try_remove_point_at(event.position):
+		return
+	selected_index = -1
+	selected_control_index = ControlIndex.NONE
+	queue_redraw()
+
+
+func _handle_left_released() -> void:
+	if pending_add_point != null:
+		var point := pending_add_point
+		var point_position := point.position
+		pending_add_point = null
+		_request_point_add(point)
+		selected_index = -1
+		for i in range(_curve.points.size()):
+			if _curve.points[i].position == point_position:
+				selected_index = i
+				break
+		dragging_point = -1
+		dragging_control = ControlIndex.NONE
+		queue_redraw()
+		return
+	var finish_point_edit := dragging_point != -1
+	var point_order: Array[EasingCurvePoint] = []
+	if finish_point_edit and dragging_control == ControlIndex.NONE:
+		var dragged_point := _curve.points[dragging_point]
+		point_order = _get_display_points()
+		selected_index = point_order.find(dragged_point)
+	dragging_point = -1
+	dragging_control = ControlIndex.NONE
+	if finish_point_edit:
+		point_edit_finished.emit(point_order)
+	queue_redraw()
 
 
 func _request_point_property_change(index: int, property_name: StringName, value: Variant, changing: bool = false) -> void:
