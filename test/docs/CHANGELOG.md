@@ -3,6 +3,42 @@
 Release entries are ordered newest to oldest. Add future releases above the
 current top entry.
 
+## v1.0.6
+
+### Changed
+
+- Refactored and reorganized the Easing Curve Inspector internals while
+  preserving existing editor and runtime behavior.
+- Centralized point selection restoration so the selected logical point remains
+  synchronized between the graph, Points list, and property controls across
+  Inspector refreshes and point reordering.
+- Simplified editor Undo/Redo action handling and point snapshot restoration
+  while preserving serialized resource compatibility and notification behavior.
+- Consolidated transition presentation metadata and removed stale/internal
+  duplicate code.
+
+### Fixed
+
+- Fixed point selection restoration after Move Up/Down, Points-list drag
+  reordering, Position-X reordering, Undo, and Redo.
+- Fixed an intermittent Godot Viewport error when completing native Points-list
+  drag reordering by safely clearing the retiring Inspector controls from mouse
+  hover state before rebuilding the list.
+- Fixed Points-list delete/reorder edge cases and preserved logical point
+  identity through topology changes.
+
+### Testing
+
+- Expanded automated coverage for serialization compatibility, transition
+  contracts, point-state behavior, selection/refresh behavior, graph gestures,
+  Points-list operations, and Undo/Redo.
+- Added historical resource fixtures to protect compatibility with older saved
+  Easing Curve resources.
+- Added a PowerShell test wrapper and aggregate runner; all 17 registered test
+  suites pass under the v1.0.6 release candidate.
+- Completed visible-editor regression testing for fold/focus behavior, layout,
+  selection, point operations, handle modes, and transition controls.
+
 ## v1.0.5
 
 ### Added
