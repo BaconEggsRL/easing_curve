@@ -144,7 +144,7 @@ function Invoke-Godot {
 
     try {
         $ErrorActionPreference = "Continue"
-        & $GodotLauncher @Arguments 1> $StdoutPath 2> $StderrPath
+        & $GodotLauncher -GodotArgs $Arguments 1> $StdoutPath 2> $StderrPath
         $ExitCode = $LASTEXITCODE
 
         $Stdout = if (Test-Path -LiteralPath $StdoutPath) { Get-Content -Raw -LiteralPath $StdoutPath } else { "" }
