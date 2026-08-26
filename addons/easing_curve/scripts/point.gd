@@ -47,15 +47,15 @@ enum ControlState {
 }
 
 
-var _test_vector: Vector2 = Vector2.ZERO
-var test_vector: Vector2:
-	get:
-		return _test_vector
-	set(value):
-		if _test_vector == value:
-			return
-		_test_vector = value
-		emit_changed()
+#var _test_vector: Vector2 = Vector2.ZERO
+#var test_vector: Vector2:
+	#get:
+		#return _test_vector
+	#set(value):
+		#if _test_vector == value:
+			#return
+		#_test_vector = value
+		#emit_changed()
 
 
 @export var position: Vector2 = Vector2.ZERO: set = set_position
