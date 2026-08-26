@@ -18,13 +18,14 @@ func _init() -> void:
 func _run() -> void:
 	_test_repeated_arrow_moves_keep_the_logical_point_selected()
 	_test_committed_drag_reorder_selects_the_dragged_point()
+	_test_reorder_undo_redo_follows_the_selected_resource()
 	_test_handle_mode_reset_uses_the_normal_transition()
 	_test_handle_mode_property_cell_layout_selection_and_copy_paste()
 
-	if _completed_fixtures != 4:
+	if _completed_fixtures != 5:
 		_failures += 1
 		push_error(
-			"Only %d of 4 Points-list submitted reorder fixtures completed" % _completed_fixtures
+			"Only %d of 5 Points-list submitted reorder fixtures completed" % _completed_fixtures
 		)
 	if _failures == 0:
 		print("PASS: %d Points-list submitted reorder checks" % _checks)
@@ -136,6 +137,49 @@ func _test_committed_drag_reorder_selects_the_dragged_point() -> void:
 
 	inspector.call("_move_point", 2, 2)
 	_expect(editor.selected_index == 2 and curve.points[2] == moved, "No-op drag reorder changed normal selection")
+	_completed_fixtures += 1
+	editor.free()
+
+
+func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
+	var fixture := _make_fixture()
+	var curve: EasingCurve = fixture.curve
+	var editor: EasingCurveEditor = fixture.editor
+	var inspector: Object = fixture.inspector
+	var points: Array[EasingCurvePoint] = fixture.points
+	var selected := points[1]
+	var property_header := PanelContainer.new()
+	var history := UndoRedo.new()
+	inspector.set("editor_undo_redo", history)
+	inspector.call("_select_point_property", property_header, 1, &"position")
+
+	inspector.call("_move_point_down", 1)
+	_expect(curve.points[2] == selected, "Move Down did not move the selected Resource")
+	_expect(editor.selected_index == 2, "Move Down did not update the graph selection index")
+	history.undo()
+	print("DEBUG reorder undo ids: ", curve.get_editor_state_snapshot().point_resource_ids, " selected=", selected.get_instance_id(), " points=", curve.points.map(func(point: EasingCurvePoint): return point.get_instance_id()))
+	_expect(curve.points[1] == selected, "Move Down Undo did not return the selected Resource to P2")
+	_expect(editor.selected_index == 1, "Move Down Undo did not resolve the graph index from the selected Resource")
+	_expect(inspector.get("_selected_point_index") == 1, "Move Down Undo retained a stale Inspector index")
+	_expect(inspector.get("_selected_point_resource_id") == selected.get_instance_id(), "Move Down Undo changed the selected Resource")
+	_expect(inspector.get("_selected_point_property_name") == &"position", "Move Down Undo lost the selected property")
+	history.redo()
+	_expect(curve.points[2] == selected, "Move Down Redo did not return the selected Resource to P3")
+	_expect(editor.selected_index == 2, "Move Down Redo did not resolve the graph index from the selected Resource")
+	_expect(inspector.get("_selected_point_index") == 2, "Move Down Redo retained a stale Inspector index")
+
+	inspector.call("_move_point", 2, 0)
+	_expect(curve.points[0] == selected, "Drag reorder did not move the selected Resource")
+	history.undo()
+	_expect(curve.points[2] == selected, "Drag reorder Undo did not restore the selected Resource identity")
+	_expect(editor.selected_index == 2 and inspector.get("_selected_point_index") == 2, "Drag reorder Undo did not synchronize graph and Inspector selection")
+	history.redo()
+	_expect(curve.points[0] == selected, "Drag reorder Redo did not restore the selected Resource identity")
+	_expect(editor.selected_index == 0 and inspector.get("_selected_point_index") == 0, "Drag reorder Redo did not synchronize graph and Inspector selection")
+
+	history.clear_history(false)
+	history.free()
+	property_header.free()
 	_completed_fixtures += 1
 	editor.free()
 

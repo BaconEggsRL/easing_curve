@@ -1517,8 +1517,45 @@ func get_editor_state_snapshot() -> Dictionary:
 		"invert": invert,
 		"bezier_parameter_snapshot": _get_bezier_parameter_snapshot(),
 		"point_snapshot": get_point_snapshot(),
+		"point_resource_ids": _get_editor_point_resource_ids(),
 		"function_snapshot": get_function_snapshot(),
 	}
+
+
+func _get_editor_point_resource_ids() -> PackedInt64Array:
+	var point_resource_ids := PackedInt64Array()
+	for point in _points:
+		point_resource_ids.append(point.get_instance_id() if point != null else 0)
+	return point_resource_ids
+
+
+func _restore_editor_point_resource_order(
+		point_resource_ids: PackedInt64Array,
+) -> bool:
+	if point_resource_ids.size() != _points.size() or point_resource_ids.is_empty():
+		return false
+
+	var points_by_id := {}
+	for point in _points:
+		if point == null:
+			return false
+		var point_id := point.get_instance_id()
+		if points_by_id.has(point_id):
+			return false
+		points_by_id[point_id] = point
+
+	var ordered_points: Array[EasingCurvePoint] = []
+	for point_id in point_resource_ids:
+		if point_id == 0 or not points_by_id.has(point_id):
+			return false
+		ordered_points.append(points_by_id[point_id])
+
+	if _point_arrays_match(_points, ordered_points):
+		return false
+
+	_points = ordered_points
+	_synchronize_point_connections()
+	return true
 
 
 func _get_bezier_parameter_snapshot() -> Dictionary:
@@ -1543,6 +1580,10 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	)
 	var point_snapshot: Dictionary = snapshot.get("point_snapshot", get_point_snapshot())
 	var function_snapshot: Dictionary = snapshot.get("function_snapshot", get_function_snapshot())
+	var point_resource_ids: PackedInt64Array = snapshot.get(
+		"point_resource_ids",
+		PackedInt64Array(),
+	)
 
 	var positions: PackedVector2Array = point_snapshot.get("positions", PackedVector2Array())
 	var left_control_points: PackedVector2Array = point_snapshot.get("left_control_points", PackedVector2Array())
@@ -1551,6 +1592,10 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	var locks: Array = point_snapshot.get("locks", [])
 	var left_force_linear: PackedByteArray = point_snapshot.get("left_force_linear", PackedByteArray())
 	var right_force_linear: PackedByteArray = point_snapshot.get("right_force_linear", PackedByteArray())
+	var resource_order_changed := _restore_editor_point_resource_order(
+		point_resource_ids
+	)
+	print("DEBUG restore ids=", point_resource_ids, " changed=", resource_order_changed)
 	var topology_changed := positions.size() != _points.size() or _points.has(null)
 	var point_data_changed := _point_snapshot_differs(
 		positions,
@@ -1581,6 +1626,7 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	var property_list_changed := (
 		point_data_changed
 		or topology_changed
+		or resource_order_changed
 		or locks_changed
 		or ease_type != snapshot_ease
 		or trans_type != snapshot_trans
@@ -1603,7 +1649,10 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	if curve_mode == CurveMode.FUNCTION and trans_type != TRANS.CUSTOM:
 		_init_function()
 	_applying_editor_state_snapshot = false
-	_notify_curve_changed(point_data_changed, property_list_changed)
+	_notify_curve_changed(
+		point_data_changed or resource_order_changed,
+		property_list_changed,
+	)
 
 
 func _get_generated_function_snapshot() -> Dictionary:

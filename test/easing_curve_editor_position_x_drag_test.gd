@@ -11,6 +11,7 @@ func _init() -> void:
 		quit(1)
 		return
 	_test_position_x_drag_defers_list_reorder()
+	_test_position_x_reorder_undo_redo_follows_the_selected_resource()
 	_test_position_x_drag_crosses_multiple_points()
 	_test_position_x_drag_continues_through_backtracking()
 	_test_position_x_endpoint_takeover_is_previewed_until_commit()
@@ -135,6 +136,37 @@ func _test_position_x_drag_defers_list_reorder() -> void:
 		inspector.get("_point_edit_before_state").is_empty(),
 		"Final Position X update did not close the drag edit transaction",
 	)
+	editor.free()
+
+
+func _test_position_x_reorder_undo_redo_follows_the_selected_resource() -> void:
+	var fixture := _make_fixture()
+	var curve: EasingCurve = fixture.curve
+	var editor: EasingCurveEditor = fixture.editor
+	var inspector: Object = fixture.inspector
+	var points: Array[EasingCurvePoint] = fixture.points
+	var selected := points[1]
+	var property_header := PanelContainer.new()
+	var history := UndoRedo.new()
+	inspector.set("editor_undo_redo", history)
+	inspector.call("_select_point_property", property_header, 1, &"position")
+
+	_drag_position_x(inspector, curve, selected, 0.8)
+	_finish_position_x(inspector, curve, selected, 0.8)
+	_expect(curve.points[2] == selected, "Position-X reorder did not move the selected Resource")
+	_expect(editor.selected_index == 2, "Position-X reorder did not update the graph selection index")
+	history.undo()
+	_expect(curve.points[1] == selected, "Position-X Undo did not return the selected Resource to P2")
+	_expect(editor.selected_index == 1 and inspector.get("_selected_point_index") == 1, "Position-X Undo did not synchronize graph and Inspector selection")
+	_expect(inspector.get("_selected_point_resource_id") == selected.get_instance_id(), "Position-X Undo changed the selected Resource")
+	_expect(inspector.get("_selected_point_property_name") == &"position", "Position-X Undo lost the selected property")
+	history.redo()
+	_expect(curve.points[2] == selected, "Position-X Redo did not return the selected Resource to P3")
+	_expect(editor.selected_index == 2 and inspector.get("_selected_point_index") == 2, "Position-X Redo did not synchronize graph and Inspector selection")
+
+	history.clear_history(false)
+	history.free()
+	property_header.free()
 	editor.free()
 
 
