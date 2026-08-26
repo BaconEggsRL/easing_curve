@@ -304,6 +304,17 @@ function Get-ChangelogReleaseNotes {
 
 function Invoke-PrepareCommit {
     Write-Step "Prepare release commit"
+	
+	if (Test-GitClean) {
+        $Head = (git log -1 --oneline).Trim()
+        Assert-LastExitCode "git log"
+
+        Write-Host "Working tree is already clean; no release commit is needed." `
+            -ForegroundColor Green
+        Write-Host "Current HEAD:"
+        Write-Host "  $Head"
+        return
+    }
 
     git status --short
     Assert-LastExitCode "git status"
