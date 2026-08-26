@@ -1,16 +1,11 @@
 @tool
 extends EditorPlugin
 
-const SETTING_PREFIX := "godot_ai_tunnel/"
-const SETTING_ENABLED := SETTING_PREFIX + "enabled"
-const SETTING_EXECUTABLE_PATH := SETTING_PREFIX + "executable_path"
-const SETTING_PROFILE := SETTING_PREFIX + "profile"
-const SETTING_HEALTH_LISTEN_ADDR := SETTING_PREFIX + "health_listen_addr"
+const CONFIG_PATH := "res://addons/godot_ai_tunnel/tunnel_config.json"
 
 const METADATA_SECTION := "godot_ai_tunnel"
 const METADATA_MANAGED_PID := "managed_pid"
 
-const DEFAULT_ENABLED := true
 const DEFAULT_PROFILE := "godot-ai"
 const DEFAULT_HEALTH_LISTEN_ADDR := "127.0.0.1:18080"
 
@@ -22,22 +17,24 @@ func _enter_tree() -> void:
 	if OS.get_name() != "Windows":
 		return
 
-	var settings := EditorInterface.get_editor_settings()
-	if settings == null:
-		push_warning("Godot AI Tunnel | EditorSettings unavailable")
+	var config := _load_config()
+	if config.is_empty():
 		return
 
-	_register_settings(settings)
-
-	if not bool(settings.get_setting(SETTING_ENABLED)):
-		print("Godot AI Tunnel | disabled in Editor Settings")
+	if not bool(config.get("enabled", true)):
+		print("Godot AI Tunnel | disabled in tunnel_config.json")
 		return
 
-	var executable := str(settings.get_setting(SETTING_EXECUTABLE_PATH)).strip_edges()
+	var executable := str(config.get("executable_path", "")).strip_edges()
+	var profile := str(config.get("profile", DEFAULT_PROFILE)).strip_edges()
+	var health_listen_addr := str(
+		config.get("health_listen_addr", DEFAULT_HEALTH_LISTEN_ADDR)
+	).strip_edges()
+
 	if executable.is_empty():
-		push_warning(
-			"Godot AI Tunnel | configure Editor Settings > "
-			+ SETTING_EXECUTABLE_PATH
+		push_error(
+			"Godot AI Tunnel | executable_path is missing or empty in "
+			+ CONFIG_PATH
 		)
 		return
 
@@ -48,8 +45,18 @@ func _enter_tree() -> void:
 		)
 		return
 
-	var profile := str(settings.get_setting(SETTING_PROFILE))
-	var health_listen_addr := str(settings.get_setting(SETTING_HEALTH_LISTEN_ADDR))
+	if profile.is_empty():
+		push_error("Godot AI Tunnel | profile is empty in " + CONFIG_PATH)
+		return
+
+	if health_listen_addr.is_empty():
+		push_error(
+			"Godot AI Tunnel | health_listen_addr is empty in "
+			+ CONFIG_PATH
+		)
+		return
+
+	var settings := EditorInterface.get_editor_settings()
 	var existing_pid := _find_health_listener_pid(health_listen_addr)
 
 	if existing_pid > 0:
@@ -62,11 +69,12 @@ func _enter_tree() -> void:
 
 		_tunnel_pid = existing_pid
 		_owns_tunnel = false
-		settings.set_project_metadata(
-			METADATA_SECTION,
-			METADATA_MANAGED_PID,
-			0,
-		)
+		if settings != null:
+			settings.set_project_metadata(
+				METADATA_SECTION,
+				METADATA_MANAGED_PID,
+				0,
+			)
 		print(
 			"Godot AI Tunnel | adopted existing tunnel-client (PID %d)"
 			% _tunnel_pid
@@ -85,32 +93,33 @@ func _exit_tree() -> void:
 	_stop_tunnel()
 
 
-func _register_settings(settings: EditorSettings) -> void:
-	_register_setting(settings, SETTING_ENABLED, DEFAULT_ENABLED)
-	_register_setting(settings, SETTING_EXECUTABLE_PATH, "")
-	_register_setting(settings, SETTING_PROFILE, DEFAULT_PROFILE)
-	_register_setting(
-		settings,
-		SETTING_HEALTH_LISTEN_ADDR,
-		DEFAULT_HEALTH_LISTEN_ADDR,
-	)
+func _load_config() -> Dictionary:
+	if not FileAccess.file_exists(CONFIG_PATH):
+		push_error(
+			"Godot AI Tunnel | missing tunnel_config.json: "
+			+ ProjectSettings.globalize_path(CONFIG_PATH)
+			+ " | Copy tunnel_config.example.json to tunnel_config.json "
+			+ "and configure executable_path."
+		)
+		return {}
 
-	settings.add_property_info({
-		"name": SETTING_EXECUTABLE_PATH,
-		"type": TYPE_STRING,
-		"hint": PROPERTY_HINT_GLOBAL_FILE,
-		"hint_string": "*.exe",
-	})
+	var file := FileAccess.open(CONFIG_PATH, FileAccess.READ)
+	if file == null:
+		push_error(
+			"Godot AI Tunnel | failed to open tunnel_config.json: "
+			+ ProjectSettings.globalize_path(CONFIG_PATH)
+		)
+		return {}
 
+	var parsed = JSON.parse_string(file.get_as_text())
+	if parsed == null or not parsed is Dictionary:
+		push_error(
+			"Godot AI Tunnel | invalid JSON in tunnel_config.json: "
+			+ ProjectSettings.globalize_path(CONFIG_PATH)
+		)
+		return {}
 
-func _register_setting(
-	settings: EditorSettings,
-	name: String,
-	default_value: Variant,
-) -> void:
-	if not settings.has_setting(name):
-		settings.set_setting(name, default_value)
-	settings.set_initial_value(name, default_value, false)
+	return parsed
 
 
 func _start_tunnel(
@@ -143,11 +152,12 @@ func _start_tunnel(
 		return
 
 	_owns_tunnel = true
-	settings.set_project_metadata(
-		METADATA_SECTION,
-		METADATA_MANAGED_PID,
-		_tunnel_pid,
-	)
+	if settings != null:
+		settings.set_project_metadata(
+			METADATA_SECTION,
+			METADATA_MANAGED_PID,
+			_tunnel_pid,
+		)
 	print(
 		"Godot AI Tunnel | started tunnel-client (PID %d)"
 		% _tunnel_pid
