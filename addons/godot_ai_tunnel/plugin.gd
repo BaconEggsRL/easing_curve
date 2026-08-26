@@ -15,6 +15,7 @@ const DEFAULT_PROFILE := "godot-ai"
 const DEFAULT_HEALTH_LISTEN_ADDR := "127.0.0.1:18080"
 
 var _tunnel_pid := -1
+var _owns_tunnel := false
 
 
 func _enter_tree() -> void:
@@ -47,11 +48,35 @@ func _enter_tree() -> void:
 		)
 		return
 
-	_stop_stale_managed_tunnel(settings)
+	var profile := str(settings.get_setting(SETTING_PROFILE))
+	var health_listen_addr := str(settings.get_setting(SETTING_HEALTH_LISTEN_ADDR))
+	var existing_pid := _find_health_listener_pid(health_listen_addr)
+
+	if existing_pid > 0:
+		if not _pid_is_tunnel_client(existing_pid):
+			push_error(
+				"Godot AI Tunnel | health port is already owned by "
+				+ "a non-tunnel process (PID %d)" % existing_pid
+			)
+			return
+
+		_tunnel_pid = existing_pid
+		_owns_tunnel = false
+		settings.set_project_metadata(
+			METADATA_SECTION,
+			METADATA_MANAGED_PID,
+			0,
+		)
+		print(
+			"Godot AI Tunnel | adopted existing tunnel-client (PID %d)"
+			% _tunnel_pid
+		)
+		return
+
 	_start_tunnel(
 		executable,
-		str(settings.get_setting(SETTING_PROFILE)),
-		str(settings.get_setting(SETTING_HEALTH_LISTEN_ADDR)),
+		profile,
+		health_listen_addr,
 		settings,
 	)
 
@@ -117,6 +142,7 @@ func _start_tunnel(
 		push_error("Godot AI Tunnel | failed to start tunnel-client")
 		return
 
+	_owns_tunnel = true
 	settings.set_project_metadata(
 		METADATA_SECTION,
 		METADATA_MANAGED_PID,
@@ -130,6 +156,14 @@ func _start_tunnel(
 
 func _stop_tunnel() -> void:
 	if _tunnel_pid <= 0:
+		return
+
+	if not _owns_tunnel:
+		print(
+			"Godot AI Tunnel | leaving adopted tunnel-client running (PID %d)"
+			% _tunnel_pid
+		)
+		_tunnel_pid = -1
 		return
 
 	if OS.is_process_running(_tunnel_pid):
@@ -148,28 +182,79 @@ func _stop_tunnel() -> void:
 		)
 
 	_tunnel_pid = -1
+	_owns_tunnel = false
 
 
-func _stop_stale_managed_tunnel(settings: EditorSettings) -> void:
-	var stale_pid := int(
-		settings.get_project_metadata(
-			METADATA_SECTION,
-			METADATA_MANAGED_PID,
-			0,
-		)
+func _pid_is_tunnel_client(pid: int) -> bool:
+	var output: Array = []
+	var command := (
+		"$p = Get-CimInstance Win32_Process -Filter \"ProcessId = %d\" "
+		+ "-ErrorAction SilentlyContinue; "
+		+ "if ($p) { Write-Output $p.Name }"
+	) % pid
+
+	var exit_code := OS.execute(
+		"powershell.exe",
+		PackedStringArray([
+			"-NoProfile",
+			"-NonInteractive",
+			"-Command",
+			command,
+		]),
+		output,
+		true,
+		false,
 	)
-	if stale_pid <= 0:
-		return
 
-	if OS.is_process_running(stale_pid):
-		print(
-			"Godot AI Tunnel | stopping stale managed tunnel (PID %d)"
-			% stale_pid
+	if exit_code != 0 or output.is_empty():
+		return false
+
+	return str(output[0]).strip_edges().to_lower() == "tunnel-client.exe"
+
+
+func _find_health_listener_pid(health_listen_addr: String) -> int:
+	var separator := health_listen_addr.rfind(":")
+	if separator < 0 or separator == health_listen_addr.length() - 1:
+		push_warning(
+			"Godot AI Tunnel | invalid health listen address: %s"
+			% health_listen_addr
 		)
-		OS.kill(stale_pid)
+		return 0
 
-	settings.set_project_metadata(
-		METADATA_SECTION,
-		METADATA_MANAGED_PID,
-		0,
+	var port_text := health_listen_addr.substr(separator + 1)
+	if not port_text.is_valid_int():
+		push_warning(
+			"Godot AI Tunnel | invalid health listen port: %s"
+			% port_text
+		)
+		return 0
+
+	var port := int(port_text)
+	var output: Array = []
+	var command := (
+		"$c = Get-NetTCPConnection -State Listen -LocalPort %d "
+		+ "-ErrorAction SilentlyContinue | Select-Object -First 1; "
+		+ "if ($c) { Write-Output $c.OwningProcess }"
+	) % port
+
+	var exit_code := OS.execute(
+		"powershell.exe",
+		PackedStringArray([
+			"-NoProfile",
+			"-NonInteractive",
+			"-Command",
+			command,
+		]),
+		output,
+		true,
+		false,
 	)
+
+	if exit_code != 0 or output.is_empty():
+		return 0
+
+	var pid_text := str(output[0]).strip_edges()
+	if not pid_text.is_valid_int():
+		return 0
+
+	return int(pid_text)
