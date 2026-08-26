@@ -5,7 +5,7 @@ param(
 
     [Alias("v")]
     [ValidatePattern("^\d+\.\d+\.\d+$")]
-    [string]$Version = "1.0.6",
+    [string]$Version = "1.0.7",
 
     [string]$ReleaseBranch = "master",
     [string]$Repository = "BaconEggsRL/easing_curve",
@@ -703,7 +703,7 @@ try {
     Write-Host "Easing Curve v$Version release"
     Write-Host "Mode: $Mode"
 
-    # Safe to rerun: 1.0.6-dev -> 1.0.6, or leaves 1.0.6 unchanged.
+    # Safe to rerun: 1.0.7-dev -> 1.0.7, or leaves 1.0.7 unchanged.
     Set-PluginVersion
 
     # Step 2 is still manual; this verifies it was done before release validation.

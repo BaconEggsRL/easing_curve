@@ -3,6 +3,21 @@
 Release entries are ordered newest to oldest. Add future releases above the
 current top entry.
 
+## v1.0.7
+
+### Changed
+
+- Centralized transition/runtime metadata and point snapshot mutation rules.
+- Reorganized Inspector and graph-editor internals, including graph-input
+  handling and Undo/Redo action state, while preserving point identity,
+  selection, notifications, and gesture behavior.
+- Extracted the Bézier numerical solver without changing curve results.
+- Hardened automated test-runner and release-validation behavior.
+
+### Testing
+
+- Final refactor closeout passed all 17 registered automated test suites.
+
 ## v1.0.6
 
 ### Changed
