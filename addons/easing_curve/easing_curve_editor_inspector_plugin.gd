@@ -129,7 +129,11 @@ func _copy_point_property_value(
 	point_index: int,
 	property_name: StringName,
 ) -> void:
-	if point_index < 0 or point_index >= curve.points.size():
+	if (
+		point_index < 0
+		or point_index >= curve.points.size()
+		or not EasingCurve.is_point_property_copy_paste_enabled(property_name)
+	):
 		return
 
 	var value: Variant = curve.points[point_index].get(property_name)
@@ -143,7 +147,11 @@ func _paste_point_property_value(
 	point_index: int,
 	property_name: StringName,
 ) -> void:
-	if point_index < 0 or point_index >= curve.points.size():
+	if (
+		point_index < 0
+		or point_index >= curve.points.size()
+		or not EasingCurve.is_point_property_copy_paste_enabled(property_name)
+	):
 		return
 
 	var clipboard := DisplayServer.clipboard_get()
@@ -157,7 +165,10 @@ func _apply_pasted_point_property_value(
 	property_name: StringName,
 	value: Variant,
 ) -> void:
-	if not _is_point_property_value_compatible(property_name, value):
+	if (
+		not EasingCurve.is_point_property_copy_paste_enabled(property_name)
+		or not _is_point_property_value_compatible(property_name, value)
+	):
 		return
 
 	_apply_point_property_change(
@@ -184,7 +195,11 @@ static func _is_point_property_value_compatible(
 	value: Variant,
 ) -> bool:
 	var definition := EasingCurve.get_point_property_definition(property_name)
-	if definition.is_empty() or typeof(value) != definition["type"]:
+	if (
+		definition.is_empty()
+		or not EasingCurve.is_point_property_copy_paste_enabled(property_name)
+		or typeof(value) != definition["type"]
+	):
 		return false
 
 	if property_name == &"handle_mode":
@@ -1334,27 +1349,32 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 
 		point_main_hbox.add_child(remove_btn)
 
-		# Position
-		_create_vector2_property(
-			point,
-			i,
-			"position",
-			"Position",
-			point_properties_grid,
-		)
+		if EasingCurve.is_point_property_inspector_visible(&"position"):
+			_create_vector2_property(
+				point,
+				i,
+				"position",
+				"Position",
+				point_properties_grid,
+			)
 
-		# Handle Mode
-		_create_handle_mode_property(
-			point,
-			i,
-			point_properties_grid,
-		)
+		if EasingCurve.is_point_property_inspector_visible(&"handle_mode"):
+			_create_handle_mode_property(
+				point,
+				i,
+				point_properties_grid,
+			)
 
 		# Control Points
 		var point_count = curve.points.size()
 
 		if point_count > 1:
-			if i != 0: # not the first point -> add left control
+			if (
+				i != 0
+				and EasingCurve.is_point_property_inspector_visible(
+					&"left_control_point",
+				)
+			): # not the first point -> add left control
 				_create_vector2_property(
 					point,
 					i,
@@ -1362,7 +1382,12 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 					"Left Control",
 					point_properties_grid,
 				)
-			if i != point_count - 1: # not the last point -> add right control
+			if (
+				i != point_count - 1
+				and EasingCurve.is_point_property_inspector_visible(
+					&"right_control_point",
+				)
+			): # not the last point -> add right control
 				_create_vector2_property(
 					point,
 					i,
@@ -1614,7 +1639,11 @@ func _update_point_reset_btn(
 	i: int,
 	property_name: StringName,
 ) -> void:
-	if i < 0 or i >= curve.points.size():
+	if (
+		i < 0
+		or i >= curve.points.size()
+		or not EasingCurve.is_point_property_resettable(property_name)
+	):
 		return
 
 	var value: Vector2 = curve.points[i].get(property_name)
@@ -1636,6 +1665,8 @@ func _on_reset_btn_pressed(
 		property_name: String,
 		reset_btn: Button,
 ) -> void:
+	if not EasingCurve.is_point_property_resettable(property_name):
+		return
 	var i := _get_current_point_index(point)
 	if i == -1:
 		return
@@ -2049,6 +2080,8 @@ func _create_vector2_property(
 	label_text: String,
 	property_grid: GridContainer,
 ) -> void:
+	if not EasingCurve.is_point_property_inspector_visible(property_name):
+		return
 	var default_vec: Vector2 = curve.get_default_for_property(i, property_name)
 	var current_vec: Vector2 = point.get(property_name)
 
@@ -2573,11 +2606,15 @@ func _create_handle_mode_property(
 	i: int,
 	property_grid: GridContainer,
 ) -> void:
+	if not EasingCurve.is_point_property_inspector_visible(&"handle_mode"):
+		return
 
 	var reset_btn := _create_point_reset_button()
 	_set_point_reset_button_available(
 		reset_btn,
-		point.handle_mode != EasingCurvePoint.HandleMode.FREE,
+		point.handle_mode != EasingCurve.get_point_property_default(
+			&"handle_mode",
+		),
 	)
 	var property_header := _create_selectable_point_property_header(
 		i,
@@ -2650,14 +2687,17 @@ func _on_handle_mode_reset_pressed(
 	var i := _get_current_point_index(point)
 	if i == -1:
 		return
-	if point.handle_mode == EasingCurvePoint.HandleMode.FREE:
+	var default_mode: int = EasingCurve.get_point_property_default(
+	&"handle_mode",
+)
+	if point.handle_mode == default_mode:
 		_set_point_reset_button_available(reset_btn, false)
 		return
-	option.select(option.get_item_index(EasingCurvePoint.HandleMode.FREE))
+	option.select(option.get_item_index(default_mode))
 	_apply_point_property_change(
 		i,
 		&"handle_mode",
-		EasingCurvePoint.HandleMode.FREE,
+		default_mode,
 	)
 	_set_point_reset_button_available(reset_btn, false)
 

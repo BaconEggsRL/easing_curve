@@ -224,13 +224,13 @@ func _test_point_storage_schema() -> void:
 	curve.set("_point_count", 3)
 	var expected_names: Array[StringName] = [EasingCurve.POINT_STORAGE_COUNT]
 	var expected_definitions: Array[Dictionary] = [
-		{"name": &"position", "type": TYPE_VECTOR2},
-		{"name": &"left_control_point", "type": TYPE_VECTOR2},
-		{"name": &"right_control_point", "type": TYPE_VECTOR2},
-		{"name": &"locked", "type": TYPE_DICTIONARY},
-		{"name": &"handle_mode", "type": TYPE_INT},
-		{"name": &"left_force_linear", "type": TYPE_BOOL},
-		{"name": &"right_force_linear", "type": TYPE_BOOL},
+		{"name": &"position", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true},
+		{"name": &"left_control_point", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true},
+		{"name": &"right_control_point", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true},
+		{"name": &"locked", "type": TYPE_DICTIONARY, "default": {"position": false, "left_control_point": false, "right_control_point": false}, "inspector_visible": false},
+		{"name": &"handle_mode", "type": TYPE_INT, "default": EasingCurvePoint.HandleMode.FREE, "inspector_visible": true},
+		{"name": &"left_force_linear", "type": TYPE_BOOL, "default": false, "inspector_visible": false},
+		{"name": &"right_force_linear", "type": TYPE_BOOL, "default": false, "inspector_visible": false},
 	]
 	_expect(EasingCurve.POINT_PROPERTY_DEFINITIONS.size() == expected_definitions.size(), "Point property definition count changed")
 	for definition_index in range(expected_definitions.size()):
@@ -238,6 +238,11 @@ func _test_point_storage_schema() -> void:
 		var definition: Dictionary = EasingCurve.POINT_PROPERTY_DEFINITIONS[definition_index]
 		_expect(definition.get("name") == expected_definition.name, "Point property definition order changed at index %d" % definition_index)
 		_expect(definition.get("type") == expected_definition.type, "Point property type changed for %s" % expected_definition.name)
+		_expect(definition.get("default") == expected_definition.default, "Point property default changed for %s" % expected_definition.name)
+		_expect(definition.get("inspector_visible") == expected_definition.inspector_visible, "Point property Inspector visibility changed for %s" % expected_definition.name)
+		_expect(EasingCurve.get_point_property_default(expected_definition.name) == expected_definition.default, "Point property default lookup changed for %s" % expected_definition.name)
+		_expect(EasingCurve.is_point_property_resettable(expected_definition.name) == expected_definition.inspector_visible, "Point property reset eligibility changed for %s" % expected_definition.name)
+		_expect(EasingCurve.is_point_property_copy_paste_enabled(expected_definition.name) == expected_definition.inspector_visible, "Point property copy/paste eligibility changed for %s" % expected_definition.name)
 	for index in range(3):
 		for property_name in EasingCurve.POINT_PROPERTIES:
 			expected_names.append(StringName("_point_%d/%s" % [index, property_name]))

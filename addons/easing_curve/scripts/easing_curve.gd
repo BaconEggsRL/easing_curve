@@ -191,16 +191,25 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"name": &"position",
 		"type": TYPE_VECTOR2,
 		"default": Vector2.ZERO,
+		"inspector_visible": true,
+		"resettable": true,
+		"copy_paste_enabled": true,
 	},
 	{
 		"name": &"left_control_point",
 		"type": TYPE_VECTOR2,
 		"default": Vector2.ZERO,
+		"inspector_visible": true,
+		"resettable": true,
+		"copy_paste_enabled": true,
 	},
 	{
 		"name": &"right_control_point",
 		"type": TYPE_VECTOR2,
 		"default": Vector2.ZERO,
+		"inspector_visible": true,
+		"resettable": true,
+		"copy_paste_enabled": true,
 	},
 	{
 		"name": &"locked",
@@ -210,21 +219,33 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 			"left_control_point": false,
 			"right_control_point": false,
 		},
+		"inspector_visible": false,
+		"resettable": false,
+		"copy_paste_enabled": false,
 	},
 	{
 		"name": &"handle_mode",
 		"type": TYPE_INT,
 		"default": EasingCurvePoint.HandleMode.FREE,
+		"inspector_visible": true,
+		"resettable": true,
+		"copy_paste_enabled": true,
 	},
 	{
 		"name": &"left_force_linear",
 		"type": TYPE_BOOL,
 		"default": false,
+		"inspector_visible": false,
+		"resettable": false,
+		"copy_paste_enabled": false,
 	},
 	{
 		"name": &"right_force_linear",
 		"type": TYPE_BOOL,
 		"default": false,
+		"inspector_visible": false,
+		"resettable": false,
+		"copy_paste_enabled": false,
 	},
 ]
 static var POINT_PROPERTIES: Array[StringName] = _get_point_property_names()
@@ -244,6 +265,30 @@ static func get_point_property_definition(
 		if definition["name"] == property_name:
 			return definition
 	return {}
+
+
+static func get_point_property_default(property_name: StringName) -> Variant:
+	var definition := get_point_property_definition(property_name)
+	if definition.is_empty():
+		return null
+	var default_value: Variant = definition["default"]
+	return default_value.duplicate(true) if default_value is Dictionary else default_value
+
+
+static func is_point_property_inspector_visible(
+	property_name: StringName,
+) -> bool:
+	return bool(get_point_property_definition(property_name).get("inspector_visible", false))
+
+
+static func is_point_property_resettable(property_name: StringName) -> bool:
+	return bool(get_point_property_definition(property_name).get("resettable", false))
+
+
+static func is_point_property_copy_paste_enabled(
+	property_name: StringName,
+) -> bool:
+	return bool(get_point_property_definition(property_name).get("copy_paste_enabled", false))
 
 ## Zoom slider variables
 var _last_slider_value: float = DEFAULT_SLIDER_VALUE
