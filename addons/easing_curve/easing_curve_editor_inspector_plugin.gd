@@ -649,6 +649,8 @@ class PointsListContainer:
 	var drop_after := false
 
 	var _debug_drag_id := 0
+	var _pending_swap_from := -1
+	var _pending_swap_to := -1
 
 
 	func _debug_drag_event(event: String, details: String = "") -> void:
@@ -671,11 +673,23 @@ class PointsListContainer:
 				"DRAG_BEGIN",
 				"drag=%d" % _debug_drag_id,
 			)
+
 		elif what == NOTIFICATION_DRAG_END:
 			_debug_drag_event(
 				"DRAG_END",
-				"drag=%d" % _debug_drag_id,
+				"drag=%d pending=%d->%d"
+				% [
+					_debug_drag_id,
+					_pending_swap_from,
+					_pending_swap_to,
+				],
 			)
+
+			if _pending_swap_from >= 0 and _pending_swap_to >= 0:
+				get_tree().process_frame.connect(
+					_emit_pending_point_swap.bind(_debug_drag_id),
+					CONNECT_ONE_SHOT,
+				)
 
 
 	func _exit_tree() -> void:
@@ -785,31 +799,26 @@ class PointsListContainer:
 		clear_drop_index()
 
 		if to_index >= 0 and from_index != to_index:
-			_defer_point_swap(from_index, to_index)
+			_pending_swap_from = from_index
+			_pending_swap_to = to_index
+
+			_debug_drag_event(
+				"PENDING_SWAP",
+				"drag=%d from=%d to=%d"
+				% [_debug_drag_id, from_index, to_index],
+			)
 
 
-	func _defer_point_swap(from_index: int, to_index: int) -> void:
-		_debug_drag_event(
-			"SCHEDULE_SWAP",
-			"drag=%d from=%d to=%d"
-			% [_debug_drag_id, from_index, to_index],
-		)
+	func _emit_pending_point_swap(drag_id: int) -> void:
+		var from_index := _pending_swap_from
+		var to_index := _pending_swap_to
 
-		get_tree().process_frame.connect(
-			_emit_deferred_point_swap.bind(
-				from_index,
-				to_index,
-				_debug_drag_id,
-			),
-			CONNECT_ONE_SHOT,
-		)
+		_pending_swap_from = -1
+		_pending_swap_to = -1
 
+		if from_index < 0 or to_index < 0:
+			return
 
-	func _emit_deferred_point_swap(
-		from_index: int,
-		to_index: int,
-		drag_id: int,
-	) -> void:
 		_debug_drag_event(
 			"EMIT_SWAP",
 			"drag=%d from=%d to=%d"
