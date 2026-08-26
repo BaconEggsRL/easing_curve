@@ -276,7 +276,7 @@ func _init() -> void:
 }
 
 function Get-ChangelogReleaseNotes {
-    $Lines = @(Get-Content -LiteralPath $Changelog)
+    $Lines = @(Get-Content -LiteralPath $Changelog -Encoding UTF8)
     $Heading = "## v$Version"
     $Start = -1
 
