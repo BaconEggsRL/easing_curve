@@ -304,8 +304,8 @@ function Get-ChangelogReleaseNotes {
 
 function Invoke-PrepareCommit {
     Write-Step "Prepare release commit"
-	
-	if (Test-GitClean) {
+
+    if (Test-GitClean) {
         $Head = (git log -1 --oneline).Trim()
         Assert-LastExitCode "git log"
 
@@ -339,6 +339,47 @@ function Invoke-PrepareCommit {
     Assert-LastExitCode "git commit"
 
     Write-Host "Release commit created." -ForegroundColor Green
+}
+
+function Get-NextDevelopmentVersion {
+    $Parts = $Version.Split(".")
+    if ($Parts.Count -ne 3) {
+        throw "Could not calculate next development version from '$Version'."
+    }
+
+    $Major = [int]$Parts[0]
+    $Minor = [int]$Parts[1]
+    $Patch = [int]$Parts[2] + 1
+
+    return "$Major.$Minor.$Patch-dev"
+}
+
+
+function Write-PostPublishSteps {
+    $NextDevelopmentVersion = Get-NextDevelopmentVersion
+
+    Write-Host ""
+    Write-Host "=== Post-release Git steps ===" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "1. Return to the development branch:"
+    Write-Host "   git checkout dev"
+    Write-Host "   git pull --ff-only origin dev"
+    Write-Host ""
+    Write-Host "2. Start the next development version:"
+    Write-Host "   Update addons/easing_curve/plugin.cfg:"
+    Write-Host "   version=`"$NextDevelopmentVersion`""
+    Write-Host ""
+    Write-Host "3. Commit and push the development-version bump:"
+    Write-Host "   git add addons/easing_curve/plugin.cfg"
+    Write-Host "   git commit -m `"Start $NextDevelopmentVersion development`""
+    Write-Host "   git push origin dev"
+    Write-Host ""
+    Write-Host "4. Optional release verification:"
+    Write-Host "   git status --short"
+    Write-Host "   git tag --points-at $ReleaseBranch"
+    Write-Host "   gh release view $Tag"
+    Write-Host ""
+    Write-Host "Release workflow complete." -ForegroundColor Green
 }
 
 function Invoke-Publish {
@@ -413,16 +454,17 @@ function Invoke-Publish {
         Assert-LastExitCode "git push tag"
 
         gh release create `
-            $Tag `
-            $ZipPath `
-            --repo $Repository `
-            --title "Easing Curve $Tag" `
-            --notes-file $ReleaseNotesPath `
-            --latest
-        Assert-LastExitCode "gh release create"
+			$Tag `
+			$ZipPath `
+			--repo $Repository `
+			--title "$Tag" `
+			--notes-file $ReleaseNotesPath `
+			--latest
+		Assert-LastExitCode "gh release create"
 
-        Write-Host ""
-        Write-Host "$Tag published successfully." -ForegroundColor Green
+		Write-Host ""
+		Write-Host "$Tag published successfully." -ForegroundColor Green
+		Write-PostPublishSteps
     }
     finally {
         Remove-Item -LiteralPath $ReleaseNotesPath -Force -ErrorAction SilentlyContinue
