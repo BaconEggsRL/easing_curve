@@ -686,6 +686,15 @@ class PointsListContainer:
 			)
 
 			if _pending_swap_from >= 0 and _pending_swap_to >= 0:
+				_debug_drag_event(
+					"MOUSE_QUARANTINE",
+					"drag=%d" % _debug_drag_id,
+				)
+
+				# Remove this soon-to-be-rebuilt Points list and all of its children
+				# from the Viewport's mouse-over hierarchy while they are still alive.
+				mouse_behavior_recursive = Control.MOUSE_BEHAVIOR_DISABLED
+
 				call_deferred(
 					"_arm_pending_point_swap_next_frame",
 					_debug_drag_id,
@@ -830,6 +839,37 @@ class PointsListContainer:
 
 
 	func _emit_pending_point_swap(drag_id: int) -> void:
+		var hovered := get_viewport().gui_get_hovered_control()
+		var hover_is_inside_list := (
+			hovered == self
+			or (
+				hovered != null
+				and is_ancestor_of(hovered)
+			)
+		)
+
+		if hover_is_inside_list:
+			_debug_drag_event(
+				"WAIT_HOVER_CLEAR",
+				"drag=%d hovered=%d"
+				% [drag_id, hovered.get_instance_id()],
+			)
+
+			get_tree().process_frame.connect(
+				_emit_pending_point_swap.bind(drag_id),
+				CONNECT_ONE_SHOT,
+			)
+			return
+
+		_debug_drag_event(
+			"HOVER_CLEAR",
+			"drag=%d hovered=%d"
+			% [
+				drag_id,
+				hovered.get_instance_id() if hovered != null else 0,
+			],
+		)
+
 		var from_index := _pending_swap_from
 		var to_index := _pending_swap_to
 
