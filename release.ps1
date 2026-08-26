@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("Validate", "Prepare", "Publish")]
+    [ValidateSet("Validate", "Prepare", "Publish", "Republish")]
     [string]$Mode = "Validate",
 
     [Alias("v")]
@@ -471,6 +471,171 @@ function Invoke-Publish {
     }
 }
 
+function Invoke-Republish {
+    Write-Step "Republish $Tag"
+
+    $CurrentBranch = (git branch --show-current).Trim()
+    Assert-LastExitCode "git branch"
+
+    if ($CurrentBranch -ne $ReleaseBranch) {
+        throw "Republish must run from '$ReleaseBranch'. Current branch is '$CurrentBranch'."
+    }
+
+    if (-not (Test-GitClean)) {
+        throw "Working tree must be clean before republishing."
+    }
+
+    git fetch origin
+    Assert-LastExitCode "git fetch"
+
+    $RemoteOnlyCount = (
+        git rev-list --right-only --count "$ReleaseBranch...origin/$ReleaseBranch"
+    ).Trim()
+    Assert-LastExitCode "git rev-list"
+
+    if ([int]$RemoteOnlyCount -ne 0) {
+        throw "Local '$ReleaseBranch' is behind origin. Update it before republishing."
+    }
+
+    $ExistingRemoteTag = git ls-remote --tags origin "refs/tags/$Tag"
+    Assert-LastExitCode "git ls-remote"
+
+    if (-not $ExistingRemoteTag) {
+        throw "Remote tag '$Tag' does not exist. Use Publish mode for a new release."
+    }
+
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        throw "GitHub CLI 'gh' was not found. Install/authenticate it before Republish mode."
+    }
+
+    gh release view $Tag --repo $Repository *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "GitHub release '$Tag' does not exist. Use Publish mode for a new release."
+    }
+
+    $ReleaseHead = (git rev-parse $ReleaseBranch).Trim()
+    Assert-LastExitCode "git rev-parse"
+
+    $CurrentTagCommit = git rev-list -n 1 $Tag 2>$null
+    if ($LASTEXITCODE -eq 0 -and $CurrentTagCommit) {
+        $CurrentTagCommit = $CurrentTagCommit.Trim()
+    }
+    else {
+        $CurrentTagCommit = "(not available locally)"
+    }
+
+    $ReleaseNotes = Get-ChangelogReleaseNotes
+    $ReleaseNotesPath = Join-Path (
+        [IO.Path]::GetTempPath()
+    ) ("easing-curve-{0}-release-notes.md" -f $Version)
+
+    try {
+        [System.IO.File]::WriteAllText(
+            $ReleaseNotesPath,
+            $ReleaseNotes,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+
+        Write-Host ""
+        Write-Host "Existing release:"
+        Write-Host "  $Tag"
+        Write-Host "Current tag commit:"
+        Write-Host "  $CurrentTagCommit"
+        Write-Host "New release commit:"
+        Write-Host "  $ReleaseHead"
+        Write-Host "Replacement asset:"
+        Write-Host "  $ZipPath"
+        Write-Host ""
+        Write-Host "This will:"
+        Write-Host "  - push '$ReleaseBranch' if it is ahead of origin"
+        Write-Host "  - force-move '$Tag' to the current '$ReleaseBranch' commit"
+        Write-Host "  - replace the existing ZIP asset"
+        Write-Host "  - refresh the release title, target, notes, and Latest status"
+        Write-Host ""
+
+        $Answer = Read-Host "Force-update and republish existing $Tag? [y/N]"
+        if ($Answer -notmatch '^[Yy]$') {
+            throw "Republishing cancelled."
+        }
+
+        # Ensure master itself is published first.
+        git push origin $ReleaseBranch
+        Assert-LastExitCode "git push branch"
+
+        # Recreate the annotated tag at the current master commit.
+        git tag -f -a $Tag -m "$Tag" $ReleaseHead
+        Assert-LastExitCode "git tag"
+
+        git push --force origin "refs/tags/$Tag"
+        Assert-LastExitCode "git push tag"
+
+        # Replace the existing ZIP asset with the exact ZIP that just
+        # passed the release validation and clean-project smoke tests.
+        gh release upload `
+            $Tag `
+            $ZipPath `
+            --repo $Repository `
+            --clobber
+        Assert-LastExitCode "gh release upload"
+
+        # Keep the release metadata synchronized with the tag/changelog.
+        gh release edit `
+            $Tag `
+            --repo $Repository `
+            --title "$Tag" `
+            --target $ReleaseBranch `
+            --notes-file $ReleaseNotesPath `
+            --latest
+        Assert-LastExitCode "gh release edit"
+
+        # Verify the tag resolves to the exact current release commit.
+        $LocalTagCommit = (git rev-list -n 1 $Tag).Trim()
+        Assert-LastExitCode "git rev-list tag"
+
+        if ($LocalTagCommit -ne $ReleaseHead) {
+            throw (
+                "Local tag '$Tag' points to '$LocalTagCommit', " +
+                "expected '$ReleaseHead'."
+            )
+        }
+
+        $RemoteTagLine = (
+            git ls-remote origin "refs/tags/$Tag^{}"
+        ).Trim()
+        Assert-LastExitCode "git ls-remote peeled tag"
+
+        if (-not $RemoteTagLine) {
+            throw "Could not verify remote annotated tag '$Tag'."
+        }
+
+        $RemoteTagCommit = ($RemoteTagLine -split "\s+")[0]
+
+        if ($RemoteTagCommit -ne $ReleaseHead) {
+            throw (
+                "Remote tag '$Tag' points to '$RemoteTagCommit', " +
+                "expected '$ReleaseHead'."
+            )
+        }
+
+        Write-Host ""
+        Write-Host "$Tag republished successfully." -ForegroundColor Green
+        Write-Host "Tag now points to:"
+        Write-Host "  $ReleaseHead"
+        Write-Host ""
+
+        gh release view $Tag --repo $Repository
+        Assert-LastExitCode "gh release view"
+
+        Write-PostPublishSteps
+    }
+    finally {
+        Remove-Item `
+            -LiteralPath $ReleaseNotesPath `
+            -Force `
+            -ErrorAction SilentlyContinue
+    }
+}
+
 Push-Location $ProjectRoot
 
 try {
@@ -535,6 +700,14 @@ try {
 
         Invoke-Publish
     }
+	
+	if ($Mode -eq "Republish") {
+		if (-not (Test-GitClean)) {
+			throw "Validation/build changed tracked files. Commit them before republishing."
+		}
+
+		Invoke-Republish
+	}
 }
 finally {
     Pop-Location
