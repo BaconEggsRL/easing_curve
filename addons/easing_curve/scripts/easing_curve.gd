@@ -214,18 +214,18 @@ const POINT_SNAPSHOT_LIFECYCLES: Array[StringName] = [
 # 	"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
 # }
 const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
-	#{
-		#"name": &"test_vector",
-		#"type": TYPE_VECTOR2,
-		#"default": Vector2.ZERO,
-		#"inspector_label": "Test Vector",
-		#"inspector_visible": true,
-		#"resettable": true,
-		#"copy_paste_enabled": true,
-		#"editor_kind": POINT_EDITOR_KIND_VECTOR2,
-		#"snapshot_key": &"test_vectors",
-		#"snapshot_lifecycle":  POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
-	#},
+	{
+		"name": &"test_vector",
+		"type": TYPE_VECTOR2,
+		"default": Vector2.ZERO,
+		"inspector_label": "Test Vector",
+		"inspector_visible": true,
+		"resettable": true,
+		"copy_paste_enabled": true,
+		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
+		"snapshot_key": &"test_vectors",
+		"snapshot_lifecycle":  POINT_SNAPSHOT_LIFECYCLE_ORDINARY,
+	},
 	{
 		"name": &"position",
 		"type": TYPE_VECTOR2,

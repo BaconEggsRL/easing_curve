@@ -39,7 +39,7 @@ const SHOW_MODIFIED_ASTERISK := true
 const POINT_PROPERTY_HEADER_RATIO := 0.35
 const POINT_PROPERTY_VALUE_RATIO := 0.65
 const POINT_INSPECTOR_PROPERTY_ORDER: Array[StringName] = [
-	#&"test_vector",
+	&"test_vector",
 	&"position",
 	&"handle_mode",
 	&"left_control_point",
