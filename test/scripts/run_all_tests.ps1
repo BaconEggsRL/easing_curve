@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $godotLauncher = Join-Path $PSScriptRoot "run_godot.ps1"
 $suiteTimeoutSeconds = 60
+$killWaitMilliseconds = 5000
 $powerShellExecutable = (Get-Process -Id $PID).Path
 
 $suites = @(
@@ -66,7 +67,12 @@ foreach ($suite in $suites) {
 			$timedOut = $true
 			Write-Host "Timed out after $suiteTimeout seconds; terminating process tree rooted at PID $($launcherProcess.Id)." -ForegroundColor Yellow
 			& taskkill.exe /PID $launcherProcess.Id /T /F 2>$null | Out-Null
-			$launcherProcess.WaitForExit()
+			if (-not $launcherProcess.WaitForExit($killWaitMilliseconds)) {
+				Write-Warning (
+					"Process tree rooted at PID $($launcherProcess.Id) " +
+					"did not exit after taskkill."
+				)
+			}
 		}
 		$stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -Raw -LiteralPath $stdoutPath } else { "" }
 		$stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -Raw -LiteralPath $stderrPath } else { "" }
