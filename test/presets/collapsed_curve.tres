@@ -7,7 +7,7 @@ script = ExtResource("1_1gt8g")
 trans_type = 0
 _css_linear_points = PackedVector2Array(0, 0, 1, 1)
 _css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.25, 1)
-_point_count = 3
+_point_count = 4
 _point_0/position = Vector2(0, 0)
 _point_0/left_control_point = Vector2(0, 0)
 _point_0/right_control_point = Vector2(0, 0)
@@ -30,15 +30,26 @@ _point_1/locked = Dictionary[String, bool]({
 _point_1/handle_mode = 0
 _point_1/left_force_linear = false
 _point_1/right_force_linear = false
-_point_2/position = Vector2(1, 1)
-_point_2/left_control_point = Vector2(1, 1)
-_point_2/right_control_point = Vector2(1, 1)
+_point_2/position = Vector2(0.698288, 0.2419709)
+_point_2/left_control_point = Vector2(0.698288, 0.2419709)
+_point_2/right_control_point = Vector2(0.698288, 0.2419709)
 _point_2/locked = Dictionary[String, bool]({
 "left_control_point": false,
 "position": false,
 "right_control_point": false
 })
-_point_2/handle_mode = 0
+_point_2/handle_mode = 1
 _point_2/left_force_linear = false
 _point_2/right_force_linear = false
+_point_3/position = Vector2(1, 1)
+_point_3/left_control_point = Vector2(1, 1)
+_point_3/right_control_point = Vector2(1, 1)
+_point_3/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_3/handle_mode = 0
+_point_3/left_force_linear = false
+_point_3/right_force_linear = false
 metadata/_custom_type_script = "uid://c10cjby72qngf"
