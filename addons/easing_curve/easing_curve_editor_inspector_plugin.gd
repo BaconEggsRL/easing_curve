@@ -1850,14 +1850,7 @@ func _is_point_input_editable(
 	point: EasingCurvePoint,
 	property_name: String,
 ) -> bool:
-	if property_name not in ["left_control_point", "right_control_point"]:
-		return true
-	var side := (
-		EasingCurvePoint.ControlSide.LEFT
-		if property_name == "left_control_point"
-		else EasingCurvePoint.ControlSide.RIGHT
-	)
-	return point.is_control_position_editable(side)
+	return point.is_position_input_editable(property_name)
 
 
 func _move_point_up(i: int) -> void:
@@ -2255,13 +2248,14 @@ func _create_vector2_property(
 	)
 	force_linear_slot.add_child(force_linear_btn)
 
-	var lock_btn := _create_point_lock_button(
-		point,
-		i,
-		property_name,
-		property_header,
-	)
-	value_hbox.add_child(lock_btn)
+	if point.is_lockable_property(property_name):
+		var lock_btn := _create_point_lock_button(
+			point,
+			i,
+			property_name,
+			property_header,
+		)
+		value_hbox.add_child(lock_btn)
 
 	var vec: Vector2 = point.get(property_name)
 
@@ -2385,7 +2379,7 @@ func _create_point_lock_button(
 	lock_btn.add_theme_color_override("icon_pressed_color", pressed_color)
 	lock_btn.add_theme_color_override("icon_hover_pressed_color", pressed_color)
 
-	var locked := point.locked[property_name]
+	var locked := point.locked.get(property_name, false)
 	lock_btn.button_pressed = locked
 	var toggled_on := lock_btn.button_pressed
 	var lock_available := property_name == "position" or point.supports_control_state()
