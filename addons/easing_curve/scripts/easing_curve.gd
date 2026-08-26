@@ -191,6 +191,17 @@ const POINT_EDITOR_KIND_HANDLE_MODE := &"handle_mode"
 const POINT_SNAPSHOT_LIFECYCLE_ORDINARY := &"ordinary"
 const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
+		"name": &"test_vector",
+		"type": TYPE_VECTOR2,
+		"snapshot_key": &"test_vectors",
+		"default": Vector2.ZERO,
+		"inspector_visible": true,
+		"resettable": true,
+		"copy_paste_enabled": true,
+		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
+		"inspector_label": "Test Vector",
+	},
+	{
 		"name": &"position",
 		"type": TYPE_VECTOR2,
 		"snapshot_key": &"positions",
