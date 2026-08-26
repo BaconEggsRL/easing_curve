@@ -151,7 +151,13 @@ func _create_handle_mode_fixture(
 ) -> Dictionary:
 	var property_grid := GridContainer.new()
 	property_grid.columns = 2
-	inspector.call("_create_handle_mode_property", point, point_index, property_grid)
+	inspector.call(
+		"_create_handle_mode_property",
+		point,
+		point_index,
+		EasingCurve.get_point_property_definition(&"handle_mode"),
+		property_grid,
+	)
 	if property_grid.get_child_count() != 2:
 		return {"property_grid": property_grid}
 	var property_header := property_grid.get_child(0) as PanelContainer

@@ -16,6 +16,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_add_undo_redo_selection_symmetry()
+	_test_normal_property_row_order()
 	_test_property_selection_survives_reparse()
 	_test_topology_and_resource_switch_selection()
 	if _failures == 0:
@@ -116,16 +117,38 @@ func _create_property_header(
 ) -> Dictionary:
 	var grid := GridContainer.new()
 	grid.columns = 2
+	var definition := EasingCurve.get_point_property_definition(property_name)
 	if property_name == &"handle_mode":
-		inspector.call("_create_handle_mode_property", point, index, grid)
+		inspector.call("_create_handle_mode_property", point, index, definition, grid)
 	else:
-		var label: String = {
-			&"position": "Position",
-			&"left_control_point": "Left Control",
-			&"right_control_point": "Right Control",
-		}[property_name]
-		inspector.call("_create_vector2_property", point, index, String(property_name), label, grid)
+		inspector.call("_create_vector2_property", point, index, definition, grid)
 	return {"grid": grid, "header": grid.get_child(0) as PanelContainer}
+
+
+func _test_normal_property_row_order() -> void:
+	var curve := _curve()
+	var context := EDITOR_HOST.create_inspector_context(curve)
+	var inspector: Object = context.inspector
+	for point_index in range(curve.points.size()):
+		var expected_row: Array[StringName] = [
+			&"position",
+			&"handle_mode",
+		]
+		if point_index != 0:
+			expected_row.append(&"left_control_point")
+		if point_index != curve.points.size() - 1:
+			expected_row.append(&"right_control_point")
+		var definitions: Array = inspector.call(
+			"_get_normal_point_property_definitions",
+			point_index,
+			curve.points.size(),
+		)
+		var property_names: Array[StringName] = []
+		for definition: Dictionary in definitions:
+			property_names.append(definition["name"])
+			_expect(bool(definition["inspector_visible"]), "%s generated a hidden storage row" % definition["name"])
+		_expect(property_names == expected_row, "Point %d normal row order changed" % (point_index + 1))
+	context.editor.free()
 
 
 func _test_property_selection_survives_reparse() -> void:

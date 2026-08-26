@@ -186,6 +186,8 @@ const FUNCTION_SNAPSHOT_PROPERTY := &"_function_snapshot"
 const EDITOR_STATE_SNAPSHOT_PROPERTY := &"_editor_state_snapshot"
 const POINT_STORAGE_COUNT := &"_point_count"
 const POINT_STORAGE_PREFIX := "_point_"
+const POINT_EDITOR_KIND_VECTOR2 := &"vector2"
+const POINT_EDITOR_KIND_HANDLE_MODE := &"handle_mode"
 const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 	{
 		"name": &"position",
@@ -194,6 +196,8 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"inspector_visible": true,
 		"resettable": true,
 		"copy_paste_enabled": true,
+		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
+		"inspector_label": "Position",
 	},
 	{
 		"name": &"left_control_point",
@@ -202,6 +206,8 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"inspector_visible": true,
 		"resettable": true,
 		"copy_paste_enabled": true,
+		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
+		"inspector_label": "Left Control",
 	},
 	{
 		"name": &"right_control_point",
@@ -210,6 +216,8 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"inspector_visible": true,
 		"resettable": true,
 		"copy_paste_enabled": true,
+		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
+		"inspector_label": "Right Control",
 	},
 	{
 		"name": &"locked",
@@ -230,6 +238,8 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"inspector_visible": true,
 		"resettable": true,
 		"copy_paste_enabled": true,
+		"editor_kind": POINT_EDITOR_KIND_HANDLE_MODE,
+		"inspector_label": "Handle Mode",
 	},
 	{
 		"name": &"left_force_linear",
@@ -289,6 +299,12 @@ static func is_point_property_copy_paste_enabled(
 	property_name: StringName,
 ) -> bool:
 	return bool(get_point_property_definition(property_name).get("copy_paste_enabled", false))
+
+
+static func get_point_property_editor_kind(
+	property_name: StringName,
+) -> StringName:
+	return StringName(get_point_property_definition(property_name).get("editor_kind", StringName()))
 
 ## Zoom slider variables
 var _last_slider_value: float = DEFAULT_SLIDER_VALUE

@@ -224,11 +224,11 @@ func _test_point_storage_schema() -> void:
 	curve.set("_point_count", 3)
 	var expected_names: Array[StringName] = [EasingCurve.POINT_STORAGE_COUNT]
 	var expected_definitions: Array[Dictionary] = [
-		{"name": &"position", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true},
-		{"name": &"left_control_point", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true},
-		{"name": &"right_control_point", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true},
+		{"name": &"position", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
+		{"name": &"left_control_point", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
+		{"name": &"right_control_point", "type": TYPE_VECTOR2, "default": Vector2.ZERO, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_VECTOR2},
 		{"name": &"locked", "type": TYPE_DICTIONARY, "default": {"position": false, "left_control_point": false, "right_control_point": false}, "inspector_visible": false},
-		{"name": &"handle_mode", "type": TYPE_INT, "default": EasingCurvePoint.HandleMode.FREE, "inspector_visible": true},
+		{"name": &"handle_mode", "type": TYPE_INT, "default": EasingCurvePoint.HandleMode.FREE, "inspector_visible": true, "editor_kind": EasingCurve.POINT_EDITOR_KIND_HANDLE_MODE},
 		{"name": &"left_force_linear", "type": TYPE_BOOL, "default": false, "inspector_visible": false},
 		{"name": &"right_force_linear", "type": TYPE_BOOL, "default": false, "inspector_visible": false},
 	]
@@ -240,6 +240,11 @@ func _test_point_storage_schema() -> void:
 		_expect(definition.get("type") == expected_definition.type, "Point property type changed for %s" % expected_definition.name)
 		_expect(definition.get("default") == expected_definition.default, "Point property default changed for %s" % expected_definition.name)
 		_expect(definition.get("inspector_visible") == expected_definition.inspector_visible, "Point property Inspector visibility changed for %s" % expected_definition.name)
+		if expected_definition.has("editor_kind"):
+			_expect(definition.get("editor_kind") == expected_definition.editor_kind, "Point property editor kind changed for %s" % expected_definition.name)
+			_expect(EasingCurve.get_point_property_editor_kind(expected_definition.name) == expected_definition.editor_kind, "Point property editor kind lookup changed for %s" % expected_definition.name)
+		else:
+			_expect(not definition.has("editor_kind"), "Hidden storage property %s unexpectedly gained an editor kind" % expected_definition.name)
 		_expect(EasingCurve.get_point_property_default(expected_definition.name) == expected_definition.default, "Point property default lookup changed for %s" % expected_definition.name)
 		_expect(EasingCurve.is_point_property_resettable(expected_definition.name) == expected_definition.inspector_visible, "Point property reset eligibility changed for %s" % expected_definition.name)
 		_expect(EasingCurve.is_point_property_copy_paste_enabled(expected_definition.name) == expected_definition.inspector_visible, "Point property copy/paste eligibility changed for %s" % expected_definition.name)

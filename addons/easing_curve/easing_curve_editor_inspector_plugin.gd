@@ -38,6 +38,12 @@ const SHOW_MODIFIED_ASTERISK := true
 # alignment
 const POINT_PROPERTY_HEADER_RATIO := 0.35
 const POINT_PROPERTY_VALUE_RATIO := 0.65
+const POINT_INSPECTOR_PROPERTY_ORDER: Array[StringName] = [
+	&"position",
+	&"handle_mode",
+	&"left_control_point",
+	&"right_control_point",
+]
 # debug
 const DEBUG_POINT_LIST_DRAG := false
 
@@ -1349,52 +1355,12 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 
 		point_main_hbox.add_child(remove_btn)
 
-		if EasingCurve.is_point_property_inspector_visible(&"position"):
-			_create_vector2_property(
-				point,
-				i,
-				"position",
-				"Position",
-				point_properties_grid,
-			)
-
-		if EasingCurve.is_point_property_inspector_visible(&"handle_mode"):
-			_create_handle_mode_property(
-				point,
-				i,
-				point_properties_grid,
-			)
-
-		# Control Points
-		var point_count = curve.points.size()
-
-		if point_count > 1:
-			if (
-				i != 0
-				and EasingCurve.is_point_property_inspector_visible(
-					&"left_control_point",
-				)
-			): # not the first point -> add left control
-				_create_vector2_property(
-					point,
-					i,
-					"left_control_point",
-					"Left Control",
-					point_properties_grid,
-				)
-			if (
-				i != point_count - 1
-				and EasingCurve.is_point_property_inspector_visible(
-					&"right_control_point",
-				)
-			): # not the last point -> add right control
-				_create_vector2_property(
-					point,
-					i,
-					"right_control_point",
-					"Right Control",
-					point_properties_grid,
-				)
+		_create_normal_point_property_rows(
+			point,
+			i,
+			curve.points.size(),
+			point_properties_grid,
+		)
 
 		# IMPORTANT: add panel to list
 		point_list.add_child(point_panel)
@@ -1413,6 +1379,49 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 	# point_list.add_spacer(true)
 
 	return point_list
+
+
+static func _get_normal_point_property_definitions(
+		point_index: int,
+		point_count: int,
+) -> Array[Dictionary]:
+	var definitions: Array[Dictionary] = []
+	for property_name in POINT_INSPECTOR_PROPERTY_ORDER:
+		if not EasingCurve.is_point_property_inspector_visible(property_name):
+			continue
+		if property_name == &"left_control_point" and point_index == 0:
+			continue
+		if property_name == &"right_control_point" and point_index == point_count - 1:
+			continue
+		definitions.append(EasingCurve.get_point_property_definition(property_name))
+	return definitions
+
+
+func _create_normal_point_property_rows(
+		point: EasingCurvePoint,
+		point_index: int,
+		point_count: int,
+		property_grid: GridContainer,
+) -> void:
+	for definition in _get_normal_point_property_definitions(
+		point_index,
+		point_count,
+	):
+		match StringName(definition["editor_kind"]):
+			EasingCurve.POINT_EDITOR_KIND_VECTOR2:
+				_create_vector2_property(
+					point,
+					point_index,
+					definition,
+					property_grid,
+				)
+			EasingCurve.POINT_EDITOR_KIND_HANDLE_MODE:
+				_create_handle_mode_property(
+					point,
+					point_index,
+					definition,
+					property_grid,
+				)
 
 
 func handle_easing_curve_editor(object) -> Control:
@@ -2073,13 +2082,44 @@ func _set_point_property_selected(
 	)
 
 
+func _create_normal_point_property_row(
+		point_index: int,
+		definition: Dictionary,
+		reset_btn: Button,
+		editor_control: Control,
+		property_grid: GridContainer,
+) -> Dictionary:
+	var property_header := _create_selectable_point_property_header(
+		point_index,
+		definition["name"],
+		definition["inspector_label"],
+		reset_btn,
+	)
+	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
+	property_grid.add_child(property_header)
+
+	var value_panel := PanelContainer.new()
+	value_panel.add_theme_stylebox_override("panel", X_STYLEBOX)
+	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
+	value_panel.custom_minimum_size.x = 0.0
+	value_panel.z_index = 1
+	property_grid.add_child(value_panel)
+	value_panel.add_child(editor_control)
+
+	return {
+		"property_header": property_header,
+		"value_panel": value_panel,
+	}
+
+
 func _create_vector2_property(
-	point: EasingCurvePoint,
-	i: int,
-	property_name: String,
-	label_text: String,
-	property_grid: GridContainer,
+		point: EasingCurvePoint,
+		i: int,
+		definition: Dictionary,
+		property_grid: GridContainer,
 ) -> void:
+	var property_name: StringName = definition["name"]
 	if not EasingCurve.is_point_property_inspector_visible(property_name):
 		return
 	var default_vec: Vector2 = curve.get_default_for_property(i, property_name)
@@ -2092,29 +2132,18 @@ func _create_vector2_property(
 		not current_vec.is_equal_approx(default_vec)
 	)
 
-	var property_header := _create_selectable_point_property_header(
-		i,
-		StringName(property_name),
-		label_text,
-		reset_btn,
-	)
-	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
-	property_grid.add_child(property_header)
-
-	# Value container panel (x/y inputs; lock_btn)
-	var value_panel := PanelContainer.new()
-	value_panel.add_theme_stylebox_override("panel", X_STYLEBOX)
-	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
-	value_panel.custom_minimum_size.x = 0.0
-	value_panel.z_index = 1
-	property_grid.add_child(value_panel)
-
 	# HBox for x/y inputs; lock_btn
 	var value_hbox := HBoxContainer.new()
 	value_hbox.add_theme_constant_override("separation", _compact_separation())
 	value_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	value_panel.add_child(value_hbox)
+	var row := _create_normal_point_property_row(
+		i,
+		definition,
+		reset_btn,
+		value_hbox,
+		property_grid,
+	)
+	var property_header: PanelContainer = row["property_header"]
 
 	var force_linear_slot := Control.new()
 	force_linear_slot.custom_minimum_size.x = (
@@ -2602,41 +2631,34 @@ func _on_curve_editor_point_remove_requested(point: EasingCurvePoint) -> void:
 
 
 func _create_handle_mode_property(
-	point: EasingCurvePoint,
-	i: int,
-	property_grid: GridContainer,
+		point: EasingCurvePoint,
+		i: int,
+		definition: Dictionary,
+		property_grid: GridContainer,
 ) -> void:
-	if not EasingCurve.is_point_property_inspector_visible(&"handle_mode"):
+	var property_name: StringName = definition["name"]
+	if not EasingCurve.is_point_property_inspector_visible(property_name):
 		return
 
 	var reset_btn := _create_point_reset_button()
 	_set_point_reset_button_available(
 		reset_btn,
 		point.handle_mode != EasingCurve.get_point_property_default(
-			&"handle_mode",
+			property_name,
 		),
 	)
-	var property_header := _create_selectable_point_property_header(
-		i,
-		&"handle_mode",
-		"Handle Mode",
-		reset_btn,
-	)
-	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
-	property_grid.add_child(property_header)
-
-	var value_panel := PanelContainer.new()
-	value_panel.add_theme_stylebox_override(&"panel", X_STYLEBOX)
-	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
-	value_panel.custom_minimum_size.x = 0.0
-	value_panel.z_index = 1
-	property_grid.add_child(value_panel)
 
 	var option := OptionButton.new()
 	_configure_compact_option(option)
 	option.custom_minimum_size.x = 0.0
-	value_panel.add_child(option)
+	var row := _create_normal_point_property_row(
+		i,
+		definition,
+		reset_btn,
+		option,
+		property_grid,
+	)
+	var property_header: PanelContainer = row["property_header"]
 
 	option.add_item("Free", EasingCurvePoint.HandleMode.FREE)
 	option.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
