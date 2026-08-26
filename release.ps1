@@ -306,13 +306,24 @@ function Invoke-PrepareCommit {
     Write-Step "Prepare release commit"
 
     if (Test-GitClean) {
-        $Head = (git log -1 --oneline).Trim()
+        $CurrentCommitMessage = (
+            git log -1 --pretty=%s
+        ).Trim()
         Assert-LastExitCode "git log"
 
-        Write-Host "Working tree is already clean; no release commit is needed." `
-            -ForegroundColor Green
-        Write-Host "Current HEAD:"
-        Write-Host "  $Head"
+        $DesiredCommitMessage = "Release $Tag"
+
+        if ($CurrentCommitMessage -eq $DesiredCommitMessage) {
+            Write-Host "Release commit already exists." -ForegroundColor Green
+            Write-Host "Current HEAD:"
+            Write-Host "  $CurrentCommitMessage"
+            return
+        }
+
+        git commit --allow-empty -m $DesiredCommitMessage
+        Assert-LastExitCode "git commit"
+
+        Write-Host "Empty release commit created." -ForegroundColor Green
         return
     }
 
