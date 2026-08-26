@@ -1,13 +1,8 @@
-[CmdletBinding()]
-param(
-	[switch]$TimeoutSelfTest
-)
-
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $godotLauncher = Join-Path $PSScriptRoot "run_godot.ps1"
 $suiteTimeoutSeconds = 60
-$powerShellExecutable = (Get-Command powershell.exe -ErrorAction Stop).Source
+$powerShellExecutable = (Get-Process -Id $PID).Path
 
 $suites = @(
 	@{ Name = "css_linear_test.gd"; Editor = $false },
@@ -28,13 +23,6 @@ $suites = @(
 	@{ Name = "easing_curve_editor_gesture_characterization_test.gd"; Editor = $true },
 	@{ Name = "editor_undo_redo_test.gd"; Editor = $true }
 )
-
-if ($TimeoutSelfTest) {
-	$suites = @(
-		@{ Name = "runner_timeout_fixture.gd"; Editor = $false; TimeoutSeconds = 1 },
-		@{ Name = "css_linear_test.gd"; Editor = $false }
-	)
-}
 
 $results = @()
 foreach ($suite in $suites) {
@@ -66,16 +54,18 @@ foreach ($suite in $suites) {
 			WorkingDirectory = $projectRoot
 			RedirectStandardOutput = $stdoutPath
 			RedirectStandardError = $stderrPath
+			WindowStyle = "Hidden"
 			PassThru = $true
 		}
 		$launcherProcess = Start-Process @startProcessArguments
-		if ($launcherProcess.WaitForExit([int]($suiteTimeout * 1000))) {
+		$completed = $launcherProcess.WaitForExit([int]($suiteTimeout * 1000))
+		if ($completed) {
 			$launcherProcess.Refresh()
 			$suiteExitCode = $launcherProcess.ExitCode
 		} else {
 			$timedOut = $true
 			Write-Host "Timed out after $suiteTimeout seconds; terminating process tree rooted at PID $($launcherProcess.Id)." -ForegroundColor Yellow
-			& taskkill.exe /PID $launcherProcess.Id /T /F | Out-Null
+			& taskkill.exe /PID $launcherProcess.Id /T /F 2>$null | Out-Null
 			$launcherProcess.WaitForExit()
 		}
 		$stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -Raw -LiteralPath $stdoutPath } else { "" }
