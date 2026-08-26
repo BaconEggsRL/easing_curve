@@ -13,7 +13,7 @@ The following tests require an Editor-host launch:
 Run an Editor-dependent test with:
 
 ```text
-./test/run_godot.ps1 --editor --headless --path . --script res://test/<test_name>.gd
+./test/scripts/run_godot.ps1 --editor --headless --path . --script res://test/<test_name>.gd
 ```
 
 Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can
@@ -24,7 +24,7 @@ misleadingly report zero checks. It is not a valid result for these tests.
 Run every headless and Editor-host suite independently with:
 
 ```powershell
-./test/run_all_tests.ps1
+./test/scripts/run_all_tests.ps1
 ```
 
 `test/run_godot.ps1` launches the configured Godot 4.7.1 console executable
@@ -93,7 +93,7 @@ Everything else is automatic for normal numeric parameters: function-mode detect
 
 ### Special cases
 
-* **No normal Ease support:** update `_transition_supports_ease()` in `easing_curve_editor_inspector_plugin.gd`.
+* **No normal Ease support:** update 'TRANSITION_PRESENTATION::supports_ease' field in `easing_curve_editor_inspector_plugin.gd`.
 * **Extra Inspector controls:** register them in `FUNCTION_EDITOR_PROPERTIES`.
 * **Generated internal data:** add the transition to `GENERATED_FUNCTION_TRANSITIONS`; if it adds new generated state, update `_get_generated_function_snapshot()` and its restore/parsing helper.
 

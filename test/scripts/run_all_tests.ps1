@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Stop"
-$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $godotLauncher = Join-Path $PSScriptRoot "run_godot.ps1"
 
 $suites = @(

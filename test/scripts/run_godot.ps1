@@ -19,7 +19,7 @@ public static class ErrorMode {
 
 $Godot = "C:\Godot\4.7\engine\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64_console.exe"
 
-$projectRoot = Split-Path -Parent $PSScriptRoot
+$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 for ($index = 0; $index -lt $GodotArgs.Count; $index += 1) {
 	$argument = $GodotArgs[$index]
 	$projectPath = ""
