@@ -1,3 +1,4 @@
+@tool
 extends VBoxContainer
 
 const GUI_TREE_ARROW_RIGHT = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowRight.svg")

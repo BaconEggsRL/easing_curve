@@ -1,3 +1,4 @@
+@tool
 extends VBoxContainer
 
 const DEBUG_POINT_LIST_DRAG := false
