@@ -61,8 +61,7 @@ func _test_points_list_remove_button_undo_redo() -> void:
 			history,
 			curve,
 			"Remove Easing Curve Point",
-			before,
-			after,
+			EasingCurveEditorUndo.ActionContext.new(before, after),
 		),
 		"Remove Point button result did not create an Undo action",
 	)
@@ -191,7 +190,7 @@ func _test_interior_point_adds() -> void:
 	_expect(notifications.changed == 3 and notifications.points == 3 and notifications.property_list == 3, "Repeated interior Adds did not refresh the inspector and graph")
 
 	var history := UndoRedo.new()
-	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Add Easing Curve Point", before, after), "Interior Add did not produce an Undo/Redo state change")
+	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Add Easing Curve Point", EasingCurveEditorUndo.ActionContext.new(before, after)), "Interior Add did not produce an Undo/Redo state change")
 	history.undo()
 	_expect(curve.get_editor_state_snapshot() == before, "Interior Add Undo did not restore the complete point state")
 	history.redo()

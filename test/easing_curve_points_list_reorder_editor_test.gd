@@ -260,14 +260,9 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 			history,
 			curve,
 			"Reorder Easing Curve Points",
-			move_down_before,
-			move_down_after,
-			null,
-			Callable(inspector, "_restore_point_selection_state"),
-			move_down_selection_before,
-			move_down_selection_after,
-			move_down_point_resource_ids_before,
-			move_down_point_resource_ids_after,
+			EasingCurveEditorUndo.ActionContext.new(move_down_before, move_down_after)
+				.with_selection(Callable(inspector, "_restore_point_selection_state"), move_down_selection_before, move_down_selection_after)
+				.with_point_resource_ids(move_down_point_resource_ids_before, move_down_point_resource_ids_after),
 		),
 		"Move Down did not create an Undo action",
 	)
@@ -296,14 +291,9 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 			history,
 			curve,
 			"Reorder Easing Curve Points",
-			drag_before,
-			drag_after,
-			null,
-			Callable(inspector, "_restore_point_selection_state"),
-			drag_selection_before,
-			drag_selection_after,
-			drag_point_resource_ids_before,
-			drag_point_resource_ids_after,
+			EasingCurveEditorUndo.ActionContext.new(drag_before, drag_after)
+				.with_selection(Callable(inspector, "_restore_point_selection_state"), drag_selection_before, drag_selection_after)
+				.with_point_resource_ids(drag_point_resource_ids_before, drag_point_resource_ids_after),
 		),
 		"Drag reorder did not create an Undo action",
 	)
@@ -364,7 +354,7 @@ func _test_handle_mode_reset_uses_the_normal_transition() -> void:
 	_expect(not reset_btn.visible and reset_btn.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Handle Mode reset did not reserve and disable its reset slot")
 
 	var history := UndoRedo.new()
-	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Change Easing Curve Handle Mode", before, after), "Handle Mode reset did not produce an Undo/Redo action")
+	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Change Easing Curve Handle Mode", EasingCurveEditorUndo.ActionContext.new(before, after)), "Handle Mode reset did not produce an Undo/Redo action")
 	history.undo()
 	_expect(curve.get_editor_state_snapshot() == before, "Handle Mode reset Undo did not restore the prior mode and geometry")
 	history.redo()
@@ -441,7 +431,7 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	var after := EDITOR_UNDO.capture_state(curve)
 	_expect(target.left_control_point == target.position and target.right_control_point == target.position, "Pasting Linear did not use Linear transition geometry")
 	var history := UndoRedo.new()
-	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Change Easing Curve Handle Mode", before, after), "Handle Mode paste did not create an Undo/Redo action")
+	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Change Easing Curve Handle Mode", EasingCurveEditorUndo.ActionContext.new(before, after)), "Handle Mode paste did not create an Undo/Redo action")
 	history.undo()
 	_expect(curve.get_editor_state_snapshot() == before, "Handle Mode paste Undo did not restore geometry")
 	history.redo()

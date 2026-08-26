@@ -66,12 +66,11 @@ func _commit_add(
 			history,
 			curve,
 			"Add Easing Curve Point",
-			before,
-			{},
-			null,
-			Callable(inspector, "_restore_point_selection_state"),
-			selection_before,
-			selection_after,
+			EasingCurveEditorUndo.ActionContext.new(before).with_selection(
+				Callable(inspector, "_restore_point_selection_state"),
+				selection_before,
+				selection_after,
+			),
 		),
 		"Add did not create an Undo action",
 	)

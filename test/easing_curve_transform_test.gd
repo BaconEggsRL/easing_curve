@@ -196,7 +196,7 @@ func _test_handle_mode_transform_state_and_notifications() -> void:
 		_expect(notifications.changed == 1 and notifications.points == 1 and notifications.property_list == 1, "%s did not publish one coherent Points-list refresh" % property_name)
 
 		var history := UndoRedo.new()
-		_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Toggle %s" % property_name, before, after), "%s Handle Mode transform did not create an Undo action" % property_name)
+		_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Toggle %s" % property_name, EasingCurveEditorUndo.ActionContext.new(before, after)), "%s Handle Mode transform did not create an Undo action" % property_name)
 		notifications.changed = 0
 		notifications.points = 0
 		notifications.property_list = 0
@@ -408,7 +408,7 @@ func _test_undo_redo() -> void:
 		var before := EDITOR_UNDO.capture_state(curve)
 		curve.set(property_name, true)
 		var after := EDITOR_UNDO.capture_state(curve)
-		_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Toggle %s" % property_name, before, after), "%s toggle did not create an Undo action" % property_name)
+		_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Toggle %s" % property_name, EasingCurveEditorUndo.ActionContext.new(before, after)), "%s toggle did not create an Undo action" % property_name)
 		_expect(history.has_undo(), "%s toggle did not create exactly one Undo action" % property_name)
 		history.undo()
 		_expect(curve.get_editor_state_snapshot() == before, "%s Undo did not restore flag and geometry atomically" % property_name)

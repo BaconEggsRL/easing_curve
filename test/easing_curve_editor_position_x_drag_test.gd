@@ -164,14 +164,9 @@ func _test_position_x_reorder_undo_redo_follows_the_selected_resource() -> void:
 			history,
 			curve,
 			"Move Easing Curve Point",
-			before,
-			after,
-			null,
-			Callable(inspector, "_restore_point_selection_state"),
-			selection_before,
-			selection_after,
-			point_resource_ids_before,
-			point_resource_ids_after,
+			EasingCurveEditorUndo.ActionContext.new(before, after)
+				.with_selection(Callable(inspector, "_restore_point_selection_state"), selection_before, selection_after)
+				.with_point_resource_ids(point_resource_ids_before, point_resource_ids_after),
 		),
 		"Position-X reorder did not create an Undo action",
 	)

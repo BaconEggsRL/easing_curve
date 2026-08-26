@@ -128,7 +128,7 @@ func _commit_applied(
 ) -> Dictionary:
 	var after := EDITOR_UNDO.capture_state(curve)
 	_expect(
-		EDITOR_UNDO.commit_applied_action(history, curve, action_name, before, after),
+		EDITOR_UNDO.commit_applied_action(history, curve, action_name, EasingCurveEditorUndo.ActionContext.new(before, after)),
 		"%s was not added to Undo / Redo history" % action_name,
 	)
 	return after
@@ -177,7 +177,7 @@ func _test_point_drag() -> void:
 	var after := EDITOR_UNDO.capture_state(curve)
 	curve.set_point_snapshot(curve.get_point_snapshot())
 	_expect(counts.changed == 1 and counts.points == 1, "Point drag did not finalize signals exactly once")
-	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Move Easing Curve Point", before, after), "Point drag was not committed")
+	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Move Easing Curve Point", EasingCurveEditorUndo.ActionContext.new(before, after)), "Point drag was not committed")
 	counts.changed = 0
 	counts.points = 0
 	_verify_single_action(history, curve, before, after, "Point drag", 3)
@@ -198,7 +198,7 @@ func _test_handle_drag() -> void:
 		curve.set_point_snapshot(snapshot)
 	var after := EDITOR_UNDO.capture_state(curve)
 	curve.set_point_snapshot(curve.get_point_snapshot())
-	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Move Easing Curve Handle", before, after), "Handle drag was not committed")
+	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Move Easing Curve Handle", EasingCurveEditorUndo.ActionContext.new(before, after)), "Handle drag was not committed")
 	_verify_single_action(history, curve, before, after, "Handle drag", 3)
 	_dispose_history(history)
 
@@ -256,12 +256,11 @@ func _test_topology_selection_undo_redo() -> void:
 			history,
 			curve,
 			"Add Easing Curve Point A",
-			add_a_before,
-			{},
-			null,
-			Callable(inspector, "_restore_point_selection_state"),
-			add_a_before_selection,
-			add_a_after_selection,
+			EasingCurveEditorUndo.ActionContext.new(add_a_before).with_selection(
+				Callable(inspector, "_restore_point_selection_state"),
+				add_a_before_selection,
+				add_a_after_selection,
+			),
 		),
 		"Add A did not record selection restoration",
 	)
@@ -292,12 +291,11 @@ func _test_topology_selection_undo_redo() -> void:
 			history,
 			curve,
 			"Add Easing Curve Point B",
-			add_b_before,
-			{},
-			null,
-			Callable(inspector, "_restore_point_selection_state"),
-			add_b_before_selection,
-			add_b_after_selection,
+			EasingCurveEditorUndo.ActionContext.new(add_b_before).with_selection(
+				Callable(inspector, "_restore_point_selection_state"),
+				add_b_before_selection,
+				add_b_after_selection,
+			),
 		),
 		"Add B did not record selection restoration",
 	)
@@ -774,8 +772,7 @@ func _test_back_overshoot_undo_redo() -> void:
 			history,
 			curve,
 			"Change Easing Curve Overshoot",
-			before,
-			after,
+			EasingCurveEditorUndo.ActionContext.new(before, after),
 		),
 		"Back Overshoot action was not committed",
 	)
@@ -813,8 +810,7 @@ func _test_back_overshoot_property_reset() -> void:
 			history,
 			curve,
 			"Reset Easing Curve Overshoot",
-			before,
-			after,
+			EasingCurveEditorUndo.ActionContext.new(before, after),
 		),
 		"Back Overshoot reset action was not committed",
 	)
@@ -932,7 +928,7 @@ func _test_function_parameter_changes() -> void:
 		var after := EDITOR_UNDO.capture_state(curve)
 		curve._finish_editor_parameter_edit()
 		_expect(
-			EDITOR_UNDO.commit_applied_action(history, curve, "Change %s" % property_name, before, after),
+			EDITOR_UNDO.commit_applied_action(history, curve, "Change %s" % property_name, EasingCurveEditorUndo.ActionContext.new(before, after)),
 			"%s parameter action was not committed" % property_name,
 		)
 		_verify_single_action(history, curve, before, after, "%s parameter" % property_name, 2)
@@ -948,7 +944,7 @@ func _test_generate_action() -> void:
 	curve.generate_irregular()
 	var after := EDITOR_UNDO.capture_state(curve)
 	curve._finish_editor_parameter_edit()
-	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Generate Easing Curve", before, after), "Generate action was not committed")
+	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Generate Easing Curve", EasingCurveEditorUndo.ActionContext.new(before, after)), "Generate action was not committed")
 	_verify_single_action(history, curve, before, after, "Generate", 3)
 	_dispose_history(history)
 
@@ -963,6 +959,6 @@ func _test_parameter_reset() -> void:
 	curve.randomness = 3.5
 	var after := EDITOR_UNDO.capture_state(curve)
 	curve._finish_editor_parameter_edit()
-	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Reset Easing Curve Randomness", before, after), "Parameter reset was not committed")
+	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Reset Easing Curve Randomness", EasingCurveEditorUndo.ActionContext.new(before, after)), "Parameter reset was not committed")
 	_verify_single_action(history, curve, before, after, "Parameter reset", 3)
 	_dispose_history(history)

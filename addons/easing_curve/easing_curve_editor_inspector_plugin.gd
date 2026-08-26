@@ -1168,13 +1168,16 @@ func _move_point(from_index: int, to_index: int) -> void:
 	var point_resource_ids_after := curve._get_editor_point_resource_ids()
 	_commit_curve_action(
 		"Reorder Easing Curve Points",
-		before,
-		{},
-		Callable(self, "_restore_point_selection_state"),
-		selection_before,
-		selection_after,
-		point_resource_ids_before,
-		point_resource_ids_after,
+		EASING_CURVE_EDITOR_UNDO.ActionContext.new(before)
+			.with_selection(
+				Callable(self, "_restore_point_selection_state"),
+				selection_before,
+				selection_after,
+			)
+			.with_point_resource_ids(
+				point_resource_ids_before,
+				point_resource_ids_after,
+			),
 	)
 
 func _select_reordered_point(point: EasingCurvePoint) -> void:
@@ -1971,38 +1974,29 @@ func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
 	curve.set_point_snapshot(curve.get_point_snapshot())
 	_commit_curve_action(
 		action_name,
-		before,
-		after,
-		Callable(self, "_restore_point_selection_state"),
-		selection_before,
-		selection_after,
-		point_resource_ids_before,
-		point_resource_ids_after,
+		EASING_CURVE_EDITOR_UNDO.ActionContext.new(before, after)
+			.with_selection(
+				Callable(self, "_restore_point_selection_state"),
+				selection_before,
+				selection_after,
+			)
+			.with_point_resource_ids(
+				point_resource_ids_before,
+				point_resource_ids_after,
+			),
 	)
 
 
 func _commit_curve_action(
 		action_name: String,
-		before: Dictionary,
-		after: Dictionary = {},
-		selection_restorer: Callable = Callable(),
-		before_selection: Dictionary = {},
-		after_selection: Dictionary = {},
-		before_point_resource_ids: PackedInt64Array = PackedInt64Array(),
-		after_point_resource_ids: PackedInt64Array = PackedInt64Array(),
+		context: EasingCurveEditorUndo.ActionContext,
 ) -> bool:
 	return EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 		editor_undo_redo,
 		curve,
 		action_name,
-		before,
-		after,
+		context,
 		_undo_source_property(),
-		selection_restorer,
-		before_selection,
-		after_selection,
-		before_point_resource_ids,
-		after_point_resource_ids,
 	)
 
 
@@ -2282,7 +2276,7 @@ func _apply_point_property_change(
 			return
 		_commit_curve_action(
 			_point_action_name(property_name),
-			before,
+			EASING_CURVE_EDITOR_UNDO.ActionContext.new(before),
 		)
 
 
@@ -2335,11 +2329,11 @@ func _add_point(
 	)
 	_commit_curve_action(
 		"Add Easing Curve Point",
-		before,
-		{},
-		Callable(self, "_restore_point_selection_state") if not selection_before.is_empty() else Callable(),
-		selection_before,
-		selection_after,
+		EASING_CURVE_EDITOR_UNDO.ActionContext.new(before).with_selection(
+			Callable(self, "_restore_point_selection_state") if not selection_before.is_empty() else Callable(),
+			selection_before,
+			selection_after,
+		),
 	)
 	return added_point
 
@@ -2355,11 +2349,11 @@ func _remove_point(point: EasingCurvePoint) -> void:
 	var selection_after := _capture_point_selection_state()
 	_commit_curve_action(
 		"Remove Easing Curve Point",
-		before,
-		{},
-		Callable(self, "_restore_point_selection_state"),
-		selection_before,
-		selection_after,
+		EASING_CURVE_EDITOR_UNDO.ActionContext.new(before).with_selection(
+			Callable(self, "_restore_point_selection_state"),
+			selection_before,
+			selection_after,
+		),
 	)
 
 func _emit_curve_property(property_name: StringName, value: Variant) -> void:

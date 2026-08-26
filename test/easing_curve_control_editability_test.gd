@@ -170,7 +170,7 @@ func _test_handle_mode_undo_redo_refreshes_inputs() -> void:
 	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
 	var after := EDITOR_UNDO.capture_state(curve)
 	_expect(
-		EDITOR_UNDO.commit_applied_action(history, curve, "Change Easing Curve Handle Mode", before, after),
+		EDITOR_UNDO.commit_applied_action(history, curve, "Change Easing Curve Handle Mode", EasingCurveEditorUndo.ActionContext.new(before, after)),
 		"Handle mode change did not create an Undo/Redo action",
 	)
 	_expect(not _control_inputs_are_read_only(inputs, "left_control_point"), "Linear mode did not keep inputs editable before Undo")

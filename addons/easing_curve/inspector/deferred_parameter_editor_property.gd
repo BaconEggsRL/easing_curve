@@ -147,8 +147,10 @@ func _commit_drag() -> void:
 			undo_redo,
 			object,
 			"Change Easing Curve %s" % String(property_name).capitalize(),
-			drag_original_snapshot,
-			final_snapshot,
+			EasingCurveEditorUndo.ActionContext.new(
+				drag_original_snapshot,
+				final_snapshot,
+			),
 			self,
 		)
 	_queue_curve_redraw()

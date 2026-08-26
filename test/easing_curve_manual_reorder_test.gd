@@ -107,7 +107,7 @@ func _test_multiple_swaps_and_undo_redo() -> void:
 	curve.swap_points(2, 3)
 	var after := EDITOR_UNDO.capture_state(curve)
 	_expect(
-		EDITOR_UNDO.commit_applied_action(history, curve, "Reorder Easing Curve Points", before, after),
+		EDITOR_UNDO.commit_applied_action(history, curve, "Reorder Easing Curve Points", EasingCurveEditorUndo.ActionContext.new(before, after)),
 		"Manual reorder did not create one Undo/Redo action",
 	)
 	_expect(curve.points == [a, c, d, b], "Multiple manual reorders did not move the logical point through X slots")
@@ -148,7 +148,7 @@ func _test_reorder_selection_follows_logical_point() -> void:
 	_expect(curve.points[2] == b and curve_editor.selected_index == 2, "Move Up did not select the moved logical point at P2")
 	var after := EDITOR_UNDO.capture_state(curve)
 	var history := UndoRedo.new()
-	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Reorder Easing Curve Points", before, after), "Selection reorder test did not create an Undo action")
+	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Reorder Easing Curve Points", EasingCurveEditorUndo.ActionContext.new(before, after)), "Selection reorder test did not create an Undo action")
 	history.undo()
 	_expect(curve_editor.selected_index >= 0 and curve_editor.selected_index < curve.points.size(), "Undo left an invalid selected point index")
 	history.redo()
