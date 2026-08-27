@@ -28,11 +28,11 @@ enum ControlIndex { NONE = -1, LEFT = 0, RIGHT = 1 }
 
 const ZOOM_SLIDER_CONTAINER = preload("uid://r1ymwr6nae")
 const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
-const ZOOM_MIN := 0.1
-const ZOOM_MAX := 10.0
-const ZOOM_FACTOR := 1.2 # same as wheel multiplier
-const ZOOM_STEPS := int(round(log(ZOOM_MAX / ZOOM_MIN) / log(ZOOM_FACTOR)))
-const DEFAULT_SLIDER_VALUE := floor(ZOOM_STEPS / 2.0)
+const ZOOM_MIN := EasingCurve.ZOOM_MIN
+const ZOOM_MAX := EasingCurve.ZOOM_MAX
+const ZOOM_FACTOR := EasingCurve.ZOOM_FACTOR
+const ZOOM_STEPS := EasingCurve.ZOOM_STEPS
+const DEFAULT_SLIDER_VALUE := EasingCurve.DEFAULT_SLIDER_VALUE
 const ASPECT_RATIO: float = 6. / 13.
 const MIN_GRAPH_HEIGHT := 135.0
 const MIN_X: float = 0.0
