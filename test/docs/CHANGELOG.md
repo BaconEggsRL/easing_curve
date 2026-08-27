@@ -3,6 +3,28 @@
 Release entries are ordered newest to oldest. Add future releases above the
 current top entry.
 
+## v1.0.8
+
+### Added
+
+* Added Shift-constrained dragging for curve points in the graph editor.
+
+  * Press Shift while dragging to constrain movement to the dominant horizontal or vertical axis.
+  * The constrained axis can change naturally as the drag direction changes.
+  * Releasing Shift immediately returns to free movement.
+
+### Improved
+
+* Refactored and cleaned up editor code while preserving existing curve editing, selection, Undo/Redo, handle, and point behavior.
+* Improved test infrastructure and documentation, including configurable Godot executable selection.
+* Expanded characterization and regression coverage for graph interactions, point state, selection, serialization, and Undo/Redo behavior.
+
+### Fixed
+
+* Fixed several edge cases uncovered during the v1.0.8 refactor and regression-test pass.
+* Improved reliability of point dragging and editor interaction behavior without changing existing curve data or serialization semantics.
+
+
 ## v1.0.7
 
 ### Changed
