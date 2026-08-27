@@ -65,7 +65,7 @@ These can be high-level overviews, with suggested implementation details, but no
 
 ## NEW FEATURES
 
-Each new feature should be assigned a tag, eg. FEATURE-01.
+Each new feature should be assigned a tag / ID, eg. FEATURE-01.
 
 Analyze the user-supplied requests for new features or updates to existing features.
 Assess the current architecture related to said feature.
@@ -76,5 +76,6 @@ Note any constraints from the code smells audit; if those should be completed fi
 
 ## PLAN EXECUTION
 
-When executing a step of the code plan; execution sub-steps should be documented within the corresponding code report (see CODE_REPORT_REQUIREMENTS.md).
-Do not provide exact code diffs within the plan itself.
+Do not provide exact code diffs within the code plan itself.
+Instead, when executing a step of the code plan; execution sub-steps should be documented within the corresponding code report (see CODE_REPORT_REQUIREMENTS.md).
+This applies to both code smell findings and features.
