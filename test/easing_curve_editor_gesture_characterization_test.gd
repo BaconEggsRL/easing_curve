@@ -18,6 +18,7 @@ func _run() -> void:
 	_test_zoom_metadata_contract()
 	_test_zoom_behavioral_invariants()
 	_test_pending_add_cancel_and_no_op_release()
+	_test_modifier_capable_drag_baseline()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
 	if _failures == 0:
@@ -63,18 +64,29 @@ func _fixture() -> Dictionary:
 	return {"curve": curve, "editor": editor, "inspector": inspector}
 
 
-func _button(button: MouseButton, position: Vector2, pressed: bool) -> InputEventMouseButton:
+func _button(
+	button: MouseButton,
+	position: Vector2,
+	pressed: bool,
+	shift_pressed := false,
+) -> InputEventMouseButton:
 	var event := InputEventMouseButton.new()
 	event.button_index = button
 	event.position = position
 	event.pressed = pressed
+	event.shift_pressed = shift_pressed
 	return event
 
 
-func _motion(position: Vector2, buttons := 0) -> InputEventMouseMotion:
+func _motion(
+	position: Vector2,
+	buttons := 0,
+	shift_pressed := false,
+) -> InputEventMouseMotion:
 	var event := InputEventMouseMotion.new()
 	event.position = position
 	event.button_mask = buttons
+	event.shift_pressed = shift_pressed
 	return event
 
 
@@ -201,6 +213,57 @@ func _test_pending_add_cancel_and_no_op_release() -> void:
 	_expect(inspector.get("_point_edit_before_state").is_empty(), "No-op point click created an edit transaction")
 	_expect(editor.dragging_point == -1 and editor.dragging_control == EasingCurveEditor.ControlIndex.NONE, "No-op point release leaked drag state")
 	editor.free()
+
+
+func _test_modifier_capable_drag_baseline() -> void:
+	var point_fixture := _fixture()
+	var point_curve: EasingCurve = point_fixture.curve
+	var point_editor: EasingCurveEditor = point_fixture.editor
+	var point := point_curve.points[1]
+	var point_start := _point_view(point_editor, point)
+	var point_target_view := point_start + Vector2(26.0, -17.0)
+	var expected_point_target := point_editor.get_world_pos(point_target_view).clamp(
+		Vector2(0, point_curve.min_value),
+		Vector2(1.0, point_curve.max_value),
+	)
+	point_editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_start, true, true))
+	_expect(point_editor.dragging_point == 1, "Pre-held Shift prevented the ordinary point drag from starting")
+	point_editor._gui_input(_motion(point_target_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(point.position.is_equal_approx(expected_point_target), "Pre-held Shift changed the ordinary unconstrained point target")
+	point_editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_target_view, false, true))
+	_expect(point_editor.dragging_point == -1, "Pre-held Shift point drag did not clear drag state on release")
+	point_editor._slider.free()
+	point_editor.free()
+
+	var left_fixture := _fixture()
+	var left_curve: EasingCurve = left_fixture.curve
+	var left_editor: EasingCurveEditor = left_fixture.editor
+	var left_point := left_curve.points[1]
+	var left_start := left_editor.get_view_pos(left_point.left_control_point)
+	var left_target_view := left_start + Vector2(-18.0, 12.0)
+	var expected_left_target := left_editor.get_world_pos(left_target_view)
+	left_editor._gui_input(_button(MOUSE_BUTTON_LEFT, left_start, true))
+	_expect(left_editor.dragging_control == EasingCurveEditor.ControlIndex.LEFT, "Ordinary left-handle drag did not start on the left control")
+	left_editor._gui_input(_motion(left_target_view, MOUSE_BUTTON_MASK_LEFT))
+	_expect(left_point.left_control_point.is_equal_approx(expected_left_target), "Ordinary left-handle drag no longer follows the unconstrained mouse target")
+	left_editor._gui_input(_button(MOUSE_BUTTON_LEFT, left_target_view, false))
+	left_editor._slider.free()
+	left_editor.free()
+
+	var right_fixture := _fixture()
+	var right_curve: EasingCurve = right_fixture.curve
+	var right_editor: EasingCurveEditor = right_fixture.editor
+	var right_point := right_curve.points[1]
+	var right_start := right_editor.get_view_pos(right_point.right_control_point)
+	var right_target_view := right_start + Vector2(18.0, -12.0)
+	var expected_right_target := right_editor.get_world_pos(right_target_view)
+	right_editor._gui_input(_button(MOUSE_BUTTON_LEFT, right_start, true))
+	_expect(right_editor.dragging_control == EasingCurveEditor.ControlIndex.RIGHT, "Ordinary right-handle drag did not start on the right control")
+	right_editor._gui_input(_motion(right_target_view, MOUSE_BUTTON_MASK_LEFT))
+	_expect(right_point.right_control_point.is_equal_approx(expected_right_target), "Ordinary right-handle drag no longer follows the unconstrained mouse target")
+	right_editor._gui_input(_button(MOUSE_BUTTON_LEFT, right_target_view, false))
+	right_editor._slider.free()
+	right_editor.free()
 
 
 func _test_point_and_control_drag_boundaries() -> void:

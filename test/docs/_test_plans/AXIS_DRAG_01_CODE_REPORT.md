@@ -5,7 +5,7 @@ release: 1.0.8-dev
 feature_id: AXIS-DRAG-01
 feature: Shift axis-constrained graph dragging
 report_type: execution-progress
-status: planning_complete_execution_not_started
+status: in_progress
 created: 2026-08-27
 last_updated: 2026-08-27
 authoritative_plan: test/docs/_test_plans/AXIS_DRAG_01_CODE_PLAN.md
@@ -33,7 +33,7 @@ Per `CODE_REPORT_REQUIREMENTS.md`:
   targeted validation for that step must be shown before implementation;
 - generating this report does **not** authorize production changes.
 
-No AXIS-DRAG-01 production or test implementation has been performed yet.
+AXIS-DRAG-01 Step 1 characterization is complete. No production code has been changed for the feature yet.
 
 ---
 
@@ -45,10 +45,10 @@ No AXIS-DRAG-01 production or test implementation has been performed yet.
 | Feature | Shift axis-constrained graph dragging |
 | Release | `1.0.8-dev` |
 | Plan | `test/docs/_test_plans/AXIS_DRAG_01_CODE_PLAN.md` |
-| Execution status | NOT STARTED |
-| Current step | Awaiting approval for Step 1 of 8 |
+| Execution status | IN PROGRESS |
+| Current step | Awaiting approval for Step 2 of 8 |
 | Production code changed for feature | No |
-| Feature tests changed | No |
+| Feature tests changed | Yes — graph gesture characterization only |
 | Baseline branch | `dev` |
 | Baseline commit | `e694fb8aec392a572791204f5e3a0ecc39ff950e` |
 | Baseline automated result | 17/17 PASS on Godot 4.7.1 |
@@ -65,9 +65,9 @@ existing deferred maintenance constraints.
 
 | Plan ID | Status | Execution relationship |
 | --- | --- | --- |
-| `AXIS-TEST-01` | NOT STARTED | Addressed by AXIS-DRAG-01 Step 1 and later characterization steps |
+| `AXIS-TEST-01` | IN PROGRESS | Step 1 added modifier-capable baseline characterization; active-constraint coverage continues in later steps |
 | `AXIS-STATE-01` | NOT STARTED | Addressed narrowly during core feature implementation if needed |
-| `AXIS-DRAG-01` | NOT STARTED | Active 8-step feature execution plan below |
+| `AXIS-DRAG-01` | IN PROGRESS | Step 1 complete; awaiting approval for Step 2 |
 | `EDITOR-02` | DEFERRED | Must not be folded into feature |
 | `EDITOR-03` | NOT REQUIRED | No visual constraint guide planned |
 | `EDITOR-01` | DEFERRED | Not on the graph coordinate-input boundary |
@@ -103,7 +103,7 @@ to run it earlier. Use focused suites during development.
 
 ## AXIS-DRAG-01 Step 1 of 8 — Establish modifier-capable graph characterization
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 ### Objective
 
@@ -138,9 +138,36 @@ No production file should change in this step.
 - `git diff --check`.
 - Confirm only the graph gesture test changed.
 
-### Approval gate
+### Execution result
 
-Present exact test-only diff before execution.
+Completed on 2026-08-27.
+
+Changed only:
+
+- `test/easing_curve_editor_gesture_characterization_test.gd`.
+
+Implemented:
+
+- optional `shift_pressed` support in the existing mouse button/motion test helpers while preserving existing call sites;
+- explicit ordinary left-handle and right-handle unconstrained drag baselines;
+- pre-held Shift characterization proving that its initial hold still starts and performs an ordinary unconstrained point drag and cleans up normally.
+
+The suite increased from **45 to 52 checks**. No desired mid-drag Shift-axis assertions were added yet, so Step 1 does not require unfinished production behavior.
+
+Validation:
+
+- fresh Godot 4.7.1 Editor-host run through `test/scripts/run_godot.ps1`;
+- process exit code `0`;
+- `PASS: 52 graph gesture characterization checks`;
+- no `SCRIPT ERROR` or `ERROR:` in the final test log;
+- `git diff --check` passed;
+- Step 1 implementation scope contained no production code.
+
+Diagnostic encountered:
+
+- during the multi-patch edit, the first patch temporarily registered `_test_modifier_capable_drag_baseline()` in `_run()` before its function body existed, producing an expected transient editor parse diagnostic; after the planned function body was added the script parsed cleanly and the fresh Editor-host process passed 52 checks. This was a patch-order/tooling artifact, not a final source defect.
+
+Next approval gate: **AXIS-DRAG-01 Step 2 of 8 — Implement Shift eligibility and constrained point dragging**.
 
 ---
 
@@ -587,11 +614,16 @@ the execution history.
 
 # 7. Current handoff
 
-**AXIS-DRAG-01 implementation has not started.**
+**AXIS-DRAG-01 Step 1 is complete.**
+
+Current implementation state:
+
+- production feature code: not started;
+- modifier-capable baseline characterization: complete;
+- graph gesture suite: 52 checks passing.
 
 The next approval gate is:
 
-**AXIS-DRAG-01 Step 1 of 8 — Establish modifier-capable graph characterization**
+**AXIS-DRAG-01 Step 2 of 8 — Implement Shift eligibility and constrained point dragging**
 
-That step is test-only and should be presented with its exact proposed test diff
-before any file is changed.
+Before executing Step 2, present the exact proposed production + test diff and targeted validation.
