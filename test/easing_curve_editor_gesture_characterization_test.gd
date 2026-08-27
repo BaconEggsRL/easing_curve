@@ -15,6 +15,7 @@ func _init() -> void:
 
 
 func _run() -> void:
+	_test_zoom_metadata_contract()
 	_test_pending_add_cancel_and_no_op_release()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
@@ -78,6 +79,44 @@ func _motion(position: Vector2, buttons := 0) -> InputEventMouseMotion:
 
 func _point_view(editor: EasingCurveEditor, point: EasingCurvePoint) -> Vector2:
 	return editor.get_view_pos(point.position)
+
+
+func _test_zoom_metadata_contract() -> void:
+	_expect(EasingCurve.ZOOM_MIN == 0.1, "EasingCurve ZOOM_MIN changed")
+	_expect(EasingCurve.ZOOM_MAX == 10.0, "EasingCurve ZOOM_MAX changed")
+	_expect(EasingCurve.ZOOM_FACTOR == 1.2, "EasingCurve ZOOM_FACTOR changed")
+	_expect(EasingCurve.ZOOM_STEPS == 25, "EasingCurve ZOOM_STEPS changed")
+	_expect(EasingCurve.DEFAULT_SLIDER_VALUE == 12.0, "EasingCurve DEFAULT_SLIDER_VALUE changed")
+
+	for value_pair in [
+		[EasingCurveEditor.ZOOM_MIN, EasingCurveZoomSliderContainer.ZOOM_MIN],
+		[EasingCurveEditor.ZOOM_MAX, EasingCurveZoomSliderContainer.ZOOM_MAX],
+		[EasingCurveEditor.ZOOM_FACTOR, EasingCurveZoomSliderContainer.ZOOM_FACTOR],
+		[EasingCurveEditor.ZOOM_STEPS, EasingCurveZoomSliderContainer.ZOOM_STEPS],
+		[EasingCurveEditor.DEFAULT_SLIDER_VALUE, EasingCurveZoomSliderContainer.DEFAULT_SLIDER_VALUE],
+	]:
+		_expect(value_pair[0] == value_pair[1], "Editor and zoom slider zoom metadata diverged")
+
+	_expect(EasingCurveEditor.ZOOM_MIN == EasingCurve.ZOOM_MIN, "Editor ZOOM_MIN diverged from EasingCurve")
+	_expect(EasingCurveEditor.ZOOM_MAX == EasingCurve.ZOOM_MAX, "Editor ZOOM_MAX diverged from EasingCurve")
+	_expect(EasingCurveEditor.ZOOM_FACTOR == EasingCurve.ZOOM_FACTOR, "Editor ZOOM_FACTOR diverged from EasingCurve")
+	_expect(EasingCurveEditor.ZOOM_STEPS == EasingCurve.ZOOM_STEPS, "Editor ZOOM_STEPS diverged from EasingCurve")
+	_expect(EasingCurveEditor.DEFAULT_SLIDER_VALUE == EasingCurve.DEFAULT_SLIDER_VALUE, "Editor DEFAULT_SLIDER_VALUE diverged from EasingCurve")
+
+	_expect(
+		EasingCurve.ZOOM_STEPS == int(round(log(EasingCurve.ZOOM_MAX / EasingCurve.ZOOM_MIN) / log(EasingCurve.ZOOM_FACTOR))),
+		"Zoom step count no longer matches the public zoom range/factor",
+	)
+	_expect(
+		EasingCurve.DEFAULT_SLIDER_VALUE == floor(EasingCurve.ZOOM_STEPS / 2.0),
+		"Default slider value is no longer the midpoint of the zoom-step range",
+	)
+
+	var editor := EasingCurveEditor.new()
+	var default_step := int(EasingCurve.DEFAULT_SLIDER_VALUE)
+	_expect(is_equal_approx(editor.step_to_zoom(0), EasingCurve.ZOOM_MIN), "Zoom step zero no longer maps to ZOOM_MIN")
+	_expect(editor.zoom_to_step(editor.step_to_zoom(default_step)) == default_step, "Default zoom step no longer round-trips through the zoom conversion")
+	editor.free()
 
 
 func _test_pending_add_cancel_and_no_op_release() -> void:
