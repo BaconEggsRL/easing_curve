@@ -20,6 +20,7 @@ func _run() -> void:
 	_test_pending_add_cancel_and_no_op_release()
 	_test_modifier_capable_drag_baseline()
 	_test_point_axis_constraint_behavior()
+	_test_handle_axis_constraint_behavior()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
 	if _failures == 0:
@@ -361,6 +362,74 @@ func _test_point_axis_constraint_behavior() -> void:
 	preheld_editor._gui_input(_button(MOUSE_BUTTON_LEFT, repress_view, false, true))
 	preheld_editor._slider.free()
 	preheld_editor.free()
+
+
+func _test_handle_axis_constraint_behavior() -> void:
+	var left_fixture := _fixture()
+	var left_curve: EasingCurve = left_fixture.curve
+	var left_editor: EasingCurveEditor = left_fixture.editor
+	var left_point := left_curve.points[1]
+	var left_origin := left_point.left_control_point
+	var left_start := left_editor.get_view_pos(left_origin)
+	left_editor._gui_input(_button(MOUSE_BUTTON_LEFT, left_start, true))
+
+	var left_horizontal_view := left_start + Vector2(-52.0, 12.0)
+	var left_horizontal_world := left_editor.get_world_pos(left_horizontal_view)
+	var expected_left_horizontal := Vector2(left_horizontal_world.x, left_origin.y)
+	left_editor._gui_input(_motion(left_horizontal_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		left_point.left_control_point.is_equal_approx(expected_left_horizontal),
+		"Shift did not constrain the left handle to the horizontal axis from its original drag position",
+	)
+
+	var left_vertical_view := left_start + Vector2(-12.0, -52.0)
+	var left_vertical_world := left_editor.get_world_pos(left_vertical_view)
+	var expected_left_vertical := Vector2(left_origin.x, left_vertical_world.y)
+	left_editor._gui_input(_motion(left_vertical_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		left_point.left_control_point.is_equal_approx(expected_left_vertical),
+		"Held Shift did not constrain the left handle to the vertical axis when Y became dominant",
+	)
+
+	var left_free_view := left_start + Vector2(-30.0, -24.0)
+	var expected_left_free := left_editor.get_world_pos(left_free_view)
+	left_editor._gui_input(_motion(left_free_view, MOUSE_BUTTON_MASK_LEFT, false))
+	_expect(
+		left_point.left_control_point.is_equal_approx(expected_left_free),
+		"Releasing Shift did not immediately restore ordinary unconstrained left-handle dragging",
+	)
+	left_editor._gui_input(_button(MOUSE_BUTTON_LEFT, left_free_view, false))
+	left_editor._slider.free()
+	left_editor.free()
+
+	var right_fixture := _fixture()
+	var right_curve: EasingCurve = right_fixture.curve
+	var right_editor: EasingCurveEditor = right_fixture.editor
+	var right_point := right_curve.points[1]
+	var right_origin := right_point.right_control_point
+	var right_start := right_editor.get_view_pos(right_origin)
+	right_editor._gui_input(_button(MOUSE_BUTTON_LEFT, right_start, true))
+
+	var right_horizontal_view := right_start + Vector2(52.0, -12.0)
+	var right_horizontal_world := right_editor.get_world_pos(right_horizontal_view)
+	var expected_right_horizontal := Vector2(right_horizontal_world.x, right_origin.y)
+	right_editor._gui_input(_motion(right_horizontal_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		right_point.right_control_point.is_equal_approx(expected_right_horizontal),
+		"Shift did not constrain the right handle to the horizontal axis from its original drag position",
+	)
+
+	var right_vertical_view := right_start + Vector2(12.0, 52.0)
+	var right_vertical_world := right_editor.get_world_pos(right_vertical_view)
+	var expected_right_vertical := Vector2(right_origin.x, right_vertical_world.y)
+	right_editor._gui_input(_motion(right_vertical_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		right_point.right_control_point.is_equal_approx(expected_right_vertical),
+		"Held Shift did not constrain the right handle to the vertical axis when Y became dominant",
+	)
+	right_editor._gui_input(_button(MOUSE_BUTTON_LEFT, right_vertical_view, false, true))
+	right_editor._slider.free()
+	right_editor.free()
 
 
 func _test_point_and_control_drag_boundaries() -> void:

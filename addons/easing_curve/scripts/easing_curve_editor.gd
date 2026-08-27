@@ -231,7 +231,7 @@ func _clear_axis_drag() -> void:
 	_axis_drag_shift_blocked = false
 
 
-func _apply_point_axis_constraint(
+func _apply_axis_drag_constraint(
 	event: InputEventMouseMotion,
 	world_pos: Vector2,
 ) -> Vector2:
@@ -264,6 +264,8 @@ func _handle_drag_motion(event: InputEventMouseMotion) -> void:
 	if dragging_control == ControlIndex.RIGHT and p.is_lock_active(&"right_control_point"):
 		return
 
+	world_pos = _apply_axis_drag_constraint(event, world_pos)
+
 	match dragging_control:
 		ControlIndex.LEFT:
 			if dragging_point != 0:
@@ -272,7 +274,6 @@ func _handle_drag_motion(event: InputEventMouseMotion) -> void:
 			if dragging_point != _curve.points.size() - 1:
 				_request_point_property_change(dragging_point, &"right_control_point", world_pos, true)
 		ControlIndex.NONE:
-			world_pos = _apply_point_axis_constraint(event, world_pos)
 			var clamped_pos = world_pos.clamp(Vector2(0, _curve.min_value), Vector2(1.0, _curve.max_value))
 			var delta = clamped_pos - p.position
 			var left_control: Vector2 = p.left_control_point

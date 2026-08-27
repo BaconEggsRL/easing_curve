@@ -33,7 +33,7 @@ Per `CODE_REPORT_REQUIREMENTS.md`:
   targeted validation for that step must be shown before implementation;
 - generating this report does **not** authorize production changes.
 
-AXIS-DRAG-01 Steps 1-2 are complete. Step 2 introduced the first bounded production implementation for Shift-constrained point dragging.
+AXIS-DRAG-01 Steps 1-3 are complete. Point and Bézier-handle dragging now share the bounded Shift-axis projection path.
 
 ---
 
@@ -46,8 +46,8 @@ AXIS-DRAG-01 Steps 1-2 are complete. Step 2 introduced the first bounded product
 | Release | `1.0.8-dev` |
 | Plan | `test/docs/_test_plans/AXIS_DRAG_01_CODE_PLAN.md` |
 | Execution status | IN PROGRESS |
-| Current step | Awaiting approval for Step 3 of 8 |
-| Production code changed for feature | Yes — `easing_curve_editor.gd` point-drag constraint path |
+| Current step | Awaiting approval for Step 4 of 8 |
+| Production code changed for feature | Yes — `easing_curve_editor.gd` point/handle axis-constraint path |
 | Feature tests changed | Yes — graph gesture characterization |
 | Baseline branch | `dev` |
 | Baseline commit | `e694fb8aec392a572791204f5e3a0ecc39ff950e` |
@@ -67,7 +67,7 @@ existing deferred maintenance constraints.
 | --- | --- | --- |
 | `AXIS-TEST-01` | IN PROGRESS | Step 1 added modifier-capable baseline characterization; active-constraint coverage continues in later steps |
 | `AXIS-STATE-01` | COMPLETE | Step 2 added one narrow private gesture-origin/Shift-eligibility lifecycle |
-| `AXIS-DRAG-01` | IN PROGRESS | Steps 1-2 complete; awaiting approval for Step 3 |
+| `AXIS-DRAG-01` | IN PROGRESS | Steps 1-3 complete; awaiting approval for Step 4 |
 | `EDITOR-02` | DEFERRED | Must not be folded into feature |
 | `EDITOR-03` | NOT REQUIRED | No visual constraint guide planned |
 | `EDITOR-01` | DEFERRED | Not on the graph coordinate-input boundary |
@@ -284,7 +284,7 @@ Next approval gate: **AXIS-DRAG-01 Step 3 of 8 — Apply the same constraint mod
 
 ## AXIS-DRAG-01 Step 3 of 8 — Apply the same constraint model to Bézier handles
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 ### Objective
 
@@ -317,9 +317,43 @@ Expected production/test scope:
 - `easing_curve_linear_control_alias_test.gd`;
 - `git diff --check`.
 
-### Approval gate
+### Execution result
 
-Present exact diff before execution.
+Completed on 2026-08-27.
+
+Production change remained confined to `addons/easing_curve/scripts/easing_curve_editor.gd`:
+
+- renamed the Step 2 point-specific projection helper to the generic `_apply_axis_drag_constraint()`;
+- applied that helper once to the ordinary world target after existing lock checks and before the existing left/right/point dispatch;
+- reused the existing Step 2 drag-origin and pre-held-Shift eligibility state for handles;
+- left left/right property requests, control availability, locks, Handle Modes, Force Linear, Inspector mutation, notifications, and Undo transaction behavior unchanged.
+
+Characterization change remained in `test/easing_curve_editor_gesture_characterization_test.gd` and added five checks:
+
+- left-handle horizontal constraint;
+- left-handle vertical constraint;
+- left-handle Shift release returning immediately to ordinary unconstrained movement;
+- right-handle horizontal constraint;
+- right-handle vertical constraint.
+
+The graph gesture suite increased from **59 to 64 checks**.
+
+Focused validation passed in fresh Godot 4.7.1 Editor-host processes through `test/scripts/run_godot.ps1`:
+
+- `PASS: 64 graph gesture characterization checks`;
+- `PASS: 21 EasingCurve control editability checks`;
+- `PASS: 72 EasingCurve Linear control alias checks`;
+- all three processes exited `0`;
+- no final log contained `SCRIPT ERROR` or `ERROR:`;
+- `git diff --check` passed.
+
+Diagnostic encountered:
+
+- the live editor produced the previously observed hot-reload error code `43` while saving `easing_curve_editor.gd`; fresh Editor-host compilation and all focused suites passed, so this remains classified as a live-editor hot-reload artifact rather than a source defect.
+
+No full 17-suite run was performed in Step 3.
+
+Next approval gate: **AXIS-DRAG-01 Step 4 of 8 — Characterize Handle Modes, locks, and Force Linear integration**.
 
 ---
 
@@ -661,18 +695,20 @@ the execution history.
 
 # 7. Current handoff
 
-**AXIS-DRAG-01 Steps 1-2 are complete.**
+**AXIS-DRAG-01 Steps 1-3 are complete.**
 
 Current implementation state:
 
 - modifier-capable baseline characterization: complete;
 - Shift-constrained point dragging: implemented and focused-validated;
-- Bézier handle constraint: not started;
-- graph gesture suite: 59 checks passing;
-- Position-X drag suite: 69 checks passing.
+- Shift-constrained left/right Bézier handle dragging: implemented and focused-validated;
+- graph gesture suite: 64 checks passing;
+- control editability suite: 21 checks passing;
+- Linear control alias suite: 72 checks passing;
+- Position-X drag suite remains at its Step 2 validation baseline of 69 checks passing.
 
 The next approval gate is:
 
-**AXIS-DRAG-01 Step 3 of 8 — Apply the same constraint model to Bézier handles**
+**AXIS-DRAG-01 Step 4 of 8 — Characterize Handle Modes, locks, and Force Linear integration**
 
-Before executing Step 3, present the exact proposed production + test diff and targeted validation.
+Step 4 should prefer test-only characterization and must not move point/control semantics into the graph editor.
