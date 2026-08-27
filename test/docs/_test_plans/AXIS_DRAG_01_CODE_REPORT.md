@@ -33,7 +33,7 @@ Per `CODE_REPORT_REQUIREMENTS.md`:
   targeted validation for that step must be shown before implementation;
 - generating this report does **not** authorize production changes.
 
-AXIS-DRAG-01 Steps 1-6 are complete. Step 6 added test-only characterization for constrained request/transaction boundaries, explicit no-op Undo rejection, and unaffected Shift-modified graph input.
+AXIS-DRAG-01 Steps 1-6 are complete. Step 7 focused automated and display-backed validation is complete; subjective Inspector drag-feel smoke remains pending manual confirmation.
 
 ---
 
@@ -46,7 +46,7 @@ AXIS-DRAG-01 Steps 1-6 are complete. Step 6 added test-only characterization for
 | Release | `1.0.8-dev` |
 | Plan | `test/docs/_test_plans/AXIS_DRAG_01_CODE_PLAN.md` |
 | Execution status | IN PROGRESS |
-| Current step | Awaiting approval for Step 7 of 8 |
+| Current step | Step 7 of 8 PARTIAL — manual Inspector smoke pending |
 | Production code changed for feature | Yes — `easing_curve_editor.gd` point/handle axis-constraint path |
 | Feature tests changed | Yes — graph gesture characterization |
 | Baseline branch | `dev` |
@@ -67,7 +67,7 @@ existing deferred maintenance constraints.
 | --- | --- | --- |
 | `AXIS-TEST-01` | COMPLETE | Steps 1-6 now cover modifier input, point/handle constraints, downstream semantics, geometry, request/transaction boundaries, and unaffected graph gestures |
 | `AXIS-STATE-01` | COMPLETE | Step 2 added one narrow private gesture-origin/Shift-eligibility lifecycle |
-| `AXIS-DRAG-01` | IN PROGRESS | Steps 1-6 complete; awaiting approval for Step 7 |
+| `AXIS-DRAG-01` | IN PROGRESS | Steps 1-6 complete; Step 7 automated/display validation complete, manual Inspector smoke pending |
 | `EDITOR-02` | DEFERRED | Must not be folded into feature |
 | `EDITOR-03` | NOT REQUIRED | No visual constraint guide planned |
 | `EDITOR-01` | DEFERRED | Not on the graph coordinate-input boundary |
@@ -653,7 +653,7 @@ Next approval gate: **AXIS-DRAG-01 Step 7 of 8 — Focused integration and visib
 ---
 ## AXIS-DRAG-01 Step 7 of 8 — Focused integration and visible-editor validation
 
-**Status:** NOT STARTED
+**Status:** PARTIAL — AUTOMATED / DISPLAY-BACKED VALIDATION COMPLETE; MANUAL INSPECTOR SMOKE PENDING
 
 ### Objective
 
@@ -698,10 +698,17 @@ Manually verify the 13-point checklist in the code plan, including:
 Record any subjective drag-feel issue exactly. Do not add axis latching,
 continuity rebasing, or visual guides without a new approval decision.
 
+### Execution result
+
+Focused automated validation completed on 2026-08-27 with no code change. Fresh Godot 4.7.1 runs passed all eight focused suites: 124 graph gesture checks, 69 Position-X drag checks, 21 control editability checks, 72 Linear alias checks, 106 point-state checks, 70 selection/refresh checks, 629 editor Undo/Redo checks, and 20 RMB-delete checks. All eight processes exited `0`; no focused log contained `SCRIPT ERROR` or `ERROR:`.
+
+A separate non-headless / display-backed Editor-host run of the graph gesture suite also exited `0` and printed `PASS: 124 graph gesture characterization checks`. After PASS it emitted `ERROR: Parameter "current_window" is null.` from `editor/gui/progress_dialog.cpp:183`, followed by normal plugin unload/shutdown. This did not occur in the focused headless Editor-host run and is classified as a scripted-editor harness/environment diagnostic, not a Shift-drag production failure.
+
+The available Godot-AI tooling cannot inject mouse/keyboard input into the editor Inspector UI. The 13-point interaction matrix is functionally covered by the 124-check EasingCurveEditor event-path suite and focused regressions, but subjective free-drag/Shift-transition feel in the actual Inspector remains pending manual user confirmation. No production or test correction was required.
+
 ### Approval gate
 
-Present the validation checklist before execution. If any code fix is required,
-stop and present that diff as a bounded corrective sub-step before continuing.
+Do not advance to Step 8 until the manual Inspector smoke is confirmed or an explicitly approved issue is recorded. If manual testing finds a defect, stop and present that diff as a bounded corrective sub-step before continuing.
 
 ---
 
@@ -836,7 +843,7 @@ the execution history.
 
 # 7. Current handoff
 
-**AXIS-DRAG-01 Steps 1-6 are complete.**
+**AXIS-DRAG-01 Steps 1-6 are complete. Step 7 is PARTIAL.**
 
 Current implementation/characterization state:
 
@@ -846,6 +853,8 @@ Current implementation/characterization state:
 - downstream Handle Mode / lock / Force Linear integration: characterized without a Step 4 production change;
 - view-space dominance, diagonal boundary, zoom/pan, clamping, and ordering interactions: characterized without a Step 5 production change;
 - constrained request/transaction boundaries and unrelated Shift-modified graph inputs: characterized without a Step 6 production change;
+- Step 7 focused regression set: all eight suites passed; display-backed graph run also passed 124 checks;
+- manual Inspector mouse/Shift smoke remains pending because editor-UI input injection is unavailable;
 - graph gesture suite: 124 checks passing;
 - editor Undo/Redo suite: 629 checks passing;
 - Position-X drag suite: 69 checks passing;
@@ -855,8 +864,4 @@ Current implementation/characterization state:
 - Linear control alias suite: 72 checks passing;
 - point-state characterization suite: 106 checks passing.
 
-The next approval gate is:
-
-**AXIS-DRAG-01 Step 7 of 8 — Focused integration and visible-editor validation**
-
-Step 7 should run the complete focused regression set and perform the visible-editor interaction smoke. No code change is expected unless that validation exposes a defect.
+The remaining Step 7 gate is manual Inspector smoke. Do **not** begin Step 8 until that smoke is confirmed or an explicitly approved issue is recorded.
