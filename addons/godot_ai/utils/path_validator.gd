@@ -55,6 +55,17 @@ static func _user_root() -> String:
 	return _cached_user_root
 
 
+## Godot Strings cannot retain U+0000. During decoding, an attempted NUL is
+## replaced with U+FFFD. Check for that codepoint directly instead of
+## constructing String.chr(0), which itself emits an "Unexpected NUL character"
+## Unicode parsing error on current Godot builds.
+static func _contains_unicode_replacement(path: String) -> bool:
+	for i in path.length():
+		if path.unicode_at(i) == 0xFFFD:
+			return true
+	return false
+
+
 ## Returns "" when the path is a safe `res://`-rooted reference inside the
 ## project root. Returns a human-readable error message otherwise.
 ## Prefer `path_error` over calling this directly — it wraps the message in the
@@ -71,8 +82,9 @@ static func validate_resource_path(path: String, for_write: bool = false) -> Str
 	## Guard the sentinel: on builds where String.chr(0) yields "" (some engines
 	## normalize embedded nulls away, e.g. 4.3), contains("") would be true and
 	## reject every path. A String that can't hold a null can't smuggle one.
-	var nul := String.chr(0)
-	if not nul.is_empty() and path.contains(nul):
+	#var nul := String.chr(0)
+	#if not nul.is_empty() and path.contains(nul):
+	if _contains_unicode_replacement(path):
 		return "Path must not contain null bytes"
 	if not path.begins_with("res://"):
 		return "Path must start with res://"
@@ -97,8 +109,9 @@ static func validate_loadable_path(path: String) -> String:
 	## Guard the sentinel: on builds where String.chr(0) yields "" (some engines
 	## normalize embedded nulls away, e.g. 4.3), contains("") would be true and
 	## reject every path. A String that can't hold a null can't smuggle one.
-	var nul := String.chr(0)
-	if not nul.is_empty() and path.contains(nul):
+	#var nul := String.chr(0)
+	#if not nul.is_empty() and path.contains(nul):
+	if _contains_unicode_replacement(path):
 		return "Path must not contain null bytes"
 	if path.begins_with("uid://"):
 		return ""
