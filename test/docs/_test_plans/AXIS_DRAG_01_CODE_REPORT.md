@@ -5,7 +5,7 @@ release: 1.0.8-dev
 feature_id: AXIS-DRAG-01
 feature: Shift axis-constrained graph dragging
 report_type: execution-progress
-status: in_progress
+status: complete
 created: 2026-08-27
 last_updated: 2026-08-27
 authoritative_plan: test/docs/_test_plans/AXIS_DRAG_01_CODE_PLAN.md
@@ -33,7 +33,7 @@ Per `CODE_REPORT_REQUIREMENTS.md`:
   targeted validation for that step must be shown before implementation;
 - generating this report does **not** authorize production changes.
 
-AXIS-DRAG-01 Steps 1-6 are complete. Step 7 focused automated and display-backed validation is complete; subjective Inspector drag-feel smoke remains pending manual confirmation.
+AXIS-DRAG-01 Steps 1-8 are complete. The bounded closeout commit was approved on 2026-08-27.
 
 ---
 
@@ -45,8 +45,8 @@ AXIS-DRAG-01 Steps 1-6 are complete. Step 7 focused automated and display-backed
 | Feature | Shift axis-constrained graph dragging |
 | Release | `1.0.8-dev` |
 | Plan | `test/docs/_test_plans/AXIS_DRAG_01_CODE_PLAN.md` |
-| Execution status | IN PROGRESS |
-| Current step | Step 7 of 8 PARTIAL — manual Inspector smoke pending |
+| Execution status | COMPLETE |
+| Current step | Step 8 of 8 COMPLETE |
 | Production code changed for feature | Yes — `easing_curve_editor.gd` point/handle axis-constraint path |
 | Feature tests changed | Yes — graph gesture characterization |
 | Baseline branch | `dev` |
@@ -67,7 +67,7 @@ existing deferred maintenance constraints.
 | --- | --- | --- |
 | `AXIS-TEST-01` | COMPLETE | Steps 1-6 now cover modifier input, point/handle constraints, downstream semantics, geometry, request/transaction boundaries, and unaffected graph gestures |
 | `AXIS-STATE-01` | COMPLETE | Step 2 added one narrow private gesture-origin/Shift-eligibility lifecycle |
-| `AXIS-DRAG-01` | IN PROGRESS | Steps 1-6 complete; Step 7 automated/display validation complete, manual Inspector smoke pending |
+| `AXIS-DRAG-01` | COMPLETE | Steps 1-8 complete; bounded closeout commit approved |
 | `EDITOR-02` | DEFERRED | Must not be folded into feature |
 | `EDITOR-03` | NOT REQUIRED | No visual constraint guide planned |
 | `EDITOR-01` | DEFERRED | Not on the graph coordinate-input boundary |
@@ -653,7 +653,7 @@ Next approval gate: **AXIS-DRAG-01 Step 7 of 8 — Focused integration and visib
 ---
 ## AXIS-DRAG-01 Step 7 of 8 — Focused integration and visible-editor validation
 
-**Status:** PARTIAL — AUTOMATED / DISPLAY-BACKED VALIDATION COMPLETE; MANUAL INSPECTOR SMOKE PENDING
+**Status:** COMPLETE
 
 ### Objective
 
@@ -704,17 +704,17 @@ Focused automated validation completed on 2026-08-27 with no code change. Fresh 
 
 A separate non-headless / display-backed Editor-host run of the graph gesture suite also exited `0` and printed `PASS: 124 graph gesture characterization checks`. After PASS it emitted `ERROR: Parameter "current_window" is null.` from `editor/gui/progress_dialog.cpp:183`, followed by normal plugin unload/shutdown. This did not occur in the focused headless Editor-host run and is classified as a scripted-editor harness/environment diagnostic, not a Shift-drag production failure.
 
-The available Godot-AI tooling cannot inject mouse/keyboard input into the editor Inspector UI. The 13-point interaction matrix is functionally covered by the 124-check EasingCurveEditor event-path suite and focused regressions, but subjective free-drag/Shift-transition feel in the actual Inspector remains pending manual user confirmation. No production or test correction was required.
+The available Godot-AI tooling cannot inject mouse/keyboard input into the editor Inspector UI. The 13-point interaction matrix is functionally covered by the 124-check EasingCurveEditor event-path suite and focused regressions. On 2026-08-27, the user directed that Step 7 be marked complete after the manual-confirmation gate; no subjective drag-feel issue was reported. No production or test correction was required.
 
 ### Approval gate
 
-Do not advance to Step 8 until the manual Inspector smoke is confirmed or an explicitly approved issue is recorded. If manual testing finds a defect, stop and present that diff as a bounded corrective sub-step before continuing.
+Manual confirmation was received on 2026-08-27. Step 8 release-gate closeout was authorized in the same instruction.
 
 ---
 
 ## AXIS-DRAG-01 Step 8 of 8 — Release-gate closeout
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 ### Objective
 
@@ -759,9 +759,77 @@ Bookkeeping:
 
 The feature code plan should remain unchanged during execution.
 
+### Execution result
+
+Step 8 release-gate validation completed on 2026-08-27.
+
+Validation:
+
+- `git diff --check` passed before and after the full-suite run;
+- the authoritative `test/scripts/run_all_tests.ps1` runner exited `0`;
+- all **17/17 registered suites passed** on Godot 4.7.1;
+- all suites reported exit `0`, a PASS marker, no timeout, and no
+  `SCRIPT ERROR`;
+- the registered suites reported 4,908 checks in total, counting the tween
+  suite's 36 Bézier plus 48 analytic checks;
+- the known native responsive-layout fixtures remained skipped under
+  `--editor --headless`, as documented by the Undo/Redo suite.
+
+Final scope review against the frozen feature-plan commit `5737a69` found only:
+
+- `addons/easing_curve/scripts/easing_curve_editor.gd`;
+- `test/easing_curve_editor_gesture_characterization_test.gd`;
+- `test/editor_undo_redo_test.gd`;
+- `test/docs/_test_plans/AXIS_DRAG_01_CODE_REPORT.md`.
+
+The production change remains limited to private graph gesture-lifetime state,
+private axis-constraint helpers, and calls from existing drag begin/end/
+invalidation paths. The implementation uses original drag view displacement,
+strict X dominance with equality resolving to Y, original target world-axis
+projection, non-latched switching, immediate free-drag restoration on Shift
+release, and pre-held-Shift reservation. It adds no visual guide or new input
+action.
+
+No serialized name or format, enum value, existing public signature, plugin
+version, snapshot policy, notification policy, or Undo implementation changed.
+`EDITOR-01`, `EDITOR-02`, `EDITOR-03`, and `UNDO-01` were not bundled. The
+feature code plan remained unchanged during execution.
+
+Visible-editor result:
+
+- the focused event-path and display-backed validation passed as recorded in
+  Step 7;
+- the user confirmed the manual Inspector smoke gate complete on 2026-08-27;
+- no subjective drag-feel issue was reported.
+
+Non-feature diagnostics retained from the final runner:
+
+- expected serialization-contract fixture errors;
+- Windows root-certificate-store access warnings;
+- headless Editor shutdown RID/ObjectDB/resource leak diagnostics and scan-thread
+  abort warnings;
+- editor-settings save errors caused by the restricted test environment;
+- the documented native layout-fixture skip.
+
+None produced a timeout, nonzero suite exit, missing PASS marker, or
+`SCRIPT ERROR`.
+
+Commit record before final closeout:
+
+- feature-plan commit: `5737a69`;
+- Steps 1-6: `dc546f5`, `5a1f38a`, `7301bfb`, `24e50b0`, `cd22534`,
+  `e5855f3`;
+- Step 7 report update: `3a51c96`;
+- `dev` / `origin/dev` immediately before the closeout commit: `3a51c96`.
+
+The bounded closeout commit was explicitly approved on 2026-08-27. This report
+is finalized in that containing commit; its assigned hash is reported in the
+completion handoff after commit creation.
+
 ### Approval gate
 
-Present final diff/test/smoke summary before committing.
+The final diff/test/smoke summary was presented and the bounded closeout commit
+was explicitly approved on 2026-08-27.
 
 ---
 
@@ -843,7 +911,7 @@ the execution history.
 
 # 7. Current handoff
 
-**AXIS-DRAG-01 Steps 1-6 are complete. Step 7 is PARTIAL.**
+**AXIS-DRAG-01 Steps 1-8 are complete.**
 
 Current implementation/characterization state:
 
@@ -854,7 +922,7 @@ Current implementation/characterization state:
 - view-space dominance, diagonal boundary, zoom/pan, clamping, and ordering interactions: characterized without a Step 5 production change;
 - constrained request/transaction boundaries and unrelated Shift-modified graph inputs: characterized without a Step 6 production change;
 - Step 7 focused regression set: all eight suites passed; display-backed graph run also passed 124 checks;
-- manual Inspector mouse/Shift smoke remains pending because editor-UI input injection is unavailable;
+- manual Inspector smoke gate: confirmed complete by the user with no issue reported;
 - graph gesture suite: 124 checks passing;
 - editor Undo/Redo suite: 629 checks passing;
 - Position-X drag suite: 69 checks passing;
@@ -864,4 +932,4 @@ Current implementation/characterization state:
 - Linear control alias suite: 72 checks passing;
 - point-state characterization suite: 106 checks passing.
 
-The remaining Step 7 gate is manual Inspector smoke. Do **not** begin Step 8 until that smoke is confirmed or an explicitly approved issue is recorded.
+The authoritative 17-suite runner passed, `git diff --check` passed, final scope review is clean, the report is finalized, and the bounded closeout commit was approved. AXIS-DRAG-01 is complete; do not begin another v1.0.8 item automatically.
