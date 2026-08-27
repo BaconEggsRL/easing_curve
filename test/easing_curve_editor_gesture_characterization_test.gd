@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_point_axis_constraint_behavior()
 	_test_handle_axis_constraint_behavior()
 	_test_axis_constraint_downstream_control_semantics()
+	_test_axis_constraint_view_and_order_geometry()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
 	if _failures == 0:
@@ -630,6 +631,181 @@ func _test_axis_constraint_downstream_control_semantics() -> void:
 	linear_editor._gui_input(_button(MOUSE_BUTTON_LEFT, linear_target_view, false, true))
 	linear_editor._slider.free()
 	linear_editor.free()
+
+
+func _test_axis_constraint_view_and_order_geometry() -> void:
+	var view_fixture := _fixture()
+	var view_curve: EasingCurve = view_fixture.curve
+	var view_editor: EasingCurveEditor = view_fixture.editor
+	var view_point := view_curve.points[1]
+	var view_origin := view_point.position
+	var view_start := _point_view(view_editor, view_point)
+	var disagreement_view := view_start + Vector2(40.0, 30.0)
+	var disagreement_world := view_editor.get_world_pos(disagreement_view)
+	var disagreement_world_delta := disagreement_world - view_origin
+	_expect(
+		absf(disagreement_world_delta.y) > absf(disagreement_world_delta.x),
+		"View-space dominance fixture no longer disagrees with world-space dominance",
+	)
+	view_editor._gui_input(_button(MOUSE_BUTTON_LEFT, view_start, true))
+	view_editor._gui_input(_motion(disagreement_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		view_point.position.is_equal_approx(
+			Vector2(disagreement_world.x, view_origin.y).clamp(
+				Vector2(0, view_curve.min_value),
+				Vector2(1.0, view_curve.max_value),
+			)
+		),
+		"Shift axis choice followed world-space magnitude instead of view-space pixel displacement",
+	)
+
+	var equal_view := view_start + Vector2(32.0, 32.0)
+	var equal_world := view_editor.get_world_pos(equal_view)
+	view_editor._gui_input(_motion(equal_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		view_point.position.is_equal_approx(
+			Vector2(view_origin.x, equal_world.y).clamp(
+				Vector2(0, view_curve.min_value),
+				Vector2(1.0, view_curve.max_value),
+			)
+		),
+		"Equal view-space displacement no longer resolves to the Y axis",
+	)
+
+	var x_side_view := view_start + Vector2(33.0, 32.0)
+	var x_side_world := view_editor.get_world_pos(x_side_view)
+	view_editor._gui_input(_motion(x_side_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		view_point.position.is_equal_approx(
+			Vector2(x_side_world.x, view_origin.y).clamp(
+				Vector2(0, view_curve.min_value),
+				Vector2(1.0, view_curve.max_value),
+			)
+		),
+		"X side of the view-space diagonal did not constrain horizontally",
+	)
+
+	var y_side_view := view_start + Vector2(32.0, 33.0)
+	var y_side_world := view_editor.get_world_pos(y_side_view)
+	view_editor._gui_input(_motion(y_side_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		view_point.position.is_equal_approx(
+			Vector2(view_origin.x, y_side_world.y).clamp(
+				Vector2(0, view_curve.min_value),
+				Vector2(1.0, view_curve.max_value),
+			)
+		),
+		"Y side of the view-space diagonal did not constrain vertically",
+	)
+	view_editor._gui_input(_button(MOUSE_BUTTON_LEFT, y_side_view, false, true))
+	view_editor._slider.free()
+	view_editor.free()
+
+	var zoom_fixture := _fixture()
+	var zoom_curve: EasingCurve = zoom_fixture.curve
+	var zoom_editor: EasingCurveEditor = zoom_fixture.editor
+	zoom_editor.set_slider_value(
+		mini(int(EasingCurve.DEFAULT_SLIDER_VALUE) + 3, EasingCurve.ZOOM_STEPS)
+	)
+	zoom_editor.update_view_transform()
+	zoom_editor.pan_offset = Vector2(37.0, -21.0)
+	var zoom_point := zoom_curve.points[1]
+	var zoom_origin := zoom_point.position
+	var zoom_start := _point_view(zoom_editor, zoom_point)
+	zoom_editor._gui_input(_button(MOUSE_BUTTON_LEFT, zoom_start, true))
+	var zoom_target_view := zoom_start + Vector2(44.0, 20.0)
+	var zoom_target_world := zoom_editor.get_world_pos(zoom_target_view)
+	zoom_editor._gui_input(_motion(zoom_target_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		zoom_point.position.is_equal_approx(
+			Vector2(zoom_target_world.x, zoom_origin.y).clamp(
+				Vector2(0, zoom_curve.min_value),
+				Vector2(1.0, zoom_curve.max_value),
+			)
+		),
+		"Shift constraint did not preserve view-space axis behavior under zoom and pan",
+	)
+	var zoom_step_before_wheel := zoom_editor._zoom_step
+	zoom_editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, zoom_target_view, true, true))
+	_expect(
+		zoom_editor.dragging_point == 1
+		and zoom_editor._zoom_step == mini(zoom_step_before_wheel + 1, EasingCurve.ZOOM_STEPS),
+		"Wheel zoom during a constrained drag canceled the drag or failed to advance zoom",
+	)
+	var post_wheel_view := zoom_start + Vector2(56.0, 18.0)
+	var post_wheel_world := zoom_editor.get_world_pos(post_wheel_view)
+	zoom_editor._gui_input(_motion(post_wheel_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		zoom_point.position.is_equal_approx(
+			Vector2(post_wheel_world.x, zoom_origin.y).clamp(
+				Vector2(0, zoom_curve.min_value),
+				Vector2(1.0, zoom_curve.max_value),
+			)
+		),
+		"Constrained drag after wheel zoom stopped using the original view-space drag axis",
+	)
+	zoom_editor._gui_input(_button(MOUSE_BUTTON_LEFT, post_wheel_view, false, true))
+	zoom_editor._slider.free()
+	zoom_editor.free()
+
+	var endpoint_fixture := _fixture()
+	var endpoint_curve: EasingCurve = endpoint_fixture.curve
+	var endpoint_editor: EasingCurveEditor = endpoint_fixture.editor
+	endpoint_curve.points[2].position = Vector2(1.0, endpoint_curve.points[2].position.y)
+	var endpoint_points: Array[EasingCurvePoint] = endpoint_curve.points.duplicate()
+	var endpoint_moved := endpoint_points[1]
+	var endpoint_origin := endpoint_moved.position
+	var endpoint_start := _point_view(endpoint_editor, endpoint_moved)
+	endpoint_editor._gui_input(_button(MOUSE_BUTTON_LEFT, endpoint_start, true))
+	var endpoint_target_view := endpoint_start + Vector2(1000.0, 5.0)
+	endpoint_editor._gui_input(_motion(endpoint_target_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		endpoint_moved.position.is_equal_approx(Vector2(1.0, endpoint_origin.y)),
+		"Horizontal constrained point drag did not clamp to the right X endpoint",
+	)
+	_expect(
+		endpoint_curve.points == endpoint_points
+		and endpoint_editor._get_display_points() == [endpoint_points[0], endpoint_moved],
+		"Horizontal constrained endpoint takeover changed source order or failed to update the live preview",
+	)
+	endpoint_editor._gui_input(_button(MOUSE_BUTTON_LEFT, endpoint_target_view, false, true))
+	_expect(
+		endpoint_curve.points == [endpoint_points[0], endpoint_moved]
+		and endpoint_editor.selected_index == 1,
+		"Horizontal constrained endpoint takeover did not commit through the existing ordering path",
+	)
+	endpoint_editor._slider.free()
+	endpoint_editor.free()
+
+	var vertical_fixture := _fixture()
+	var vertical_curve: EasingCurve = vertical_fixture.curve
+	var vertical_editor: EasingCurveEditor = vertical_fixture.editor
+	var vertical_points: Array[EasingCurvePoint] = vertical_curve.points.duplicate()
+	var vertical_moved := vertical_points[1]
+	var vertical_origin := vertical_moved.position
+	var vertical_start := _point_view(vertical_editor, vertical_moved)
+	vertical_editor._gui_input(_button(MOUSE_BUTTON_LEFT, vertical_start, true))
+	var vertical_target_view := vertical_start + Vector2(5.0, -1000.0)
+	vertical_editor._gui_input(_motion(vertical_target_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		vertical_moved.position.is_equal_approx(
+			Vector2(vertical_origin.x, vertical_curve.max_value)
+		),
+		"Vertical constrained point drag did not clamp Y while preserving the original X",
+	)
+	_expect(
+		vertical_curve.points == vertical_points
+		and vertical_editor._get_display_points() == vertical_points,
+		"Vertical constrained movement changed point ordering during the live preview",
+	)
+	vertical_editor._gui_input(_button(MOUSE_BUTTON_LEFT, vertical_target_view, false, true))
+	_expect(
+		vertical_curve.points == vertical_points
+		and vertical_editor.selected_index == 1,
+		"Vertical constrained movement changed committed point ordering",
+	)
+	vertical_editor._slider.free()
+	vertical_editor.free()
 
 
 func _test_point_and_control_drag_boundaries() -> void:
