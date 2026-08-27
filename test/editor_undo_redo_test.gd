@@ -15,6 +15,7 @@ func _init() -> void:
 		return
 	seed(948217)
 	_test_editor_snapshot_contract()
+	_test_no_op_action_rejected()
 	_test_point_drag()
 	_test_handle_drag()
 	_test_add_point()
@@ -151,6 +152,23 @@ func _verify_single_action(
 		history.redo()
 		_expect(curve.get_editor_state_snapshot() == after, "%s Redo lost state on cycle %d" % [label, cycle + 1])
 		_expect(history.has_undo(), "%s Redo did not restore the Undo action" % label)
+
+
+func _test_no_op_action_rejected() -> void:
+	var curve := _three_point_curve()
+	var history := UndoRedo.new()
+	var state := EDITOR_UNDO.capture_state(curve)
+	_expect(
+		not EDITOR_UNDO.commit_applied_action(
+			history,
+			curve,
+			"No-op Easing Curve Edit",
+			EasingCurveEditorUndo.ActionContext.new(state, state.duplicate(true)),
+		),
+		"Identical before/after state created an Undo action",
+	)
+	_expect(not history.has_undo() and not history.has_redo(), "Rejected no-op action left Undo/Redo history entries")
+	_dispose_history(history)
 
 
 func _test_point_drag() -> void:

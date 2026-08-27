@@ -33,7 +33,7 @@ Per `CODE_REPORT_REQUIREMENTS.md`:
   targeted validation for that step must be shown before implementation;
 - generating this report does **not** authorize production changes.
 
-AXIS-DRAG-01 Steps 1-5 are complete. Step 5 added test-only characterization for view-space axis choice, zoom/pan behavior, clamping, and ordering/endpoint takeover interactions.
+AXIS-DRAG-01 Steps 1-6 are complete. Step 6 added test-only characterization for constrained request/transaction boundaries, explicit no-op Undo rejection, and unaffected Shift-modified graph input.
 
 ---
 
@@ -46,7 +46,7 @@ AXIS-DRAG-01 Steps 1-5 are complete. Step 5 added test-only characterization for
 | Release | `1.0.8-dev` |
 | Plan | `test/docs/_test_plans/AXIS_DRAG_01_CODE_PLAN.md` |
 | Execution status | IN PROGRESS |
-| Current step | Awaiting approval for Step 6 of 8 |
+| Current step | Awaiting approval for Step 7 of 8 |
 | Production code changed for feature | Yes — `easing_curve_editor.gd` point/handle axis-constraint path |
 | Feature tests changed | Yes — graph gesture characterization |
 | Baseline branch | `dev` |
@@ -65,9 +65,9 @@ existing deferred maintenance constraints.
 
 | Plan ID | Status | Execution relationship |
 | --- | --- | --- |
-| `AXIS-TEST-01` | IN PROGRESS | Step 1 added modifier-capable baseline characterization; active-constraint coverage continues in later steps |
+| `AXIS-TEST-01` | COMPLETE | Steps 1-6 now cover modifier input, point/handle constraints, downstream semantics, geometry, request/transaction boundaries, and unaffected graph gestures |
 | `AXIS-STATE-01` | COMPLETE | Step 2 added one narrow private gesture-origin/Shift-eligibility lifecycle |
-| `AXIS-DRAG-01` | IN PROGRESS | Steps 1-5 complete; awaiting approval for Step 6 |
+| `AXIS-DRAG-01` | IN PROGRESS | Steps 1-6 complete; awaiting approval for Step 7 |
 | `EDITOR-02` | DEFERRED | Must not be folded into feature |
 | `EDITOR-03` | NOT REQUIRED | No visual constraint guide planned |
 | `EDITOR-01` | DEFERRED | Not on the graph coordinate-input boundary |
@@ -540,7 +540,7 @@ Next approval gate: **AXIS-DRAG-01 Step 4 of 8 — Characterize Handle Modes, lo
 
 	## AXIS-DRAG-01 Step 6 of 8 — Verify Undo/request boundaries and unaffected graph input
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 ### Objective
 
@@ -586,12 +586,71 @@ No Undo production refactor is authorized.
 - RMB delete suite when applicable;
 - `git diff --check`.
 
-### Approval gate
+### Execution result
 
-Present any proposed test diff or corrective production diff before execution.
+Completed on 2026-08-27 as a **test-only** boundary/regression step. No
+production source or Undo implementation was modified.
+
+Changed for Step 6:
+
+- `test/easing_curve_editor_gesture_characterization_test.gd`;
+- `test/editor_undo_redo_test.gd`;
+- this report for bookkeeping.
+
+The graph gesture suite added feature-specific request/transaction and
+unaffected-input characterization. It verifies:
+
+- constrained point motion preserves the existing repeating request sequence
+  `position -> left_control_point -> right_control_point`, with every motion
+  request marked `changing=true`;
+- constrained handle motion preserves one handle-property request per motion;
+- repeated constrained point and handle motions retain one original
+  `_point_edit_before_state` and the existing `Move Easing Curve Point` /
+  `Move Easing Curve Handle` action names;
+- LMB release emits exactly one `point_edit_finished` boundary, emits no extra
+  point-property request, and clears Inspector transaction state;
+- zero-displacement Shift motion leaves point/handle geometry unchanged and
+  closes its transient transaction state;
+- pre-held Shift still permits ordinary pending-add tracking, and Shift+RMB
+  cancels that pending add without deleting an existing point;
+- Shift+RMB delete, Shift+MMB pan, Shift+wheel zoom, and Shift hover preserve
+  their existing behavior;
+- Shift-modified point input remains inert in Function mode.
+
+The graph gesture suite increased from **98 to 124 checks**.
+
+`editor_undo_redo_test.gd` added two explicit checks proving
+`EasingCurveEditorUndo.commit_applied_action()` rejects identical before/after
+state and leaves no Undo/Redo history entries. The Undo/Redo suite increased
+from **627 to 629 checks**. Existing history tests continue to own exact state,
+selection, and Resource-identity restoration across Undo/Redo cycles.
+
+Focused validation on Godot 4.7.1:
+
+- `PASS: 124 graph gesture characterization checks`;
+- `PASS: 629 editor Undo / Redo checks`;
+- `PASS: 70 selection and refresh characterization checks`;
+- `PASS: 20 EasingCurveEditor RMB delete checks`;
+- all four fresh Editor-host processes exited `0`;
+- no passing log contained `SCRIPT ERROR` or `ERROR:`;
+- `git diff --check` passed before the report update.
+
+Diagnostics/test-fixture corrections:
+
+- the first 122-check graph run failed two combined finish-boundary assertions;
+  splitting them proved the Inspector transaction state was already closing
+  correctly and isolated only the local finish counters;
+- those counters used captured integer locals inside signal lambdas, which did
+  not provide a reliable shared mutable counter for this fixture; they were
+  changed to mutable dictionaries (`{"count": 0}`), after which the final
+  124-check run passed;
+- this was a test-fixture issue, not a production Shift-drag or Undo defect.
+
+No full 17-suite run was performed in Step 6.
+
+Next approval gate: **AXIS-DRAG-01 Step 7 of 8 — Focused integration and visible-editor validation**.
 
 ---
-
 ## AXIS-DRAG-01 Step 7 of 8 — Focused integration and visible-editor validation
 
 **Status:** NOT STARTED
@@ -777,24 +836,27 @@ the execution history.
 
 # 7. Current handoff
 
-	**AXIS-DRAG-01 Steps 1-5 are complete.**
+**AXIS-DRAG-01 Steps 1-6 are complete.**
 
-	Current implementation/characterization state:
+Current implementation/characterization state:
 
-	- modifier-capable baseline characterization: complete;
-	- Shift-constrained point dragging: implemented and focused-validated;
-	- Shift-constrained left/right Bézier handle dragging: implemented and focused-validated;
-	- downstream Handle Mode / lock / Force Linear integration: characterized without a Step 4 production change;
-	- view-space dominance, diagonal boundary, zoom/pan, clamping, and ordering interactions: characterized without a Step 5 production change;
-	- graph gesture suite: 98 checks passing;
-	- Position-X drag suite: 69 checks passing;
-	- selection/refresh characterization suite: 70 checks passing;
-	- control editability suite: 21 checks passing;
-	- Linear control alias suite: 72 checks passing;
-	- point-state characterization suite: 106 checks passing.
+- modifier-capable baseline characterization: complete;
+- Shift-constrained point dragging: implemented and focused-validated;
+- Shift-constrained left/right Bézier handle dragging: implemented and focused-validated;
+- downstream Handle Mode / lock / Force Linear integration: characterized without a Step 4 production change;
+- view-space dominance, diagonal boundary, zoom/pan, clamping, and ordering interactions: characterized without a Step 5 production change;
+- constrained request/transaction boundaries and unrelated Shift-modified graph inputs: characterized without a Step 6 production change;
+- graph gesture suite: 124 checks passing;
+- editor Undo/Redo suite: 629 checks passing;
+- Position-X drag suite: 69 checks passing;
+- selection/refresh characterization suite: 70 checks passing;
+- RMB delete suite: 20 checks passing;
+- control editability suite: 21 checks passing;
+- Linear control alias suite: 72 checks passing;
+- point-state characterization suite: 106 checks passing.
 
-	The next approval gate is:
+The next approval gate is:
 
-	**AXIS-DRAG-01 Step 6 of 8 — Verify Undo/request boundaries and unaffected graph input**
+**AXIS-DRAG-01 Step 7 of 8 — Focused integration and visible-editor validation**
 
-	Step 6 should prove the feature preserves Undo transaction identity, point-property request boundaries, and unrelated pending-add/RMB/MMB/wheel/function-mode graph input.
+Step 7 should run the complete focused regression set and perform the visible-editor interaction smoke. No code change is expected unless that validation exposes a defect.

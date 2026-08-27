@@ -23,6 +23,7 @@ func _run() -> void:
 	_test_handle_axis_constraint_behavior()
 	_test_axis_constraint_downstream_control_semantics()
 	_test_axis_constraint_view_and_order_geometry()
+	_test_axis_constraint_request_and_input_boundaries()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
 	if _failures == 0:
@@ -806,6 +807,172 @@ func _test_axis_constraint_view_and_order_geometry() -> void:
 	)
 	vertical_editor._slider.free()
 	vertical_editor.free()
+
+
+func _test_axis_constraint_request_and_input_boundaries() -> void:
+	var point_fixture := _fixture()
+	var point_curve: EasingCurve = point_fixture.curve
+	var point_editor: EasingCurveEditor = point_fixture.editor
+	var point_inspector: Object = point_fixture.inspector
+	var point_requests: Array = []
+	var point_finish := {"count": 0}
+	point_editor.point_property_change_requested.connect(
+		func(_index: int, property_name: StringName, _value: Variant, changing: bool) -> void:
+			point_requests.append({"name": property_name, "changing": changing})
+	)
+	point_editor.point_edit_finished.connect(
+		func(_point_order: Array[EasingCurvePoint]) -> void:
+			point_finish["count"] += 1
+	)
+	var point := point_curve.points[1]
+	var point_start := _point_view(point_editor, point)
+	point_editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_start, true))
+	point_editor._gui_input(_motion(point_start + Vector2(48.0, 10.0), MOUSE_BUTTON_MASK_LEFT, true))
+	var point_transaction: Dictionary = point_inspector.get("_point_edit_before_state").duplicate(true)
+	_expect(not point_transaction.is_empty(), "Constrained point drag did not start an edit transaction")
+	_expect(point_inspector.get("_point_edit_action_name") == "Move Easing Curve Point", "Constrained point drag changed its Undo action name")
+	point_editor._gui_input(_motion(point_start + Vector2(56.0, 12.0), MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(point_inspector.get("_point_edit_before_state") == point_transaction, "Repeated constrained point motion started a second edit transaction")
+	var point_request_names := []
+	var point_requests_all_changing := true
+	for request: Dictionary in point_requests:
+		point_request_names.append(request["name"])
+		point_requests_all_changing = point_requests_all_changing and bool(request["changing"])
+	_expect(
+		point_request_names == [
+			&"position", &"left_control_point", &"right_control_point",
+			&"position", &"left_control_point", &"right_control_point",
+		],
+		"Constrained point drag changed the existing point/control request sequence",
+	)
+	_expect(point_requests_all_changing, "Constrained point drag emitted a non-changing motion request")
+	var point_request_count_before_release := point_requests.size()
+	point_editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_start + Vector2(56.0, 12.0), false, true))
+	_expect(point_requests.size() == point_request_count_before_release, "Constrained point release emitted an extra point-property request")
+	_expect(int(point_finish["count"]) == 1, "Constrained point drag emitted the wrong number of edit-finished boundaries")
+	_expect(point_inspector.get("_point_edit_before_state").is_empty(), "Constrained point drag left the Inspector transaction open after release")
+	point_editor._slider.free()
+	point_editor.free()
+
+	var handle_fixture := _fixture()
+	var handle_curve: EasingCurve = handle_fixture.curve
+	var handle_editor: EasingCurveEditor = handle_fixture.editor
+	var handle_inspector: Object = handle_fixture.inspector
+	var handle_requests: Array = []
+	var handle_finish := {"count": 0}
+	handle_editor.point_property_change_requested.connect(
+		func(_index: int, property_name: StringName, _value: Variant, changing: bool) -> void:
+			handle_requests.append({"name": property_name, "changing": changing})
+	)
+	handle_editor.point_edit_finished.connect(
+		func(_point_order: Array[EasingCurvePoint]) -> void:
+			handle_finish["count"] += 1
+	)
+	var handle_point := handle_curve.points[1]
+	var handle_start := handle_editor.get_view_pos(handle_point.right_control_point)
+	handle_editor._gui_input(_button(MOUSE_BUTTON_LEFT, handle_start, true))
+	handle_editor._gui_input(_motion(handle_start + Vector2(46.0, -8.0), MOUSE_BUTTON_MASK_LEFT, true))
+	var handle_transaction: Dictionary = handle_inspector.get("_point_edit_before_state").duplicate(true)
+	_expect(not handle_transaction.is_empty(), "Constrained handle drag did not start an edit transaction")
+	_expect(handle_inspector.get("_point_edit_action_name") == "Move Easing Curve Handle", "Constrained handle drag changed its Undo action name")
+	handle_editor._gui_input(_motion(handle_start + Vector2(54.0, -10.0), MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(handle_inspector.get("_point_edit_before_state") == handle_transaction, "Repeated constrained handle motion started a second edit transaction")
+	var handle_request_names := []
+	var handle_requests_all_changing := true
+	for request: Dictionary in handle_requests:
+		handle_request_names.append(request["name"])
+		handle_requests_all_changing = handle_requests_all_changing and bool(request["changing"])
+	_expect(handle_request_names == [&"right_control_point", &"right_control_point"], "Constrained handle drag changed the existing handle request sequence")
+	_expect(handle_requests_all_changing, "Constrained handle drag emitted a non-changing motion request")
+	handle_editor._gui_input(_button(MOUSE_BUTTON_LEFT, handle_start + Vector2(54.0, -10.0), false, true))
+	_expect(int(handle_finish["count"]) == 1, "Constrained handle drag emitted the wrong number of edit-finished boundaries")
+	_expect(handle_inspector.get("_point_edit_before_state").is_empty(), "Constrained handle drag left the Inspector transaction open after release")
+	handle_editor._slider.free()
+	handle_editor.free()
+
+	var noop_fixture := _fixture()
+	var noop_curve: EasingCurve = noop_fixture.curve
+	var noop_editor: EasingCurveEditor = noop_fixture.editor
+	var noop_inspector: Object = noop_fixture.inspector
+	var noop_point := noop_curve.points[1]
+	var noop_position := noop_point.position
+	var noop_left := noop_point.left_control_point
+	var noop_right := noop_point.right_control_point
+	var noop_start := _point_view(noop_editor, noop_point)
+	noop_editor._gui_input(_button(MOUSE_BUTTON_LEFT, noop_start, true))
+	noop_editor._gui_input(_motion(noop_start, MOUSE_BUTTON_MASK_LEFT, true))
+	noop_editor._gui_input(_button(MOUSE_BUTTON_LEFT, noop_start, false, true))
+	_expect(
+		noop_point.position.is_equal_approx(noop_position)
+		and noop_point.left_control_point.is_equal_approx(noop_left)
+		and noop_point.right_control_point.is_equal_approx(noop_right),
+		"Zero-displacement constrained drag changed point geometry",
+	)
+	_expect(noop_inspector.get("_point_edit_before_state").is_empty(), "Zero-displacement constrained drag left a transaction open")
+	noop_editor._slider.free()
+	noop_editor.free()
+
+	var pending_fixture := _fixture()
+	var pending_curve: EasingCurve = pending_fixture.curve
+	var pending_editor: EasingCurveEditor = pending_fixture.editor
+	var pending_count := pending_curve.points.size()
+	var pending_start := Vector2(580.0, 280.0)
+	var pending_target := Vector2(540.0, 250.0)
+	pending_editor._gui_input(_button(MOUSE_BUTTON_LEFT, pending_start, true, true))
+	_expect(pending_editor.pending_add_point != null, "Pre-held Shift prevented ordinary pending-add start")
+	pending_editor._gui_input(_motion(pending_target, MOUSE_BUTTON_MASK_LEFT, true))
+	var expected_pending := pending_editor.get_world_pos(pending_target).clamp(
+		Vector2(0, pending_curve.min_value),
+		Vector2(1.0, pending_curve.max_value),
+	)
+	_expect(pending_editor.pending_add_point.position.is_equal_approx(expected_pending), "Shift changed pending-add mouse tracking")
+	pending_editor._gui_input(_button(MOUSE_BUTTON_RIGHT, pending_target, true, true))
+	_expect(pending_editor.pending_add_point == null and pending_curve.points.size() == pending_count and not pending_editor.is_right_delete_dragging, "Shift changed RMB pending-add cancel semantics")
+	pending_editor._gui_input(_button(MOUSE_BUTTON_RIGHT, pending_target, false, true))
+	pending_editor._gui_input(_button(MOUSE_BUTTON_LEFT, pending_target, false, true))
+	pending_editor._slider.free()
+	pending_editor.free()
+
+	var delete_fixture := _fixture()
+	var delete_curve: EasingCurve = delete_fixture.curve
+	var delete_editor: EasingCurveEditor = delete_fixture.editor
+	var deleted_point := delete_curve.points[1]
+	var delete_view := delete_editor.get_view_pos(deleted_point.position)
+	delete_editor._gui_input(_button(MOUSE_BUTTON_RIGHT, delete_view, true, true))
+	_expect(not delete_curve.points.has(deleted_point), "Shift changed RMB point deletion")
+	delete_editor._gui_input(_button(MOUSE_BUTTON_RIGHT, delete_view, false, true))
+	_expect(not delete_editor.is_right_delete_dragging, "Shift+RMB release left delete-drag active")
+	delete_editor._slider.free()
+	delete_editor.free()
+
+	var navigation_fixture := _fixture()
+	var navigation_editor: EasingCurveEditor = navigation_fixture.editor
+	get_root().add_child(navigation_editor)
+	var pan_before := navigation_editor.pan_offset
+	navigation_editor._gui_input(_button(MOUSE_BUTTON_MIDDLE, Vector2(100.0, 100.0), true, true))
+	navigation_editor._gui_input(_motion(Vector2(125.0, 115.0), MOUSE_BUTTON_MASK_MIDDLE, true))
+	navigation_editor._gui_input(_button(MOUSE_BUTTON_MIDDLE, Vector2(125.0, 115.0), false, true))
+	_expect(navigation_editor.pan_offset == pan_before + Vector2(25.0, 15.0) and not navigation_editor.is_panning, "Shift changed MMB pan semantics")
+	var zoom_before := navigation_editor._zoom_step
+	navigation_editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, Vector2(200.0, 150.0), true, true))
+	_expect(navigation_editor._zoom_step == mini(zoom_before + 1, EasingCurve.ZOOM_STEPS), "Shift changed wheel zoom semantics")
+	var hover_view := navigation_editor.get_view_pos(navigation_fixture.curve.points[1].position)
+	navigation_editor._gui_input(_motion(hover_view, 0, true))
+	_expect(navigation_editor.hovered_index == 1, "Shift changed ordinary graph hover detection")
+	navigation_editor.get_parent().remove_child(navigation_editor)
+	navigation_editor._slider.free()
+	navigation_editor.free()
+
+	var function_fixture := _fixture()
+	var function_curve: EasingCurve = function_fixture.curve
+	var function_editor: EasingCurveEditor = function_fixture.editor
+	function_curve.curve_mode = EasingCurve.CurveMode.FUNCTION
+	function_editor.hovered_index = -1
+	function_editor._gui_input(_button(MOUSE_BUTTON_LEFT, Vector2(500.0, 250.0), true, true))
+	function_editor._gui_input(_motion(Vector2(300.0, 160.0), MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(function_editor.pending_add_point == null and function_editor.dragging_point == -1 and function_editor.hovered_index == -1, "Shift activated graph point input in Function mode")
+	function_editor._slider.free()
+	function_editor.free()
 
 
 func _test_point_and_control_drag_boundaries() -> void:
