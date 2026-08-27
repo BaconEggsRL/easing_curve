@@ -1,18 +1,127 @@
-[CmdletBinding()]
-param(
-    [ValidateSet("Validate", "Prepare", "Publish", "Republish")]
-    [string]$Mode = "Validate",
-
-    [Alias("v")]
-    [ValidatePattern("^\d+\.\d+\.\d+$")]
-    [string]$Version = "1.0.7",
-
-    [string]$ReleaseBranch = "master",
-    [string]$Repository = "BaconEggsRL/easing_curve",
-    [switch]$KeepSmokeProject
-)
+param()
 
 $ErrorActionPreference = "Stop"
+
+function Write-ReleaseHelp {
+    Write-Host @"
+Easing Curve release helper
+
+Usage:
+  .\release.ps1 --version <x.y.z> [options]
+  .\release.ps1 --help
+
+Required for release actions:
+  --version <x.y.z>             Release version, for example 1.0.8.
+
+Options:
+  --mode <mode>                 Release mode. Default: Validate.
+                                Valid modes: Validate, Prepare, Publish, Republish.
+  --release-branch <name>       Release branch. Default: master.
+  --repository <owner/repo>     GitHub repository. Default: BaconEggsRL/easing_curve.
+  --keep-smoke-project          Keep the temporary smoke-test project.
+  --help                        Show this help menu and exit.
+
+Examples:
+  .\release.ps1 --version 1.0.8
+  .\release.ps1 --version 1.0.8 --mode Prepare
+  .\release.ps1 --version 1.0.8 --mode Publish
+  .\release.ps1 --version 1.0.8 --mode Republish
+
+Legacy PowerShell-style names are also accepted:
+  -Version, -v, -Mode, -ReleaseBranch, -Repository, -KeepSmokeProject
+"@
+}
+
+$Mode = "Validate"
+$Version = $null
+$ReleaseBranch = "master"
+$Repository = "BaconEggsRL/easing_curve"
+$KeepSmokeProject = $false
+
+$ArgumentList = @($args)
+
+if ($ArgumentList.Count -eq 0) {
+    Write-ReleaseHelp
+    exit 0
+}
+
+for ($Index = 0; $Index -lt $ArgumentList.Count; $Index++) {
+    $Argument = $ArgumentList[$Index]
+
+    switch ($Argument) {
+        { $_ -in @("--help", "-h") } {
+            Write-ReleaseHelp
+            exit 0
+        }
+
+        { $_ -in @("--version", "-Version", "-v") } {
+            if ($Index + 1 -ge $ArgumentList.Count) {
+                throw "$Argument requires a version value, for example: --version 1.0.8"
+            }
+
+            $Index += 1
+            $Version = $ArgumentList[$Index]
+            continue
+        }
+
+        { $_ -in @("--mode", "-Mode") } {
+            if ($Index + 1 -ge $ArgumentList.Count) {
+                throw "$Argument requires one of: Validate, Prepare, Publish, Republish."
+            }
+
+            $Index += 1
+            $Mode = $ArgumentList[$Index]
+            continue
+        }
+
+        { $_ -in @("--release-branch", "-ReleaseBranch") } {
+            if ($Index + 1 -ge $ArgumentList.Count) {
+                throw "$Argument requires a branch name."
+            }
+
+            $Index += 1
+            $ReleaseBranch = $ArgumentList[$Index]
+            continue
+        }
+
+        { $_ -in @("--repository", "-Repository") } {
+            if ($Index + 1 -ge $ArgumentList.Count) {
+                throw "$Argument requires a repository in owner/name form."
+            }
+
+            $Index += 1
+            $Repository = $ArgumentList[$Index]
+            continue
+        }
+
+        { $_ -in @("--keep-smoke-project", "-KeepSmokeProject") } {
+            $KeepSmokeProject = $true
+            continue
+        }
+
+        default {
+            throw "Unknown argument '$Argument'. Run '.\release.ps1 --help' for usage."
+        }
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    throw "Missing required --version <x.y.z>. Run '.\release.ps1 --help' for usage."
+}
+
+if ($Version -notmatch '^\d+\.\d+\.\d+$') {
+    throw "Invalid version '$Version'. Expected semantic version x.y.z, for example 1.0.8."
+}
+
+$Mode = switch ($Mode.ToLowerInvariant()) {
+    "validate" { "Validate" }
+    "prepare" { "Prepare" }
+    "publish" { "Publish" }
+    "republish" { "Republish" }
+    default {
+        throw "Invalid mode '$Mode'. Expected one of: Validate, Prepare, Publish, Republish."
+    }
+}
 
 $ProjectRoot = (Resolve-Path $PSScriptRoot).Path
 $PluginConfig = Join-Path $ProjectRoot "addons\easing_curve\plugin.cfg"
@@ -714,7 +823,7 @@ try {
     Write-Host "Easing Curve v$Version release"
     Write-Host "Mode: $Mode"
 
-    # Safe to rerun: 1.0.7-dev -> 1.0.7, or leaves 1.0.7 unchanged.
+    # Safe to rerun: <version>-dev -> <version>, or leaves <version> unchanged.
     Set-PluginVersion
 
     # Step 2 is still manual; this verifies it was done before release validation.
