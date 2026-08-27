@@ -33,7 +33,7 @@ Per `CODE_REPORT_REQUIREMENTS.md`:
   targeted validation for that step must be shown before implementation;
 - generating this report does **not** authorize production changes.
 
-AXIS-DRAG-01 Steps 1-3 are complete. Point and Bézier-handle dragging now share the bounded Shift-axis projection path.
+AXIS-DRAG-01 Steps 1-4 are complete. Step 4 added test-only characterization proving the Shift-projected graph target remains subordinate to existing Handle Mode, lock, and Force Linear semantics.
 
 ---
 
@@ -46,7 +46,7 @@ AXIS-DRAG-01 Steps 1-3 are complete. Point and Bézier-handle dragging now share
 | Release | `1.0.8-dev` |
 | Plan | `test/docs/_test_plans/AXIS_DRAG_01_CODE_PLAN.md` |
 | Execution status | IN PROGRESS |
-| Current step | Awaiting approval for Step 4 of 8 |
+| Current step | Awaiting approval for Step 5 of 8 |
 | Production code changed for feature | Yes — `easing_curve_editor.gd` point/handle axis-constraint path |
 | Feature tests changed | Yes — graph gesture characterization |
 | Baseline branch | `dev` |
@@ -67,7 +67,7 @@ existing deferred maintenance constraints.
 | --- | --- | --- |
 | `AXIS-TEST-01` | IN PROGRESS | Step 1 added modifier-capable baseline characterization; active-constraint coverage continues in later steps |
 | `AXIS-STATE-01` | COMPLETE | Step 2 added one narrow private gesture-origin/Shift-eligibility lifecycle |
-| `AXIS-DRAG-01` | IN PROGRESS | Steps 1-3 complete; awaiting approval for Step 4 |
+| `AXIS-DRAG-01` | IN PROGRESS | Steps 1-4 complete; awaiting approval for Step 5 |
 | `EDITOR-02` | DEFERRED | Must not be folded into feature |
 | `EDITOR-03` | NOT REQUIRED | No visual constraint guide planned |
 | `EDITOR-01` | DEFERRED | Not on the graph coordinate-input boundary |
@@ -359,56 +359,91 @@ Next approval gate: **AXIS-DRAG-01 Step 4 of 8 — Characterize Handle Modes, lo
 
 ## AXIS-DRAG-01 Step 4 of 8 — Characterize Handle Modes, locks, and Force Linear integration
 
-**Status:** NOT STARTED
+	**Status:** COMPLETE
 
-### Objective
+	### Objective
 
-Prove that axis projection remains only an input-target transformation and that
-all existing point/control semantics continue to be owned downstream.
+	Prove that axis projection remains only an input-target transformation and that
+	all existing point/control semantics continue to be owned downstream.
 
-### Expected files
+	### Expected files
 
-Prefer test-only changes if new feature-specific characterization is needed.
-Potential files:
+	Prefer test-only changes if new feature-specific characterization is needed.
+	Potential files:
 
-- `test/easing_curve_editor_gesture_characterization_test.gd`;
-- an existing focused control/point suite only if that suite is the clearer owner
-  of a specific invariant.
+	- `test/easing_curve_editor_gesture_characterization_test.gd`;
+	- an existing focused control/point suite only if that suite is the clearer owner
+	  of a specific invariant.
 
-Production changes are not expected unless this validation finds a genuine
-feature defect.
+	Production changes are not expected unless this validation finds a genuine
+	feature defect.
 
-### High-level coverage
+	### High-level coverage
 
-- locked point position;
-- locked left control;
-- locked right control;
-- Force Linear;
-- Free;
-- Linear fallback/alias behavior;
-- Balanced;
-- Mirrored;
-- Linked;
-- opposite-handle consequences remain unchanged.
+	- locked point position;
+	- locked left control;
+	- locked right control;
+	- Force Linear;
+	- Free;
+	- Linear fallback/alias behavior;
+	- Balanced;
+	- Mirrored;
+	- Linked;
+	- opposite-handle consequences remain unchanged.
 
-Do not change `point.gd`, snapshot mutation policy, or Inspector semantics merely
-to simplify tests.
+	Do not change `point.gd`, snapshot mutation policy, or Inspector semantics merely
+	to simplify tests.
 
-### Targeted validation
+	### Targeted validation
 
-- graph gesture characterization;
-- control editability;
-- Linear control alias;
-- point-state characterization;
-- `git diff --check`.
+	- graph gesture characterization;
+	- control editability;
+	- Linear control alias;
+	- point-state characterization;
+	- `git diff --check`.
 
-### Approval gate
+	### Execution result
 
-Present any proposed test/production diff before execution.
+	Completed on 2026-08-27 as a **test-only** integration-characterization slice.
+	No production source was modified during Step 4.
 
----
+	Changed for Step 4:
 
-## AXIS-DRAG-01 Step 5 of 8 — Validate view-space dominance, pan/zoom, clamping, and ordering
+	- `test/easing_curve_editor_gesture_characterization_test.gd`;
+	- this report for bookkeeping.
+
+	Added 20 graph-level integration checks covering:
+
+	- locked point position refusing to start/move under Shift motion;
+	- locked left and right controls refusing to start/move;
+	- Free constrained handle movement leaving the opposite handle unchanged;
+	- Force Linear remaining collapsed while the point receives a constrained target;
+	- Balanced constrained handle movement preserving its downstream opposite display-space direction and opposite display-space length;
+	- Mirrored constrained handle movement preserving downstream display-space mirroring;
+	- Linked constrained handle movement keeping both controls synchronized to the single constrained request;
+	- Linear collapsed-handle hit testing continuing to fall back to the existing point-drag path, with Shift constraining that point while both controls remain collapsed.
+
+	The graph gesture suite increased from **64 to 84 checks**.
+
+	Validation after the final test correction:
+
+	- `PASS: 84 graph gesture characterization checks`;
+	- `PASS: 21 EasingCurve control editability checks`;
+	- `PASS: 72 EasingCurve Linear control alias checks`;
+	- `PASS: 106 point-state characterization checks`;
+	- all four fresh Godot 4.7.1 Editor-host processes exited `0`;
+	- no `SCRIPT ERROR` or `ERROR:` appeared in the passing logs;
+	- `git diff --check` passed.
+
+	One initial graph run failed 1 of 84 checks on the new Balanced opposite-direction assertion. The constrained dragged target and opposite display-space length assertions both passed. The failing predicate compared a raw display-space cross product with `is_zero_approx()`, which amplified floating-point error at editor-scale handle magnitudes. The test helper was corrected to compare normalized display-space directions instead. The rerun passed 84/84. This was a test numerical-tolerance defect, not a production Shift-drag defect; no production change was made.
+
+	Existing `easing_curve_point_state_characterization_test.gd` remains the owner of detailed Handle Mode transition mathematics and Inspector precedence. Step 4 only characterizes the graph-input integration seam and does not duplicate those responsibilities.
+
+	Next approval gate: **AXIS-DRAG-01 Step 5 of 8 — Validate view-space dominance, pan/zoom, clamping, and ordering**.
+
+	---
+
+	## AXIS-DRAG-01 Step 5 of 8 — Validate view-space dominance, pan/zoom, clamping, and ordering
 
 **Status:** NOT STARTED
 
@@ -695,20 +730,22 @@ the execution history.
 
 # 7. Current handoff
 
-**AXIS-DRAG-01 Steps 1-3 are complete.**
+	**AXIS-DRAG-01 Steps 1-4 are complete.**
 
-Current implementation state:
+	Current implementation/characterization state:
 
-- modifier-capable baseline characterization: complete;
-- Shift-constrained point dragging: implemented and focused-validated;
-- Shift-constrained left/right Bézier handle dragging: implemented and focused-validated;
-- graph gesture suite: 64 checks passing;
-- control editability suite: 21 checks passing;
-- Linear control alias suite: 72 checks passing;
-- Position-X drag suite remains at its Step 2 validation baseline of 69 checks passing.
+	- modifier-capable baseline characterization: complete;
+	- Shift-constrained point dragging: implemented and focused-validated;
+	- Shift-constrained left/right Bézier handle dragging: implemented and focused-validated;
+	- downstream Handle Mode / lock / Force Linear integration: characterized without a Step 4 production change;
+	- graph gesture suite: 84 checks passing;
+	- control editability suite: 21 checks passing;
+	- Linear control alias suite: 72 checks passing;
+	- point-state characterization suite: 106 checks passing;
+	- Position-X drag suite remains at its Step 2 validation baseline of 69 checks passing.
 
-The next approval gate is:
+	The next approval gate is:
 
-**AXIS-DRAG-01 Step 4 of 8 — Characterize Handle Modes, locks, and Force Linear integration**
+	**AXIS-DRAG-01 Step 5 of 8 — Validate view-space dominance, pan/zoom, clamping, and ordering**
 
-Step 4 should prefer test-only characterization and must not move point/control semantics into the graph editor.
+	Step 5 should focus on Easing Curve-specific geometry risks: view-space axis choice, diagonal boundary behavior, pan/zoom, point clamping, and X-order/endpoint takeover interactions.

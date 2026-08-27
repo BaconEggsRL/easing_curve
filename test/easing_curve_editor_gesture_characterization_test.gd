@@ -21,6 +21,7 @@ func _run() -> void:
 	_test_modifier_capable_drag_baseline()
 	_test_point_axis_constraint_behavior()
 	_test_handle_axis_constraint_behavior()
+	_test_axis_constraint_downstream_control_semantics()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
 	if _failures == 0:
@@ -94,6 +95,14 @@ func _motion(
 
 func _point_view(editor: EasingCurveEditor, point: EasingCurvePoint) -> Vector2:
 	return editor.get_view_pos(point.position)
+
+
+func _handles_are_opposite_in_display_space(point: EasingCurvePoint) -> bool:
+	var left_delta := (point.left_control_point - point.position) * point.handle_display_scale
+	var right_delta := (point.right_control_point - point.position) * point.handle_display_scale
+	if left_delta.is_zero_approx() or right_delta.is_zero_approx():
+		return false
+	return left_delta.normalized().is_equal_approx(-right_delta.normalized())
 
 
 func _test_zoom_metadata_contract() -> void:
@@ -430,6 +439,197 @@ func _test_handle_axis_constraint_behavior() -> void:
 	right_editor._gui_input(_button(MOUSE_BUTTON_LEFT, right_vertical_view, false, true))
 	right_editor._slider.free()
 	right_editor.free()
+
+
+func _test_axis_constraint_downstream_control_semantics() -> void:
+	var locked_point_fixture := _fixture()
+	var locked_point_curve: EasingCurve = locked_point_fixture.curve
+	var locked_point_editor: EasingCurveEditor = locked_point_fixture.editor
+	var locked_point := locked_point_curve.points[1]
+	var locked_point_origin := locked_point.position
+	var locked_point_start := _point_view(locked_point_editor, locked_point)
+	locked_point.set_locked("position", true)
+	locked_point_editor._gui_input(_button(MOUSE_BUTTON_LEFT, locked_point_start, true))
+	_expect(locked_point_editor.dragging_point == -1, "Locked point position unexpectedly started a graph drag")
+	locked_point_editor._gui_input(_motion(locked_point_start + Vector2(50.0, 10.0), MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(locked_point.position == locked_point_origin, "Shift motion moved a locked point position")
+	locked_point_editor._gui_input(_button(MOUSE_BUTTON_LEFT, locked_point_start + Vector2(50.0, 10.0), false, true))
+	locked_point_editor._slider.free()
+	locked_point_editor.free()
+
+	var locked_left_fixture := _fixture()
+	var locked_left_curve: EasingCurve = locked_left_fixture.curve
+	var locked_left_editor: EasingCurveEditor = locked_left_fixture.editor
+	var locked_left_point := locked_left_curve.points[1]
+	var locked_left_origin := locked_left_point.left_control_point
+	var locked_left_start := locked_left_editor.get_view_pos(locked_left_origin)
+	locked_left_point.set_locked("left_control_point", true)
+	locked_left_editor._gui_input(_button(MOUSE_BUTTON_LEFT, locked_left_start, true))
+	_expect(locked_left_editor.dragging_point == -1, "Locked left control unexpectedly started a graph drag")
+	locked_left_editor._gui_input(_motion(locked_left_start + Vector2(-50.0, 10.0), MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(locked_left_point.left_control_point == locked_left_origin, "Shift motion moved a locked left control")
+	locked_left_editor._gui_input(_button(MOUSE_BUTTON_LEFT, locked_left_start + Vector2(-50.0, 10.0), false, true))
+	locked_left_editor._slider.free()
+	locked_left_editor.free()
+
+	var locked_right_fixture := _fixture()
+	var locked_right_curve: EasingCurve = locked_right_fixture.curve
+	var locked_right_editor: EasingCurveEditor = locked_right_fixture.editor
+	var locked_right_point := locked_right_curve.points[1]
+	var locked_right_origin := locked_right_point.right_control_point
+	var locked_right_start := locked_right_editor.get_view_pos(locked_right_origin)
+	locked_right_point.set_locked("right_control_point", true)
+	locked_right_editor._gui_input(_button(MOUSE_BUTTON_LEFT, locked_right_start, true))
+	_expect(locked_right_editor.dragging_point == -1, "Locked right control unexpectedly started a graph drag")
+	locked_right_editor._gui_input(_motion(locked_right_start + Vector2(50.0, -10.0), MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(locked_right_point.right_control_point == locked_right_origin, "Shift motion moved a locked right control")
+	locked_right_editor._gui_input(_button(MOUSE_BUTTON_LEFT, locked_right_start + Vector2(50.0, -10.0), false, true))
+	locked_right_editor._slider.free()
+	locked_right_editor.free()
+
+	var free_fixture := _fixture()
+	var free_curve: EasingCurve = free_fixture.curve
+	var free_editor: EasingCurveEditor = free_fixture.editor
+	var free_point := free_curve.points[1]
+	var free_left_origin := free_point.left_control_point
+	var free_right_origin := free_point.right_control_point
+	var free_start := free_editor.get_view_pos(free_left_origin)
+	free_editor._gui_input(_button(MOUSE_BUTTON_LEFT, free_start, true))
+	var free_target_view := free_start + Vector2(-48.0, 10.0)
+	var free_target_world := free_editor.get_world_pos(free_target_view)
+	var expected_free_left := Vector2(free_target_world.x, free_left_origin.y)
+	free_editor._gui_input(_motion(free_target_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(free_point.left_control_point.is_equal_approx(expected_free_left), "Free Shift drag did not preserve the constrained requested handle target")
+	_expect(free_point.right_control_point == free_right_origin, "Free Shift drag unexpectedly changed the opposite handle")
+	free_editor._gui_input(_button(MOUSE_BUTTON_LEFT, free_target_view, false, true))
+	free_editor._slider.free()
+	free_editor.free()
+
+	var force_fixture := _fixture()
+	var force_curve: EasingCurve = force_fixture.curve
+	var force_editor: EasingCurveEditor = force_fixture.editor
+	var force_point := force_curve.points[1]
+	force_point.left_force_linear = true
+	var force_origin := force_point.position
+	var force_start := _point_view(force_editor, force_point)
+	force_editor._gui_input(_button(MOUSE_BUTTON_LEFT, force_start, true))
+	var force_target_view := force_start + Vector2(50.0, 10.0)
+	var force_target_world := force_editor.get_world_pos(force_target_view)
+	var expected_force_position := Vector2(force_target_world.x, force_origin.y).clamp(
+		Vector2(0, force_curve.min_value),
+		Vector2(1.0, force_curve.max_value),
+	)
+	force_editor._gui_input(_motion(force_target_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(force_point.position.is_equal_approx(expected_force_position), "Force Linear point did not receive the constrained point target")
+	_expect(force_point.left_control_point == force_point.position, "Constrained point drag bypassed downstream Force Linear geometry")
+	force_editor._gui_input(_button(MOUSE_BUTTON_LEFT, force_target_view, false, true))
+	force_editor._slider.free()
+	force_editor.free()
+
+	var balanced_fixture := _fixture()
+	var balanced_curve: EasingCurve = balanced_fixture.curve
+	var balanced_editor: EasingCurveEditor = balanced_fixture.editor
+	var balanced_point := balanced_curve.points[1]
+	balanced_point.set_handle_display_scale(balanced_editor.get_world_to_view_scale())
+	balanced_point.handle_mode = EasingCurvePoint.HandleMode.BALANCED
+	var balanced_left_origin := balanced_point.left_control_point
+	var balanced_right_display_length := (
+		(balanced_point.right_control_point - balanced_point.position)
+		* balanced_point.handle_display_scale
+	).length()
+	var balanced_start := balanced_editor.get_view_pos(balanced_left_origin)
+	balanced_editor._gui_input(_button(MOUSE_BUTTON_LEFT, balanced_start, true))
+	var balanced_target_view := balanced_start + Vector2(-50.0, 10.0)
+	var balanced_target_world := balanced_editor.get_world_pos(balanced_target_view)
+	var expected_balanced_left := Vector2(balanced_target_world.x, balanced_left_origin.y)
+	balanced_editor._gui_input(_motion(balanced_target_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(balanced_point.left_control_point.is_equal_approx(expected_balanced_left), "Balanced Shift drag did not preserve the constrained requested handle target")
+	_expect(_handles_are_opposite_in_display_space(balanced_point), "Balanced Shift drag bypassed downstream opposite-direction geometry")
+	_expect(
+		is_equal_approx(
+			((balanced_point.right_control_point - balanced_point.position) * balanced_point.handle_display_scale).length(),
+			balanced_right_display_length,
+		),
+		"Balanced Shift drag did not preserve the downstream opposite display-space length",
+	)
+	balanced_editor._gui_input(_button(MOUSE_BUTTON_LEFT, balanced_target_view, false, true))
+	balanced_editor._slider.free()
+	balanced_editor.free()
+
+	var mirrored_fixture := _fixture()
+	var mirrored_curve: EasingCurve = mirrored_fixture.curve
+	var mirrored_editor: EasingCurveEditor = mirrored_fixture.editor
+	var mirrored_point := mirrored_curve.points[1]
+	mirrored_point.set_handle_display_scale(mirrored_editor.get_world_to_view_scale())
+	mirrored_point.handle_mode = EasingCurvePoint.HandleMode.MIRRORED
+	var mirrored_right_origin := mirrored_point.right_control_point
+	var mirrored_start := mirrored_editor.get_view_pos(mirrored_right_origin)
+	mirrored_editor._gui_input(_button(MOUSE_BUTTON_LEFT, mirrored_start, true))
+	var mirrored_target_view := mirrored_start + Vector2(10.0, 50.0)
+	var mirrored_target_world := mirrored_editor.get_world_pos(mirrored_target_view)
+	var expected_mirrored_right := Vector2(mirrored_right_origin.x, mirrored_target_world.y)
+	mirrored_editor._gui_input(_motion(mirrored_target_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(mirrored_point.right_control_point.is_equal_approx(expected_mirrored_right), "Mirrored Shift drag did not preserve the constrained requested handle target")
+	_expect(
+		((mirrored_point.left_control_point - mirrored_point.position) * mirrored_point.handle_display_scale).is_equal_approx(
+			-((mirrored_point.right_control_point - mirrored_point.position) * mirrored_point.handle_display_scale)
+		),
+		"Mirrored Shift drag bypassed downstream mirrored display-space geometry",
+	)
+	mirrored_editor._gui_input(_button(MOUSE_BUTTON_LEFT, mirrored_target_view, false, true))
+	mirrored_editor._slider.free()
+	mirrored_editor.free()
+
+	var linked_fixture := _fixture()
+	var linked_curve: EasingCurve = linked_fixture.curve
+	var linked_editor: EasingCurveEditor = linked_fixture.editor
+	var linked_point := linked_curve.points[1]
+	linked_point.handle_mode = EasingCurvePoint.HandleMode.LINKED
+	var linked_origin := linked_point.left_control_point
+	var linked_start := linked_editor.get_view_pos(linked_origin)
+	linked_editor._gui_input(_button(MOUSE_BUTTON_LEFT, linked_start, true))
+	_expect(linked_editor.dragging_control == EasingCurveEditor.ControlIndex.LEFT, "Linked shared handle did not enter the existing left-control graph path")
+	var linked_target_view := linked_start + Vector2(50.0, 10.0)
+	var linked_target_world := linked_editor.get_world_pos(linked_target_view)
+	var expected_linked := Vector2(linked_target_world.x, linked_origin.y)
+	linked_editor._gui_input(_motion(linked_target_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		linked_point.left_control_point.is_equal_approx(expected_linked)
+		and linked_point.right_control_point.is_equal_approx(expected_linked),
+		"Linked Shift drag did not keep both controls synchronized to the constrained request",
+	)
+	linked_editor._gui_input(_button(MOUSE_BUTTON_LEFT, linked_target_view, false, true))
+	linked_editor._slider.free()
+	linked_editor.free()
+
+	var linear_fixture := _fixture()
+	var linear_curve: EasingCurve = linear_fixture.curve
+	var linear_editor: EasingCurveEditor = linear_fixture.editor
+	var linear_point := linear_curve.points[1]
+	linear_point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
+	var linear_origin := linear_point.position
+	var linear_start := linear_editor.get_view_pos(linear_point.left_control_point)
+	linear_editor._gui_input(_button(MOUSE_BUTTON_LEFT, linear_start, true))
+	_expect(
+		linear_editor.dragging_point == 1 and linear_editor.dragging_control == EasingCurveEditor.ControlIndex.NONE,
+		"Linear collapsed handle did not fall back to the existing point drag path",
+	)
+	var linear_target_view := linear_start + Vector2(50.0, 10.0)
+	var linear_target_world := linear_editor.get_world_pos(linear_target_view)
+	var expected_linear_position := Vector2(linear_target_world.x, linear_origin.y).clamp(
+		Vector2(0, linear_curve.min_value),
+		Vector2(1.0, linear_curve.max_value),
+	)
+	linear_editor._gui_input(_motion(linear_target_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(linear_point.position.is_equal_approx(expected_linear_position), "Linear fallback point drag did not receive the constrained point target")
+	_expect(
+		linear_point.left_control_point == linear_point.position
+		and linear_point.right_control_point == linear_point.position,
+		"Linear fallback point drag did not retain collapsed downstream controls",
+	)
+	linear_editor._gui_input(_button(MOUSE_BUTTON_LEFT, linear_target_view, false, true))
+	linear_editor._slider.free()
+	linear_editor.free()
 
 
 func _test_point_and_control_drag_boundaries() -> void:
