@@ -78,6 +78,9 @@ var position_x_order_preview_point: EasingCurvePoint
 var is_right_delete_dragging := false
 var _right_delete_requires_exit := false
 var _right_delete_blocked_position := Vector2.ZERO
+var _axis_drag_origin_view := Vector2.ZERO
+var _axis_drag_origin_world := Vector2.ZERO
+var _axis_drag_shift_blocked := false
 
 var grabbing: GrabMode = GrabMode.NONE
 var initial_grab_pos: Vector2
@@ -206,6 +209,47 @@ func _handle_pending_add_motion(event: InputEventMouseMotion) -> void:
 	queue_redraw()
 
 
+func _begin_axis_drag(
+	event: InputEventMouseButton,
+	point: EasingCurvePoint,
+	control: ControlIndex,
+) -> void:
+	_axis_drag_origin_view = event.position
+	match control:
+		ControlIndex.LEFT:
+			_axis_drag_origin_world = point.left_control_point
+		ControlIndex.RIGHT:
+			_axis_drag_origin_world = point.right_control_point
+		ControlIndex.NONE:
+			_axis_drag_origin_world = point.position
+	_axis_drag_shift_blocked = event.shift_pressed
+
+
+func _clear_axis_drag() -> void:
+	_axis_drag_origin_view = Vector2.ZERO
+	_axis_drag_origin_world = Vector2.ZERO
+	_axis_drag_shift_blocked = false
+
+
+func _apply_point_axis_constraint(
+	event: InputEventMouseMotion,
+	world_pos: Vector2,
+) -> Vector2:
+	if _axis_drag_shift_blocked:
+		if not event.shift_pressed:
+			_axis_drag_shift_blocked = false
+		return world_pos
+	if not event.shift_pressed:
+		return world_pos
+
+	var view_delta := event.position - _axis_drag_origin_view
+	if absf(view_delta.x) > absf(view_delta.y):
+		world_pos.y = _axis_drag_origin_world.y
+	else:
+		world_pos.x = _axis_drag_origin_world.x
+	return world_pos
+
+
 func _handle_drag_motion(event: InputEventMouseMotion) -> void:
 	var p = _curve.points[dragging_point]
 	if dragging_control != ControlIndex.NONE:
@@ -228,6 +272,7 @@ func _handle_drag_motion(event: InputEventMouseMotion) -> void:
 			if dragging_point != _curve.points.size() - 1:
 				_request_point_property_change(dragging_point, &"right_control_point", world_pos, true)
 		ControlIndex.NONE:
+			world_pos = _apply_point_axis_constraint(event, world_pos)
 			var clamped_pos = world_pos.clamp(Vector2(0, _curve.min_value), Vector2(1.0, _curve.max_value))
 			var delta = clamped_pos - p.position
 			var left_control: Vector2 = p.left_control_point
@@ -302,9 +347,11 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 		if can_drag_control:
 			dragging_point = control[0]
 			dragging_control = control[1]
+			_begin_axis_drag(event, p, dragging_control)
 		elif point_idx != -1 and not _curve.points[point_idx].is_lock_active(&"position"):
 			dragging_point = point_idx
 			dragging_control = ControlIndex.NONE
+			_begin_axis_drag(event, _curve.points[point_idx], dragging_control)
 		queue_redraw()
 		return
 	if point_idx != -1:
@@ -312,6 +359,7 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 		if not p.is_lock_active(&"position"):
 			dragging_point = point_idx
 			dragging_control = ControlIndex.NONE
+			_begin_axis_drag(event, p, dragging_control)
 		selected_index = point_idx
 		queue_redraw()
 		return
@@ -371,6 +419,7 @@ func _handle_left_released() -> void:
 				break
 		dragging_point = -1
 		dragging_control = ControlIndex.NONE
+		_clear_axis_drag()
 		queue_redraw()
 		return
 	var finish_point_edit := dragging_point != -1
@@ -381,6 +430,7 @@ func _handle_left_released() -> void:
 		selected_index = point_order.find(dragged_point)
 	dragging_point = -1
 	dragging_control = ControlIndex.NONE
+	_clear_axis_drag()
 	if finish_point_edit:
 		point_edit_finished.emit(point_order)
 	queue_redraw()
@@ -876,6 +926,7 @@ func _on_curve_changed() -> void:
 	if dragging_point >= point_count:
 		dragging_point = -1
 		dragging_control = ControlIndex.NONE
+		_clear_axis_drag()
 	_update_point_toolbar()
 	queue_redraw()
 

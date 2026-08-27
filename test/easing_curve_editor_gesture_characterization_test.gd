@@ -19,6 +19,7 @@ func _run() -> void:
 	_test_zoom_behavioral_invariants()
 	_test_pending_add_cancel_and_no_op_release()
 	_test_modifier_capable_drag_baseline()
+	_test_point_axis_constraint_behavior()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
 	if _failures == 0:
@@ -264,6 +265,102 @@ func _test_modifier_capable_drag_baseline() -> void:
 	right_editor._gui_input(_button(MOUSE_BUTTON_LEFT, right_target_view, false))
 	right_editor._slider.free()
 	right_editor.free()
+
+
+func _test_point_axis_constraint_behavior() -> void:
+	var fixture := _fixture()
+	var curve: EasingCurve = fixture.curve
+	var editor: EasingCurveEditor = fixture.editor
+	var point := curve.points[1]
+	var origin := point.position
+	var start := _point_view(editor, point)
+
+	editor._gui_input(_button(MOUSE_BUTTON_LEFT, start, true))
+	editor._gui_input(_motion(start + Vector2(8.0, -5.0), MOUSE_BUTTON_MASK_LEFT))
+
+	var horizontal_view := start + Vector2(54.0, 14.0)
+	var horizontal_world := editor.get_world_pos(horizontal_view)
+	var expected_horizontal := Vector2(horizontal_world.x, origin.y).clamp(
+		Vector2(0, curve.min_value),
+		Vector2(1.0, curve.max_value),
+	)
+	editor._gui_input(_motion(horizontal_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		point.position.is_equal_approx(expected_horizontal),
+		"Mid-drag Shift did not constrain the point to the horizontal axis from the original drag position",
+	)
+
+	var vertical_view := start + Vector2(14.0, -54.0)
+	var vertical_world := editor.get_world_pos(vertical_view)
+	var expected_vertical := Vector2(origin.x, vertical_world.y).clamp(
+		Vector2(0, curve.min_value),
+		Vector2(1.0, curve.max_value),
+	)
+	editor._gui_input(_motion(vertical_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		point.position.is_equal_approx(expected_vertical),
+		"Held Shift did not switch to the vertical axis when total view displacement became Y-dominant",
+	)
+
+	var free_view := start + Vector2(42.0, -30.0)
+	var expected_free := editor.get_world_pos(free_view).clamp(
+		Vector2(0, curve.min_value),
+		Vector2(1.0, curve.max_value),
+	)
+	editor._gui_input(_motion(free_view, MOUSE_BUTTON_MASK_LEFT, false))
+	_expect(
+		point.position.is_equal_approx(expected_free),
+		"Releasing Shift did not immediately restore ordinary unconstrained point dragging",
+	)
+	editor._gui_input(_button(MOUSE_BUTTON_LEFT, free_view, false))
+	_expect(editor.dragging_point == -1, "Constrained point drag did not clear drag state on release")
+	editor._slider.free()
+	editor.free()
+
+	var preheld_fixture := _fixture()
+	var preheld_curve: EasingCurve = preheld_fixture.curve
+	var preheld_editor: EasingCurveEditor = preheld_fixture.editor
+	var preheld_point := preheld_curve.points[1]
+	var preheld_origin := preheld_point.position
+	var preheld_start := _point_view(preheld_editor, preheld_point)
+	preheld_editor._gui_input(_button(MOUSE_BUTTON_LEFT, preheld_start, true, true))
+
+	var held_view := preheld_start + Vector2(40.0, -12.0)
+	var expected_held := preheld_editor.get_world_pos(held_view).clamp(
+		Vector2(0, preheld_curve.min_value),
+		Vector2(1.0, preheld_curve.max_value),
+	)
+	preheld_editor._gui_input(_motion(held_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		preheld_point.position.is_equal_approx(expected_held),
+		"Pre-held Shift unexpectedly activated point axis constraint",
+	)
+
+	var released_shift_view := preheld_start + Vector2(45.0, -20.0)
+	var expected_released_shift := preheld_editor.get_world_pos(released_shift_view).clamp(
+		Vector2(0, preheld_curve.min_value),
+		Vector2(1.0, preheld_curve.max_value),
+	)
+	preheld_editor._gui_input(_motion(released_shift_view, MOUSE_BUTTON_MASK_LEFT, false))
+	_expect(
+		preheld_point.position.is_equal_approx(expected_released_shift),
+		"Releasing a pre-held Shift did not preserve the ordinary point drag target",
+	)
+
+	var repress_view := preheld_start + Vector2(52.0, 10.0)
+	var repress_world := preheld_editor.get_world_pos(repress_view)
+	var expected_repress := Vector2(repress_world.x, preheld_origin.y).clamp(
+		Vector2(0, preheld_curve.min_value),
+		Vector2(1.0, preheld_curve.max_value),
+	)
+	preheld_editor._gui_input(_motion(repress_view, MOUSE_BUTTON_MASK_LEFT, true))
+	_expect(
+		preheld_point.position.is_equal_approx(expected_repress),
+		"Shift did not become eligible after a pre-held Shift was released and pressed again during the same drag",
+	)
+	preheld_editor._gui_input(_button(MOUSE_BUTTON_LEFT, repress_view, false, true))
+	preheld_editor._slider.free()
+	preheld_editor.free()
 
 
 func _test_point_and_control_drag_boundaries() -> void:
