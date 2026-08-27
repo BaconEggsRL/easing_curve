@@ -6,7 +6,8 @@
 
 `test/scripts/run_all_tests.ps1` is the source of truth for the explicit
 automated-suite manifest. It currently registers 17 suites: eight headless and
-nine Editor-host. Do not infer an automated suite or its mode from its filename.
+nine Editor-host. Their entrypoint scripts and `.uid` sidecars live under
+`test/automated/`. Do not infer an automated suite or its mode from its filename.
 
 ### Headless suites
 
@@ -36,7 +37,7 @@ The following suites require an Editor-host launch:
 Run an Editor-dependent test with:
 
 ```text
-./test/scripts/run_godot.ps1 --editor --headless --path . --script res://test/<test_name>.gd
+./test/scripts/run_godot.ps1 --editor --headless --path . --script res://test/automated/<test_name>.gd
 ```
 
 Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can
@@ -74,9 +75,10 @@ those fixtures in a visible Editor session instead.
 
 ## Test-asset ownership
 
-Only the 17 scripts in the explicit runner manifest above are release-gating
-automated suites. The following assets are intentionally documented by their
-observed repository role; none is registered by `run_all_tests.ps1`.
+Only the 17 scripts under `test/automated/` in the explicit runner manifest
+above are release-gating automated suites. The following assets are
+intentionally documented by their observed repository role; none is registered
+by `run_all_tests.ps1`.
 
 ### Shared automated-test harness and fixtures
 
