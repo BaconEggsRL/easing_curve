@@ -19,6 +19,7 @@ func _run() -> void:
 	_test_normal_property_row_order()
 	_test_property_selection_survives_reparse()
 	_test_topology_and_resource_switch_selection()
+	_test_resource_view_state_persistence()
 	if _failures == 0:
 		print("PASS: %d selection and refresh characterization checks" % _checks)
 		quit()
@@ -198,3 +199,62 @@ func _test_topology_and_resource_switch_selection() -> void:
 	editor.set_curve(curve)
 	_expect(editor.selected_index == curve.points.size() - 1, "Returning to a resource did not restore its graph selection")
 	editor.free()
+
+
+func _test_resource_view_state_persistence() -> void:
+	var curve_a := _curve()
+	var curve_b := _curve()
+	var context := EDITOR_HOST.create_inspector_context(curve_a)
+	var inspector: Object = context.inspector
+	context.editor.free()
+
+	var step_a := int(EasingCurve.DEFAULT_SLIDER_VALUE) + 3
+	var pan_a := Vector2(31.0, -19.0)
+	var section_a: Control = inspector.call("handle_easing_curve_editor", curve_a)
+	get_root().add_child(section_a)
+	var editor_a: EasingCurveEditor = inspector.get("easing_curve_editor")
+	editor_a.set_slider_value(step_a)
+	editor_a.pan_offset = pan_a
+	editor_a.pan_changed.emit(pan_a)
+	var zoom_a := Vector2(editor_a.step_to_zoom(step_a), editor_a.step_to_zoom(step_a))
+	_expect(curve_a._last_slider_value == step_a, "Curve A did not store its zoom slider step")
+	_expect(curve_a._last_zoom.is_equal_approx(zoom_a), "Curve A did not store its zoom vector")
+	_expect(curve_a._last_pan == pan_a, "Curve A did not store its pan offset")
+	section_a.free()
+
+	var refreshed_a: Control = inspector.call("handle_easing_curve_editor", curve_a)
+	get_root().add_child(refreshed_a)
+	editor_a = inspector.get("easing_curve_editor")
+	_expect(editor_a._zoom_step == step_a, "Refreshing Curve A did not restore its zoom step")
+	_expect(editor_a._slider.slider.value == step_a, "Refreshing Curve A did not restore its slider value")
+	_expect(Vector2(editor_a._zoom_x, editor_a._zoom_y).is_equal_approx(zoom_a), "Refreshing Curve A did not restore its zoom vector")
+	_expect(editor_a.pan_offset == pan_a, "Refreshing Curve A did not restore its pan offset")
+	refreshed_a.free()
+
+	var section_b: Control = inspector.call("handle_easing_curve_editor", curve_b)
+	get_root().add_child(section_b)
+	var editor_b: EasingCurveEditor = inspector.get("easing_curve_editor")
+	var default_step := int(EasingCurve.DEFAULT_SLIDER_VALUE)
+	_expect(editor_b._zoom_step == default_step, "Curve B inherited Curve A's zoom step")
+	_expect(editor_b.pan_offset == Vector2.ZERO, "Curve B inherited Curve A's pan offset")
+
+	var step_b := default_step - 4
+	var pan_b := Vector2(-22.0, 14.0)
+	editor_b.set_slider_value(step_b)
+	editor_b.pan_offset = pan_b
+	editor_b.pan_changed.emit(pan_b)
+	var zoom_b := Vector2(editor_b.step_to_zoom(step_b), editor_b.step_to_zoom(step_b))
+	_expect(curve_b._last_slider_value == step_b, "Curve B did not store its independent zoom slider step")
+	_expect(curve_b._last_zoom.is_equal_approx(zoom_b), "Curve B did not store its independent zoom vector")
+	_expect(curve_b._last_pan == pan_b, "Curve B did not store its independent pan offset")
+	section_b.free()
+
+	var returned_a: Control = inspector.call("handle_easing_curve_editor", curve_a)
+	get_root().add_child(returned_a)
+	editor_a = inspector.get("easing_curve_editor")
+	_expect(editor_a._zoom_step == step_a, "Returning to Curve A restored Curve B's zoom step")
+	_expect(editor_a._slider.slider.value == step_a, "Returning to Curve A restored the wrong slider value")
+	_expect(Vector2(editor_a._zoom_x, editor_a._zoom_y).is_equal_approx(zoom_a), "Returning to Curve A restored the wrong zoom vector")
+	_expect(editor_a.pan_offset == pan_a, "Returning to Curve A restored the wrong pan offset")
+	_expect(curve_b._last_slider_value == step_b and curve_b._last_zoom.is_equal_approx(zoom_b) and curve_b._last_pan == pan_b, "Returning to Curve A mutated Curve B's stored view state")
+	returned_a.free()
