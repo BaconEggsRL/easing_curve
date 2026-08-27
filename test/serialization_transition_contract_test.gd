@@ -2,7 +2,7 @@ extends SceneTree
 
 const LEGACY_PRE_FLAT_PATH := "res://test/presets/legacy_pre_flat_triangle.tres"
 const LEGACY_MISSING_FORCE_PATH := "res://test/presets/legacy_flat_without_force_linear.tres"
-const ROUND_TRIP_DIRECTORY := "res://test/_serialization_transition_contract"
+const ROUND_TRIP_DIRECTORY := "user://_serialization_transition_contract"
 const SAMPLE_INPUTS := [0.0, 0.25, 0.5, 0.75, 1.0]
 
 var _failures := 0
