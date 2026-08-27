@@ -96,6 +96,16 @@ var _game_run_token := 0
 var _ready_run_token := -1
 var _game_session_id := -1
 var _game_run_active := false
+## Debugger session id of an `mcp:hello` that arrived before the run was
+## adopted, or -1 when none is held (#891). A manually started play can beat
+## its own adoption: the helper's boot beacon is a one-shot, so discarding it
+## left the runtime bridge dead for the whole run with no retry. Buffer it and
+## replay on adoption instead. Cleared whenever a run ends, so a beacon can
+## never carry across into a later run.
+var _pending_hello_session_id := -1
+## True when holding a beacon already rotated the game-log run id, so the
+## adoption that consumes it must not rotate again (#891 review).
+var _pre_adoption_log_rotated := false
 var _manual_run_armed := false
 var _game_run_started_msec := 0
 var _game_run_started_editor_cursor := 0
@@ -168,13 +178,20 @@ func _begin_game_run_tracking(
 	sticky_debugger_scan: bool = true,
 	quiet: bool = false,
 	manual_armed: bool = false,
+	keep_session_id: int = -1,
 ) -> void:
 	_game_run_token += 1
 	_game_run_active = true
 	_manual_run_armed = manual_armed
 	_game_ready = false
 	_ready_run_token = -1
-	_game_session_id = -1
+	## Adopting a run whose game is ALREADY attached keeps that session id
+	## (#891 review): clearing it would leave every staleness guard comparing
+	## against -1, so a foreign session's `stopped` could end this live run —
+	## `_on_debugger_session_stopped` lets a manual-armed run end on any
+	## session while the id is unknown. Spawn-first callers pass -1 and keep
+	## the historical clear, since their game has not attached yet.
+	_game_session_id = keep_session_id
 	clear_debug_break()
 	_game_run_started_msec = Time.get_ticks_msec()
 	_game_run_started_editor_cursor = maxi(0, editor_log_cursor)
@@ -186,12 +203,26 @@ func _begin_game_run_tracking(
 	_game_helper_expected = helper_expected
 	var run_id := ""
 	if _game_log_buffer and rotate_game_log:
-		run_id = _game_log_buffer.clear_for_new_run()
+		if _pre_adoption_log_rotated:
+			## Already rotated when this game's beacon was held, so its boot
+			## output is tagged with the run id this adoption is about to
+			## announce. Rotating again here would orphan those lines under a
+			## superseded id and `logs_read(source="game")` — which returns the
+			## CURRENT run only — would report an empty log for a game whose
+			## only output happens in `_ready()` (#891 review).
+			run_id = _game_log_buffer.run_id()
+		else:
+			run_id = _game_log_buffer.clear_for_new_run()
+	_pre_adoption_log_rotated = false
 	if _log_buffer and not quiet:
 		var log_text := "[debug] game capture pending run token %d" % _game_run_token
 		if not run_id.is_empty():
 			log_text += " (run %s)" % run_id
 		_log_buffer.log(log_text)
+	## #891: a beacon that beat this adoption is held rather than dropped —
+	## consume it now so the bridge comes up without waiting for a second
+	## hello the game will never send.
+	_replay_pending_hello()
 
 
 func _editor_log_cursor() -> int:
@@ -202,6 +233,9 @@ func end_game_run() -> void:
 	_fail_pending_evals_not_ready(
 		"The game run ended before game_eval completed — the game stopped, crashed, or is restarting. Confirm it is running and retry."
 	)
+	## Never carry a held beacon across a run boundary (#891).
+	_pending_hello_session_id = -1
+	_pre_adoption_log_rotated = false
 	_game_run_active = false
 	_manual_run_armed = false
 	_game_ready = false
@@ -210,6 +244,36 @@ func end_game_run() -> void:
 	clear_debug_break()
 	if _surfaced_error_tracker != null:
 		_surfaced_error_tracker.note_game_run_stopped()
+
+
+## Editor play-state edge, stopped -> playing (#891). `_setup_session` adopts a
+## manually started play only when `EditorInterface.is_playing_scene()` is
+## ALREADY true at the instant Godot attaches the debugger session — an F5/F6
+## launch routinely loses that race, and the run was then never adopted at all,
+## leaving game_eval, game logs and runtime inspection silently dead for its
+## whole lifetime. This closes the race from the other side: whichever of the
+## two edges lands second performs the adoption. No-op for MCP-started runs,
+## which `project_run` already adopted via `begin_game_run`.
+func note_editor_play_started() -> void:
+	if _game_run_active:
+		return
+	## State belonging to the game that is already talking must survive the
+	## adoption that is about to reset run bookkeeping (#891 review).
+	var attached_session := _game_session_id
+	var had_break := _break_active
+	var break_can_debug := _break_can_debug
+	var break_reason := _break_reason
+	_begin_game_run_tracking(
+		_editor_log_cursor(), true, true, true, true, true, attached_session
+	)
+	if had_break:
+		## A boot parse error can break the game before the play-state edge
+		## lands. `_begin_game_run_tracking` clears break state, which would
+		## drop the actionable #645 diagnosis and leave game_status reporting
+		## "not_live" instead of "break". Re-record it against the new run so
+		## `_break_pre_live` and the synthetic-error scan are computed for THIS
+		## run — the beacon will never arrive for a game parked at a break.
+		note_debug_break(break_can_debug, break_reason)
 
 
 ## Authoritative fallback for runs whose debugger `stopped` signal never
@@ -221,8 +285,60 @@ func end_game_run() -> void:
 ## (run tracking begun, is_playing_scene() not yet true) is never clipped.
 func note_editor_play_stopped() -> void:
 	if not _game_run_active:
+		## A beacon held for an adoption that never happened must not survive
+		## into the next run (#891).
+		_pending_hello_session_id = -1
+		_pre_adoption_log_rotated = false
 		return
 	end_game_run()
+
+
+## Apply the game helper's boot beacon: the game has registered its "mcp"
+## capture and is safe to send take_screenshot / eval requests to — before
+## this, Godot's debugger drops our messages silently. Shared by the live
+## `mcp:hello` branch in `_capture` and by the buffered replay in
+## `_replay_pending_hello`, so a held beacon produces exactly the same state
+## and side effects as one that arrived after adoption (#891).
+func _accept_game_hello(session_id: int) -> void:
+	_pending_hello_session_id = -1
+	## Bind the run to the game that actually announced itself. Adoption
+	## clears `_game_session_id`, so without this a replayed beacon would
+	## leave the run bound to nothing and the staleness checks toothless
+	## until Godot's next `_setup_session` (#891 review).
+	if session_id != -1:
+		_game_session_id = session_id
+	_game_ready = true
+	_ready_run_token = _game_run_token
+	## #641: boot-time parse errors race the hello beacon — both ride
+	## the same debugger channel, and the editor inserts Errors-tab
+	## rows with a per-frame throttle, so rows can land moments after
+	## the run is declared live. Arm forced scans so those rows get
+	## promoted into the watermark even if no tool call follows.
+	if _surfaced_error_tracker != null:
+		_surfaced_error_tracker.schedule_deferred_scans()
+	if _log_buffer:
+		if _game_log_buffer:
+			_log_buffer.log("[debug] <- mcp:hello from game_helper (run %s)" % _game_log_buffer.run_id())
+		else:
+			_log_buffer.log("[debug] <- mcp:hello from game_helper")
+
+
+## Consume a beacon that arrived before this run was adopted. Called at the end
+## of run-tracking setup; no-op when nothing is held (#891).
+func _replay_pending_hello() -> void:
+	if _pending_hello_session_id == -1:
+		return
+	var held := _pending_hello_session_id
+	if _game_session_id != -1 and held != _game_session_id:
+		## Belongs to a different debugger session than the one this run is
+		## bound to — drop it rather than declare the wrong game live.
+		_pending_hello_session_id = -1
+		if _log_buffer:
+			_log_buffer.log("[debug] dropped held mcp:hello from debugger session %d (current %d)" % [held, _game_session_id])
+		return
+	if _log_buffer:
+		_log_buffer.log("[debug] replaying held mcp:hello from debugger session %d" % held)
+	_accept_game_hello(held)
 
 
 func _connect_session_stopped(session_id: int) -> void:
@@ -697,32 +813,36 @@ func _capture(message: String, data: Array, session_id: int) -> bool:
 			_on_log_batch(data)
 			return true
 		"mcp:hello":
-			if not _game_run_active:
-				if _log_buffer:
-					_log_buffer.log("[debug] ignored mcp:hello with no active game run")
-				return true
+			## Staleness is checked FIRST, before the buffering branch below:
+			## `_begin_game_run_tracking` clears `_game_session_id`, so a beacon
+			## validated only at replay time could never be rejected (#891
+			## review). A beacon from a session other than the attached one is
+			## some other game's — never hold it, never apply it.
 			if _game_session_id != -1 and session_id != _game_session_id:
 				if _log_buffer:
 					_log_buffer.log("[debug] ignored stale mcp:hello from debugger session %d (current %d)" % [session_id, _game_session_id])
 				return true
-			## Boot beacon from the game-side autoload. Tells us the
-			## game has registered its "mcp" capture and is safe to send
-			## take_screenshot to — before this, Godot's debugger would
-			## drop our message silently.
-			_game_ready = true
-			_ready_run_token = _game_run_token
-			## #641: boot-time parse errors race the hello beacon — both ride
-			## the same debugger channel, and the editor inserts Errors-tab
-			## rows with a per-frame throttle, so rows can land moments after
-			## the run is declared live. Arm forced scans so those rows get
-			## promoted into the watermark even if no tool call follows.
-			if _surfaced_error_tracker != null:
-				_surfaced_error_tracker.schedule_deferred_scans()
-			if _log_buffer:
-				if _game_log_buffer:
-					_log_buffer.log("[debug] <- mcp:hello from game_helper (run %s)" % _game_log_buffer.run_id())
-				else:
-					_log_buffer.log("[debug] <- mcp:hello from game_helper")
+			if not _game_run_active:
+				## #891: the run is not adopted YET — a manually started play
+				## whose debugger session attached before the editor flipped
+				## `is_playing_scene()` lands here. The beacon is a one-shot,
+				## so hold it for the imminent adoption instead of dropping it
+				## (which left game_eval waiting forever for a hello that had
+				## already been thrown away).
+				_pending_hello_session_id = session_id
+				## The beacon is this game's first word, and its boot output
+				## follows immediately (the helper flushes on its first
+				## `_process`). Rotate the run id NOW so those lines are tagged
+				## with the identity adoption will announce, instead of landing
+				## under the previous run and vanishing from
+				## `logs_read(source="game")` (#891 review).
+				if _game_log_buffer and not _pre_adoption_log_rotated:
+					_game_log_buffer.clear_for_new_run()
+					_pre_adoption_log_rotated = true
+				if _log_buffer:
+					_log_buffer.log("[debug] holding mcp:hello from debugger session %d until the run is adopted" % session_id)
+				return true
+			_accept_game_hello(session_id)
 			return true
 		"mcp:eval_liveness_response":
 			_on_eval_liveness_response(data)
