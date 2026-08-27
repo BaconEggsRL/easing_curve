@@ -216,6 +216,7 @@ var config_file_env: String = ""
 ## override to apply. Only declare a mapping when the client's docs guarantee
 ## the env var relocates the exact file we write — a wrong mapping writes the
 ## MCP entry somewhere the client never reads and Configure false-succeeds.
+## Relative values fail closed for the same reason `config_file_env`'s do.
 var config_home_env: String = ""
 ## Path of the config file relative to the env var's directory, e.g.
 ## "config.toml". Joined verbatim — no per-OS variants needed because the env
@@ -270,6 +271,35 @@ func resolved_config_path() -> String:
 ## is empty for ordinary unsupported/missing path mappings to preserve the
 ## long-standing status behavior for clients not installed on this platform.
 func resolved_config_path_details() -> Dictionary:
+	var details := _resolve_config_path_details()
+	var path := str(details.get("path", ""))
+	if path.is_empty() or path.is_absolute_path():
+		return details
+	## Last gate before every strategy's read/write. `McpPathTemplate.expand`
+	## leaves a token it cannot resolve in place, so an unset `$USERPROFILE` (or
+	## a `~` with no HOME) reaches here as a RELATIVE path rather than as the
+	## root-relative `/godot` that sails through `is_absolute_path()`. Acting on
+	## it would resolve against the editor's own working directory and create a
+	## literal `$USERPROFILE` folder in the Godot project. No descriptor
+	## template is intentionally relative — every one is `~`- or `$VAR`-rooted —
+	## so a non-absolute survivor is always a resolution failure. Report it with
+	## the unexpanded path, which still shows what could not be resolved.
+	return {"path": "", "error": unresolved_config_path_error(display_name, path)}
+
+
+## Shared wording for a path template `McpPathTemplate.expand` could not fully
+## resolve. Used by the guard above and by the merge-tier loader in
+## `_json_strategy.gd`, which resolves its own templates and never passes
+## through `resolved_config_path_details`.
+static func unresolved_config_path_error(client_name: String, path: String) -> String:
+	return (
+		"Could not resolve %s's config path: %s did not expand to an absolute "
+		+ "path. Set HOME/USERPROFILE (or the variable the path names) in the "
+		+ "environment the editor was launched from."
+	) % [client_name, path]
+
+
+func _resolve_config_path_details() -> Dictionary:
 	## Reflected reads: after an in-session self-update, an instance created
 	## before the update can answer Nil for vars the update added, and the
 	## typed calls below would each hard-error (Nil -> Dictionary, #850's
@@ -285,10 +315,10 @@ func resolved_config_path_details() -> Dictionary:
 	if not str(file_override.get("path", "")).is_empty() or not str(file_override.get("error", "")).is_empty():
 		_clear_config_path_warning()
 		return file_override
-	var override := config_home_override()
-	if not override.is_empty():
+	var home_override := config_home_override_details()
+	if not str(home_override.get("path", "")).is_empty() or not str(home_override.get("error", "")).is_empty():
 		_clear_config_path_warning()
-		return {"path": override, "error": ""}
+		return home_override
 	var candidate_key := McpPathTemplate.platform_key(candidates)
 	if not candidate_key.is_empty():
 		return _resolve_ordered_config_path_candidates(candidates[candidate_key])
@@ -333,6 +363,17 @@ func _resolve_ordered_config_path_candidates(templates: Variant) -> Dictionary:
 	var fallback_create_path := ""
 	for index in range(ordered_templates.size()):
 		var template := str(ordered_templates[index])
+		var expanded_template := McpPathTemplate.expand(template)
+		# An empty wildcard group ordinarily means "this package is not
+		# installed", but an unresolved root token produces the same empty
+		# group. Do not silently treat "could not inspect" as "not present" and
+		# fall through to a later writable candidate.
+		if not expanded_template.is_absolute_path():
+			_clear_config_path_warning()
+			return {
+				"path": "",
+				"error": unresolved_config_path_error(display_name, expanded_template),
+			}
 		var group := McpPathTemplate.expand_path_candidates(template)
 		if group.size() > 1:
 			var message := (
@@ -353,26 +394,40 @@ func _resolve_ordered_config_path_candidates(templates: Variant) -> Dictionary:
 		# anything currently visible through read-through by naming the first
 		# later existing candidate as a one-time seed source.
 		if template.contains("*"):
-			var seed_path := _first_existing_later_candidate(ordered_templates, index + 1)
+			var seed := _first_existing_later_candidate(ordered_templates, index + 1)
+			if not str(seed.get("error", "")).is_empty():
+				_clear_config_path_warning()
+				return {"path": "", "error": seed["error"]}
 			_clear_config_path_warning()
-			return {"path": path, "error": "", "seed_path": seed_path}
+			return {"path": path, "error": "", "seed_path": seed.get("path", "")}
 		if fallback_create_path.is_empty():
 			fallback_create_path = path
 	_clear_config_path_warning()
 	return {"path": fallback_create_path, "error": ""}
 
 
-func _first_existing_later_candidate(templates: Array, start_index: int) -> String:
+## Find a readable seed for a newly-created authoritative wildcard target.
+## An unresolved later root is an error, not an absent seed: writing without
+## inspecting it could silently discard configuration visible through the
+## package's read-through fallback.
+func _first_existing_later_candidate(templates: Array, start_index: int) -> Dictionary:
 	for index in range(start_index, templates.size()):
-		var group := McpPathTemplate.expand_path_candidates(str(templates[index]))
+		var template := str(templates[index])
+		var expanded_template := McpPathTemplate.expand(template)
+		if not expanded_template.is_absolute_path():
+			return {
+				"path": "",
+				"error": unresolved_config_path_error(display_name, expanded_template),
+			}
+		var group := McpPathTemplate.expand_path_candidates(template)
 		# A seed is optional. Never choose among an ambiguous later wildcard;
 		# the authoritative target was already resolved by the earlier group.
 		if group.size() != 1:
 			continue
 		var path := String(group[0])
 		if FileAccess.file_exists(path):
-			return path
-	return ""
+			return {"path": path, "error": ""}
+	return {"path": "", "error": ""}
 
 
 func _warn_config_path_once(message: String) -> void:
@@ -390,18 +445,40 @@ func _clear_config_path_warning() -> void:
 	_config_path_warning_mutex.unlock()
 
 
-## The env-var-relocated config path, or "" when no override applies
-## (no mapping declared, env var unset, or env var empty/whitespace).
-func config_home_override() -> String:
+## The config-home env override plus any fail-closed diagnostic. Empty path and
+## error means no override applies (no mapping declared, env var unset, or env
+## var empty/whitespace).
+func config_home_override_details() -> Dictionary:
 	if config_home_env.is_empty() or config_home_env_subpath.is_empty():
-		return ""
+		return {"path": "", "error": ""}
 	## env_lookup, not OS.get_environment: this runs on dock worker threads,
 	## which must not race the spawn window's setenv/unsetenv (#691).
 	var home := McpPathTemplate.env_lookup(config_home_env).strip_edges()
 	if home.is_empty():
-		return ""
+		return {"path": "", "error": ""}
 	# Expand a leading ~ so `CODEX_HOME=~/codex-alt` behaves like the shell.
-	return McpPathTemplate.expand(home).path_join(config_home_env_subpath)
+	var expanded := McpPathTemplate.expand(home)
+	## Same fail-closed rule as `config_file_override_details`: a relative value
+	## resolves against the EDITOR's working directory, not the client's, so
+	## honouring it silently aims the write at the Godot project directory
+	## instead of the file the client reads. The write layer can only name the
+	## mangled path it was handed; only here do we still know which env var
+	## produced it, so this is where the user-facing explanation belongs.
+	if not expanded.is_absolute_path():
+		return {
+			"path": "",
+			"error": "%s's $%s override must be an absolute config-home directory path; got %s" % [
+				display_name, config_home_env, home,
+			],
+		}
+	return {"path": expanded.path_join(config_home_env_subpath), "error": ""}
+
+
+## The env-var-relocated config path, or "" when no override applies (no
+## mapping declared, env var unset, env var empty/whitespace, or a value that
+## failed closed — `config_home_override_details` carries that diagnostic).
+func config_home_override() -> String:
+	return str(config_home_override_details().get("path", ""))
 
 
 ## True when a CLI client also declares where its config file lives, so it can

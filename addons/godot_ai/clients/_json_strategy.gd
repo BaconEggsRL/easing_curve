@@ -595,6 +595,18 @@ static func _project_override_message(
 static func _load_merge_tiers(client: McpClient) -> Dictionary:
 	var tiers: Array[Dictionary] = []
 	for path in _merge_paths(client):
+		## These templates never pass through `resolved_config_path_details`,
+		## so they need its fail-closed gate here: `McpPathTemplate.expand`
+		## leaves a token it cannot resolve in place, and the relative survivor
+		## would be read — and on Configure, written — against the editor's own
+		## working directory. Fail the whole fold rather than dropping the tier:
+		## a dropped tier reads as "the user has no config there", which is
+		## exactly the wrong thing to conclude when we could not look.
+		if not path.is_absolute_path():
+			return {
+				"ok": false,
+				"error": McpClient.unresolved_config_path_error(client.display_name, path),
+			}
 		var read := _read_file_text(path)
 		if not read.get("ok", false):
 			return {

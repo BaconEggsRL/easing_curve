@@ -1500,6 +1500,15 @@ static func get_server_launch_mode() -> String:
 	return "unknown"
 
 
+## Wall-clock budget for the Configure-time pre-warm. Far above
+## `McpCliExec.DEFAULT_TIMEOUT_MS` (8s) on purpose: this call is *expected* to
+## take tens of seconds on a cold cache — downloading and unpacking the tool
+## environment is the entire point — so the usual CLI-registry budget would
+## kill it right when it is doing useful work. Still bounded so a wedged uv
+## can't hold the worker thread forever.
+const PREWARM_TIMEOUT_MS := 180000
+
+
 static func find_uvx() -> String:
 	return CliFinder.find(_uvx_cli_names())
 
@@ -1550,6 +1559,92 @@ static func prewarm_server_package_argv(version: String) -> Array[String]:
 	if re.compile("^[A-Za-z0-9.+!-]+$") != OK or re.search(pinned) == null:
 		return []
 	return ["--from", "godot-ai==%s" % pinned, "godot-ai", "--version"]
+
+
+## Blocking sibling of `prewarm_server_package`, for the user-initiated
+## Configure flow (#851, and the reconnect timeouts reported alongside it).
+##
+## Why Configure needs its own pre-warm: `prewarm_server_package` only fires
+## on self-update and on server-lifecycle recovery. Neither covers the case
+## that actually bites — the plugin ADOPTS an already-running server (no uvx
+## spawn, so nothing warms the env), the user clicks Configure, and the first
+## client launch is the one that pays for building the whole tool environment.
+## That build is ~67 packages; a warm launch is ~0.1s. Two symptoms fall out
+## of the cold path: a visible terminal window on Windows (#851), and a spawn
+## that overruns the MCP client's default 30s connect timeout, which the user
+## sees as the Godot AI tools silently disappearing.
+##
+## Why blocking, unlike the fire-and-forget server-side pre-warm: Configure is
+## a deliberate click, so the cost is attributable and the dock can show it as
+## progress rather than as an unexplained pause. Runs on the dock's client
+## action worker thread — never the main thread — and `McpCliExec.run` bounds
+## it, so a wedged uv cannot trap the worker.
+##
+## Best-effort by contract. The config file is already written and correct
+## when this runs; a failure here only means the next client launch pays the
+## cold cost it always used to. Callers must NOT downgrade a successful
+## Configure because of this result.
+##
+## Returns the `McpCliExec.run` dict, plus `skipped` (true when there is no
+## uvx tier to warm or no usable version pin).
+static func prewarm_server_package_blocking(
+	version: String,
+	timeout_ms: int = PREWARM_TIMEOUT_MS,
+	cancel_check: Callable = Callable(),
+) -> Dictionary:
+	var args := prewarm_server_package_argv(version)
+	if args.is_empty():
+		return {"skipped": true, "reason": "no version pin"}
+	var uvx := find_uvx()
+	if uvx.is_empty():
+		## dev-venv and system tiers have no per-version cache to warm.
+		return {"skipped": true, "reason": "no uvx"}
+	var result := McpCliExec.run(uvx, args, timeout_ms, true, cancel_check)
+	result["skipped"] = false
+	return result
+
+
+## Decide whether the freshly-written entry has an environment worth warming.
+##
+## Pure and side-effect free, split from the spawn below so tests can pin the
+## decision without building a real uv environment — the same split
+## `prewarm_server_package_argv` uses for the argv (#890).
+##
+## Warms only the `uvx` tier: dev-venv and system launches run an
+## already-installed package and have no per-version environment to build.
+## Resolving the tier here rather than in the dock keeps launcher knowledge in
+## the configurator; the dock stays free of tier branching.
+##
+## Returns `{warm: bool, version: String, reason: String}`.
+static func prewarm_attach_plan(
+	launch_context: Dictionary, discovery_override: Dictionary = {}
+) -> Dictionary:
+	var launch := resolve_attach_launch(launch_context, discovery_override)
+	if not bool(launch.get("ok", false)):
+		return {"warm": false, "version": "", "reason": "launch discovery failed"}
+	var tier := str(launch.get("tier", ""))
+	if tier != "uvx":
+		return {"warm": false, "version": "", "reason": "tier %s has no env to warm" % tier}
+	var version := _pypi_pin_version(str(launch_context.get("plugin_version", "")))
+	if version.is_empty():
+		return {"warm": false, "version": "", "reason": "no version pin"}
+	return {"warm": true, "version": version, "reason": ""}
+
+
+## Warm the environment the freshly-written entry will actually launch.
+## Thin wrapper over `prewarm_attach_plan` + `prewarm_server_package_blocking`.
+static func prewarm_attach_launch(
+	launch_context: Dictionary,
+	timeout_ms: int = PREWARM_TIMEOUT_MS,
+	discovery_override: Dictionary = {},
+	cancel_check: Callable = Callable(),
+) -> Dictionary:
+	var plan := prewarm_attach_plan(launch_context, discovery_override)
+	if not bool(plan.get("warm", false)):
+		return {"skipped": true, "reason": str(plan.get("reason", ""))}
+	return prewarm_server_package_blocking(
+		str(plan.get("version", "")), timeout_ms, cancel_check
+	)
 
 
 static func _uvx_cli_names() -> Array[String]:

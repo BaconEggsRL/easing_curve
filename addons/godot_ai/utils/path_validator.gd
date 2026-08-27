@@ -55,13 +55,30 @@ static func _user_root() -> String:
 	return _cached_user_root
 
 
-## Godot Strings cannot retain U+0000. During decoding, an attempted NUL is
-## replaced with U+FFFD. Check for that codepoint directly instead of
-## constructing String.chr(0), which itself emits an "Unexpected NUL character"
-## Unicode parsing error on current Godot builds.
-static func _contains_unicode_replacement(path: String) -> bool:
+## True when `path` carries a codepoint that must never reach a filesystem API.
+##
+## Issue #889: the previous guard built its sentinel with `String.chr(0)`, and
+## Godot emits `Unicode parsing error … Unexpected NUL character` while
+## *constructing* that string. Every validated call — including reads that then
+## failed with "File not found" — printed an alarming engine error that had
+## nothing to do with the caller's path. Reading codepoints instead never
+## materialises a NUL String, so the noise is gone.
+##
+## Both codepoints are rejected, for different reasons:
+##   * `0x0000` — a real embedded NUL can truncate a C string, so the path that
+##     is validated is not the path that gets opened. Current Godot cannot
+##     retain one in a String, making this a no-op today; it stays as
+##     defense-in-depth for any build or input path that can.
+##   * `0xFFFD` — what current Godot actually substitutes for a NUL or any other
+##     undecodable input. Once the engine has replaced the byte there is no way
+##     left to tell an attempted NUL from malformed UTF-8 from a literal
+##     replacement character, so the only safe reading at a security boundary is
+##     to refuse all three. A legitimate filename containing U+FFFD is rejected
+##     too; that false positive is deliberate and vanishingly rare.
+static func _contains_invalid_path_codepoint(path: String) -> bool:
 	for i in path.length():
-		if path.unicode_at(i) == 0xFFFD:
+		var codepoint := path.unicode_at(i)
+		if codepoint == 0x0000 or codepoint == 0xFFFD:
 			return true
 	return false
 
@@ -79,13 +96,8 @@ static func _contains_unicode_replacement(path: String) -> bool:
 static func validate_resource_path(path: String, for_write: bool = false) -> String:
 	if path.is_empty():
 		return "Missing required param: path"
-	## Guard the sentinel: on builds where String.chr(0) yields "" (some engines
-	## normalize embedded nulls away, e.g. 4.3), contains("") would be true and
-	## reject every path. A String that can't hold a null can't smuggle one.
-	#var nul := String.chr(0)
-	#if not nul.is_empty() and path.contains(nul):
-	if _contains_unicode_replacement(path):
-		return "Path must not contain null bytes"
+	if _contains_invalid_path_codepoint(path):
+		return "Path must not contain null bytes or invalid Unicode"
 	if not path.begins_with("res://"):
 		return "Path must start with res://"
 	var confine_err := _confine_under(path, _res_root(), "res://")
@@ -106,13 +118,8 @@ static func validate_resource_path(path: String, for_write: bool = false) -> Str
 static func validate_loadable_path(path: String) -> String:
 	if path.is_empty():
 		return "Missing required param: path"
-	## Guard the sentinel: on builds where String.chr(0) yields "" (some engines
-	## normalize embedded nulls away, e.g. 4.3), contains("") would be true and
-	## reject every path. A String that can't hold a null can't smuggle one.
-	#var nul := String.chr(0)
-	#if not nul.is_empty() and path.contains(nul):
-	if _contains_unicode_replacement(path):
-		return "Path must not contain null bytes"
+	if _contains_invalid_path_codepoint(path):
+		return "Path must not contain null bytes or invalid Unicode"
 	if path.begins_with("uid://"):
 		return ""
 	if path.begins_with("user://"):

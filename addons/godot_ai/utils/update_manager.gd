@@ -33,6 +33,7 @@ const RELEASES_PAGE := "https://github.com/hi-godot/godot-ai/releases/latest"
 const UPDATE_TEMP_DIR := "user://godot_ai_update/"
 const UPDATE_TEMP_ZIP := "user://godot_ai_update/update.zip"
 const ClientConfigurator := preload("res://addons/godot_ai/client_configurator.gd")
+const PortResolver := preload("res://addons/godot_ai/utils/port_resolver.gd")
 
 ## RSA-4096 public key for release-signature verification (#687). The paired
 ## private key exists only in the GitHub Actions secret RELEASE_SIGNING_KEY_PEM
@@ -216,6 +217,23 @@ static func _manual_update_label(version: String) -> String:
 		+ "Upgrade to Godot 4.5+ to keep receiving updates."
 	)
 
+
+## PID of the detached package pre-warm started alongside the zip download,
+## or <= 0 when none is running (no uvx tier, unusable version pin, or it has
+## already been waited out). See `_wait_for_prewarm_before_install`.
+var _prewarm_pid := -1
+## When the install first found the pre-warm still running, so the wait below
+## is bounded from the first check rather than re-armed on every poll.
+var _prewarm_wait_started_ms := 0
+## Ceiling on how long install will wait for the pre-warm. Matches the budget
+## the Configure-time pre-warm allows for the same download.
+const PREWARM_WAIT_BUDGET_MS := 180 * 1000
+## Poll interval while waiting. Deliberately not sub-second: `pid_alive` shells
+## out to `tasklist` on Windows via a blocking `OS.execute` on the main thread,
+## so a tight poll would make the editor sluggish for the whole wait.
+const PREWARM_POLL_SECONDS := 2.0
+
+
 ## Driven by the dock's Update button. On Godot < 4.5 (see _can_self_update)
 ## the in-editor install is disabled so users cannot install an incompatible
 ## latest release. With no resolved download URL, falls back to opening the
@@ -262,7 +280,8 @@ func start_install() -> void:
 	## almost always cached in the CliFinder by now (the dock's setup probe);
 	## a cold lookup is the same bounded main-thread cost as
 	## `_reprobe_uv_if_negative`, on the same rare click-driven path.
-	ClientConfigurator.prewarm_server_package(_latest_remote_version)
+	_prewarm_pid = ClientConfigurator.prewarm_server_package(_latest_remote_version)
+	_prewarm_wait_started_ms = 0
 
 	if _download_request != null:
 		_download_request.queue_free()
@@ -724,6 +743,40 @@ static func _parse_sha256_digest(text: String) -> String:
 
 # ---- Install orchestration ---------------------------------------------
 
+## True when install may proceed now. False means "come back later" — this
+## call has already scheduled the retry.
+##
+## Deliberately placed AFTER the symlink check in `_install_zip` so a dev
+## checkout (which never installs) is never delayed by it.
+func _wait_for_prewarm_before_install() -> bool:
+	if _prewarm_pid <= 0 or not PortResolver.pid_alive(_prewarm_pid):
+		_prewarm_pid = -1
+		return true
+	if _prewarm_wait_started_ms == 0:
+		_prewarm_wait_started_ms = Time.get_ticks_msec()
+	if Time.get_ticks_msec() - _prewarm_wait_started_ms >= PREWARM_WAIT_BUDGET_MS:
+		## Proceed rather than strand the update: a pre-warm this slow means the
+		## post-update spawn will be cold, which is now survivable — the startup
+		## watch stays alive until the pid-file appears (#896).
+		print(
+			"MCP | self-update: package pre-warm still running after %ds; "
+			% int(PREWARM_WAIT_BUDGET_MS / 1000)
+			+ "installing anyway, the new server may start cold"
+		)
+		_prewarm_pid = -1
+		return true
+	install_state_changed.emit({"button_text": "Preparing packages...", "button_disabled": true})
+	if is_inside_tree():
+		get_tree().create_timer(PREWARM_POLL_SECONDS).timeout.connect(
+			_install_zip, CONNECT_ONE_SHOT
+		)
+		return false
+	## Detached from the tree (dock teardown mid-update): no timer to re-arm on,
+	## so let the install proceed rather than silently dropping it.
+	_prewarm_pid = -1
+	return true
+
+
 func _install_zip() -> void:
 	## Symlinked addons dir means an extract would clobber canonical
 	## `plugin/` source through the link. Symlink detection is independent
@@ -734,6 +787,21 @@ func _install_zip() -> void:
 			"button_disabled": true,
 			"banner_visible": false,
 		})
+		return
+
+	## #896: do not tear the old server down until the NEW version's uv
+	## environment is actually built. `install_downloaded_update` below kills
+	## the server and hands off to the reload runner; the new plugin instance
+	## then spawns a server that, on a cold cache, is still downloading ~67
+	## packages. The pre-warm was started alongside the zip download precisely
+	## to cover this, but nothing waited for it — so on a slow link the update
+	## proceeded while the environment was still being fetched, which is the
+	## window where a failed spawn goes undiagnosed.
+	##
+	## Non-blocking: re-arms itself on a timer rather than stalling the main
+	## thread, and gives up after PREWARM_WAIT_BUDGET_MS so a wedged pre-warm
+	## cannot strand the update. Fully inert when no pre-warm is running.
+	if not _wait_for_prewarm_before_install():
 		return
 
 	## Drain in-flight workers + block new ones BEFORE any disk write.

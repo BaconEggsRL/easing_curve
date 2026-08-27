@@ -220,6 +220,21 @@ var _client_action_names: Dictionary = {}
 ## Timed-out Configure/Remove workers are abandoned but retained here until
 ## they finish, so GDScript does not destroy a live Thread object.
 static var _orphaned_client_action_threads: Array[Thread] = []
+## Which client each abandoned worker belonged to, so a row whose worker was
+## abandoned but is STILL RUNNING can't start a second one on top of it.
+## The flat array above exists to keep Thread objects alive; it carries no
+## client association, and `_abandon_client_action_thread` erases the row's
+## `_client_action_threads` slot — so the dispatch guard alone would let a
+## re-click spawn an overlapping worker. Two concurrent Configure workers for
+## one client means two uv builds and two writers on the same config file.
+## Static for the same reason as the array: a script reload must not GC a
+## live Thread.
+static var _orphaned_client_action_owners: Dictionary = {}
+## Cooperative stop shared across dock instances because orphan action
+## threads survive script/dock replacement. A new action clears its row's
+## flag before starting; teardown sets every active/orphaned row before join.
+static var _client_action_cancel_mutex := Mutex.new()
+static var _client_action_cancelled_clients: Dictionary = {}
 
 # Dev-mode only
 var _dev_section: VBoxContainer
@@ -394,6 +409,13 @@ func _drain_client_action_workers() -> void:
 	## user-visible failure mode for the install-update bail-out branch
 	## (zip extract failure on the manager clears `_install_in_flight` and
 	## the dock stays alive).
+	## Signal every worker before joining any one of them. Normal Configure
+	## keeps its full cold-install budget, while shutdown/update can stop all
+	## in-flight uvx poll loops concurrently and avoid a 180s editor stall.
+	for client_id in _client_action_threads.keys():
+		_set_client_action_cancel_requested(String(client_id), true)
+	for client_id in _orphaned_client_action_owners.keys():
+		_set_client_action_cancel_requested(String(client_id), true)
 	for client_id in _client_action_threads.keys():
 		var t: Thread = _client_action_threads[client_id]
 		if t != null:
@@ -401,6 +423,7 @@ func _drain_client_action_workers() -> void:
 		_client_action_generations[client_id] = int(_client_action_generations.get(client_id, 0)) + 1
 		_client_action_started_msec.erase(client_id)
 		_client_action_names.erase(client_id)
+		_clear_client_action_phase(String(client_id))
 		_finalize_action_buttons(String(client_id))
 		var row: Dictionary = _client_rows.get(String(client_id), {})
 		if not row.is_empty():
@@ -414,8 +437,16 @@ func _drain_client_action_workers() -> void:
 		if thread != null:
 			thread.wait_to_finish()
 	_orphaned_client_action_threads.clear()
+	_orphaned_client_action_owners.clear()
 	_client_action_started_msec.clear()
 	_client_action_names.clear()
+	_client_action_phase_mutex.lock()
+	_client_action_phases.clear()
+	_client_action_phase_mutex.unlock()
+	_client_action_phase_shown.clear()
+	_client_action_cancel_mutex.lock()
+	_client_action_cancelled_clients.clear()
+	_client_action_cancel_mutex.unlock()
 
 
 func _check_client_action_timeouts() -> void:
@@ -424,8 +455,27 @@ func _check_client_action_timeouts() -> void:
 		if not _client_action_started_msec.has(client_id):
 			continue
 		var started := int(_client_action_started_msec.get(client_id, 0))
-		if now - started >= CLIENT_ACTION_TIMEOUT_MSEC:
+		if now - started >= _client_action_budget_msec(String(client_id)):
 			_abandon_client_action_thread(String(client_id))
+
+
+## Watchdog budget for an in-flight client action.
+##
+## The 30s default is sized for a CLI registry call. Once the worker reports it
+## has moved on to building the pinned uv environment, that budget is far too
+## short: a cold build is *expected* to run for tens of seconds, and abandoning
+## it would report a false Configure timeout for exactly the slow cold start the
+## pre-warm exists to absorb — re-enabling the row and discarding the worker's
+## completion while the build is still running and about to succeed.
+##
+## The prewarm phase therefore gets the base budget plus the pre-warm's own
+## ceiling. The action still cannot hang forever: `McpCliExec.run` bounds the
+## build at `PREWARM_TIMEOUT_MS` on its own, so this is a backstop above a
+## backstop rather than the only limit.
+func _client_action_budget_msec(client_id: String) -> int:
+	if _read_client_action_phase(client_id) == _PHASE_PREWARM:
+		return CLIENT_ACTION_TIMEOUT_MSEC + ClientConfigurator.PREWARM_TIMEOUT_MS
+	return CLIENT_ACTION_TIMEOUT_MSEC
 
 
 func _abandon_client_action_thread(client_id: String) -> void:
@@ -436,12 +486,25 @@ func _abandon_client_action_thread(client_id: String) -> void:
 	var worker_alive := thread != null and thread.is_alive()
 	if thread != null:
 		_orphaned_client_action_threads.append(thread)
+		if worker_alive:
+			## The worker can cross the base watchdog immediately before it
+			## announces PREWARM. Cancel now so it cannot become an orphan and
+			## then begin a fresh 180s uvx operation outside timeout tracking.
+			_set_client_action_cancel_requested(client_id, true)
+			var owned: Array = _orphaned_client_action_owners.get(client_id, [])
+			owned.append(thread)
+			_orphaned_client_action_owners[client_id] = owned
 	_client_action_threads.erase(client_id)
 	_client_action_started_msec.erase(client_id)
+	_clear_client_action_phase(client_id)
 	var action := str(_client_action_names.get(client_id, "configure"))
 	_client_action_names.erase(client_id)
 	_client_action_generations[client_id] = int(_client_action_generations.get(client_id, 0)) + 1
-	_finalize_action_buttons(client_id)
+	## Only hand the row back when nothing is still running for it. Re-enabling
+	## while the abandoned worker is mid-build invites a second worker on top
+	## of the first; the prune below re-enables the row once it actually ends.
+	if not worker_alive:
+		_finalize_action_buttons(client_id)
 	print("MCP | client action timed out: client=%s action=%s elapsed_ms=%d worker_alive=%s" % [
 		client_id,
 		action,
@@ -449,11 +512,12 @@ func _abandon_client_action_thread(client_id: String) -> void:
 		str(worker_alive),
 	])
 	var label := "Remove" if action == "remove" else "Configure"
-	_apply_row_status(
-		client_id,
-		Client.Status.ERROR,
-		"%s did not report completion in time; refreshing current status." % label
+	var detail := (
+		"%s is taking longer than expected and is still running; refreshing current status." % label
+		if worker_alive
+		else "%s did not report completion in time; refreshing current status." % label
 	)
+	_apply_row_status(client_id, Client.Status.ERROR, detail)
 	_refresh_clients_summary()
 	if is_inside_tree():
 		_request_client_status_refresh(true)
@@ -469,8 +533,35 @@ func _prune_orphaned_client_action_threads() -> void:
 			thread.wait_to_finish()
 			_orphaned_client_action_threads.remove_at(i)
 			completed_orphan = true
+	_release_finished_orphan_owners()
 	if completed_orphan and is_inside_tree():
 		_request_client_action_completion_refresh()
+
+
+## Hand a row back once its abandoned worker has actually finished. Pairs with
+## `_abandon_client_action_thread`, which deliberately leaves the buttons
+## disabled while the orphan is still running — without this the row would stay
+## disabled forever.
+func _release_finished_orphan_owners() -> void:
+	for client_id in _orphaned_client_action_owners.keys():
+		var owned: Array = _orphaned_client_action_owners[client_id]
+		for i in range(owned.size() - 1, -1, -1):
+			var t: Thread = owned[i]
+			if t == null or not t.is_alive():
+				owned.remove_at(i)
+		if owned.is_empty():
+			_orphaned_client_action_owners.erase(client_id)
+			if not _client_action_threads.has(client_id):
+				_finalize_action_buttons(String(client_id))
+
+
+## True while a previously-abandoned worker for this client is still running.
+static func _has_live_orphan(client_id: String) -> bool:
+	var owned: Array = _orphaned_client_action_owners.get(client_id, [])
+	for t in owned:
+		if t != null and (t as Thread).is_alive():
+			return true
+	return false
 
 
 func _request_client_action_completion_refresh() -> void:
@@ -2064,10 +2155,20 @@ func _dispatch_client_action(client_id: String, action: String) -> void:
 		return
 	if _client_action_threads.has(client_id):
 		return
+	## An abandoned-but-still-running worker owns this row's config file just
+	## as much as a tracked one does. Defensive: `_abandon_client_action_thread`
+	## already leaves the buttons disabled in that state.
+	if _has_live_orphan(client_id):
+		return
 	var row: Dictionary = _client_rows.get(client_id, {})
 	if row.is_empty():
 		return
 
+	## Drop any phase left behind by a previous action on this row — a
+	## generation-mismatch or shutdown return can skip the normal finalize,
+	## and a stale phase would suppress the label for this new action.
+	_clear_client_action_phase(client_id)
+	_set_client_action_cancel_requested(client_id, false)
 	_set_row_action_in_flight(client_id, action)
 	## Snapshot `server_url` on main: `http_url()` reads
 	## `EditorInterface.get_editor_settings()`, which is main-thread-only.
@@ -2108,14 +2209,35 @@ func _run_client_action_worker(
 	generation: int,
 ) -> Dictionary:
 	var result: Dictionary
+	var prewarm: Dictionary = {}
 	if action == "remove":
 		result = ClientConfigurator.remove(client_id, server_url, launch_context)
 	else:
 		result = ClientConfigurator.configure(client_id, server_url, launch_context)
+		## #851: the entry we just wrote pins an exact `godot-ai==X`. If uv has
+		## never built that environment, the FIRST client spawn builds it —
+		## ~67 packages — which is what flashes a terminal window on Windows
+		## and what can push a bridge spawn past the MCP client's default 30s
+		## connect timeout, so the tools appear to vanish. Pay that cost here,
+		## on a deliberate click the dock can label, instead of on the client's
+		## critical path.
+		##
+		## Best-effort: the config file is already written and correct. A
+		## failed or timed-out warm only means the next launch pays the cold
+		## cost it always used to, so `result` is deliberately left untouched.
+		if result.get("status") == "ok":
+			_set_client_action_phase(client_id, _PHASE_PREWARM)
+			prewarm = ClientConfigurator.prewarm_attach_launch(
+				launch_context,
+				ClientConfigurator.PREWARM_TIMEOUT_MS,
+				{},
+				Callable(self, "_is_client_action_cancel_requested").bind(client_id),
+			)
 	return {
 		"client_id": client_id,
 		"action": action,
 		"result": result,
+		"prewarm": prewarm,
 		"generation": generation,
 	}
 
@@ -2123,13 +2245,19 @@ func _run_client_action_worker(
 func _poll_completed_client_action_threads() -> void:
 	for client_id in _client_action_threads.keys():
 		var thread: Thread = _client_action_threads[client_id]
-		if thread == null or thread.is_alive():
+		if thread == null:
+			continue
+		if thread.is_alive():
+			_apply_client_action_phase(String(client_id))
 			continue
 		var payload: Variant = thread.wait_to_finish()
 		_client_action_threads[client_id] = null
 		if payload is Dictionary:
 			var data := payload as Dictionary
 			var result: Dictionary = data.get("result", {})
+			_report_prewarm_outcome(
+				String(data.get("client_id", client_id)), data.get("prewarm", {})
+			)
 			_apply_client_action_result(
 				String(data.get("client_id", client_id)),
 				String(data.get("action", _client_action_names.get(client_id, "configure"))),
@@ -2161,6 +2289,7 @@ func _apply_client_action_result(client_id: String, action: String, result: Dict
 	_client_action_threads.erase(client_id)
 	_client_action_started_msec.erase(client_id)
 	_client_action_names.erase(client_id)
+	_clear_client_action_phase(client_id)
 	_finalize_action_buttons(client_id)
 	if _server_blocks_client_health():
 		_apply_row_status(client_id, Client.Status.ERROR, _server_blocked_client_message())
@@ -2185,6 +2314,102 @@ func _apply_client_action_result(client_id: String, action: String, result: Dict
 		if action == "configure":
 			_show_manual_command_for(client_id)
 	_refresh_clients_summary()
+
+
+## Phase label for the Configure worker's pre-warm step. The config write
+## itself is fast; building the pinned uv environment is the part that can
+## run for tens of seconds, so it gets its own label rather than sitting
+## under a motionless "Configuring…".
+const _PHASE_PREWARM := "prewarm"
+
+## Worker-written, main-read. `Dictionary` writes are not atomic across
+## threads, so both sides take the mutex — the same discipline `CliFinder`
+## uses for its cache. Held only across the dictionary access, never across
+## the subprocess, so the main thread can never block on uv.
+var _client_action_phase_mutex := Mutex.new()
+var _client_action_phases: Dictionary = {}
+## Rows whose button text already reflects their phase, so the per-frame poll
+## rewrites the label once instead of on every frame.
+var _client_action_phase_shown: Dictionary = {}
+
+
+## Thread-safe cancellation state read by McpCliExec's 50ms poll loop.
+func _set_client_action_cancel_requested(client_id: String, requested: bool) -> void:
+	_client_action_cancel_mutex.lock()
+	if requested:
+		_client_action_cancelled_clients[client_id] = true
+	else:
+		_client_action_cancelled_clients.erase(client_id)
+	_client_action_cancel_mutex.unlock()
+
+
+func _is_client_action_cancel_requested(client_id: String) -> bool:
+	_client_action_cancel_mutex.lock()
+	var requested := bool(_client_action_cancelled_clients.get(client_id, false))
+	_client_action_cancel_mutex.unlock()
+	return requested
+
+
+func _set_client_action_phase(client_id: String, phase: String) -> void:
+	_client_action_phase_mutex.lock()
+	_client_action_phases[client_id] = phase
+	_client_action_phase_mutex.unlock()
+
+
+func _read_client_action_phase(client_id: String) -> String:
+	_client_action_phase_mutex.lock()
+	var phase := String(_client_action_phases.get(client_id, ""))
+	_client_action_phase_mutex.unlock()
+	return phase
+
+
+func _clear_client_action_phase(client_id: String) -> void:
+	_client_action_phase_mutex.lock()
+	_client_action_phases.erase(client_id)
+	_client_action_phase_mutex.unlock()
+	_client_action_phase_shown.erase(client_id)
+
+
+## Per-frame, for a still-running worker: promote the button label when the
+## worker reports it has moved on to warming the package environment. Keeps
+## the dock honest about why Configure is taking a while — otherwise a cold
+## uv build looks like a hang.
+func _apply_client_action_phase(client_id: String) -> void:
+	if _read_client_action_phase(client_id) != _PHASE_PREWARM:
+		return
+	if _client_action_phase_shown.get(client_id, "") == _PHASE_PREWARM:
+		return
+	var row: Dictionary = _client_rows.get(client_id, {})
+	if row.is_empty():
+		return
+	_client_action_phase_shown[client_id] = _PHASE_PREWARM
+	(row["configure_btn"] as Button).text = "Installing…"
+
+
+## One line per Configure so a cold build is attributable after the fact —
+## the dock label is transient, and #851's symptom (a terminal window on
+## Windows) is easiest to correlate against a timestamped log entry. Silent
+## on the skip paths: a dev-venv/system tier having no env to warm is the
+## normal case, not news.
+func _report_prewarm_outcome(client_id: String, prewarm: Variant) -> void:
+	if not (prewarm is Dictionary):
+		return
+	var data := prewarm as Dictionary
+	if data.is_empty() or bool(data.get("skipped", false)):
+		return
+	if bool(data.get("timed_out", false)):
+		print(
+			"MCP | %s: package pre-warm timed out; the first client launch will build the environment"
+			% client_id
+		)
+		return
+	if int(data.get("exit_code", -1)) != 0:
+		print(
+			"MCP | %s: package pre-warm failed (exit %d); the first client launch will build the environment"
+			% [client_id, int(data.get("exit_code", -1))]
+		)
+		return
+	print("MCP | %s: package environment pre-warmed" % client_id)
 
 
 ## In-flight visual: rewrite the verb onto the button the user just

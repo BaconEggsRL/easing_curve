@@ -24,7 +24,7 @@ static var _env_snapshot := {}
 static var _env_snapshot_mutex := Mutex.new()
 
 ## Every var this layer and its sibling consumers (`_base.gd`
-## `config_file_override_details`, `config_home_override`, `_cli_finder.gd` lookups,
+## `config_file_override_details`, `config_home_override_details`, `_cli_finder.gd` lookups,
 ## `client_configurator.gd` mode/trace reads) can touch off-main.
 ## Descriptor-declared config-file/config-home env names are passed as extras
 ## by the warm callers.
@@ -154,28 +154,64 @@ static func expand_path_candidates(template: String) -> PackedStringArray:
 
 
 ## Substitute env vars and ~ in a single template string.
+##
+## A token that cannot be resolved — the var is unset and no home-derived
+## fallback applies, or a dock worker's env snapshot was never warmed with it —
+## is LEFT IN PLACE rather than replaced with "". Substituting "" is what turns
+## `$USERPROFILE/godot` into `/godot`: a root-relative path that
+## `is_absolute_path()` accepts, so every fail-closed guard downstream waves it
+## through and the caller reads or writes a directory the user never named.
+## `$USERPROFILE` is the easy repro (unset off Windows, and the only one of
+## these vars with no fallback), but `$HOME`/`$XDG_CONFIG_HOME`/`$APPDATA`/
+## `$LOCALAPPDATA` reach the same state whenever `_home()` is empty, which the
+## missing-warm-up degradation above makes reachable on a worker thread.
+##
+## The surviving token keeps the result non-absolute, so those guards catch it,
+## and the unexpanded path they report still shows what failed to resolve.
+## `~` is left alone for the same reason: collapsing `~/godot` to the relative
+## `godot` aims it at the editor's own working directory.
 static func expand(template: String) -> String:
 	if template.is_empty():
 		return ""
 	var out := template
 	if out.begins_with("~/") or out == "~":
 		var home := _home()
-		out = home if out == "~" else home.path_join(out.substr(2))
+		if not home.is_empty():
+			out = home if out == "~" else home.path_join(out.substr(2))
 	# $HOME, $APPDATA, $LOCALAPPDATA, $USERPROFILE, $XDG_CONFIG_HOME
 	for var_name in ["XDG_CONFIG_HOME", "LOCALAPPDATA", "USERPROFILE", "APPDATA", "HOME"]:
 		var token := "$%s" % var_name
-		if out.find(token) >= 0:
-			var value := env_lookup(var_name)
-			if value.is_empty() and var_name == "XDG_CONFIG_HOME":
-				value = _home().path_join(".config")
-			if value.is_empty() and var_name == "APPDATA":
-				value = _home().path_join("AppData/Roaming")
-			if value.is_empty() and var_name == "LOCALAPPDATA":
-				value = _home().path_join("AppData/Local")
-			if value.is_empty() and var_name == "HOME":
-				value = _home()
-			out = out.replace(token, value)
+		if out.find(token) < 0:
+			continue
+		var value := env_lookup(var_name)
+		if value.is_empty():
+			value = _home_fallback(var_name)
+		if value.is_empty():
+			continue
+		out = out.replace(token, value)
 	return out
+
+
+## Home-derived default for a var the environment does not define. Returns ""
+## when home itself is unresolvable so `expand` leaves the token alone: rooting
+## these at an empty home yields a RELATIVE path, not an absent one —
+## `"".path_join(".config")` is `.config`, which reads against the editor's
+## working directory rather than the user's config dir. `USERPROFILE` has no
+## fallback (it is the thing `_home()` itself falls back to).
+static func _home_fallback(var_name: String) -> String:
+	var home := _home()
+	if home.is_empty():
+		return ""
+	match var_name:
+		"XDG_CONFIG_HOME":
+			return home.path_join(".config")
+		"APPDATA":
+			return home.path_join("AppData/Roaming")
+		"LOCALAPPDATA":
+			return home.path_join("AppData/Local")
+		"HOME":
+			return home
+	return ""
 
 
 static func _os_key() -> String:

@@ -45,6 +45,10 @@ var _server_pid: int = -1
 var _server_keep_alive := false
 var _server_spawn_ms: int = 0
 var _server_exit_ms: int = 0
+## Elapsed-since-spawn when the pid-file first appeared. The warm watch window
+## starts here, not at process creation: a cold uvx download may consume most
+## of the cold-start budget before Python starts and publishes the file.
+var _server_pid_published_elapsed_ms: int = 0
 ## Elapsed-since-spawn at the first watch tick that saw the spawn PID dead, or
 ## 0 when it is alive / has been healed onto the real PID. Only meaningful
 ## while a Windows trampoline handoff is being waited out (#797): it preserves
@@ -1066,6 +1070,7 @@ func _start_server_impl(async_gen: int) -> void:
 	if spawned_pid > 0:
 		_server_spawn_ms = Time.get_ticks_msec()
 		_server_exit_ms = 0
+		_server_pid_published_elapsed_ms = 0
 		_spawn_dead_since_ms = 0
 		_server_keep_alive = keep_alive_env_set
 		_host._server_started_this_session = true
@@ -1248,7 +1253,8 @@ static func format_spawn_exit_forensics(facts: Dictionary) -> String:
 	]
 
 
-## Watch-loop callback (1 Hz, capped by SERVER_WATCH_MS).
+## Watch-loop callback (1 Hz, cold-start budget until pid-file publication,
+## then the warm budget from the publication tick).
 ## `--pid-file` is the source of truth on Windows / uvx where the
 ## launcher PID dies quickly after spawning the real interpreter.
 func check_server_health() -> void:
@@ -1257,6 +1263,8 @@ func check_server_health() -> void:
 		return
 	var elapsed := Time.get_ticks_msec() - int(_server_spawn_ms)
 	var real_pid := PortResolver.read_pid_file()
+	if real_pid > 0 and _server_pid_published_elapsed_ms == 0:
+		_server_pid_published_elapsed_ms = elapsed
 	var spawn_pid := int(_server_pid)
 	if real_pid > 0 and real_pid != spawn_pid and PortResolver.pid_alive(real_pid):
 		_spawn_dead_since_ms = 0
@@ -1288,9 +1296,48 @@ func check_server_health() -> void:
 		if elapsed >= int(_host.SPAWN_GRACE_MS) and not McpServerStateScript.is_terminal_diagnosis(_server_state):
 			_diagnose_spawn_fast_exit(_spawn_dead_since_ms)
 		return
-	if elapsed >= int(_host.SERVER_WATCH_MS):
-		## Survived startup — mid-session crashes surface via WebSocket disconnect.
+	var watch_elapsed := watch_window_elapsed_ms(
+		elapsed, real_pid, _server_pid_published_elapsed_ms
+	)
+	if watch_elapsed >= watch_budget_ms(
+		real_pid, int(_host.SERVER_WATCH_MS), int(_host.SERVER_COLD_START_WATCH_MS)
+	):
+		## #896: past the budget we stop watching either way, but a spawn that
+		## never published a pid-file did not "survive startup" — it just never
+		## proved anything. Say so, or the only remaining signal is a silent
+		## reconnect loop.
+		if real_pid <= 0:
+			print(
+				"MCP | server spawn never published a pid-file within %ds; "
+				% int(_host.SERVER_COLD_START_WATCH_MS / 1000)
+				+ "no longer watching it. If the editor stays disconnected, "
+				+ "check the Godot output log for the server's own errors."
+			)
 		_host._stop_server_watch()
+
+
+## How long to keep watching a spawn, given whether it has published its
+## pid-file yet.
+##
+## Pure so tests can drive the decision without a live spawn. `pid_from_file`
+## is the authoritative "the server got far enough to run" signal: the Python
+## server writes it during import, before uvicorn binds. Until it appears, a
+## live launcher PID proves only that `uvx` has not exited — on a cold start
+## that is usually a download still in progress, not a started server.
+static func watch_budget_ms(pid_from_file: int, warm_ms: int, cold_ms: int) -> int:
+	return warm_ms if pid_from_file > 0 else cold_ms
+
+
+## Elapsed time in the currently-active watch window. Before startup proof,
+## the window begins at process creation. Once the pid-file appears, begin a
+## fresh warm watch window so a 45-second download still gets 30 seconds of
+## early-exit coverage after Python starts.
+static func watch_window_elapsed_ms(
+	spawn_elapsed_ms: int, pid_from_file: int, pid_published_elapsed_ms: int
+) -> int:
+	if pid_from_file <= 0 or pid_published_elapsed_ms <= 0:
+		return spawn_elapsed_ms
+	return maxi(0, spawn_elapsed_ms - pid_published_elapsed_ms)
 
 
 ## The spawned server died inside the SPAWN_GRACE_MS window. Decide what
@@ -1480,6 +1527,7 @@ func respawn_with_refresh() -> void:
 	if spawn_pid > 0:
 		_server_spawn_ms = Time.get_ticks_msec()
 		_server_exit_ms = 0
+		_server_pid_published_elapsed_ms = 0
 		_spawn_dead_since_ms = 0
 		_server_keep_alive = keep_alive_env_set
 		var current_version := _expected_server_version()
@@ -1784,6 +1832,7 @@ func detach_server(
 	_host._stop_server_watch()
 	var detached_pid := int(_server_pid)
 	_server_pid = -1
+	_server_pid_published_elapsed_ms = 0
 	transition_state(McpServerStateScript.STOPPED)
 	if detached_pid > 0:
 		print("MCP | %s (PID %d)" % [log_reason, detached_pid])
@@ -1836,6 +1885,7 @@ func stop_server() -> void:
 		print("MCP | stopped server (PID %s)" % str(killed))
 	_server_pid = -1
 	_server_keep_alive = false
+	_server_pid_published_elapsed_ms = 0
 	_host._wait_for_port_free(port, 2.0)
 	## Preserve record/pid-file when port is still held — the drift
 	## branch on the next start_server retries the kill (#159 follow-up).
@@ -1970,6 +2020,7 @@ func recover_incompatible_server() -> bool:
 	_can_recover_incompatible = false
 	_host._server_started_this_session = false
 	_server_pid = -1
+	_server_pid_published_elapsed_ms = 0
 	## Await the respawn walk: the plugin gates its connection unblock on
 	## the post-walk state (SPAWNING/READY), so returning true while the
 	## walk is still suspended would leave the connection blocked forever

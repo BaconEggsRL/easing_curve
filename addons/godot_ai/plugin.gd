@@ -83,10 +83,25 @@ const HANDLERS_DIR := "res://addons/godot_ai/handlers/"
 ## resolver, and characterization tests share one source of truth.
 const SERVER_PID_FILE := PortResolver.SERVER_PID_FILE
 
-## How long we watch the spawned server for early exit. If the process is
-## still alive when this expires, we stop watching. Mid-session crashes
-## after this point get caught by the WebSocket disconnect flow.
+## How long we watch the spawned server for early exit once it has PROVEN it
+## started — i.e. published its pid-file. If the process is still alive when
+## this expires, we stop watching. Mid-session crashes after this point get
+## caught by the WebSocket disconnect flow.
 const SERVER_WATCH_MS := 30 * 1000
+## Watch ceiling for a spawn that has NOT yet published its pid-file (#896).
+##
+## The short window above justifies itself with "mid-session crashes surface
+## via WebSocket disconnect" — which is only true for a server that got far
+## enough to be connected to. A cold `uvx` spawn on a slow link can still be
+## resolving and downloading its ~67-package environment at 30s, having proven
+## nothing; stopping the watch there means a launcher that dies at 45s is never
+## observed, `_diagnose_spawn_fast_exit` never runs (it is only reachable from
+## inside the watch), and the plugin redials forever while the dock shows a
+## bare "Disconnected".
+##
+## Sized to cover that download. Independent of any pre-warm: this window has
+## to hold even when nothing warmed the cache first.
+const SERVER_COLD_START_WATCH_MS := 180 * 1000
 ## Python's import graph (FastMCP + Rich + uvicorn) plus the pid-file write
 ## take a beat on cold starts, especially on Windows. Hold off on declaring
 ## a spawn a crash until this window elapses so the watch loop has time to
@@ -1146,11 +1161,12 @@ func _on_server_version_unverified() -> void:
 	_update_process_enabled()
 
 
-## Start a 1s-tick timer that watches the spawned server for up to
-## SERVER_WATCH_MS. If the process dies inside the window we drain the
-## captured pipes and mark the server as crashed so the dock can surface
-## what went wrong. After the window expires we close the pipes so they
-## don't pin file descriptors or fill their kernel buffers. See #146.
+## Start a 1s-tick timer that watches the spawned server through its cold-start
+## window, then for SERVER_WATCH_MS after pid-file publication. If the process
+## dies inside the active window we drain the captured pipes and mark the server
+## as crashed so the dock can surface what went wrong. After the window expires
+## we close the pipes so they don't pin file descriptors or fill their kernel
+## buffers. See #146 and #896.
 func _start_server_watch() -> void:
 	_stop_server_watch()
 	_server_watch_timer = Timer.new()
