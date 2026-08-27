@@ -16,6 +16,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_zoom_metadata_contract()
+	_test_zoom_behavioral_invariants()
 	_test_pending_add_cancel_and_no_op_release()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
@@ -116,6 +117,68 @@ func _test_zoom_metadata_contract() -> void:
 	var default_step := int(EasingCurve.DEFAULT_SLIDER_VALUE)
 	_expect(is_equal_approx(editor.step_to_zoom(0), EasingCurve.ZOOM_MIN), "Zoom step zero no longer maps to ZOOM_MIN")
 	_expect(editor.zoom_to_step(editor.step_to_zoom(default_step)) == default_step, "Default zoom step no longer round-trips through the zoom conversion")
+	editor.free()
+
+
+func _test_zoom_behavioral_invariants() -> void:
+	var fixture := _fixture()
+	var curve: EasingCurve = fixture.curve
+	var editor: EasingCurveEditor = fixture.editor
+	var default_step := int(EasingCurve.DEFAULT_SLIDER_VALUE)
+	var default_zoom := editor.step_to_zoom(default_step)
+
+	_expect(
+		curve._last_slider_value == EasingCurve.DEFAULT_SLIDER_VALUE,
+		"New EasingCurve resource no longer starts at the canonical slider value",
+	)
+
+	editor.set_slider_value(default_step)
+	_expect(editor._zoom_step == default_step, "Applying the default slider value did not select the canonical zoom step")
+	_expect(
+		is_equal_approx(editor._zoom_x, default_zoom) and is_equal_approx(editor._zoom_y, default_zoom),
+		"Default slider value no longer maps to the canonical zoom",
+	)
+	_expect(editor._slider.slider.value == default_step, "Editor and slider value diverged at the canonical zoom step")
+
+	var slider_step := mini(default_step + 2, EasingCurve.ZOOM_STEPS)
+	editor.set_slider_value(slider_step)
+	var slider_zoom := editor.step_to_zoom(slider_step)
+	_expect(editor._zoom_step == slider_step, "Slider-driven zoom did not update the editor zoom step")
+	_expect(
+		is_equal_approx(editor._zoom_x, slider_zoom) and is_equal_approx(editor._zoom_y, slider_zoom),
+		"Slider-driven zoom no longer uses step_to_zoom() consistently",
+	)
+
+	editor.update_view_transform()
+	var wheel_anchor := Vector2(137.0, 113.0)
+	var world_before := editor.get_world_pos(wheel_anchor)
+	var wheel_step_before := editor._zoom_step
+	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, wheel_anchor, true))
+	var expected_wheel_step := mini(wheel_step_before + 1, EasingCurve.ZOOM_STEPS)
+	var wheel_zoom := editor.step_to_zoom(expected_wheel_step)
+	_expect(editor._zoom_step == expected_wheel_step, "Wheel zoom did not advance exactly one zoom step")
+	_expect(
+		is_equal_approx(editor._zoom_x, wheel_zoom) and is_equal_approx(editor._zoom_y, wheel_zoom),
+		"Wheel zoom no longer uses the same step-to-zoom conversion as slider zoom",
+	)
+	var world_after := editor.get_world_pos(wheel_anchor)
+	_expect(
+		world_after.is_equal_approx(world_before),
+		"Zoom around an off-center pointer no longer preserves the world point under the cursor",
+	)
+
+	editor.pan_offset = Vector2(23.0, -17.0)
+	editor.set_slider_value(mini(default_step + 3, EasingCurve.ZOOM_STEPS))
+	editor._on_autofit_pressed()
+	_expect(editor._zoom_step == default_step, "Autofit no longer restores the canonical default zoom step")
+	_expect(editor._slider.slider.value == default_step, "Autofit left the slider out of sync with the canonical default step")
+	_expect(editor.pan_offset == Vector2.ZERO, "Autofit no longer clears graph pan")
+	_expect(
+		is_equal_approx(editor._zoom_x, default_zoom) and is_equal_approx(editor._zoom_y, default_zoom),
+		"Autofit no longer restores the canonical default zoom",
+	)
+
+	editor._slider.free()
 	editor.free()
 
 
