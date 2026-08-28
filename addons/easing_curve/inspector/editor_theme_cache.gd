@@ -42,14 +42,16 @@ static func get_icon(icon_name: StringName) -> Texture2D:
 	return icon
 
 
-static func make_zero_margin_panel_stylebox() -> StyleBox:
-	var style := (
-		get_theme()
-		.get_stylebox(&"panel", &"PanelContainer")
-		.duplicate() as StyleBox
-	)
+static func make_zero_margin_panel_stylebox() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
 	style.content_margin_left = 0.0
 	style.content_margin_top = 0.0
 	style.content_margin_right = 0.0
 	style.content_margin_bottom = 0.0
+	style.bg_color = Color(0.1, 0.1, 0.1, 0.6)
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_detail = 5
 	return style
