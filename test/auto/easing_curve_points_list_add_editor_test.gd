@@ -1,6 +1,6 @@
 extends SceneTree
 
-const EDITOR_HOST = preload("res://test/editor_host_test_harness.gd")
+const EDITOR_HOST = preload("res://test/auto/editor_host_test_harness.gd")
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 
 var _failures := 0

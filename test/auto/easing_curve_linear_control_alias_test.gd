@@ -1,6 +1,6 @@
 extends SceneTree
 
-const EDITOR_HOST = preload("res://test/editor_host_test_harness.gd")
+const EDITOR_HOST = preload("res://test/auto/editor_host_test_harness.gd")
 const DRAGGING_META := &"_easing_curve_dragging"
 
 var _failures := 0

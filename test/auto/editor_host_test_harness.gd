@@ -9,7 +9,7 @@ static func require_editor_host(test_name: String) -> bool:
 	if Engine.is_editor_hint():
 		return true
 	push_error(
-		"%s requires an Editor host. Run: godot --editor --headless --path . --script res://test/automated/%s"
+		"%s requires an Editor host. Run: godot --editor --headless --path . --script res://test/auto/%s"
 		% [test_name, test_name]
 	)
 	return false

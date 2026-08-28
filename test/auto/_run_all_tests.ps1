@@ -1,11 +1,14 @@
 [CmdletBinding()]
 param(
-	[string]$GodotPath = ""
+	[Parameter()]
+	[string]$GodotPath = "",
+	[Parameter(Position = 0, ValueFromRemainingArguments = $true)]
+	[string[]]$CommandArguments
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$godotLauncher = Join-Path $PSScriptRoot "run_godot.ps1"
+$godotLauncher = Join-Path $PSScriptRoot "_run_godot.ps1"
 $suiteTimeoutSeconds = 60
 $killWaitMilliseconds = 5000
 $powerShellExecutable = (Get-Process -Id $PID).Path
@@ -30,6 +33,44 @@ $suites = @(
 	@{ Name = "editor_undo_redo_test.gd"; Editor = $true }
 )
 
+function Show-Help {
+	Write-Host "Usage: .\\_run_all_tests.ps1 [--help | --list | --run] [-GodotPath <path>]"
+	Write-Host ""
+	Write-Host "Options:"
+	Write-Host "  --help  Show this help menu."
+	Write-Host "  --list  List the individual unit tests run by this script."
+	Write-Host "  --run   Run all listed unit tests."
+	Write-Host ""
+	Write-Host "-GodotPath may be supplied with --run to select a Godot executable."
+}
+
+if ($CommandArguments.Count -ne 1) {
+	Show-Help
+	if ($CommandArguments.Count -gt 1) {
+		Write-Error "Specify exactly one command: --help, --list, or --run."
+	}
+	exit $(if ($CommandArguments.Count -eq 0) { 0 } else { 1 })
+}
+
+switch ($CommandArguments[0]) {
+	"--help" {
+		Show-Help
+		exit 0
+	}
+	"--list" {
+		foreach ($suite in $suites) {
+			Write-Output $suite.Name
+		}
+		exit 0
+	}
+	"--run" { }
+	default {
+		Show-Help
+		Write-Error "Unknown command: $($CommandArguments[0])"
+		exit 1
+	}
+}
+
 $results = @()
 foreach ($suite in $suites) {
 	$mode = if ($suite.Editor) { "editor-host" } else { "headless" }
@@ -41,7 +82,7 @@ foreach ($suite in $suites) {
 	$arguments += @(
 		"--headless",
 		"--path", $projectRoot,
-		"--script", "res://test/automated/$($suite.Name)"
+		"--script", "res://test/auto/$($suite.Name)"
 	)
 	$stdoutPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stdout" -f [guid]::NewGuid())
 	$stderrPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stderr" -f [guid]::NewGuid())
