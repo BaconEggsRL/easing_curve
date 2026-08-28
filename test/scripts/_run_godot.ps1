@@ -7,6 +7,8 @@ param(
 	[string[]]$GodotArgs
 )
 
+$ErrorActionPreference = "Stop"
+
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -19,32 +21,6 @@ public static class ErrorMode {
 
 # SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX
 [ErrorMode]::SetErrorMode(0x0001 -bor 0x0002) | Out-Null
-
-$fallbackGodotPath = "C:\Godot\4.7\engine\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64_console.exe"
-$godotPathSource = "explicit -GodotPath"
-if ([string]::IsNullOrWhiteSpace($GodotPath)) {
-	$GodotPath = $env:EASING_CURVE_GODOT_PATH
-	$godotPathSource = "EASING_CURVE_GODOT_PATH"
-}
-if ([string]::IsNullOrWhiteSpace($GodotPath)) {
-	$GodotPath = $fallbackGodotPath
-	$godotPathSource = "local fallback"
-}
-
-if (-not (Test-Path -LiteralPath $GodotPath -PathType Leaf)) {
-	throw (
-		"Godot executable was not found: $GodotPath. Supply -GodotPath '<path-to-godot>' " +
-		"or set EASING_CURVE_GODOT_PATH."
-	)
-}
-
-$Godot = (Resolve-Path -LiteralPath $GodotPath -ErrorAction Stop).Path
-Write-Host "Godot executable ($godotPathSource): $Godot"
-$godotVersion = (& $Godot --version | Out-String).Trim()
-if ($LASTEXITCODE -ne 0) {
-	throw "Could not query Godot version from: $Godot"
-}
-Write-Host "Godot version: $godotVersion"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 for ($index = 0; $index -lt $GodotArgs.Count; $index += 1) {
@@ -66,6 +42,38 @@ for ($index = 0; $index -lt $GodotArgs.Count; $index += 1) {
 	break
 }
 
+$fallbackGodotPath = "C:\Godot\4.7\engine\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64_console.exe"
+$godotPathSource = "explicit -GodotPath"
+if ([string]::IsNullOrWhiteSpace($GodotPath)) {
+	$GodotPath = $env:EASING_CURVE_GODOT_PATH
+	$godotPathSource = "EASING_CURVE_GODOT_PATH"
+}
+if ([string]::IsNullOrWhiteSpace($GodotPath)) {
+	$GodotPath = $fallbackGodotPath
+	$godotPathSource = "local fallback"
+}
+
+if (-not (Test-Path -LiteralPath $GodotPath -PathType Leaf)) {
+	throw (
+		"Godot executable was not found: $GodotPath. Supply -GodotPath '<path-to-godot>' " +
+		"or set EASING_CURVE_GODOT_PATH."
+	)
+}
+
+$Godot = (Resolve-Path -LiteralPath $GodotPath -ErrorAction Stop).Path
+$godotFileName = [IO.Path]::GetFileNameWithoutExtension($Godot)
+if (-not $godotFileName.EndsWith("_console", [StringComparison]::OrdinalIgnoreCase)) {
+	$consoleGodot = Join-Path ([IO.Path]::GetDirectoryName($Godot)) ($godotFileName + "_console.exe")
+	if (Test-Path -LiteralPath $consoleGodot -PathType Leaf) {
+		$Godot = (Resolve-Path -LiteralPath $consoleGodot -ErrorAction Stop).Path
+		$godotPathSource += ", console companion"
+	}
+}
+
+$testTempDirectory = Join-Path $projectRoot "test\_temp"
+$testAppDataDirectory = Join-Path $testTempDirectory "appdata"
+New-Item -ItemType Directory -Force -Path $testAppDataDirectory | Out-Null
+
 $hasLogFile = $false
 foreach ($argument in $GodotArgs) {
 	if ($argument -ieq "--log-file" -or $argument -ilike "--log-file=*") {
@@ -77,7 +85,7 @@ foreach ($argument in $GodotArgs) {
 $launchArguments = @($GodotArgs)
 $testLogPath = ""
 if (-not $hasLogFile) {
-	$testLogDirectory = Join-Path $projectRoot ".godot\test_logs"
+	$testLogDirectory = Join-Path $testTempDirectory "logs"
 	New-Item -ItemType Directory -Force -Path $testLogDirectory | Out-Null
 	$testLogPath = Join-Path $testLogDirectory (
 		"godot-test-{0}-{1}.log" -f $PID, [guid]::NewGuid().ToString("N")
@@ -88,8 +96,29 @@ if (-not $hasLogFile) {
 	Write-Verbose "Godot test log: caller-supplied --log-file"
 }
 
-& $Godot @launchArguments
-$exitCode = $LASTEXITCODE
+$previousAppData = $env:APPDATA
+$exitCode = -1
+try {
+	# Keep Godot user:// writes inside the repository so sandboxed test runs
+	# do not depend on write access to the real Windows roaming AppData folder.
+	$env:APPDATA = $testAppDataDirectory
+
+	Write-Host "Godot executable ($godotPathSource): $Godot"
+	$godotVersion = (& $Godot --version | Out-String).Trim()
+	if ($LASTEXITCODE -ne 0) {
+		throw "Could not query Godot version from: $Godot"
+	}
+	Write-Host "Godot version: $godotVersion"
+
+	& $Godot @launchArguments
+	$exitCode = $LASTEXITCODE
+} finally {
+	if ($null -eq $previousAppData) {
+		Remove-Item Env:APPDATA -ErrorAction SilentlyContinue
+	} else {
+		$env:APPDATA = $previousAppData
+	}
+}
 
 if ($testLogPath -and $exitCode -eq 0) {
 	Remove-Item -LiteralPath $testLogPath -Force -ErrorAction SilentlyContinue

@@ -3,6 +3,7 @@
 /android/
 /_exports/
 /_media/
+test/_temp/
 
 # Local secrets
 .env

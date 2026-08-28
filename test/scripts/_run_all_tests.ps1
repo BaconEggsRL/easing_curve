@@ -12,6 +12,8 @@ $godotLauncher = Join-Path $PSScriptRoot "_run_godot.ps1"
 $suiteTimeoutSeconds = 60
 $killWaitMilliseconds = 5000
 $powerShellExecutable = (Get-Process -Id $PID).Path
+$runnerTempDirectory = Join-Path $projectRoot "test\_temp\runner"
+New-Item -ItemType Directory -Force -Path $runnerTempDirectory | Out-Null
 
 $suites = @(
 	@{ Name = "css_linear_test.gd"; Editor = $false },
@@ -84,9 +86,9 @@ foreach ($suite in $suites) {
 		"--path", $projectRoot,
 		"--script", "res://test/scripts/$($suite.Name)"
 	)
-	$stdoutPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stdout" -f [guid]::NewGuid())
-	$stderrPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stderr" -f [guid]::NewGuid())
-	$exitCodePath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.exitcode" -f [guid]::NewGuid())
+	$stdoutPath = Join-Path $runnerTempDirectory ("easing-curve-{0}.stdout" -f [guid]::NewGuid())
+	$stderrPath = Join-Path $runnerTempDirectory ("easing-curve-{0}.stderr" -f [guid]::NewGuid())
+	$exitCodePath = Join-Path $runnerTempDirectory ("easing-curve-{0}.exitcode" -f [guid]::NewGuid())
 	$suiteExitCode = -1
 	$timedOut = $false
 	try {
