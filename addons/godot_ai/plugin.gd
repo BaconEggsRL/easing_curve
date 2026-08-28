@@ -1889,7 +1889,7 @@ func _resume_connection_after_recovery() -> void:
 	_arm_server_version_check()
 
 
-func recover_incompatible_server(user_initiated: bool = true) -> bool:
+func recover_incompatible_server(user_initiated: bool = true, stale_version: String = "") -> bool:
 	## A user's click (the dock's Restart) authorizes the bounded
 	## stale-occupant retry for this episode, so a bridge respawning the old
 	## version and winning the post-kill bind race gets re-killed
@@ -1904,7 +1904,7 @@ func recover_incompatible_server(user_initiated: bool = true) -> bool:
 	## (#678): `_resume_connection_after_recovery` gates on the post-walk
 	## state, so it must not run until the respawn walk has completed. With
 	## `defer_blocking_work` off this completes synchronously.
-	if not await _lifecycle.recover_incompatible_server():
+	if not await _lifecycle.recover_incompatible_server(stale_version):
 		return false
 	_resume_connection_after_recovery()
 	return true

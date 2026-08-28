@@ -113,6 +113,22 @@ var _readopt_walk_pending: bool = false
 ## needs its remaining rounds (#890 review P1).
 var _stale_recovery_budget: int = 0
 
+## Single owner for kill/drain/respawn recovery. Startup probing and the
+## WebSocket version verdict observe the same backend from different async
+## paths; a retry budget bounds how often they may act, but does not stop both
+## paths acting at once. Keep one recovery transaction in flight and coalesce
+## stale handshake verdicts into it so an older continuation cannot kill the
+## fresh server that another continuation just spawned.
+var _recovery_in_flight: bool = false
+## Generation-scoped capability for the startup walk spawned by
+## `_recover_incompatible_server_impl`. The outer recovery keeps
+## `_recovery_in_flight` armed so handshakes and unrelated recovery calls still
+## coalesce, while this token lets only that exact owned walk spend another
+## bounded stale-recovery round if an attach bridge reclaims the port after the
+## kill. A later walk created by invalidation gets a different generation and
+## cannot inherit the authority.
+var _recovery_owned_startup_generation: int = -1
+
 ## Bounded deadline for the foreign-port adoption-confirmation watcher.
 ## Zero when disarmed.
 var _adoption_watch_deadline_ms: int = 0
@@ -408,6 +424,14 @@ func handle_server_version_verified(expected_version: String, version: String) -
 		transition_state(McpServerStateScript.READY)
 		_host._update_process_enabled()
 		return
+	## A stale handshake is expected while the startup/recovery owner is already
+	## replacing that exact old backend. Do not let the connection-side verdict
+	## invalidate the startup walk and launch a second kill transaction. The
+	## active owner re-probes the listener before acting and will either replace
+	## it or leave the normal incompatible diagnosis on failure.
+	if _recovery_in_flight and version != expected:
+		print("MCP | stale godot-ai v%s handshake coalesced into active recovery" % version)
+		return
 	var live := {"version": version, "status_code": 200, "name": "godot-ai"}
 	## Connection propagation + version-check disarm + process re-evaluation
 	## all live inside _set_incompatible_server now (#691) so the startup-walk
@@ -433,7 +457,7 @@ func handle_server_version_verified(expected_version: String, version: String) -
 		## Fire-and-forget coroutine: this verdict lands on the main thread
 		## from `_process`, and the recovery owns the flow from here
 		## (mirroring the recovery click).
-		_host.recover_incompatible_server(false)
+		_host.recover_incompatible_server(false, version)
 
 
 func handle_server_version_unverified(expected_version: String) -> void:
@@ -895,28 +919,15 @@ func _start_server_impl(async_gen: int) -> void:
 		if bool(_managed_record_has_version_drift(record_version, current_version)):
 			print("MCP | managed server v%s does not match plugin v%s, restarting"
 				% [record_version, current_version])
-		## Forward `live` so the recovery proof helper reuses our snapshot.
-		## The kill invalidates it, so the failure arm re-probes below.
-		var recovered: bool = await recover_strong_port_occupant(port, 3.0, live)
+		## One transaction owns strong-proof recovery and the bounded stale-version
+		## fallback. The WS handshake path can observe the same old server while
+		## these awaits are suspended; `_recovery_in_flight` makes that verdict
+		## coalesce here instead of starting a competing kill/respawn.
+		var recovered: bool = await _recover_startup_port_occupant(
+			port, live, live_version, current_version, async_gen
+		)
 		if _async_stale(async_gen):
 			return
-		if not recovered and _stale_recovery_available(live_version, current_version):
-			## Post-update / recovery-click episode: the occupant is a verified
-			## stale-VERSION godot-ai (typically the previous release kept alive
-			## — or just respawned — by attach bridges still pinned to it) and a
-			## user action already authorized replacing it. Strong proof cannot
-			## exist for that server (external adoption dropped record and
-			## pid-file by design), so spend one bounded round of weak-proof
-			## recovery instead of latching INCOMPATIBLE and asking the user to
-			## click through the replacement by hand.
-			_stale_recovery_budget -= 1
-			print(
-				"MCP | stale godot-ai v%s holds port %d — replacing it (update/recovery authorized, %d retry round(s) left)"
-				% [live_version, port, _stale_recovery_budget]
-			)
-			recovered = await recover_stale_port_occupant(port, 3.0)
-			if _async_stale(async_gen):
-				return
 		if not recovered:
 			_host._server_started_this_session = true
 			var post_recovery_result: Variant = await _run_blocking(func() -> Variant:
@@ -1610,6 +1621,44 @@ static func _compatible_adoption_log_message(
 	]
 
 
+## Single-owner recovery transaction for the contended startup walk. Strong
+## ownership proof gets first refusal; only a user-authorized, verified version
+## drift may fall back to weak proof. Keeping the flag across both awaits is
+## what lets the WS handshake path coalesce instead of cancelling this walk.
+func _recover_startup_port_occupant(
+	port: int,
+	live: Dictionary,
+	live_version: String,
+	current_version: String,
+	async_gen: int,
+) -> bool:
+	var owns_recovery := not _recovery_in_flight
+	var is_owned_startup := (
+		_recovery_in_flight and async_gen == _recovery_owned_startup_generation
+	)
+	if not owns_recovery and not is_owned_startup:
+		return false
+	if owns_recovery:
+		_recovery_in_flight = true
+	## Forward `live` so the strong proof helper reuses our snapshot. The kill
+	## invalidates it; every later consumer re-probes before using live status.
+	var recovered: bool = await recover_strong_port_occupant(port, 3.0, live)
+	if not _async_stale(async_gen) and not recovered and _stale_recovery_available(
+		live_version, current_version
+	):
+		_stale_recovery_budget -= 1
+		print(
+			"MCP | stale godot-ai v%s holds port %d — replacing it (update/recovery authorized, %d retry round(s) left)"
+			% [live_version, port, _stale_recovery_budget]
+		)
+		recovered = await _recover_stale_port_occupant_impl(port, 3.0)
+	## A nested recovery-owned startup must leave the outer transaction armed;
+	## only the path that acquired ownership here may release it.
+	if owns_recovery:
+		_recovery_in_flight = false
+	return recovered
+
+
 ## `pre_kill_live` is forwarded into the proof helper so it doesn't
 ## re-probe a port the caller already probed. The kill invalidates the
 ## snapshot — callers MUST re-probe before consuming live-status data
@@ -1675,6 +1724,15 @@ func recover_strong_port_occupant(port: int, wait_s: float, pre_kill_live: Dicti
 ## and a same-version server that took the port in the interval must abort
 ## this recovery, not be killed by it.
 func recover_stale_port_occupant(port: int, wait_s: float) -> bool:
+	if _recovery_in_flight:
+		return false
+	_recovery_in_flight = true
+	var recovered := await _recover_stale_port_occupant_impl(port, wait_s)
+	_recovery_in_flight = false
+	return recovered
+
+
+func _recover_stale_port_occupant_impl(port: int, wait_s: float) -> bool:
 	var async_gen := _async_generation
 	var record: Dictionary = _host._read_managed_server_record()
 	## Resolved on the main thread: the worker must not touch EditorSettings.
@@ -1945,7 +2003,16 @@ func can_recover_incompatible_server() -> bool:
 	return bool(_host._is_port_in_use(ClientConfigurator.http_port()))
 
 
-func recover_incompatible_server() -> bool:
+func recover_incompatible_server(stale_version: String = "") -> bool:
+	if _recovery_in_flight:
+		return false
+	_recovery_in_flight = true
+	var recovered := await _recover_incompatible_server_impl(stale_version)
+	_recovery_in_flight = false
+	return recovered
+
+
+func _recover_incompatible_server_impl(stale_version: String = "") -> bool:
 	if _server_state != McpServerStateScript.INCOMPATIBLE:
 		return false
 
@@ -1965,7 +2032,17 @@ func recover_incompatible_server() -> bool:
 	var proof_result: Variant = await _run_blocking(func() -> Variant:
 		if not is_instance_valid(_host):
 			return {"proof": "", "pids": []}
-		return _host._evaluate_recovery_port_occupant_proof(port, {}, record)
+		var live: Dictionary = {}
+		if not stale_version.is_empty():
+			## Automatic recovery was authorized by a handshake from this exact
+			## old version. Re-probe at proof time and refuse if that occupant has
+			## already been replaced; a delayed old handshake must never target the
+			## freshly-started current server via its new pid-file proof.
+			live = _host._probe_live_server_status_for_port(port)
+			var current_live_version := str(_host._verified_status_version(live))
+			if current_live_version != stale_version:
+				return {"proof": "", "pids": []}
+		return _host._evaluate_recovery_port_occupant_proof(port, live, record)
 	)
 	if _async_stale(async_gen) or proof_result == null:
 		return false
@@ -2030,7 +2107,15 @@ func recover_incompatible_server() -> bool:
 	## the automatic handshake-mismatch trigger reuses this manager flow and
 	## must only SPEND budget; re-arming inside it would unbound the
 	## kill/respawn loop against a persistent bridge respawner.
+	## Keep the outer transaction armed while the respawn walk runs so stale WS
+	## handshakes and unrelated recovery calls still coalesce. Grant only this
+	## owned startup walk permission to spend a remaining recovery round if the
+	## old attach bridge reclaims the port between the kill and the respawn.
+	var owned_startup_gen := _async_generation
+	_recovery_owned_startup_generation = owned_startup_gen
 	await start_server()
+	if _recovery_owned_startup_generation == owned_startup_gen:
+		_recovery_owned_startup_generation = -1
 	return true
 
 
