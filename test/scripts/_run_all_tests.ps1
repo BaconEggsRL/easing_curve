@@ -12,8 +12,20 @@ $godotLauncher = Join-Path $PSScriptRoot "_run_godot.ps1"
 $suiteTimeoutSeconds = 60
 $killWaitMilliseconds = 5000
 $powerShellExecutable = (Get-Process -Id $PID).Path
-$runnerTempDirectory = Join-Path $projectRoot "test\_temp\runner"
-New-Item -ItemType Directory -Force -Path $runnerTempDirectory | Out-Null
+$testTempDirectory = Join-Path $projectRoot "test\_temp"
+$runnerTempDirectory = Join-Path $testTempDirectory "runner"
+
+function Remove-DirectoryIfEmpty {
+	param([string]$Path)
+
+	if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)) {
+		return
+	}
+
+	if (-not (Get-ChildItem -LiteralPath $Path -Force | Select-Object -First 1)) {
+		Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+	}
+}
 
 $suites = @(
 	@{ Name = "css_linear_test.gd"; Editor = $false },
@@ -73,10 +85,24 @@ switch ($CommandArguments[0]) {
 	}
 }
 
+New-Item -ItemType Directory -Force -Path $runnerTempDirectory | Out-Null
+
 $results = @()
 foreach ($suite in $suites) {
 	$mode = if ($suite.Editor) { "editor-host" } else { "headless" }
 	Write-Host "`n=== $($suite.Name) [$mode] ==="
+
+	$suiteBaseName = [IO.Path]::GetFileNameWithoutExtension($suite.Name)
+	$suiteTempDirectory = Join-Path $runnerTempDirectory (
+		"{0}-{1}" -f $suiteBaseName, [guid]::NewGuid().ToString("N")
+	)
+	New-Item -ItemType Directory -Force -Path $suiteTempDirectory | Out-Null
+	$stdoutPath = Join-Path $suiteTempDirectory "stdout.txt"
+	$stderrPath = Join-Path $suiteTempDirectory "stderr.txt"
+	$exitCodePath = Join-Path $suiteTempDirectory "exitcode.txt"
+	$godotLogPath = Join-Path $suiteTempDirectory "godot.log"
+	$suiteAppDataPath = Join-Path $suiteTempDirectory "appdata"
+
 	$arguments = @()
 	if ($suite.Editor) {
 		$arguments += "--editor"
@@ -84,20 +110,21 @@ foreach ($suite in $suites) {
 	$arguments += @(
 		"--headless",
 		"--path", $projectRoot,
-		"--script", "res://test/scripts/$($suite.Name)"
+		"--script", "res://test/scripts/$($suite.Name)",
+		"--log-file", $godotLogPath
 	)
-	$stdoutPath = Join-Path $runnerTempDirectory ("easing-curve-{0}.stdout" -f [guid]::NewGuid())
-	$stderrPath = Join-Path $runnerTempDirectory ("easing-curve-{0}.stderr" -f [guid]::NewGuid())
-	$exitCodePath = Join-Path $runnerTempDirectory ("easing-curve-{0}.exitcode" -f [guid]::NewGuid())
+
 	$suiteExitCode = -1
 	$timedOut = $false
+	$passed = $false
 	try {
 		$suiteTimeout = if ($suite.ContainsKey("TimeoutSeconds")) { $suite.TimeoutSeconds } else { $suiteTimeoutSeconds }
 		$launcherArguments = @(
 			"-NoProfile",
 			"-ExecutionPolicy", "Bypass",
 			"-File", $godotLauncher,
-			"-ExitCodeFile", $exitCodePath
+			"-ExitCodeFile", $exitCodePath,
+			"-AppDataDirectory", $suiteAppDataPath
 		)
 		if (-not [string]::IsNullOrWhiteSpace($GodotPath)) {
 			$launcherArguments += @("-GodotPath", $GodotPath)
@@ -156,11 +183,15 @@ foreach ($suite in $suites) {
 			Passed = $passed
 		}
 	} finally {
-		Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
-		Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
-		Remove-Item -LiteralPath $exitCodePath -Force -ErrorAction SilentlyContinue
+		if ($passed) {
+			Remove-Item -LiteralPath $suiteTempDirectory -Recurse -Force -ErrorAction SilentlyContinue
+		} else {
+			Write-Host "Preserved temp artifacts: $suiteTempDirectory" -ForegroundColor Yellow
+		}
 	}
 }
+
+Remove-DirectoryIfEmpty $runnerTempDirectory
 
 Write-Host "`n=== Test summary ==="
 $results | Format-Table -AutoSize
@@ -170,5 +201,7 @@ if ($failed.Count -gt 0) {
 	exit 1
 }
 
+# Keep test/_temp itself: its tracked .gdignore prevents Godot from scanning
+# transient test artifacts created beneath this directory.
 Write-Host "All $($results.Count) suites passed."
 exit 0

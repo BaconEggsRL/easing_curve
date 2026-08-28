@@ -2,6 +2,7 @@
 param(
 	[string]$ExitCodeFile = "",
 	[string]$GodotPath = "",
+	[string]$AppDataDirectory = "",
 
 	[Parameter(Position = 0, ValueFromRemainingArguments = $true)]
 	[string[]]$GodotArgs
@@ -21,6 +22,18 @@ public static class ErrorMode {
 
 # SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX
 [ErrorMode]::SetErrorMode(0x0001 -bor 0x0002) | Out-Null
+
+function Remove-DirectoryIfEmpty {
+	param([string]$Path)
+
+	if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)) {
+		return
+	}
+
+	if (-not (Get-ChildItem -LiteralPath $Path -Force | Select-Object -First 1)) {
+		Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+	}
+}
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 for ($index = 0; $index -lt $GodotArgs.Count; $index += 1) {
@@ -71,8 +84,14 @@ if (-not $godotFileName.EndsWith("_console", [StringComparison]::OrdinalIgnoreCa
 }
 
 $testTempDirectory = Join-Path $projectRoot "test\_temp"
-$testAppDataDirectory = Join-Path $testTempDirectory "appdata"
-New-Item -ItemType Directory -Force -Path $testAppDataDirectory | Out-Null
+$testAppDataRoot = Join-Path $testTempDirectory "appdata"
+$ownsAppDataDirectory = [string]::IsNullOrWhiteSpace($AppDataDirectory)
+if ($ownsAppDataDirectory) {
+	$AppDataDirectory = Join-Path $testAppDataRoot (
+		"godot-test-{0}-{1}" -f $PID, [guid]::NewGuid().ToString("N")
+	)
+}
+New-Item -ItemType Directory -Force -Path $AppDataDirectory | Out-Null
 
 $hasLogFile = $false
 foreach ($argument in $GodotArgs) {
@@ -83,6 +102,7 @@ foreach ($argument in $GodotArgs) {
 }
 
 $launchArguments = @($GodotArgs)
+$testLogDirectory = ""
 $testLogPath = ""
 if (-not $hasLogFile) {
 	$testLogDirectory = Join-Path $testTempDirectory "logs"
@@ -101,7 +121,7 @@ $exitCode = -1
 try {
 	# Keep Godot user:// writes inside the repository so sandboxed test runs
 	# do not depend on write access to the real Windows roaming AppData folder.
-	$env:APPDATA = $testAppDataDirectory
+	$env:APPDATA = $AppDataDirectory
 
 	Write-Host "Godot executable ($godotPathSource): $Godot"
 	$godotVersion = (& $Godot --version | Out-String).Trim()
@@ -120,8 +140,20 @@ try {
 	}
 }
 
-if ($testLogPath -and $exitCode -eq 0) {
-	Remove-Item -LiteralPath $testLogPath -Force -ErrorAction SilentlyContinue
+if ($exitCode -eq 0) {
+	# Standalone invocations own their isolated appdata and clean it on success.
+	# A caller-supplied AppDataDirectory is caller-owned so an outer runner can
+	# decide whether to delete or preserve it based on semantic test results.
+	if ($ownsAppDataDirectory) {
+		Remove-Item -LiteralPath $AppDataDirectory -Recurse -Force -ErrorAction SilentlyContinue
+	}
+	if ($testLogPath) {
+		Remove-Item -LiteralPath $testLogPath -Force -ErrorAction SilentlyContinue
+	}
+	Remove-DirectoryIfEmpty $testAppDataRoot
+	Remove-DirectoryIfEmpty $testLogDirectory
+	# Keep test/_temp itself: its tracked .gdignore prevents Godot from scanning
+	# transient test artifacts created beneath this directory.
 }
 
 if ($ExitCodeFile) {

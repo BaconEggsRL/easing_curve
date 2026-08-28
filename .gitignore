@@ -2,8 +2,9 @@
 .godot/
 /android/
 /_exports/
-/_media/
-test/_temp/
+_media/
+test/_temp/*
+!test/_temp/.gdignore
 
 # Local secrets
 .env
