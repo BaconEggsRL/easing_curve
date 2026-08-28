@@ -126,7 +126,7 @@ $Mode = switch ($Mode.ToLowerInvariant()) {
 $ProjectRoot = (Resolve-Path $PSScriptRoot).Path
 $PluginConfig = Join-Path $ProjectRoot "addons\easing_curve\plugin.cfg"
 $BuildScript = Join-Path $ProjectRoot "build_asset_store.ps1"
-$GodotLauncher = Join-Path $ProjectRoot "test\scripts\run_godot.ps1"
+$GodotLauncher = Join-Path $ProjectRoot "test\scripts\_run_godot.ps1"
 $Changelog = Join-Path $ProjectRoot "test\docs\CHANGELOG.md"
 $Tag = "v$Version"
 $ZipPath = Join-Path $ProjectRoot "_exports\_asset_store_builds\easing_curve_v$Version.zip"
@@ -817,7 +817,7 @@ try {
     }
 
     if (-not (Test-Path -LiteralPath $GodotLauncher -PathType Leaf)) {
-        throw "Could not find test/scripts/run_godot.ps1."
+        throw "Could not find test/scripts/_run_godot.ps1."
     }
 
     Write-Host "Easing Curve v$Version release"

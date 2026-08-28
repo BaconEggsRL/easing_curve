@@ -2,8 +2,10 @@ extends SceneTree
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/easing_curve_editor_inspector_plugin.gd")
-const RELOAD_ICON = preload("res://addons/easing_curve/assets/icons/Reload.svg")
-const EDITOR_HOST = preload("res://test/auto/editor_host_test_harness.gd")
+const EDITOR_THEME_CACHE = preload(
+	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+)
+const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
 
 var _failures := 0
 var _checks := 0
@@ -492,7 +494,9 @@ func _test_preset_reset_layout_stability() -> void:
 	transition_option.select(constant_item)
 	INSPECTOR_PLUGIN._set_transition_display(transition_option, EasingCurve.TRANS.CONSTANT, false)
 	var reset_button := Button.new()
-	reset_button.icon = RELOAD_ICON
+	reset_button.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_RELOAD
+	)
 	reset_button.flat = true
 	row.add_child(transition_option)
 	row.add_child(reset_button)

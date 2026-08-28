@@ -18,14 +18,15 @@ var _native_section: Control
 var _fallback_header: Button
 var _fallback_content: Control
 var _fallback_folded := false
-var editor_theme := EDITOR_THEME_CACHE.get_theme()
-var normal_color := editor_theme.get_color(
+var normal_color := EDITOR_THEME_CACHE.get_color(
 	&"font_color",
-	&"Editor"
+	&"Editor",
+	Color(1.0, 1.0, 1.0, 0.7),
 )
-var hover_color := editor_theme.get_color(
+var hover_color := EDITOR_THEME_CACHE.get_color(
 	&"font_hover_color",
-	&"Editor"
+	&"Editor",
+	Color.WHITE,
 )
 var normal_icon_color := Color(1.0, 1.0, 1.0, 0.90)
 var hover_icon_color := Color.WHITE

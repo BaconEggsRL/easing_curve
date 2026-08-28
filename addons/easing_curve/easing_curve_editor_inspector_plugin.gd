@@ -1612,9 +1612,16 @@ func _create_vector2_property(
 
 	var vec: Vector2 = point.get(property_name)
 
-	var editor_theme := EDITOR_THEME_CACHE.get_theme()
-	var x_color := editor_theme.get_color(&"property_color_x", &"Editor")
-	var y_color := editor_theme.get_color(&"property_color_y", &"Editor")
+	var x_color := EDITOR_THEME_CACHE.get_color(
+		&"property_color_x",
+		&"Editor",
+		Color(1.0, 0.35, 0.35),
+	)
+	var y_color := EDITOR_THEME_CACHE.get_color(
+		&"property_color_y",
+		&"Editor",
+		Color(0.5, 1.0, 0.5),
+	)
 
 	var x_range := Vector2(0.0, 1.0) if property_name == "position" else Vector2(-1024, 1024)
 	var x_row := _create_vector2_axis_row(

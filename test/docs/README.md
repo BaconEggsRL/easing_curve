@@ -4,10 +4,10 @@
 
 ## Automated suites
 
-`test/scripts/run_all_tests.ps1` is the source of truth for the explicit
+`test/scripts/_run_all_tests.ps1` is the source of truth for the explicit
 automated-suite manifest. It currently registers 17 suites: eight headless and
 nine Editor-host. Their entrypoint scripts and `.uid` sidecars live under
-`test/automated/`. Do not infer an automated suite or its mode from its filename.
+`test/scripts/`. Do not infer an automated suite or its mode from its filename.
 
 ### Headless suites
 
@@ -37,7 +37,7 @@ The following suites require an Editor-host launch:
 Run an Editor-dependent test with:
 
 ```text
-./test/scripts/run_godot.ps1 --editor --headless --path . --script res://test/automated/<test_name>.gd
+./test/scripts/_run_godot.ps1 --editor --headless --path . --script res://test/scripts/<test_name>.gd
 ```
 
 Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can
@@ -48,10 +48,10 @@ misleadingly report zero checks. It is not a valid result for these tests.
 Run every headless and Editor-host suite independently with:
 
 ```powershell
-./test/scripts/run_all_tests.ps1
+./test/scripts/_run_all_tests.ps1
 ```
 
-`test/scripts/run_godot.ps1` launches the configured Godot 4.7.1 console executable
+`test/scripts/_run_godot.ps1` launches the configured Godot 4.7.1 console executable
 with Windows native application-error dialogs suppressed for that test process
 tree only. All automated Godot tests must use this wrapper; do not invoke Godot
 directly for routine test validation. The wrapper supplies a unique,
@@ -75,7 +75,7 @@ those fixtures in a visible Editor session instead.
 
 ## Test-asset ownership
 
-Only the 17 scripts under `test/automated/` in the explicit runner manifest
+Only the 17 scripts under `test/scripts/` in the explicit runner manifest
 above are release-gating automated suites. The following assets are
 intentionally documented by their observed repository role; none is registered
 by `run_all_tests.ps1`.
@@ -87,7 +87,7 @@ by `run_all_tests.ps1`.
 - `presets/legacy_pre_flat_triangle.tres` and
   `presets/legacy_flat_without_force_linear.tres` are serialization fixtures
   loaded by `serialization_transition_contract_test.gd`.
-- `scripts/run_godot.ps1` is the shared launcher used by the complete-suite
+- `scripts/_run_godot.ps1` is the shared launcher used by the complete-suite
   runner; it is not a suite entrypoint.
 
 ### Manual regression fixture

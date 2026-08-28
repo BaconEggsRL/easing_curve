@@ -291,9 +291,10 @@ func _draw() -> void:
 	var target := point_panels[drop_index]
 	var y := target.position.y + target.size.y if drop_after else target.position.y
 
-	var color := EDITOR_THEME_CACHE.get_theme().get_color(
+	var color := EDITOR_THEME_CACHE.get_color(
 		&"accent_color",
 		&"Editor",
+		Color(0.3, 0.6, 1.0),
 	)
 
 	var line_width := 4.0

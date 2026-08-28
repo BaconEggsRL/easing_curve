@@ -82,7 +82,7 @@ foreach ($suite in $suites) {
 	$arguments += @(
 		"--headless",
 		"--path", $projectRoot,
-		"--script", "res://test/auto/$($suite.Name)"
+		"--script", "res://test/scripts/$($suite.Name)"
 	)
 	$stdoutPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stdout" -f [guid]::NewGuid())
 	$stderrPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}.stderr" -f [guid]::NewGuid())

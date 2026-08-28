@@ -24,9 +24,22 @@ static var _icons: Dictionary[StringName, Texture2D] = {}
 
 
 static func get_theme() -> Theme:
+	if DisplayServer.get_name() == "headless":
+		return null
 	if _editor_theme == null:
 		_editor_theme = EditorInterface.get_editor_theme()
 	return _editor_theme
+
+
+static func get_color(
+	color_name: StringName,
+	theme_type: StringName,
+	fallback: Color,
+) -> Color:
+	var editor_theme := get_theme()
+	if editor_theme == null or not editor_theme.has_color(color_name, theme_type):
+		return fallback
+	return editor_theme.get_color(color_name, theme_type)
 
 
 static func get_icon(icon_name: StringName) -> Texture2D:
