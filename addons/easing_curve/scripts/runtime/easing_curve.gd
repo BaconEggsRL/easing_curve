@@ -769,9 +769,11 @@ var _irregular_points_y: Array[float] = []:
 # ELASTIC
 # ------------------
 ## Controls the amplitude of oscillation.[br]
-## Higher values produce larger overshoots and wider motion.
-@export_range(0.0, 5.0, 0.01) var amplitude: float = 1.0:
+## Values below 1.0 are unsupported by the Godot/Penner elastic equation.
+## Higher values produce larger overshoots.
+@export_range(1.0, 5.0, 0.01) var amplitude: float = 1.0:
 	set(value):
+		value = maxf(value, 1.0)
 		if amplitude != value:
 			amplitude = value
 			_notify_parameter_changed()

@@ -811,6 +811,25 @@ func _test_function_parameters() -> void:
 	curve.period = 0.5
 	_expect(not is_equal_approx(elastic_before, curve.sample(0.4)), "Elastic parameters did not immediately affect output")
 
+	curve.period = 0.3
+	for ease: EasingCurve.EASE in EasingCurve.EASE.values():
+		curve.ease_type = ease
+		curve.amplitude = 1.0
+		var tween_value: float = Tween.interpolate_value(
+			0.0,
+			1.0,
+			0.37,
+			1.0,
+			Tween.TRANS_ELASTIC,
+			ease as Tween.EaseType,
+		)
+		_expect(
+			is_equal_approx(curve.sample(0.37), tween_value),
+			"Elastic default amplitude diverged from Godot Tween for %s" % EasingCurve.EASE.keys()[ease],
+		)
+		curve.amplitude = 0.5
+		_expect(is_equal_approx(curve.amplitude, 1.0), "Elastic amplitude below 1.0 was accepted for %s" % EasingCurve.EASE.keys()[ease])
+
 	curve.trans_type = EasingCurve.TRANS.IRREGULAR
 	curve.num_points = 5
 	curve.randomness = 2.0
