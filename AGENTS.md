@@ -1,7 +1,9 @@
-When Codex directly launches Godot in headless/script mode, always supply
---log-file with a repository-local temporary path. Do not rely on Godot's
-default user://logs path.
+When launching Godot directly from Codex, always pass --log-file with a
+repository-local path under test/_temp/. Do not rely on Godot's default
+user://logs location.
 
-A user:// permission failure occurring before test-script execution is an
-environment failure, not a product/test failure. Retry using the repo-local
-log path before falling back to an editor-host test.
+Use EASING_CURVE_GODOT_PATH when available.
+
+If a direct headless test fails before script execution, verify that a
+repository-local --log-file was supplied before falling back to editor-host
+testing.
