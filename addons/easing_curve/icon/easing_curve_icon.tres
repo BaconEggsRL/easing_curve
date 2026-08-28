@@ -1,6 +1,0 @@
-[gd_resource type="ImageTexture" format=3 uid="uid://k8sbrnudhxec"]
-
-[ext_resource type="Script" uid="uid://bdkiwyp70tox3" path="res://addons/easing_curve/icon/editor_texture.gd" id="1_1so2c"]
-
-[resource]
-script = ExtResource("1_1so2c")
