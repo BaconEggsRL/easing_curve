@@ -3,6 +3,9 @@ extends EditorProperty
 
 
 const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
+const EDITOR_THEME_CACHE = preload(
+	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+)
 
 
 var button_container: HBoxContainer
@@ -22,9 +25,9 @@ func setup(editor: EasingCurveEditor, undo_manager: Object) -> void:
 	button.text = "Generate"
 	button.tooltip_text = "Generate a new random curve"
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var editor_theme := EditorInterface.get_editor_theme()
-	if editor_theme.has_icon(&"Callable", &"EditorIcons"):
-		button.icon = editor_theme.get_icon(&"Callable", &"EditorIcons")
+	button.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_CALLABLE
+	)
 	button_container.add_child(button)
 	add_child(button_container)
 	add_focusable(button)

@@ -1,8 +1,9 @@
 @tool
 extends VBoxContainer
 
-const GUI_TREE_ARROW_RIGHT = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowRight.svg")
-const GUI_TREE_ARROW_DOWN = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowDown.svg")
+const EDITOR_THEME_CACHE = preload(
+	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+)
 
 var copy_value_callback: Callable
 var paste_value_callback: Callable
@@ -17,12 +18,12 @@ var _native_section: Control
 var _fallback_header: Button
 var _fallback_content: Control
 var _fallback_folded := false
-var base := EditorInterface.get_base_control()
-var normal_color := base.get_theme_color(
+var editor_theme := EDITOR_THEME_CACHE.get_theme()
+var normal_color := editor_theme.get_color(
 	&"font_color",
 	&"Editor"
 )
-var hover_color := base.get_theme_color(
+var hover_color := editor_theme.get_color(
 	&"font_hover_color",
 	&"Editor"
 )
@@ -200,5 +201,9 @@ func _toggle_fallback() -> void:
 func _set_fallback_folded(is_folded: bool) -> void:
 	_fallback_folded = is_folded
 	_fallback_content.visible = not is_folded
-	_fallback_header.icon = GUI_TREE_ARROW_RIGHT if is_folded else GUI_TREE_ARROW_DOWN
+	_fallback_header.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_GUI_TREE_ARROW_RIGHT
+		if is_folded
+		else EDITOR_THEME_CACHE.ICON_GUI_TREE_ARROW_DOWN
+	)
 	_on_folding_changed(is_folded)

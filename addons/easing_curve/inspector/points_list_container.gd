@@ -2,6 +2,9 @@
 extends VBoxContainer
 
 const DEBUG_POINT_LIST_DRAG := false
+const EDITOR_THEME_CACHE = preload(
+	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+)
 
 signal point_swap_requested(from_index: int, to_index: int)
 
@@ -288,8 +291,10 @@ func _draw() -> void:
 	var target := point_panels[drop_index]
 	var y := target.position.y + target.size.y if drop_after else target.position.y
 
-	var editor_theme := EditorInterface.get_editor_theme()
-	var color := editor_theme.get_color(&"accent_color", &"Editor")
+	var color := EDITOR_THEME_CACHE.get_theme().get_color(
+		&"accent_color",
+		&"Editor",
+	)
 
 	var line_width := 4.0
 

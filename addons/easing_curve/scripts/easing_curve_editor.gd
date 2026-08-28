@@ -6,7 +6,9 @@ extends Control
 ## Graph editor for interactive EasingCurve point and control-handle editing.
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
-const RELOAD_ICON = preload("res://addons/easing_curve/assets/icons/Reload.svg")
+const EDITOR_THEME_CACHE = preload(
+	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+)
 
 var use_pending_add := true
 var hide_point_toolbar_for_functions := false
@@ -1167,7 +1169,9 @@ func _create_point_toolbar() -> void:
 	_point_toolbar_controls.add_child(_point_right_state)
 
 	_point_reset_button = Button.new()
-	_point_reset_button.icon = RELOAD_ICON
+	_point_reset_button.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_RELOAD
+	)
 	_point_reset_button.flat = true
 	_point_reset_button.tooltip_text = "Reset Point Options"
 	_point_reset_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER

@@ -6,24 +6,10 @@ extends EditorInspectorPlugin
 ## The points array is built using handle_points and the curve editor using handle_easing_curve_editor.
 ## This is designed to mimic the built-in property lists in ItemList node or Curve resource.
 
-## Styleboxes
-const X_STYLEBOX = preload("uid://dsapcj11t0kpu")
-## GUI Icons
-const GUI_TREE_ARROW_RIGHT = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowRight.svg")
-const GUI_TREE_ARROW_DOWN = preload("res://addons/easing_curve/assets/icons/GuiTreeArrowDown.svg")
+const EDITOR_THEME_CACHE = preload(
+	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+)
 const ZOOM_SLIDER_CONTAINER = preload("uid://r1ymwr6nae")
-
-const FORCE_LINEAR_ICON_ON = preload("res://addons/easing_curve/assets/icons/Instance.svg")
-const FORCE_LINEAR_ICON_OFF = preload("res://addons/easing_curve/assets/icons/Unlinked.svg")
-
-const RELOAD = preload("res://addons/easing_curve/assets/icons/Reload.svg")
-const REMOVE = preload("res://addons/easing_curve/assets/icons/Remove.svg")
-const ADD = preload("res://addons/easing_curve/assets/icons/Add.svg")
-const MOVE_DOWN = preload("res://addons/easing_curve/assets/icons/MoveDown.svg")
-const MOVE_UP = preload("res://addons/easing_curve/assets/icons/MoveUp.svg")
-const TRIPLE_BAR = preload("res://addons/easing_curve/assets/icons/TripleBar.svg")
-const LOCK = preload("res://addons/easing_curve/assets/icons/Lock.svg")
-const UNLOCK = preload("res://addons/easing_curve/assets/icons/Unlock.svg")
 const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 const POINT_SNAPSHOT_MUTATOR = preload(
 	"res://addons/easing_curve/scripts/easing_curve_point_snapshot_mutator.gd"
@@ -64,6 +50,10 @@ const POINT_INSPECTOR_PROPERTY_ORDER: Array[StringName] = [
 ]
 # debug
 const DEBUG_POINT_LIST_DRAG := false
+
+var _zero_margin_panel_stylebox: StyleBox = (
+	EDITOR_THEME_CACHE.make_zero_margin_panel_stylebox()
+)
 
 
 ## Inspector-only transition grouping, ordering, and presentation.
@@ -661,7 +651,10 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 
 		# Panel container for each point
 		var point_panel := PanelContainer.new() # contains the point
-		point_panel.add_theme_stylebox_override("panel", X_STYLEBOX)
+		point_panel.add_theme_stylebox_override(
+			"panel",
+			_zero_margin_panel_stylebox,
+		)
 
 		# Keep point controls on one stable row and let the editable fields shrink.
 		var point_main_hbox := HBoxContainer.new()
@@ -687,7 +680,9 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 
 		# Remove button (centered vertically)
 		var remove_btn := Button.new()
-		remove_btn.icon = REMOVE
+		remove_btn.icon = EDITOR_THEME_CACHE.get_icon(
+			EDITOR_THEME_CACHE.ICON_REMOVE
+		)
 		remove_btn.flat = true
 		remove_btn.tooltip_text = "Remove Point"
 		remove_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -709,7 +704,9 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 	# Add Point button
 	if curve.curve_mode == curve.CurveMode.BEZIER:
 		var add_point_btn := Button.new()
-		add_point_btn.icon = ADD
+		add_point_btn.icon = EDITOR_THEME_CACHE.get_icon(
+			EDITOR_THEME_CACHE.ICON_ADD
+		)
 		add_point_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		add_point_btn.text = "Add Point"
 		add_point_btn.pressed.connect(_on_add_point_btn_pressed)
@@ -1193,7 +1190,9 @@ func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: Pan
 
 	# Move Up Button
 	var move_up_btn = Button.new()
-	move_up_btn.icon = MOVE_UP
+	move_up_btn.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_MOVE_UP
+	)
 	move_up_btn.flat = true
 	move_up_btn.tooltip_text = "Move Point Up"
 	move_up_btn.pressed.connect(_move_point_up.bind(i))
@@ -1201,7 +1200,9 @@ func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: Pan
 
 	# TripleBar TextureRect (drag handle)
 	var triple_bar = EasingCurveDragHandle.new()
-	triple_bar.texture = TRIPLE_BAR
+	triple_bar.texture = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_TRIPLE_BAR
+	)
 	triple_bar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	triple_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	triple_bar.set_focus_mode(Control.FOCUS_ALL)
@@ -1216,7 +1217,9 @@ func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: Pan
 
 	# Move Down Button
 	var move_down_btn = Button.new()
-	move_down_btn.icon = MOVE_DOWN
+	move_down_btn.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_MOVE_DOWN
+	)
 	move_down_btn.flat = true
 	move_down_btn.tooltip_text = "Move Point Down"
 	move_down_btn.pressed.connect(_move_point_down.bind(i))
@@ -1281,10 +1284,8 @@ static func _update_point_reset_button_label_margin(
 static func _create_point_reset_button() -> Button:
 	var reset_btn := Button.new()
 
-	var editor_theme := EditorInterface.get_editor_theme()
-	reset_btn.icon = editor_theme.get_icon(
-		&"Reload",
-		&"EditorIcons",
+	reset_btn.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_RELOAD
 	)
 
 	reset_btn.tooltip_text = "Reset to default"
@@ -1406,9 +1407,9 @@ func _set_point_property_selected(
 
 	var accent := Color(0.3, 0.6, 1.0)
 	if DisplayServer.get_name() != "headless":
-		var base_control := EditorInterface.get_base_control()
-		if is_instance_valid(base_control):
-			accent = base_control.get_theme_color(&"accent_color", &"Editor")
+		var editor_theme := EDITOR_THEME_CACHE.get_theme()
+		if editor_theme != null:
+			accent = editor_theme.get_color(&"accent_color", &"Editor")
 
 	accent.a = 0.10
 	style.bg_color = accent
@@ -1436,7 +1437,10 @@ func _create_normal_point_property_row(
 	property_grid.add_child(property_header)
 
 	var value_panel := PanelContainer.new()
-	value_panel.add_theme_stylebox_override("panel", X_STYLEBOX)
+	value_panel.add_theme_stylebox_override(
+		"panel",
+		_zero_margin_panel_stylebox,
+	)
 	value_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_panel.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
 	value_panel.custom_minimum_size.x = 0.0
@@ -1608,8 +1612,9 @@ func _create_vector2_property(
 
 	var vec: Vector2 = point.get(property_name)
 
-	var x_color := EditorInterface.get_editor_theme().get_color("property_color_x", "Editor")
-	var y_color := EditorInterface.get_editor_theme().get_color("property_color_y", "Editor")
+	var editor_theme := EDITOR_THEME_CACHE.get_theme()
+	var x_color := editor_theme.get_color(&"property_color_x", &"Editor")
+	var y_color := editor_theme.get_color(&"property_color_y", &"Editor")
 
 	var x_range := Vector2(0.0, 1.0) if property_name == "position" else Vector2(-1024, 1024)
 	var x_row := _create_vector2_axis_row(
@@ -1680,8 +1685,10 @@ func _create_force_linear_button(
 		else EasingCurvePoint.ControlSide.RIGHT
 	)
 	force_linear_btn.button_pressed = force_linear
-	force_linear_btn.icon = (
-		FORCE_LINEAR_ICON_ON if force_linear else FORCE_LINEAR_ICON_OFF
+	force_linear_btn.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_INSTANCE
+		if force_linear
+		else EDITOR_THEME_CACHE.ICON_UNLINKED
 	)
 	force_linear_btn.modulate.a = 1.0
 	force_linear_btn.tooltip_text = (
@@ -1699,10 +1706,10 @@ func _create_force_linear_button(
 	force_linear_btn.modulate.a = 0.25 if not force_linear_available else 1.0
 	force_linear_btn.toggled.connect(
 		func(toggled_on: bool):
-			force_linear_btn.icon = (
-				FORCE_LINEAR_ICON_ON
+			force_linear_btn.icon = EDITOR_THEME_CACHE.get_icon(
+				EDITOR_THEME_CACHE.ICON_INSTANCE
 				if toggled_on
-				else FORCE_LINEAR_ICON_OFF
+				else EDITOR_THEME_CACHE.ICON_UNLINKED
 			)
 			force_linear_btn.modulate.a = 1.0
 			_apply_point_property_change(i, force_property, toggled_on)
@@ -1718,7 +1725,9 @@ func _create_point_lock_button(
 		property_header: PanelContainer,
 ) -> Button:
 	var lock_btn := Button.new()
-	lock_btn.icon = LOCK
+	lock_btn.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_LOCK
+	)
 	lock_btn.flat = true
 	lock_btn.toggle_mode = true
 	lock_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -1742,13 +1751,21 @@ func _create_point_lock_button(
 		if lock_available
 		else "Lock — Available in Free or Linked handle mode"
 	)
-	lock_btn.icon = LOCK if toggled_on else UNLOCK
+	lock_btn.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_LOCK
+		if toggled_on
+		else EDITOR_THEME_CACHE.ICON_UNLOCK
+	)
 	lock_btn.modulate.a = 0.25 if not lock_available else 1.0 if toggled_on else 0.5
 	lock_btn.toggled.connect(
 		func(next_toggled_on: bool):
 			_request_point_selection_refresh_preservation()
 			_select_point_property(property_header, i, StringName(property_name))
-			lock_btn.icon = LOCK if next_toggled_on else UNLOCK
+			lock_btn.icon = EDITOR_THEME_CACHE.get_icon(
+				EDITOR_THEME_CACHE.ICON_LOCK
+				if next_toggled_on
+				else EDITOR_THEME_CACHE.ICON_UNLOCK
+			)
 			lock_btn.modulate.a = 1.0 if next_toggled_on else 0.5
 
 			var lock_change_property := StringName()
@@ -2525,7 +2542,9 @@ static func _create_option_label(label_text: String) -> Label:
 
 static func _create_reserved_reset_button(button_tooltip: String) -> Button:
 	var reset_button := Button.new()
-	reset_button.icon = RELOAD
+	reset_button.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_RELOAD
+	)
 	reset_button.flat = true
 	reset_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	reset_button.tooltip_text = button_tooltip

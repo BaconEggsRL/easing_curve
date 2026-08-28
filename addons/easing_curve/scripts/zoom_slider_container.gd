@@ -14,12 +14,23 @@ const ZOOM_MAX := EasingCurve.ZOOM_MAX
 const ZOOM_FACTOR := EasingCurve.ZOOM_FACTOR
 const ZOOM_STEPS := EasingCurve.ZOOM_STEPS
 const DEFAULT_SLIDER_VALUE := EasingCurve.DEFAULT_SLIDER_VALUE
+const EDITOR_THEME_CACHE = preload(
+	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+)
 
 @export var slider: HSlider
 @export var autofit_btn: Button
+@export var zoom_icon: TextureRect
 
 
 func _ready():
+	zoom_icon.texture = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_ZOOM
+	)
+	autofit_btn.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_ANIMATION_AUTO_FIT_BEZIER
+	)
+
 	slider.custom_minimum_size.x = 0.0
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.gui_input.connect(_on_slider_gui_input)
