@@ -66,7 +66,7 @@ func _signal_counts(curve: EasingCurve) -> Dictionary:
 
 
 func _test_legacy_resources_and_nested_changes() -> void:
-	var packed_scene := load("res://addons/easing_curve/test_scene/test.tscn") as PackedScene
+	var packed_scene := load("res://addons/easing_curve/_test_scene/test.tscn") as PackedScene
 	var instance := packed_scene.instantiate()
 	var scene_curve := instance.get("easing_curve") as EasingCurve
 	if scene_curve == null:

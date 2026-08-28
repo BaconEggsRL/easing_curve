@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://brs8hrd1sudyi"
-path="res://.godot/imported/Curve.svg-769f51733b487661018891020e78d3df.ctex"
+path="res://.godot/imported/Curve.svg-81e8d70b076e7b610f4b19a0f1ae4891.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://addons/easing_curve/icon/Curve.svg"
-dest_files=["res://.godot/imported/Curve.svg-769f51733b487661018891020e78d3df.ctex"]
+source_file="res://addons/easing_curve/assets/Curve.svg"
+dest_files=["res://.godot/imported/Curve.svg-81e8d70b076e7b610f4b19a0f1ae4891.ctex"]
 
 [params]
 

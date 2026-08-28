@@ -3,7 +3,7 @@ extends SceneTree
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/easing_curve_editor_inspector_plugin.gd")
 const EDITOR_THEME_CACHE = preload(
-	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+	"res://addons/easing_curve/scripts/inspector/editor_theme_cache.gd"
 )
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
 

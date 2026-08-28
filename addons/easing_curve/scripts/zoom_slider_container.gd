@@ -15,7 +15,7 @@ const ZOOM_FACTOR := EasingCurve.ZOOM_FACTOR
 const ZOOM_STEPS := EasingCurve.ZOOM_STEPS
 const DEFAULT_SLIDER_VALUE := EasingCurve.DEFAULT_SLIDER_VALUE
 const EDITOR_THEME_CACHE = preload(
-	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+	"res://addons/easing_curve/scripts/inspector/editor_theme_cache.gd"
 )
 
 @export var slider: HSlider

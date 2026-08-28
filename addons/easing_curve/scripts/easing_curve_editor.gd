@@ -7,7 +7,7 @@ extends Control
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
 const EDITOR_THEME_CACHE = preload(
-	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+	"res://addons/easing_curve/scripts/inspector/editor_theme_cache.gd"
 )
 
 var use_pending_add := true

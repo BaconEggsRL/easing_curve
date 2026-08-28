@@ -3,7 +3,7 @@ extends VBoxContainer
 
 const DEBUG_POINT_LIST_DRAG := false
 const EDITOR_THEME_CACHE = preload(
-	"res://addons/easing_curve/inspector/editor_theme_cache.gd"
+	"res://addons/easing_curve/scripts/inspector/editor_theme_cache.gd"
 )
 
 signal point_swap_requested(from_index: int, to_index: int)

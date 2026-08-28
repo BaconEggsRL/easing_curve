@@ -1,5 +1,5 @@
 @tool
-@icon("res://addons/easing_curve/icon/Curve.svg")
+@icon("res://addons/easing_curve/assets/Curve.svg")
 class_name EasingCurve
 extends Resource
 ## Easing Curve

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://qviblxegxd23"]
 
-[ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/test_scene/test.gd" id="1_37kl0"]
+[ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/_test_scene/test.gd" id="1_37kl0"]
 
 [node name="TestScene" type="Control" unique_id=198225181]
 layout_mode = 3
