@@ -1,6 +1,6 @@
 extends SceneTree
 
-const EASING_LIBRARY := preload("res://addons/easing_curve/scripts/easing.gd")
+const EASING_LIBRARY := preload("res://addons/easing_curve/scripts/runtime/easing.gd")
 const ROUND_TRIP_PATH := "res://test/_tween_bezier_round_trip.tres"
 const ANALYTIC_ERROR_LIMIT := 0.000002
 const SAMPLE_COUNT := 10000

@@ -2,7 +2,7 @@
 extends EditorProperty
 
 
-const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
+const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const DRAGGING_META := &"_easing_curve_dragging"
 
 

@@ -1,7 +1,7 @@
 extends SceneTree
 
-const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
-const CURVE_EDITOR = preload("res://addons/easing_curve/scripts/easing_curve_editor.gd")
+const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
+const CURVE_EDITOR = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor.gd")
 
 var _failures := 0
 var _checks := 0

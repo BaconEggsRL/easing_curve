@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://bkkl6rrr0brp7"]
 
-[ext_resource type="Script" uid="uid://db15sp87x04yi" path="res://addons/easing_curve/scripts/easing_curve_editor.gd" id="1_etl24"]
+[ext_resource type="Script" uid="uid://db15sp87x04yi" path="res://addons/easing_curve/scripts/editor/easing_curve_editor.gd" id="1_etl24"]
 
 [node name="bacon_curve_editor" type="Control" unique_id=1503702032]
 clip_contents = true

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://r1ymwr6nae"]
 
-[ext_resource type="Script" uid="uid://crsm247gjjooh" path="res://addons/easing_curve/scripts/zoom_slider_container.gd" id="1_58cbu"]
+[ext_resource type="Script" uid="uid://crsm247gjjooh" path="res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.gd" id="1_58cbu"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_x2nmy"]
 content_margin_left = 4.0

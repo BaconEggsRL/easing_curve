@@ -1,6 +1,6 @@
 extends SceneTree
 
-const EDITOR_UNDO := preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
+const EDITOR_UNDO := preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const CUSTOM_SAVE_PATH := "res://test/_transform_custom_round_trip.tres"
 const PRESET_SAVE_PATH := "res://test/_transform_preset_round_trip.tres"
 const SNAPSHOT_GEOMETRY_TOLERANCE := EasingCurve.PRESET_GEOMETRY_TOLERANCE

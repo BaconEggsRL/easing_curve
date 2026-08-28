@@ -7,7 +7,7 @@ extends Control
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
 const EDITOR_THEME_CACHE = preload(
-	"res://addons/easing_curve/scripts/inspector/editor_theme_cache.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
 
 var use_pending_add := true
@@ -29,7 +29,7 @@ enum GrabMode { NONE, ADD, MOVE }
 enum ControlIndex { NONE = -1, LEFT = 0, RIGHT = 1 }
 
 const ZOOM_SLIDER_CONTAINER = preload("uid://r1ymwr6nae")
-const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
+const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const ZOOM_MIN := EasingCurve.ZOOM_MIN
 const ZOOM_MAX := EasingCurve.ZOOM_MAX
 const ZOOM_FACTOR := EasingCurve.ZOOM_FACTOR

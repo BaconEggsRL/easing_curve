@@ -7,27 +7,27 @@ extends EditorInspectorPlugin
 ## This is designed to mimic the built-in property lists in ItemList node or Curve resource.
 
 const EDITOR_THEME_CACHE = preload(
-	"res://addons/easing_curve/scripts/inspector/editor_theme_cache.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
 const ZOOM_SLIDER_CONTAINER = preload("uid://r1ymwr6nae")
-const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/easing_curve_editor_undo.gd")
+const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const POINT_SNAPSHOT_MUTATOR = preload(
-	"res://addons/easing_curve/scripts/easing_curve_point_snapshot_mutator.gd"
+	"res://addons/easing_curve/scripts/runtime/easing_curve_point_snapshot_mutator.gd"
 )
 const DeferredParameterEditorProperty = preload(
-	"res://addons/easing_curve/scripts/inspector/deferred_parameter_editor_property.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/deferred_parameter_editor_property.gd"
 )
 const GenerateFunctionEditorProperty = preload(
-	"res://addons/easing_curve/scripts/inspector/generate_function_editor_property.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/generate_function_editor_property.gd"
 )
 const PointsEditorProperty = preload(
-	"res://addons/easing_curve/scripts/inspector/points_editor_property.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/points_editor_property.gd"
 )
 const PointsListContainer = preload(
-	"res://addons/easing_curve/scripts/inspector/points_list_container.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/points_list_container.gd"
 )
 const PointsFoldableSection = preload(
-	"res://addons/easing_curve/scripts/inspector/points_foldable_section.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/points_foldable_section.gd"
 )
 ## Vector2 slider step
 const SLIDER_INPUT_STEP = 0.001

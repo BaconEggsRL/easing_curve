@@ -2,7 +2,7 @@
 class_name EasingCurveEditorHostTestHarness
 extends RefCounted
 
-const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/easing_curve_editor_inspector_plugin.gd")
+const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
 
 
 static func require_editor_host(test_name: String) -> bool:

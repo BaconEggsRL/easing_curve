@@ -336,7 +336,7 @@ extends SceneTree
 
 func _init() -> void:
     var curve_script = load(
-        "res://addons/easing_curve/scripts/easing_curve.gd"
+        "res://addons/easing_curve/scripts/runtime/easing_curve.gd"
     )
 
     if curve_script == null:

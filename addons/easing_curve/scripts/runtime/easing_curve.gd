@@ -54,8 +54,8 @@ const ZOOM_STEPS := int(round(log(ZOOM_MAX / ZOOM_MIN) / log(ZOOM_FACTOR)))
 const DEFAULT_SLIDER_VALUE := floor(ZOOM_STEPS / 2.0)
 const min_value := 0.0
 const max_value := 1.0
-const EASING_LIBRARY := preload("res://addons/easing_curve/scripts/easing.gd")
-const BEZIER_SOLVER := preload("res://addons/easing_curve/scripts/bezier_solver.gd")
+const EASING_LIBRARY := preload("res://addons/easing_curve/scripts/runtime/easing.gd")
+const BEZIER_SOLVER := preload("res://addons/easing_curve/scripts/runtime/bezier_solver.gd")
 
 # Authoritative runtime metadata for EasingCurve transitions.
 const TRANSITION_DEFINITIONS := {

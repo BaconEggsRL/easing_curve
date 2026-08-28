@@ -9,7 +9,7 @@ extends EditorPlugin
 
 const EasingCurveEditorInspectorPlugin = preload("uid://bqic40cwwnu7l")
 const EasingCurveUpdateChecker = preload(
-	"res://addons/easing_curve/scripts/update_checker.gd"
+	"res://addons/easing_curve/scripts/editor/update_checker.gd"
 )
 
 const PLUGIN_CONFIG_PATH := "res://addons/easing_curve/plugin.cfg"

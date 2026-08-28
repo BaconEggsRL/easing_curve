@@ -1,7 +1,7 @@
 extends SceneTree
 
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
-const ZOOM_SLIDER = preload("res://addons/easing_curve/scripts/zoom_slider_container.tscn")
+const ZOOM_SLIDER = preload("res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.tscn")
 
 var _failures := 0
 var _checks := 0

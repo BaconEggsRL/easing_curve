@@ -208,7 +208,7 @@ another option with no graph, transform, or point-geometry semantics.
 
 1. **Add domain state to `EasingCurvePoint`**
 
-   Add normal state/getter/setter behavior to `scripts/point.gd`.
+   Add normal state/getter/setter behavior to `scripts/runtime/point.gd`.
 
    The setter must store the new value before emitting `changed`.
 
@@ -390,12 +390,12 @@ For a normal parameterized function transition:
 
 1. **Add the transition**
 
-   * `scripts/easing_curve.gd`
+   * `scripts/runtime/easing_curve.gd`
    * Add `TRANS.<NEW_MODE>` to `EasingCurve.TRANS`.
 
 2. **Add one transition definition**
 
-   * `scripts/easing_curve.gd` → `TRANSITION_DEFINITIONS`
+   * `scripts/runtime/easing_curve.gd` → `TRANSITION_DEFINITIONS`
    * Include `mode`, `supports_ease`, `class`, `extended`, and ordered
      `parameters`. Add `generated: true` and `editor_properties` only when needed.
 
@@ -411,7 +411,7 @@ For a normal parameterized function transition:
 
 3. **Add exported parameters**
 
-   * `scripts/easing_curve.gd`
+   * `scripts/runtime/easing_curve.gd`
    * Add `@export` properties with ranges/defaults.
    * Setters must call `_notify_parameter_changed()`.
    * Exported defaults are automatically used by the Inspector reset infrastructure.

@@ -2,7 +2,7 @@
 extends VBoxContainer
 
 const EDITOR_THEME_CACHE = preload(
-	"res://addons/easing_curve/scripts/inspector/editor_theme_cache.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
 
 var copy_value_callback: Callable

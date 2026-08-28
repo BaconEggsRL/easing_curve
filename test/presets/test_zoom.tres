@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="EasingCurve" format=3 uid="uid://dphuovyq7fcs4"]
 
-[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/easing_curve.gd" id="1_aol2v"]
+[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/runtime/easing_curve.gd" id="1_aol2v"]
 
 [resource]
 script = ExtResource("1_aol2v")
