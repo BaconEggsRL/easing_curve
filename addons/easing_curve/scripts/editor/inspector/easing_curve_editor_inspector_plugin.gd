@@ -438,6 +438,7 @@ var _selected_point_resource_id := 0
 var _preserve_point_selection_on_refresh := false
 var _position_x_order_preview_point: EasingCurvePoint
 var _point_input_bindings: Dictionary[int, Dictionary] = {}
+var _initial_autofit_resource_ids: Dictionary[int, bool] = {}
 
 
 func _clear_point_input_bindings() -> void:
@@ -895,6 +896,8 @@ func handle_easing_curve_editor(object) -> Control:
 
 		easing_curve_editor._slider = zoom_slider_container
 		easing_curve_editor.set_slider_value(object._last_slider_value)
+		if _consume_initial_autofit_for_loaded_resource(object):
+			call_deferred(&"_autofit_curve_editor")
 
 
 		var curve_editor_section := _create_foldable_section(
@@ -2391,6 +2394,19 @@ func _emit_curve_property(property_name: StringName, value: Variant) -> void:
 		_undo_source_property(),
 	)
 	call_deferred(&"_autofit_curve_editor")
+
+
+func _consume_initial_autofit_for_loaded_resource(object: EasingCurve) -> bool:
+	if object == null:
+		return false
+	var resource_path := object.resource_path
+	if resource_path.is_empty() or resource_path.contains("::"):
+		return false
+	var resource_id := object.get_instance_id()
+	if _initial_autofit_resource_ids.has(resource_id):
+		return false
+	_initial_autofit_resource_ids[resource_id] = true
+	return true
 
 
 func _autofit_curve_editor() -> void:

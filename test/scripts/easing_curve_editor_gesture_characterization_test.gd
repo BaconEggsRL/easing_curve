@@ -16,6 +16,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_zoom_metadata_contract()
+	_test_loaded_resource_initial_autofit_gate()
 	_test_zoom_behavioral_invariants()
 	_test_bezier_draw_clipping_and_tessellation()
 	_test_pending_add_cancel_and_no_op_release()
@@ -144,6 +145,66 @@ func _test_zoom_metadata_contract() -> void:
 	_expect(is_equal_approx(editor.step_to_zoom(0), EasingCurve.ZOOM_MIN), "Zoom step zero no longer maps to ZOOM_MIN")
 	_expect(editor.zoom_to_step(editor.step_to_zoom(default_step)) == default_step, "Default zoom step no longer round-trips through the zoom conversion")
 	editor.free()
+
+
+func _test_loaded_resource_initial_autofit_gate() -> void:
+	var unsaved_curve := EasingCurve.new()
+	var unsaved_context := EDITOR_HOST.create_inspector_context(unsaved_curve)
+	var unsaved_editor: EasingCurveEditor = unsaved_context.editor
+	var unsaved_inspector: Object = unsaved_context.inspector
+	_expect(
+		not bool(
+			unsaved_inspector.call(
+				"_consume_initial_autofit_for_loaded_resource",
+				unsaved_curve,
+			)
+		),
+		"Unsaved EasingCurve unexpectedly requested initial Autofit",
+	)
+	unsaved_editor.free()
+
+	var temp_dir := "res://test/_temp"
+	var temp_path := temp_dir.path_join("loaded_resource_autofit_gate.tres")
+	var make_dir_error := DirAccess.make_dir_recursive_absolute(
+		ProjectSettings.globalize_path(temp_dir)
+	)
+	_expect(
+		make_dir_error in [OK, ERR_ALREADY_EXISTS],
+		"Could not create temp directory for loaded-resource Autofit characterization",
+	)
+	var saved_curve := EasingCurve.new()
+	var save_error := ResourceSaver.save(saved_curve, temp_path)
+	_expect(save_error == OK, "Could not save EasingCurve Autofit characterization resource")
+	var loaded_curve := ResourceLoader.load(
+		temp_path,
+		"",
+		ResourceLoader.CACHE_MODE_IGNORE,
+	) as EasingCurve
+	_expect(loaded_curve != null, "Could not reload saved EasingCurve Autofit characterization resource")
+	if loaded_curve != null:
+		var loaded_context := EDITOR_HOST.create_inspector_context(loaded_curve)
+		var loaded_editor: EasingCurveEditor = loaded_context.editor
+		var loaded_inspector: Object = loaded_context.inspector
+		_expect(
+			bool(
+				loaded_inspector.call(
+					"_consume_initial_autofit_for_loaded_resource",
+					loaded_curve,
+				)
+			),
+			"First Inspector load of a saved EasingCurve did not request Autofit",
+		)
+		_expect(
+			not bool(
+				loaded_inspector.call(
+					"_consume_initial_autofit_for_loaded_resource",
+					loaded_curve,
+				)
+			),
+			"Inspector rebuild requested Autofit twice for the same loaded EasingCurve instance",
+		)
+		loaded_editor.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
 
 
 func _test_zoom_behavioral_invariants() -> void:
