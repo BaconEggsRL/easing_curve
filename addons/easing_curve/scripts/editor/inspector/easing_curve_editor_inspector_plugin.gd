@@ -2390,6 +2390,16 @@ func _emit_curve_property(property_name: StringName, value: Variant) -> void:
 		func(): curve.set(property_name, value),
 		_undo_source_property(),
 	)
+	call_deferred(&"_autofit_curve_editor")
+
+
+func _autofit_curve_editor() -> void:
+	if (
+		is_instance_valid(easing_curve_editor)
+		and easing_curve_editor._slider != null
+	):
+		easing_curve_editor.autofit()
+
 
 func _on_reset_selected_preset(object: EasingCurve) -> void:
 	if object == null:

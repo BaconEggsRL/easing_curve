@@ -939,6 +939,10 @@ func _zoom_at_view_pos(step_delta: int, view_pos: Vector2) -> void:
 
 
 func _on_autofit_pressed() -> void:
+	autofit()
+
+
+func autofit() -> void:
 	if _curve == null:
 		return
 

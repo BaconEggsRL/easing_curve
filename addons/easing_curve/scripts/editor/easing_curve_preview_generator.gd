@@ -26,13 +26,27 @@ func _generate(
 	if curve == null:
 		return null
 
+	var sampled_values := PackedFloat64Array()
+	var min_value := 0.0
+	var max_value := 1.0
+	for x in range(size.x):
+		var offset := float(x) / float(maxi(size.x - 1, 1))
+		var value := curve.sample(offset)
+		sampled_values.append(value)
+		min_value = minf(min_value, value)
+		max_value = maxf(max_value, value)
+
+	if min_value < 0.0 or max_value > 1.0:
+		var padding := maxf((max_value - min_value) * 0.05, 0.001)
+		min_value -= padding
+		max_value += padding
+
 	var image := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
-	var previous_y := _sample_y(curve, 0.0, size.y)
+	var previous_y := _value_to_y(sampled_values[0], min_value, max_value, size.y)
 	image.set_pixel(0, previous_y, line_color)
 
 	for x in range(1, size.x):
-		var offset := float(x) / float(size.x - 1)
-		var y := _sample_y(curve, offset, size.y)
+		var y := _value_to_y(sampled_values[x], min_value, max_value, size.y)
 		for pixel in Geometry2D.bresenham_line(
 			Vector2i(x - 1, previous_y),
 			Vector2i(x, y),
@@ -43,6 +57,16 @@ func _generate(
 	return ImageTexture.create_from_image(image)
 
 
-func _sample_y(curve: EasingCurve, offset: float, height: int) -> int:
-	var normalized_value := curve.sample(offset)
-	return clampi(int(height - normalized_value * height), 0, height - 1)
+func _value_to_y(
+		value: float,
+		min_value: float,
+		max_value: float,
+		height: int,
+) -> int:
+	var span := maxf(max_value - min_value, 0.000001)
+	var normalized_value := (value - min_value) / span
+	return clampi(
+		roundi((1.0 - normalized_value) * float(height - 1)),
+		0,
+		height - 1,
+	)
