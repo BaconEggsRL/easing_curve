@@ -15,6 +15,8 @@ const BEZIER_SOLVER = preload(
 
 var use_pending_add := true
 var hide_point_toolbar_for_functions := false
+# True: reorder through the Inspector. False: change graph selection only.
+var point_move_buttons_reorder_points := false
 
 static var _selected_index_by_curve: Dictionary[int, int] = {}
 static var _right_delete_drag_state_by_curve: Dictionary[int, Dictionary] = {}
@@ -481,18 +483,24 @@ func _request_point_remove(point: EasingCurvePoint) -> void:
 
 
 func _request_point_move_up() -> void:
-	if not _can_reorder_selected_point():
+	if not _can_use_point_move_buttons():
 		return
-	point_move_up_requested.emit(selected_index)
+	if point_move_buttons_reorder_points:
+		point_move_up_requested.emit(selected_index)
+	else:
+		selected_index = wrapi(selected_index - 1, 0, _curve.points.size())
 
 
 func _request_point_move_down() -> void:
-	if not _can_reorder_selected_point():
+	if not _can_use_point_move_buttons():
 		return
-	point_move_down_requested.emit(selected_index)
+	if point_move_buttons_reorder_points:
+		point_move_down_requested.emit(selected_index)
+	else:
+		selected_index = wrapi(selected_index + 1, 0, _curve.points.size())
 
 
-func _can_reorder_selected_point() -> bool:
+func _can_use_point_move_buttons() -> bool:
 	return (
 		_curve != null
 		and _curve.curve_mode == EasingCurve.CurveMode.BEZIER
@@ -1486,6 +1494,16 @@ func _update_point_toolbar() -> void:
 	)
 
 	_point_toolbar.visible = true
+	_point_move_left_button.tooltip_text = (
+		"Move Point Left"
+		if point_move_buttons_reorder_points
+		else "Select Previous Point"
+	)
+	_point_move_right_button.tooltip_text = (
+		"Move Point Right"
+		if point_move_buttons_reorder_points
+		else "Select Next Point"
+	)
 
 	if not valid_selection:
 		_point_label.text = (
@@ -1523,7 +1541,7 @@ func _update_point_toolbar() -> void:
 	_point_handle_mode.mouse_filter = Control.MOUSE_FILTER_STOP
 	_point_handle_mode.disabled = false
 	_set_point_toolbar_reorder_available(
-		_can_reorder_selected_point(),
+		_can_use_point_move_buttons(),
 		_curve.curve_mode == EasingCurve.CurveMode.BEZIER,
 	)
 

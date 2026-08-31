@@ -269,9 +269,30 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 
 	var moved := points[1]
 	editor.selected_index = 1
-	_expect(not move_left.disabled and not move_right.disabled, "Graph reorder buttons did not activate for a valid Bezier point selection")
+	_expect(not move_left.disabled and not move_right.disabled, "Graph point-navigation buttons did not activate for a valid Bezier point selection")
 	_expect(is_equal_approx(toolbar.custom_minimum_size.y, toolbar_height), "Selecting a point changed the graph toolbar height")
 
+	# Selection-only mode is the current preview default. It wraps selection
+	# without changing point order or emitting Inspector reorder requests.
+	_expect(not editor.point_move_buttons_reorder_points, "Graph point-navigation preview did not default to selection-only mode")
+	move_left.emit_signal(&"pressed")
+	_expect(editor.selected_index == 0, "Selection-only Move Left did not select the previous point")
+	_expect(curve.points == points, "Selection-only Move Left changed point order")
+	_expect(int(requests["up"]) == 0, "Selection-only Move Left emitted a reorder request")
+	move_left.emit_signal(&"pressed")
+	_expect(editor.selected_index == 3, "Selection-only Move Left did not wrap first to last")
+	_expect(curve.points == points, "Wrapped selection-only Move Left changed point order")
+	move_right.emit_signal(&"pressed")
+	_expect(editor.selected_index == 0, "Selection-only Move Right did not wrap last to first")
+	_expect(curve.points == points, "Wrapped selection-only Move Right changed point order")
+	move_right.emit_signal(&"pressed")
+	_expect(editor.selected_index == 1, "Selection-only Move Right did not select the next point")
+	_expect(curve.points == points, "Selection-only Move Right changed point order")
+	_expect(int(requests["down"]) == 0, "Selection-only Move Right emitted a reorder request")
+
+	# Reorder mode must continue routing through the Inspector implementation.
+	editor.point_move_buttons_reorder_points = true
+	editor.selected_index = 1
 	move_left.emit_signal(&"pressed")
 	_expect(int(requests["up"]) == 1, "Move Left emitted more or fewer than one Move Up request")
 	_expect(curve.points == [moved, points[0], points[2], points[3]], "Move Left did not route through Move Up reorder behavior")
