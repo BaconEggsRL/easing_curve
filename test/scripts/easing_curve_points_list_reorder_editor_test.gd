@@ -255,7 +255,17 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	)
 
 	_expect(move_left.disabled and move_right.disabled, "Graph reorder buttons were active without a selected point")
-	_expect(is_zero_approx(move_left.self_modulate.a) and is_zero_approx(move_right.self_modulate.a), "Graph reorder buttons remained visible without a selected point")
+	_expect(
+		is_equal_approx(move_left.self_modulate.a, 1.0)
+		and is_equal_approx(move_right.self_modulate.a, 1.0),
+		"Graph reorder buttons were hidden without a selected point",
+	)
+	editor.call("_request_point_move_up")
+	editor.call("_request_point_move_down")
+	_expect(
+		int(requests["up"]) == 0 and int(requests["down"]) == 0,
+		"No-selection graph reorder buttons emitted a reorder request",
+	)
 
 	var moved := points[1]
 	editor.selected_index = 1

@@ -1495,7 +1495,10 @@ func _update_point_toolbar() -> void:
 			else "No Selection"
 		)
 		_point_label.modulate.a = 0.6
-		_set_point_toolbar_reorder_available(false)
+		_set_point_toolbar_reorder_available(
+			false,
+			_curve == null or _curve.curve_mode == EasingCurve.CurveMode.BEZIER,
+		)
 		_point_handle_mode.visible = true
 		_point_handle_mode.self_modulate.a = 0.0
 		_point_handle_mode.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1519,7 +1522,10 @@ func _update_point_toolbar() -> void:
 	_point_handle_mode.self_modulate.a = 1.0
 	_point_handle_mode.mouse_filter = Control.MOUSE_FILTER_STOP
 	_point_handle_mode.disabled = false
-	_set_point_toolbar_reorder_available(_can_reorder_selected_point())
+	_set_point_toolbar_reorder_available(
+		_can_reorder_selected_point(),
+		_curve.curve_mode == EasingCurve.CurveMode.BEZIER,
+	)
 
 	_updating_point_toolbar = true
 
@@ -1566,11 +1572,14 @@ func _set_point_toolbar_control_state_visible(
 	option.visible = visible
 
 
-func _set_point_toolbar_reorder_available(available: bool) -> void:
+func _set_point_toolbar_reorder_available(
+	available: bool,
+	visible: bool = true,
+) -> void:
 	for button in [_point_move_left_button, _point_move_right_button]:
 		if button == null:
 			continue
-		button.self_modulate.a = 1.0 if available else 0.0
+		button.self_modulate.a = 1.0 if visible else 0.0
 		button.mouse_filter = (
 			Control.MOUSE_FILTER_STOP
 			if available
