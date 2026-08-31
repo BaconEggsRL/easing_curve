@@ -17,6 +17,7 @@ const SUITES := [
 	{"name": "serialization_transition_contract_test.gd", "editor": false},
 	{"name": "tween_equivalence_test.gd", "editor": false},
 	{"name": "easing_curve_control_editability_test.gd", "editor": true},
+	{"name": "easing_curve_preview_generator_test.gd", "editor": true},
 	{"name": "easing_curve_editor_position_x_drag_test.gd", "editor": true},
 	{"name": "easing_curve_linear_control_alias_test.gd", "editor": true},
 	{"name": "easing_curve_points_list_add_editor_test.gd", "editor": true},

@@ -8,6 +8,9 @@ extends EditorPlugin
 ## This prevents _update_preset() from running when the resource is initialized; keeping the user's custom settings intact.
 
 const EasingCurveEditorInspectorPlugin = preload("uid://bqic40cwwnu7l")
+const EasingCurvePreviewGenerator = preload(
+	"res://addons/easing_curve/scripts/editor/easing_curve_preview_generator.gd"
+)
 const EasingCurveUpdateChecker = preload(
 	"res://addons/easing_curve/scripts/editor/update_checker.gd"
 )
@@ -17,6 +20,7 @@ const UPDATE_CHECKS_ENABLE_MENU := "Easing Curve: Enable Update Checks"
 const UPDATE_CHECKS_DISABLE_MENU := "Easing Curve: Disable Update Checks"
 
 var easing_curve_editor_inspector_plugin
+var easing_curve_preview_generator: EditorResourcePreviewGenerator
 var update_checker: EasingCurveUpdateChecker
 var editor_undo_redo: EditorUndoRedoManager = get_undo_redo()
 
@@ -41,6 +45,14 @@ func _enter_tree() -> void:
 	if easing_curve_editor_inspector_plugin:
 		easing_curve_editor_inspector_plugin.editor_undo_redo = editor_undo_redo
 		add_inspector_plugin(easing_curve_editor_inspector_plugin)
+
+	easing_curve_preview_generator = EasingCurvePreviewGenerator.new()
+	easing_curve_preview_generator.line_color = (
+		EditorInterface.get_editor_theme().get_color(&"font_color", &"Editor")
+	)
+	EditorInterface.get_resource_previewer().add_preview_generator(
+		easing_curve_preview_generator
+	)
 
 	update_checker = EasingCurveUpdateChecker.new()
 	add_child(update_checker)
@@ -74,6 +86,12 @@ func _exit_tree() -> void:
 
 	if easing_curve_editor_inspector_plugin:
 		remove_inspector_plugin(easing_curve_editor_inspector_plugin)
+
+	if easing_curve_preview_generator:
+		EditorInterface.get_resource_previewer().remove_preview_generator(
+			easing_curve_preview_generator
+		)
+		easing_curve_preview_generator = null
 
 	if update_checker:
 		update_checker.queue_free()
