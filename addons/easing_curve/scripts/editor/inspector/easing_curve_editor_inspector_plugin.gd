@@ -831,6 +831,8 @@ func handle_easing_curve_editor(object) -> Control:
 		easing_curve_editor.point_property_change_requested.connect(_on_curve_editor_point_property_change_requested)
 		easing_curve_editor.point_add_requested.connect(_on_curve_editor_point_add_requested)
 		easing_curve_editor.point_remove_requested.connect(_on_curve_editor_point_remove_requested)
+		easing_curve_editor.point_move_up_requested.connect(_move_point_up)
+		easing_curve_editor.point_move_down_requested.connect(_move_point_down)
 		easing_curve_editor.point_edit_finished.connect(_on_curve_editor_point_edit_finished)
 
 		# Store reference to curve resource

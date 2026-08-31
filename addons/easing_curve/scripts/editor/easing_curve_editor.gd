@@ -23,6 +23,8 @@ signal point_changed
 signal point_property_change_requested(index: int, property_name: StringName, value: Variant, changing: bool)
 signal point_add_requested(point: EasingCurvePoint)
 signal point_remove_requested(point: EasingCurvePoint)
+signal point_move_up_requested(index: int)
+signal point_move_down_requested(index: int)
 signal point_edit_finished(point_order: Array[EasingCurvePoint])
 signal slider_changed
 signal zoom_changed
@@ -476,6 +478,28 @@ func _request_point_remove(point: EasingCurvePoint) -> void:
 			"Remove Easing Curve Point",
 			_curve.remove_point.bind(point),
 		)
+
+
+func _request_point_move_up() -> void:
+	if not _can_reorder_selected_point():
+		return
+	point_move_up_requested.emit(selected_index)
+
+
+func _request_point_move_down() -> void:
+	if not _can_reorder_selected_point():
+		return
+	point_move_down_requested.emit(selected_index)
+
+
+func _can_reorder_selected_point() -> bool:
+	return (
+		_curve != null
+		and _curve.curve_mode == EasingCurve.CurveMode.BEZIER
+		and selected_index >= 0
+		and selected_index < _curve.points.size()
+		and _curve.points.size() >= 2
+	)
 
 
 func _cancel_pending_add() -> void:
@@ -1285,6 +1309,7 @@ func _create_point_toolbar() -> void:
 		reorder_button_size,
 	)
 	_point_move_left_button.tooltip_text = "Move Point Left"
+	_point_move_left_button.pressed.connect(_request_point_move_up)
 	for style_name in [&"normal", &"hover", &"pressed", &"focus"]:
 		_point_move_left_button.add_theme_stylebox_override(
 			style_name,
@@ -1309,6 +1334,7 @@ func _create_point_toolbar() -> void:
 		reorder_button_size,
 	)
 	_point_move_right_button.tooltip_text = "Move Point Right"
+	_point_move_right_button.pressed.connect(_request_point_move_down)
 	for style_name in [&"normal", &"hover", &"pressed", &"focus"]:
 		_point_move_right_button.add_theme_stylebox_override(
 			style_name,
@@ -1469,6 +1495,7 @@ func _update_point_toolbar() -> void:
 			else "No Selection"
 		)
 		_point_label.modulate.a = 0.6
+		_set_point_toolbar_reorder_available(false)
 		_point_handle_mode.visible = true
 		_point_handle_mode.self_modulate.a = 0.0
 		_point_handle_mode.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1492,6 +1519,7 @@ func _update_point_toolbar() -> void:
 	_point_handle_mode.self_modulate.a = 1.0
 	_point_handle_mode.mouse_filter = Control.MOUSE_FILTER_STOP
 	_point_handle_mode.disabled = false
+	_set_point_toolbar_reorder_available(_can_reorder_selected_point())
 
 	_updating_point_toolbar = true
 
@@ -1536,6 +1564,20 @@ func _set_point_toolbar_control_state_visible(
 	)
 	label.visible = visible
 	option.visible = visible
+
+
+func _set_point_toolbar_reorder_available(available: bool) -> void:
+	for button in [_point_move_left_button, _point_move_right_button]:
+		if button == null:
+			continue
+		button.self_modulate.a = 1.0 if available else 0.0
+		button.mouse_filter = (
+			Control.MOUSE_FILTER_STOP
+			if available
+			else Control.MOUSE_FILTER_IGNORE
+		)
+		button.focus_mode = Control.FOCUS_ALL if available else Control.FOCUS_NONE
+		button.disabled = not available
 
 
 func _set_point_toolbar_reset_available(available: bool) -> void:

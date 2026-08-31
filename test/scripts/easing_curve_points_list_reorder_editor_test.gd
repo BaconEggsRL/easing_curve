@@ -18,15 +18,16 @@ func _init() -> void:
 func _run() -> void:
 	await _test_drop_reorder_waits_for_safe_drag_completion()
 	_test_repeated_arrow_moves_keep_the_logical_point_selected()
+	_test_graph_toolbar_reorder_requests_use_inspector_path()
 	_test_committed_drag_reorder_selects_the_dragged_point()
 	_test_reorder_undo_redo_follows_the_selected_resource()
 	_test_handle_mode_reset_uses_the_normal_transition()
 	_test_handle_mode_property_cell_layout_selection_and_copy_paste()
 
-	if _completed_fixtures != 6:
+	if _completed_fixtures != 7:
 		_failures += 1
 		push_error(
-			"Only %d of 6 Points-list submitted reorder fixtures completed" % _completed_fixtures
+			"Only %d of 7 Points-list submitted reorder fixtures completed" % _completed_fixtures
 		)
 	if _failures == 0:
 		print("PASS: %d Points-list submitted reorder checks" % _checks)
@@ -210,6 +211,92 @@ func _test_repeated_arrow_moves_keep_the_logical_point_selected() -> void:
 	_expect(editor.selected_index == 2 and curve.points[editor.selected_index] == moved, "Move Up did not keep the moved logical point selected")
 	_completed_fixtures += 1
 	editor.free()
+
+
+func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
+	var points: Array[EasingCurvePoint] = []
+	for position in [
+		Vector2(0.1, 0.1),
+		Vector2(0.3, 0.7),
+		Vector2(0.5, 0.4),
+		Vector2(0.7, 0.9),
+	]:
+		points.append(EasingCurvePoint.new(position))
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	curve.points = points
+	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
+	var content: Control = inspector.call("handle_easing_curve_editor", curve)
+	get_root().add_child(content)
+	var editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+	var move_left: Button = editor.get("_point_move_left_button")
+	var move_right: Button = editor.get("_point_move_right_button")
+	var toolbar: GridContainer = editor.get("_point_toolbar")
+	var toolbar_height := toolbar.custom_minimum_size.y
+	var up_connections := editor.point_move_up_requested.get_connections()
+	var down_connections := editor.point_move_down_requested.get_connections()
+	_expect(
+		up_connections.size() == 1
+		and up_connections[0]["callable"].get_method() == &"_move_point_up",
+		"Graph Move Up request was not routed directly to Inspector _move_point_up",
+	)
+	_expect(
+		down_connections.size() == 1
+		and down_connections[0]["callable"].get_method() == &"_move_point_down",
+		"Graph Move Down request was not routed directly to Inspector _move_point_down",
+	)
+
+	var requests := {"up": 0, "down": 0}
+	editor.point_move_up_requested.connect(
+		func(_index: int): requests["up"] = int(requests["up"]) + 1
+	)
+	editor.point_move_down_requested.connect(
+		func(_index: int): requests["down"] = int(requests["down"]) + 1
+	)
+
+	_expect(move_left.disabled and move_right.disabled, "Graph reorder buttons were active without a selected point")
+	_expect(is_zero_approx(move_left.self_modulate.a) and is_zero_approx(move_right.self_modulate.a), "Graph reorder buttons remained visible without a selected point")
+
+	var moved := points[1]
+	editor.selected_index = 1
+	_expect(not move_left.disabled and not move_right.disabled, "Graph reorder buttons did not activate for a valid Bezier point selection")
+	_expect(is_equal_approx(toolbar.custom_minimum_size.y, toolbar_height), "Selecting a point changed the graph toolbar height")
+
+	move_left.emit_signal(&"pressed")
+	_expect(int(requests["up"]) == 1, "Move Left emitted more or fewer than one Move Up request")
+	_expect(curve.points == [moved, points[0], points[2], points[3]], "Move Left did not route through Move Up reorder behavior")
+	_expect(editor.selected_index == 0 and curve.points[0] == moved, "Move Left did not keep the same Resource selected")
+
+	move_left.emit_signal(&"pressed")
+	_expect(int(requests["up"]) == 2, "Wrapped Move Left emitted more or fewer than one request")
+	_expect(curve.points == [points[3], points[0], points[2], moved], "Move Left did not wrap the first point to the last slot")
+	_expect(editor.selected_index == 3 and curve.points[3] == moved, "Wrapped Move Left lost the selected Resource")
+
+	move_right.emit_signal(&"pressed")
+	_expect(int(requests["down"]) == 1, "Move Right emitted more or fewer than one Move Down request")
+	_expect(curve.points == [moved, points[0], points[2], points[3]], "Move Right did not wrap the last point to the first slot")
+	_expect(editor.selected_index == 0 and curve.points[0] == moved, "Wrapped Move Right lost the selected Resource")
+
+	move_right.emit_signal(&"pressed")
+	_expect(int(requests["down"]) == 2, "Repeated Move Right emitted more or fewer than one request")
+	_expect(curve.points == points, "Move Right did not route through Move Down reorder behavior")
+	_expect(editor.selected_index == 1 and curve.points[1] == moved, "Move Right did not keep the same Resource selected")
+
+	curve.curve_mode = EasingCurve.CurveMode.FUNCTION
+	editor.call("_update_point_toolbar")
+	_expect(move_left.disabled and move_right.disabled, "Graph reorder buttons remained active in Function mode")
+	_expect(is_zero_approx(move_left.self_modulate.a) and is_zero_approx(move_right.self_modulate.a), "Graph reorder buttons remained visible in Function mode")
+	_expect(is_equal_approx(toolbar.custom_minimum_size.y, toolbar_height), "Function mode changed the graph toolbar height")
+	var order_before_function_request: Array[EasingCurvePoint] = curve.points.duplicate()
+	editor.call("_request_point_move_up")
+	editor.call("_request_point_move_down")
+	_expect(curve.points == order_before_function_request, "Function mode accepted a graph reorder request")
+	_expect(int(requests["up"]) == 2 and int(requests["down"]) == 2, "Function mode emitted a graph reorder request")
+
+	get_root().remove_child(content)
+	content.free()
+	inspector.free()
+	_completed_fixtures += 1
 
 
 func _test_committed_drag_reorder_selects_the_dragged_point() -> void:
