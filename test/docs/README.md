@@ -4,9 +4,10 @@
 
 ## Automated suites
 
-`test/scripts/_run_all_tests.ps1` is the source of truth for the explicit
+`test/scripts/run_all_tests.gd` is the source of truth for the explicit
 automated-suite manifest. It currently registers 17 suites: eight headless and
-nine Editor-host. Their entrypoint scripts and `.uid` sidecars live under
+nine Editor-host. `test/scripts/_run_all_tests.ps1` retains the same manifest
+as a legacy wrapper. Their entrypoint scripts and `.uid` sidecars live under
 `test/scripts/`. Do not infer an automated suite or its mode from its filename.
 
 ### Headless suites
@@ -48,8 +49,14 @@ misleadingly report zero checks. It is not a valid result for these tests.
 Run every headless and Editor-host suite independently with:
 
 ```powershell
-.\test\scripts\_run_all_tests.ps1 --run
+& $env:EASING_CURVE_GODOT_PATH --headless --path . --script res://test/scripts/run_all_tests.gd --log-file test/_temp/full-suite.log
 ```
+
+If `EASING_CURVE_GODOT_PATH` is not set, replace it with the path to the Godot
+4.7 console executable. The native runner starts its 8 compatible suites with
+`--headless`, and adds `--editor` only for the 9 suites that require an
+Editor/Inspector host. `test/scripts/_run_all_tests.ps1` remains available as a
+legacy wrapper.
 
 Only after that command exits successfully with every suite passing, immediately
 run:
@@ -65,22 +72,17 @@ missing PASS marker, script error, or any other unexpected result; retain those
 artifacts for debugging. If tests are rerun while investigating a problem, run
 cleanup only after the final full suite passes.
 
-`test/scripts/_run_godot.ps1` launches the configured Godot 4.7.1 console executable
-with Windows native application-error dialogs suppressed for that test process
-tree only. All automated Godot tests must use this wrapper; do not invoke Godot
-directly for routine test validation. The wrapper supplies a unique,
-sandbox-writable `--log-file` under `.godot/test_logs` unless the caller has
-already supplied `--log-file`. Do not request privileged execution solely
-because `user://logs` is inaccessible; only escalate if the wrapper encounters
-a different sandbox restriction. It preserves Godot stdout, stderr, and exact
-exit codes; a non-zero Godot exit remains a test failure. Direct Godot
-execution remains valid for manual debugging. The runner returns a non-zero
-exit code if any suite times out, exits unsuccessfully, lacks a PASS marker, or
-logs a script error. Each suite has a 60-second timeout; a timeout is reported
-separately in the summary, terminates that suite's launcher process tree, and
-the runner continues with later suites. Update checks are suppressed for
-headless Editor-host tests, while the Easing Curve plugin and Inspector remain
-enabled for those tests.
+The native runner uses the executing Godot binary, creates a separate process
+and isolated `APPDATA` directory for every suite, and writes each child log
+under `test/_temp/runner`. A suite fails if it times out, exits unsuccessfully,
+lacks a PASS marker, or logs a script error. Each suite has a 60-second timeout;
+the runner terminates timed-out process trees and continues with the remaining
+suites. Update checks are suppressed for headless Editor-host tests, while the
+Easing Curve plugin and Inspector remain enabled for those tests.
+
+`test/scripts/_run_godot.ps1` retains its existing behavior for standalone or
+legacy-wrapper invocations, including selecting the configured Godot 4.7.1
+console executable and supplying a repository-local log when one is not given.
 
 Under Godot 4.7 `--editor --headless`, `editor_undo_redo_test.gd` skips its
 `FoldableContainer` fixture because it crashes in that environment and its
