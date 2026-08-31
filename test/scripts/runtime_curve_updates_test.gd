@@ -1,6 +1,7 @@
 extends SceneTree
 
 const EASING_LIBRARY = preload("res://addons/easing_curve/scripts/runtime/easing.gd")
+const BEZIER_SOLVER = preload("res://addons/easing_curve/scripts/runtime/bezier_solver.gd")
 const ROUND_TRIP_PATH := "res://test/_runtime_curve_round_trip.tres"
 const GENERATED_ROUND_TRIP_PATH := "res://test/_generated_curve_round_trip.tres"
 const BACK_ROUND_TRIP_PATH := "res://test/_back_overshoot_round_trip.tres"
@@ -14,6 +15,7 @@ func _init() -> void:
 	seed(123456)
 	_test_legacy_resources_and_nested_changes()
 	_test_bezier_point_operations()
+	_test_monotonic_bezier_solver_equivalence()
 	_test_resource_free_point_snapshots()
 	_test_parameter_drag_transactions()
 	_test_preset_parameter_notification_counts()
@@ -124,9 +126,21 @@ func _test_bezier_point_operations() -> void:
 
 	counts.changed = 0
 	counts.points = 0
+	var topology_revision_before := curve._point_topology_revision
 	curve.points.append(EasingCurvePoint.new(Vector2(0.75, 0.75)))
 	curve.sample(0.5)
 	_expect(counts.changed > 0 and counts.points > 0, "External points array mutation was not detected during evaluation")
+	_expect(
+		curve._point_topology_revision == topology_revision_before + 1
+		and curve._synchronized_point_topology_revision == curve._point_topology_revision,
+		"External point mutation did not advance and synchronize the topology revision",
+	)
+	var synchronized_revision := curve._point_topology_revision
+	curve.sample(0.5)
+	_expect(
+		curve._point_topology_revision == synchronized_revision,
+		"Unchanged sampling repeatedly synchronized exposed point topology",
+	)
 
 	curve.set("_point_count", 3)
 	curve.set("_point_0/position", Vector2.ZERO)
@@ -139,6 +153,50 @@ func _test_bezier_point_operations() -> void:
 	_expect(curve.sample(0.5) > 0.85, "Flattened runtime point updates did not immediately affect output")
 	curve.set("_point_count", 2)
 	_expect(curve.points.size() == 2, "Flattened runtime point removal did not resize the point list")
+
+
+func _test_monotonic_bezier_solver_equivalence() -> void:
+	var control_pairs := [
+		Vector2(0.0, 0.0),
+		Vector2(0.1, 0.9),
+		Vector2(0.25, 0.25),
+		Vector2(0.5, 0.5),
+		Vector2(0.9, 0.1),
+	]
+	for control_pair: Vector2 in control_pairs:
+		var a := EasingCurvePoint.new(Vector2.ZERO)
+		var b := EasingCurvePoint.new(Vector2.ONE)
+		a.right_control_point = Vector2(control_pair.x, 0.85)
+		b.left_control_point = Vector2(control_pair.y, 0.15)
+		var controls := BEZIER_SOLVER.get_effective_segment_controls(a, b)
+		for step in range(17):
+			var x := float(step) / 16.0
+			var fast_t := BEZIER_SOLVER.solve_monotonic_segment_t(x, a, b)
+			var diagnostic: Dictionary = BEZIER_SOLVER.solve_for_t(
+				x,
+				a,
+				b,
+				controls[0],
+				controls[1],
+			)
+			var diagnostic_t: float = diagnostic["t"]
+			_expect(
+				absf(fast_t - diagnostic_t) <= 0.000001,
+				"Monotonic solver diverged from diagnostic solver for controls %s at x=%f"
+				% [control_pair, x],
+			)
+			var fast_y := EasingCurve.sample_bezier_segment(a, b, x)
+			var diagnostic_y := BEZIER_SOLVER.bezier_interpolate(
+				a.position.y,
+				controls[0].y,
+				controls[1].y,
+				b.position.y,
+				diagnostic_t,
+			)
+			_expect(
+				absf(fast_y - diagnostic_y) <= 0.000001,
+				"Allocation-free segment sampling changed Bézier output at x=%f" % x,
+			)
 
 
 func _test_resource_free_point_snapshots() -> void:

@@ -9,6 +9,9 @@ const SELECTION_TOOLBAR_HEIGHT := 32.0
 const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
+const BEZIER_SOLVER = preload(
+	"res://addons/easing_curve/scripts/runtime/bezier_solver.gd"
+)
 
 var use_pending_add := true
 var hide_point_toolbar_for_functions := false
@@ -48,6 +51,8 @@ const BASE_CONTROL_HOVER_RADIUS = 8
 const BASE_CONTROL_LENGTH = 36
 const LINE_COLOR = Color(1, 1, 1)
 const CONTROL_LINE_COLOR = Color(1, 1, 1, 0.4)
+const BEZIER_DRAW_TOLERANCE_PIXELS := 0.75
+const BEZIER_DRAW_MAX_DEPTH := 12
 
 var editor_undo_redo: EditorUndoRedoManager
 var pan_offset := Vector2.ZERO
@@ -1007,8 +1012,14 @@ func _draw_bezier_curve(point_list: Array[EasingCurvePoint]) -> void:
 			2,
 		)
 
+	var visible_x_bounds := _get_visible_world_x_bounds()
 	for i in range(point_list.size() - 1):
-		_draw_bezier_segment(point_list[i], point_list[i + 1], 0.0, 1.0)
+		_draw_bezier_segment(
+			point_list[i],
+			point_list[i + 1],
+			visible_x_bounds.x,
+			visible_x_bounds.y,
+		)
 
 	if not EasingCurve.is_right_endpoint_x(last_point.position.x):
 		draw_line(
@@ -1023,6 +1034,14 @@ func _draw_bezier_curve(point_list: Array[EasingCurvePoint]) -> void:
 			LINE_COLOR,
 			2,
 		)
+
+
+func _get_visible_world_x_bounds() -> Vector2:
+	var left_x := get_world_pos(Vector2(0.0, 0.0)).x
+	var right_x := get_world_pos(Vector2(size.x, 0.0)).x
+	if not is_finite(left_x) or not is_finite(right_x):
+		return Vector2(MIN_X, MAX_X)
+	return Vector2(minf(left_x, right_x), maxf(left_x, right_x))
 
 
 func _draw_bezier_segment(
@@ -1044,24 +1063,158 @@ func _draw_bezier_segment(
 	if start_x > end_x:
 		return
 
-	var start_view_x := get_view_pos(Vector2(start_x, 0.0)).x
-	var end_view_x := get_view_pos(Vector2(end_x, 0.0)).x
-	var steps := max(1, ceili(absf(end_view_x - start_view_x)))
-	var previous := Vector2.ZERO
+	var controls := BEZIER_SOLVER.get_effective_segment_controls(a, b)
+	var start_t := BEZIER_SOLVER.solve_monotonic_t(
+		start_x,
+		a.position.x,
+		controls[0].x,
+		controls[1].x,
+		b.position.x,
+	)
+	var end_t := BEZIER_SOLVER.solve_monotonic_t(
+		end_x,
+		a.position.x,
+		controls[0].x,
+		controls[1].x,
+		b.position.x,
+	)
+	if start_t > end_t:
+		var swap_t := start_t
+		start_t = end_t
+		end_t = swap_t
 
-	for i in range(steps + 1):
-		var x := lerpf(start_x, end_x, i / float(steps))
-		var y := (
-			a.position.y
-			if i == 0 and is_equal_approx(x, a.position.x)
-			else b.position.y
-			if i == steps and is_equal_approx(x, b.position.x)
-			else EasingCurve.sample_bezier_segment(a, b, x)
-		)
-		var current := get_view_pos(Vector2(x, y))
-		if i > 0:
-			draw_line(previous, current, LINE_COLOR, 2)
-		previous = current
+	var start_world := _bezier_world_position(a, b, controls[0], controls[1], start_t)
+	var end_world := _bezier_world_position(a, b, controls[0], controls[1], end_t)
+	var interval_control_scale := (end_t - start_t) / 3.0
+	var interval_out_control := start_world + _bezier_world_derivative(
+		a,
+		b,
+		controls[0],
+		controls[1],
+		start_t,
+	) * interval_control_scale
+	var interval_in_control := end_world - _bezier_world_derivative(
+		a,
+		b,
+		controls[0],
+		controls[1],
+		end_t,
+	) * interval_control_scale
+	var start_view := get_view_pos(start_world)
+	var end_view := get_view_pos(end_world)
+	var polyline := PackedVector2Array([start_view])
+	_append_adaptive_bezier_points(
+		start_view,
+		get_view_pos(interval_out_control),
+		get_view_pos(interval_in_control),
+		end_view,
+		0,
+		polyline,
+	)
+	draw_polyline(polyline, LINE_COLOR, 2.0)
+
+
+func _append_adaptive_bezier_points(
+		start_point: Vector2,
+		out_control: Vector2,
+		in_control: Vector2,
+		end_point: Vector2,
+		depth: int,
+		polyline: PackedVector2Array,
+) -> void:
+	if depth >= BEZIER_DRAW_MAX_DEPTH:
+		polyline.append(end_point)
+		return
+
+	var flatness := maxf(
+		_point_to_line_distance(out_control, start_point, end_point),
+		_point_to_line_distance(in_control, start_point, end_point),
+	)
+
+	if flatness <= BEZIER_DRAW_TOLERANCE_PIXELS * _editor_scale:
+		polyline.append(end_point)
+		return
+
+	var start_out_midpoint := (start_point + out_control) * 0.5
+	var control_midpoint := (out_control + in_control) * 0.5
+	var in_end_midpoint := (in_control + end_point) * 0.5
+	var left_control_midpoint := (start_out_midpoint + control_midpoint) * 0.5
+	var right_control_midpoint := (control_midpoint + in_end_midpoint) * 0.5
+	var curve_midpoint := (left_control_midpoint + right_control_midpoint) * 0.5
+	_append_adaptive_bezier_points(
+		start_point,
+		start_out_midpoint,
+		left_control_midpoint,
+		curve_midpoint,
+		depth + 1,
+		polyline,
+	)
+	_append_adaptive_bezier_points(
+		curve_midpoint,
+		right_control_midpoint,
+		in_end_midpoint,
+		end_point,
+		depth + 1,
+		polyline,
+	)
+
+
+func _point_to_line_distance(point: Vector2, line_start: Vector2, line_end: Vector2) -> float:
+	var line := line_end - line_start
+	var line_length := line.length()
+	if is_zero_approx(line_length):
+		return point.distance_to(line_start)
+	return absf(line.cross(point - line_start)) / line_length
+
+
+func _bezier_world_position(
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+		out_control: Vector2,
+		in_control: Vector2,
+		t: float,
+) -> Vector2:
+	return Vector2(
+		BEZIER_SOLVER.bezier_interpolate(
+			a.position.x,
+			out_control.x,
+			in_control.x,
+			b.position.x,
+			t,
+		),
+		BEZIER_SOLVER.bezier_interpolate(
+			a.position.y,
+			out_control.y,
+			in_control.y,
+			b.position.y,
+			t,
+		),
+	)
+
+
+func _bezier_world_derivative(
+		a: EasingCurvePoint,
+		b: EasingCurvePoint,
+		out_control: Vector2,
+		in_control: Vector2,
+		t: float,
+) -> Vector2:
+	return Vector2(
+		BEZIER_SOLVER.bezier_derivative(
+			a.position.x,
+			out_control.x,
+			in_control.x,
+			b.position.x,
+			t,
+		),
+		BEZIER_SOLVER.bezier_derivative(
+			a.position.y,
+			out_control.y,
+			in_control.y,
+			b.position.y,
+			t,
+		),
+	)
 
 
 func _draw_function_curve():

@@ -530,6 +530,9 @@ var _last_solved_t := 0.0
 var _points: Array[EasingCurvePoint] = []
 var _connected_points: Array[EasingCurvePoint] = []
 var _point_topology: Array[EasingCurvePoint] = []
+var _point_topology_revision := 0
+var _synchronized_point_topology_revision := -1
+var _points_array_exposed := false
 var _change_revision := 0
 var _suppress_point_notifications := 0
 var _point_snapshot_change_pending := false
@@ -677,6 +680,9 @@ var function_callable: Callable:
 ## updates do not depend on Godot's Array[Resource] change propagation.
 var points: Array[EasingCurvePoint]:
 	get:
+		# Retain compatibility with callers that mutate the returned Array in place.
+		# Only exposed arrays need the fallback topology comparison during sampling.
+		_points_array_exposed = true
 		return _points
 	set(value):
 		_set_points(value)
@@ -1470,13 +1476,14 @@ func set_trans(_trans: TRANS) -> void:
 
 
 func printpoints():
-	for i in range(points.size()):
-		var p = points[i]
+	for i in range(_points.size()):
+		var p = _points[i]
 		print(i, ": ", p.position, " L:", p.left_control_point, " R:", p.right_control_point)
 
 
 func sort_points(notify_change: bool = true) -> void:
 	sort_point_list_by_x(_points)
+	_mark_point_topology_dirty()
 	_synchronize_point_connections()
 	if notify_change:
 		_notify_curve_changed(true, true)
@@ -1494,7 +1501,7 @@ func swap_points(a, b) -> void:
 	if a is int and b is int:
 		var i = a
 		var j = b
-		swap_points(points[i], points[j])
+		swap_points(_points[i], _points[j])
 
 	elif a is EasingCurvePoint and b is EasingCurvePoint:
 		swap_properties(a, b)
@@ -1513,6 +1520,7 @@ func add_point(p: EasingCurvePoint) -> void:
 		updated_points,
 		p,
 	)
+	_mark_point_topology_dirty()
 	_synchronize_point_connections()
 	_notify_curve_changed(true, true)
 
@@ -1522,6 +1530,7 @@ func remove_point(p: EasingCurvePoint) -> void:
 		return
 
 	_points.erase(p)
+	_mark_point_topology_dirty()
 	_synchronize_point_connections()
 	_notify_curve_changed(true, true)
 
@@ -1530,6 +1539,7 @@ func set_point(i: int, p: EasingCurvePoint) -> void:
 	if i < 0 or i >= _points.size() or p == null:
 		return
 	_points[i] = p
+	_mark_point_topology_dirty()
 	_synchronize_point_connections()
 	_notify_curve_changed(true, false)
 
@@ -1822,6 +1832,7 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 			new_points.append(point)
 		_disconnect_point_signals()
 		_points = new_points
+		_mark_point_topology_dirty()
 		_synchronize_point_connections()
 	_suppress_point_notifications -= 1
 
@@ -1957,6 +1968,7 @@ func _restore_editor_point_resource_order(
 		return false
 
 	_points = ordered_points
+	_mark_point_topology_dirty()
 	_synchronize_point_connections()
 	return true
 
@@ -2266,7 +2278,7 @@ func _vectors_equal_with_tolerance(a: Vector2, b: Vector2, tolerance: float) -> 
 
 
 func force_update() -> void:
-	_synchronize_point_connections()
+	_ensure_point_connections_current()
 	_notify_curve_changed(true, true)
 
 
@@ -2276,18 +2288,20 @@ func notify_changed() -> void:
 
 func _set_points(value: Array[EasingCurvePoint]) -> void:
 	if _point_arrays_match(_points, value):
-		_synchronize_point_connections()
+		_ensure_point_connections_current()
 		return
 
 	_disconnect_point_signals()
 	_points = value
+	_points_array_exposed = true
+	_mark_point_topology_dirty()
 	_synchronize_point_connections()
 	_notify_curve_changed(true, true)
 
 
 func _resize_points(new_size: int) -> void:
 	if new_size == _points.size():
-		_synchronize_point_connections()
+		_ensure_point_connections_current()
 		return
 
 	while _points.size() > new_size:
@@ -2295,6 +2309,7 @@ func _resize_points(new_size: int) -> void:
 	while _points.size() < new_size:
 		_points.append(EasingCurvePoint.new())
 
+	_mark_point_topology_dirty()
 	_synchronize_point_connections()
 	_notify_curve_changed(true, true)
 
@@ -2303,19 +2318,48 @@ func _clear_points() -> void:
 	if _points.is_empty():
 		return
 	_points.clear()
+	_mark_point_topology_dirty()
 	_synchronize_point_connections()
 	_notify_curve_changed(true, true)
 
 
+func _mark_point_topology_dirty() -> void:
+	_point_topology_revision += 1
+
+
+func _ensure_point_connections_current() -> bool:
+	if _synchronized_point_topology_revision != _point_topology_revision:
+		return _synchronize_point_connections()
+	if not _points_array_exposed or _point_arrays_match(_point_topology, _points):
+		return false
+
+	# In-place mutation of the public points Array cannot invoke its setter.
+	_mark_point_topology_dirty()
+	return _synchronize_point_connections()
+
+
 func _synchronize_point_connections() -> bool:
+	if _synchronized_point_topology_revision == _point_topology_revision:
+		return false
+
 	var topology_changed := not _point_arrays_match(_point_topology, _points)
+	if not topology_changed:
+		_synchronized_point_topology_revision = _point_topology_revision
+		return false
+
 	var current_points: Array[EasingCurvePoint] = []
+	var current_point_ids: Dictionary[int, bool] = {}
 	for point in _points:
-		if point != null and point not in current_points:
+		if point != null and not current_point_ids.has(point.get_instance_id()):
 			current_points.append(point)
+			current_point_ids[point.get_instance_id()] = true
 
 	for point in _connected_points:
-		if point != null and point not in current_points and point.changed.is_connected(_on_point_changed):
+		if (
+			point != null
+			and not current_point_ids.has(point.get_instance_id())
+			and point.changed.is_connected(_on_point_changed)
+		):
 			point.changed.disconnect(_on_point_changed)
 
 	for point in current_points:
@@ -2324,6 +2368,7 @@ func _synchronize_point_connections() -> bool:
 
 	_connected_points = current_points
 	_point_topology = _points.duplicate()
+	_synchronized_point_topology_revision = _point_topology_revision
 	return topology_changed
 
 
@@ -2333,6 +2378,7 @@ func _disconnect_point_signals() -> void:
 			point.changed.disconnect(_on_point_changed)
 	_connected_points.clear()
 	_point_topology.clear()
+	_synchronized_point_topology_revision = -1
 
 
 func _point_arrays_match(a: Array[EasingCurvePoint], b: Array[EasingCurvePoint]) -> bool:
@@ -2447,7 +2493,7 @@ func _get_function_arguments(offset: float) -> Array:
 
 
 func _sample_raw(offset: float) -> float:
-	if _synchronize_point_connections():
+	if _ensure_point_connections_current():
 		_notify_curve_changed(true, true)
 
 	if curve_mode == CurveMode.FUNCTION:
@@ -2457,14 +2503,13 @@ func _sample_raw(offset: float) -> float:
 			_get_function_arguments(offset)
 		)
 
-	if points.size() < 2:
+	if _points.size() < 2:
 		return get_bezier_fallback_value(offset)
 
-	var solve_result: Array[Dictionary] = []
-	var result := _sample_bezier_points(points, offset, solve_result)
-	if not solve_result.is_empty():
-		_last_solved_t = solve_result[0]["t"]
-	return result
+	var sample_result := _sample_bezier_points_with_t(_points, offset)
+	if sample_result.x >= 0.0:
+		_last_solved_t = sample_result.x
+	return sample_result.y
 
 
 func get_last_solved_t() -> float:
@@ -2475,29 +2520,26 @@ static func sample_bezier_points(
 		point_list: Array[EasingCurvePoint],
 		offset: float,
 ) -> float:
-	return _sample_bezier_points(point_list, offset, null)
+	return _sample_bezier_points_with_t(point_list, offset).y
 
 
 static func get_bezier_fallback_value(_offset: float) -> float:
 	return 0.0
 
 
-static func _sample_bezier_points(
+static func _sample_bezier_points_with_t(
 		point_list: Array[EasingCurvePoint],
 		offset: float,
-		solve_result: Variant,
-) -> float:
+) -> Vector2:
 	if point_list.size() < 2:
-		return get_bezier_fallback_value(offset)
+		return Vector2(-1.0, get_bezier_fallback_value(offset))
 
 	for i in range(point_list.size() - 1):
 		var a := point_list[i]
 		var b := point_list[i + 1]
 		if absf(b.position.x - a.position.x) <= SEGMENT_X_EPSILON:
 			if absf(offset - a.position.x) <= SEGMENT_X_EPSILON:
-				if solve_result != null:
-					solve_result.append({"t": 1.0})
-				return b.position.y
+				return Vector2(1.0, b.position.y)
 			continue
 
 		var min_x = min(a.position.x, b.position.x)
@@ -2506,9 +2548,9 @@ static func _sample_bezier_points(
 		if offset < min_x or offset > max_x:
 			continue
 
-		return _sample_bezier_segment(a, b, offset, solve_result)
+		return _sample_bezier_segment_with_t(a, b, offset)
 
-	return get_bezier_fallback_value(offset)
+	return Vector2(-1.0, get_bezier_fallback_value(offset))
 
 
 static func sample_bezier_segment(
@@ -2516,27 +2558,23 @@ static func sample_bezier_segment(
 		b: EasingCurvePoint,
 		offset: float,
 ) -> float:
-	return _sample_bezier_segment(a, b, offset, null)
+	return _sample_bezier_segment_with_t(a, b, offset).y
 
 
-static func _sample_bezier_segment(
+static func _sample_bezier_segment_with_t(
 		a: EasingCurvePoint,
 		b: EasingCurvePoint,
 		offset: float,
-		solve_result: Variant,
-) -> float:
-	var controls := BEZIER_SOLVER.get_effective_segment_controls(a, b)
-	var solve_info := BEZIER_SOLVER.solve_for_t(offset, a, b, controls[0], controls[1])
-	var t: float = solve_info["t"]
-	if solve_result != null:
-		solve_result.append({"t": t})
-	return BEZIER_SOLVER.bezier_interpolate(
+) -> Vector2:
+	var t := BEZIER_SOLVER.solve_monotonic_segment_t(offset, a, b)
+	var value := BEZIER_SOLVER.bezier_interpolate(
 		a.position.y,
-		controls[0].y,
-		controls[1].y,
+		a.right_control_point.y,
+		b.left_control_point.y,
 		b.position.y,
 		t,
 	)
+	return Vector2(t, value)
 
 ## Sample the curve, calculating f(t) given x.
 func sample(offset: float) -> float:
@@ -2562,14 +2600,14 @@ func sample(offset: float) -> float:
 ##########################################################
 # Catmull-Rom → Bézier conversion
 func auto_smooth_handles():
-	if points.size() < 2:
+	if _points.size() < 2:
 		return
 
-	for i in range(points.size()):
-		var p = points[i]
+	for i in range(_points.size()):
+		var p = _points[i]
 
-		var p_prev = points[max(i - 1, 0)]
-		var p_next = points[min(i + 1, points.size() - 1)]
+		var p_prev = _points[max(i - 1, 0)]
+		var p_next = _points[min(i + 1, _points.size() - 1)]
 
 		var d1 = p.position - p_prev.position
 		var d2 = p_next.position - p.position
@@ -2591,18 +2629,18 @@ func auto_smooth_handles():
 		p.right_control_point.x = clamp(
 			p.right_control_point.x,
 			p.position.x,
-			points[min(i + 1, points.size() - 1)].position.x,
+			_points[min(i + 1, _points.size() - 1)].position.x,
 		)
 
 		p.left_control_point.x = clamp(
 			p.left_control_point.x,
-			points[max(i - 1, 0)].position.x,
+			_points[max(i - 1, 0)].position.x,
 			p.position.x,
 		)
 
 	# Clamp endpoints
-	points[0].left_control_point = points[0].position
-	points[-1].right_control_point = points[-1].position
+	_points[0].left_control_point = _points[0].position
+	_points[-1].right_control_point = _points[-1].position
 
 
 func generate_from_function(func_ref: Callable, resolution := 40):
@@ -2831,7 +2869,6 @@ func _update_preset() -> void:
 func _on_point_changed() -> void:
 	if _suppress_point_notifications > 0:
 		return
-	_synchronize_point_connections()
 	_notify_curve_changed(true, false)
 
 

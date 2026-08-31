@@ -17,6 +17,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_zoom_metadata_contract()
 	_test_zoom_behavioral_invariants()
+	_test_bezier_draw_clipping_and_tessellation()
 	_test_pending_add_cancel_and_no_op_release()
 	_test_modifier_capable_drag_baseline()
 	_test_point_axis_constraint_behavior()
@@ -204,6 +205,58 @@ func _test_zoom_behavioral_invariants() -> void:
 	)
 
 	editor._slider.free()
+	editor.free()
+
+
+func _test_bezier_draw_clipping_and_tessellation() -> void:
+	var editor := EasingCurveEditor.new()
+	editor.size = Vector2(600.0, 300.0)
+	editor.update_view_transform()
+	var default_bounds := editor._get_visible_world_x_bounds()
+	editor.set_zoom(Vector2(10.0, 10.0))
+	editor.update_view_transform()
+	var zoomed_bounds := editor._get_visible_world_x_bounds()
+	_expect(
+		zoomed_bounds.y - zoomed_bounds.x < default_bounds.y - default_bounds.x,
+		"Visible world-X clipping bounds did not narrow under horizontal zoom",
+	)
+
+	var a := EasingCurvePoint.new(Vector2.ZERO)
+	var b := EasingCurvePoint.new(Vector2.ONE)
+	var curved_out_control := Vector2(0.1, 1.0)
+	var curved_in_control := Vector2(0.9, 0.0)
+	var start_view := editor.get_view_pos(a.position)
+	var end_view := editor.get_view_pos(b.position)
+	var curved_polyline := PackedVector2Array([start_view])
+	editor._append_adaptive_bezier_points(
+		start_view,
+		editor.get_view_pos(curved_out_control),
+		editor.get_view_pos(curved_in_control),
+		end_view,
+		0,
+		curved_polyline,
+	)
+	_expect(
+		curved_polyline.size() > 2 and curved_polyline.size() < int(editor.size.x),
+		"Adaptive Bézier tessellation did not reduce the curved segment below per-pixel sampling",
+	)
+
+	var straight_out_control := Vector2.ONE / 3.0
+	var straight_in_control := Vector2.ONE * 2.0 / 3.0
+	var straight_polyline := PackedVector2Array([start_view])
+	editor._append_adaptive_bezier_points(
+		start_view,
+		editor.get_view_pos(straight_out_control),
+		editor.get_view_pos(straight_in_control),
+		end_view,
+		0,
+		straight_polyline,
+	)
+	_expect(
+		straight_polyline.size() == 2,
+		"Adaptive Bézier tessellation produced %d points for a straight segment"
+		% straight_polyline.size(),
+	)
 	editor.free()
 
 
