@@ -201,7 +201,34 @@ func _test_zoom_behavioral_invariants() -> void:
 	_expect(editor.pan_offset == Vector2.ZERO, "Autofit no longer clears graph pan")
 	_expect(
 		is_equal_approx(editor._zoom_x, default_zoom) and is_equal_approx(editor._zoom_y, default_zoom),
-		"Autofit no longer restores the canonical default zoom",
+		"Autofit changed the canonical fit for geometry already inside the base graph",
+	)
+
+	editor.size = Vector2(600.0, 300.0)
+	curve.points[1].left_control_point = Vector2(-0.6, 1.5)
+	curve.points[1].right_control_point = Vector2(1.5, -0.4)
+	editor.set_slider_value(mini(default_step + 3, EasingCurve.ZOOM_STEPS))
+	editor.pan_offset = Vector2(47.0, -31.0)
+	editor._on_autofit_pressed()
+	editor.update_view_transform()
+	var fit_rect := editor._get_graph_view_rect()
+	for world_point in [
+		Vector2(0.0, curve.min_value),
+		Vector2(1.0, curve.max_value),
+		curve.points[1].left_control_point,
+		curve.points[1].right_control_point,
+	]:
+		_expect(
+			fit_rect.has_point(editor.get_view_pos(world_point)),
+			"Autofit left graph/control geometry outside the drawable graph rect",
+		)
+	_expect(
+		editor._zoom_step < default_step,
+		"Autofit did not zoom out for controls outside the base graph",
+	)
+	_expect(
+		editor._slider.slider.value == editor._zoom_step,
+		"Autofit left the zoom slider out of sync with the fitted zoom step",
 	)
 
 	editor._slider.free()

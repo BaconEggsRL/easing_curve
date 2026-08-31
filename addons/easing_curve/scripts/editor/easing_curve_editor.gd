@@ -57,6 +57,8 @@ const LINE_COLOR = Color(1, 1, 1)
 const CONTROL_LINE_COLOR = Color(1, 1, 1, 0.4)
 const BEZIER_DRAW_TOLERANCE_PIXELS := 0.75
 const BEZIER_DRAW_MAX_DEPTH := 12
+const AUTOFIT_PADDING_RATIO := 0.10
+const FUNCTION_DRAW_STEPS := 120
 
 var editor_undo_redo: EditorUndoRedoManager
 var pan_offset := Vector2.ZERO
@@ -937,10 +939,89 @@ func _zoom_at_view_pos(step_delta: int, view_pos: Vector2) -> void:
 
 
 func _on_autofit_pressed() -> void:
-	set_slider_value(DEFAULT_SLIDER_VALUE)
+	if _curve == null:
+		return
+
+	var bounds := _get_autofit_world_bounds()
+	var padded_size := bounds.size * (1.0 + AUTOFIT_PADDING_RATIO)
+	padded_size.x = maxf(padded_size.x, 0.001)
+	padded_size.y = maxf(padded_size.y, 0.001)
+
+	var target_zoom := minf(
+		1.0 / padded_size.x,
+		1.0 / padded_size.y,
+	)
+	var fit_step := 0
+	for step in range(ZOOM_STEPS + 1):
+		if step_to_zoom(step) <= target_zoom + 0.000001:
+			fit_step = step
+		else:
+			break
+
+	_zoom_step = fit_step
+	_apply_zoom_from_step()
 	pan_offset = Vector2.ZERO
+	update_view_transform()
+
+	var graph_rect := _get_graph_view_rect()
+	var bounds_center_view := _world_to_view * bounds.get_center()
+	pan_offset = graph_rect.get_center() - bounds_center_view
 	pan_changed.emit(pan_offset)
 	queue_redraw()
+
+
+func _get_autofit_world_bounds() -> Rect2:
+	var min_bound := Vector2(MIN_X, _curve.min_value)
+	var max_bound := Vector2(MAX_X, _curve.max_value)
+
+	if _curve.curve_mode == EasingCurve.CurveMode.FUNCTION:
+		for i in range(FUNCTION_DRAW_STEPS + 1):
+			var x := float(i) / FUNCTION_DRAW_STEPS
+			var sample_point := Vector2(x, _curve.sample(x))
+			min_bound = min_bound.min(sample_point)
+			max_bound = max_bound.max(sample_point)
+		return Rect2(min_bound, max_bound - min_bound)
+
+	var display_points := _get_display_points()
+	for i in range(display_points.size()):
+		var point := display_points[i]
+		min_bound = min_bound.min(point.position)
+		max_bound = max_bound.max(point.position)
+
+		if i > 0:
+			min_bound = min_bound.min(point.left_control_point)
+			max_bound = max_bound.max(point.left_control_point)
+		if i < display_points.size() - 1:
+			min_bound = min_bound.min(point.right_control_point)
+			max_bound = max_bound.max(point.right_control_point)
+
+	for i in range(display_points.size() - 1):
+		var controls := BEZIER_SOLVER.get_effective_segment_controls(
+			display_points[i],
+			display_points[i + 1],
+		)
+		min_bound = min_bound.min(controls[0]).min(controls[1])
+		max_bound = max_bound.max(controls[0]).max(controls[1])
+
+	return Rect2(min_bound, max_bound - min_bound)
+
+
+func _get_graph_view_rect() -> Rect2:
+	var margin := 4.0 * _editor_scale
+	var toolbar_height := (
+		0.0
+		if hide_point_toolbar_for_functions
+		and _curve != null
+		and _curve.curve_mode == EasingCurve.CurveMode.FUNCTION
+		else SELECTION_TOOLBAR_HEIGHT * _editor_scale
+	)
+	return Rect2(
+		Vector2(margin, toolbar_height + margin),
+		Vector2(
+			maxf(size.x - margin * 2.0, 1.0),
+			maxf(size.y - toolbar_height - margin * 2.0, 1.0),
+		),
+	)
 
 
 func _on_slider_changed(value: float) -> void:
@@ -1253,11 +1334,10 @@ func _bezier_world_derivative(
 
 
 func _draw_function_curve():
-	var steps := 120
 	var prev: Vector2
 
-	for i in range(steps + 1):
-		var x = float(i) / steps
+	for i in range(FUNCTION_DRAW_STEPS + 1):
+		var x = float(i) / FUNCTION_DRAW_STEPS
 		var y = _curve.sample(x)
 		var pt = get_view_pos(Vector2(x, y))
 

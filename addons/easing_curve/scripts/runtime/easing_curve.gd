@@ -705,7 +705,7 @@ var points: Array[EasingCurvePoint]:
 		_update_irregular_parameter()
 ## Controls the amplitude of random variations.
 ## Higher values increase deviations from linear interpolation.
-@export_range(0.0, 4.0, 0.01) var randomness: float = 3.5:
+@export_range(0.0, 4.0, 0.001) var randomness: float = 3.5:
 	set(value):
 		if randomness == value:
 			return
@@ -798,14 +798,14 @@ var _irregular_points_y: Array[float] = []:
 # BOUNCE
 # ------------------
 ## The number of bounces before settling.
-@export_range(1, 10, 1) var num_bounces: int = 3:
+@export_range(1, 20, 1) var num_bounces: int = 3:
 	set(value):
 		if num_bounces != value:
 			num_bounces = value
 			_notify_parameter_changed()
 
 ## The amount of damping to apply to each bounce.
-@export_range(0.0, 100.0, 0.1) var bounce_damping: float = 75.0:
+@export_range(0.0, 100.0, 0.01) var bounce_damping: float = 75.0:
 	set(value):
 		if bounce_damping != value:
 			bounce_damping = value
@@ -815,13 +815,13 @@ var _irregular_points_y: Array[float] = []:
 # SPRING
 # ------------------
 ## The frequency of oscillation.
-@export_range(0.0, 10.0, 0.01) var frequency: float = 2.5:
+@export_range(0.0, 10.0, 0.001) var frequency: float = 2.5:
 	set(value):
 		if frequency != value:
 			frequency = value
 			_notify_parameter_changed()
 ## The amount of oscillation decay.
-@export_range(0.1, 10.0, 0.01) var decay: float = 2.2:
+@export_range(0.1, 10.0, 0.001) var decay: float = 2.2:
 	set(value):
 		if decay != value:
 			decay = value
