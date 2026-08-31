@@ -544,6 +544,9 @@ A production-behavior work item normally closes with:
 - `git diff --check` passing;
 - final Git status/diff scope review;
 - authoritative full registered suite passing;
+- immediately after that fully passing suite, `test/scripts/_run_all_tests.ps1
+  --cleanup` passing, with temporary artifacts removed from `test/_temp` and
+  its tracked `.gdignore` preserved;
 - applicable manual validation passing or an explicitly approved outstanding
   issue;
 - compatibility/serialization checks when relevant;
@@ -553,12 +556,20 @@ A production-behavior work item normally closes with:
 Work-item specifications should list only validation specific to the item and
 reference these shared closeout rules.
 
+Run the cleanup command only after the final full suite has passed. If a suite
+fails, crashes, times out, lacks expected results, or otherwise behaves
+unexpectedly, preserve `test/_temp` artifacts for investigation. When rerunning
+tests during diagnosis, cleanup remains deferred until the final fully passing
+run.
+
 ## Release closeout
 
 Before release completion, perform the Release Charter acceptance gates,
 commonly including:
 
 - authoritative full suite;
+- cleanup of successful-suite temporary artifacts with
+  `test/scripts/_run_all_tests.ps1 --cleanup`;
 - `git diff --check`;
 - complete visible-editor smoke where applicable;
 - compatibility testing on claimed engine/runtime versions;

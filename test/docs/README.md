@@ -48,8 +48,22 @@ misleadingly report zero checks. It is not a valid result for these tests.
 Run every headless and Editor-host suite independently with:
 
 ```powershell
-./test/scripts/_run_all_tests.ps1
+.\test\scripts\_run_all_tests.ps1 --run
 ```
+
+Only after that command exits successfully with every suite passing, immediately
+run:
+
+```powershell
+.\test\scripts\_run_all_tests.ps1 --cleanup
+```
+
+This is the required final validation step. It removes the runner's temporary
+logs and artifacts from `test/_temp` while preserving `test/_temp/.gdignore`
+and the directory itself. Do not run cleanup after a failure, crash, timeout,
+missing PASS marker, script error, or any other unexpected result; retain those
+artifacts for debugging. If tests are rerun while investigating a problem, run
+cleanup only after the final full suite passes.
 
 `test/scripts/_run_godot.ps1` launches the configured Godot 4.7.1 console executable
 with Windows native application-error dialogs suppressed for that test process

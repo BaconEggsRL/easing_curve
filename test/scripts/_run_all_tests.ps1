@@ -27,6 +27,17 @@ function Remove-DirectoryIfEmpty {
 	}
 }
 
+function Clear-TestTempArtifacts {
+	# Keep test/_temp and its tracked .gdignore so Godot does not scan transient
+	# test output. Everything else in this directory is runner-owned output.
+	New-Item -ItemType Directory -Force -Path $testTempDirectory | Out-Null
+	Get-ChildItem -LiteralPath $testTempDirectory -Force |
+		Where-Object { $_.Name -ne ".gdignore" } |
+		ForEach-Object {
+			Remove-Item -LiteralPath $_.FullName -Recurse -Force
+		}
+}
+
 $suites = @(
 	@{ Name = "css_linear_test.gd"; Editor = $false },
 	@{ Name = "easing_curve_editor_rmb_delete_test.gd"; Editor = $false },
@@ -48,12 +59,13 @@ $suites = @(
 )
 
 function Show-Help {
-	Write-Host "Usage: .\\_run_all_tests.ps1 [--help | --list | --run] [-GodotPath <path>]"
+	Write-Host "Usage: .\\_run_all_tests.ps1 [--help | --list | --run | --cleanup] [-GodotPath <path>]"
 	Write-Host ""
 	Write-Host "Options:"
 	Write-Host "  --help  Show this help menu."
 	Write-Host "  --list  List the individual unit tests run by this script."
 	Write-Host "  --run   Run all listed unit tests."
+	Write-Host "  --cleanup  Remove successful-run artifacts from test/_temp, preserving .gdignore."
 	Write-Host ""
 	Write-Host "-GodotPath may be supplied with --run to select a Godot executable."
 }
@@ -61,7 +73,7 @@ function Show-Help {
 if ($CommandArguments.Count -ne 1) {
 	Show-Help
 	if ($CommandArguments.Count -gt 1) {
-		Write-Error "Specify exactly one command: --help, --list, or --run."
+		Write-Error "Specify exactly one command: --help, --list, --run, or --cleanup."
 	}
 	exit $(if ($CommandArguments.Count -eq 0) { 0 } else { 1 })
 }
@@ -75,6 +87,11 @@ switch ($CommandArguments[0]) {
 		foreach ($suite in $suites) {
 			Write-Output $suite.Name
 		}
+		exit 0
+	}
+	"--cleanup" {
+		Clear-TestTempArtifacts
+		Write-Host "Cleaned test/_temp artifacts; preserved .gdignore."
 		exit 0
 	}
 	"--run" { }
