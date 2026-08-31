@@ -31,7 +31,10 @@ func _ready():
 		EDITOR_THEME_CACHE.ICON_ANIMATION_AUTO_FIT_BEZIER
 	)
 
-	slider.custom_minimum_size.x = 0.0
+	var controls := slider.get_parent() as HBoxContainer
+	if controls != null:
+		custom_minimum_size.x = controls.get_combined_minimum_size().x
+
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.gui_input.connect(_on_slider_gui_input)
 	autofit_btn.pressed.connect(_on_autofit_btn_pressed)
