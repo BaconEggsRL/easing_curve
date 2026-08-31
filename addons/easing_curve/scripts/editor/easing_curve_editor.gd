@@ -108,6 +108,9 @@ var _editor_scale: float = 1.0
 var _point_toolbar_panel: VBoxContainer
 var _point_toolbar: GridContainer
 var _point_label: Label
+var _point_reorder_buttons: HBoxContainer
+var _point_move_left_button: Button
+var _point_move_right_button: Button
 var _point_toolbar_controls: HBoxContainer
 var _point_handle_mode: OptionButton
 var _point_left_state_label: Label
@@ -1253,14 +1256,64 @@ func _create_point_toolbar() -> void:
 		maxi(1, roundi(2.0 * _editor_scale)),
 	)
 	_point_toolbar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_point_toolbar.custom_minimum_size.y = (
+		SELECTION_TOOLBAR_HEIGHT * _editor_scale
+	)
 
 	_point_toolbar_panel.add_child(_point_toolbar)
 
+	var point_label_row := HBoxContainer.new()
+	point_label_row.add_theme_constant_override("separation", 0)
+	point_label_row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_point_toolbar.add_child(point_label_row)
+
+	_point_reorder_buttons = HBoxContainer.new()
+	_point_reorder_buttons.add_theme_constant_override("separation", 0)
+	_point_reorder_buttons.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	point_label_row.add_child(_point_reorder_buttons)
+
+	var reorder_button_size := 16.0 * _editor_scale
+
+	_point_move_left_button = Button.new()
+	_point_move_left_button.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_MOVE_LEFT
+	)
+	_point_move_left_button.flat = true
+	_point_move_left_button.custom_minimum_size = Vector2(
+		reorder_button_size,
+		reorder_button_size,
+	)
+	_point_move_left_button.tooltip_text = "Move Point Left"
+	for style_name in [&"normal", &"hover", &"pressed", &"focus"]:
+		_point_move_left_button.add_theme_stylebox_override(
+			style_name,
+			StyleBoxEmpty.new(),
+		)
+	_point_reorder_buttons.add_child(_point_move_left_button)
+
 	_point_label = Label.new()
 	_point_label.text = "No Selection"
+	_point_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_point_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_point_toolbar.add_child(_point_label)
+	_point_reorder_buttons.add_child(_point_label)
 	_reserve_point_toolbar_label_column_width()
+
+	_point_move_right_button = Button.new()
+	_point_move_right_button.icon = EDITOR_THEME_CACHE.get_icon(
+		EDITOR_THEME_CACHE.ICON_MOVE_RIGHT
+	)
+	_point_move_right_button.flat = true
+	_point_move_right_button.custom_minimum_size = Vector2(
+		reorder_button_size,
+		reorder_button_size,
+	)
+	_point_move_right_button.tooltip_text = "Move Point Right"
+	for style_name in [&"normal", &"hover", &"pressed", &"focus"]:
+		_point_move_right_button.add_theme_stylebox_override(
+			style_name,
+			StyleBoxEmpty.new(),
+		)
+	_point_reorder_buttons.add_child(_point_move_right_button)
 
 	_point_toolbar_controls = HBoxContainer.new()
 	_point_toolbar_controls.add_theme_constant_override(
@@ -1335,17 +1388,11 @@ func _create_point_toolbar() -> void:
 
 func _reserve_point_toolbar_label_column_width() -> void:
 	var original_text := _point_label.text
-	var label_column_width := 0.0
-
-	for label_text in ["Ease", "Trans"]:
-		_point_label.text = label_text
-		label_column_width = maxf(
-			label_column_width,
-			_point_label.get_combined_minimum_size().x,
-		)
-
+	_point_label.text = "P99"
+	_point_label.custom_minimum_size.x = (
+		_point_label.get_combined_minimum_size().x
+	)
 	_point_label.text = original_text
-	_point_label.custom_minimum_size.x = label_column_width
 
 
 func _reserve_point_toolbar_control_side_label_width() -> void:
