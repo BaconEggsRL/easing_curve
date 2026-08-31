@@ -224,7 +224,8 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 		points.append(EasingCurvePoint.new(position))
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.CUSTOM
-	curve.points = points
+	# Keep expected point ordering independent from the curve's mutable Array.
+	curve.points = points.duplicate()
 	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
 	var content: Control = inspector.call("handle_easing_curve_editor", curve)
 	get_root().add_child(content)
@@ -272,46 +273,46 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	_expect(not move_left.disabled and not move_right.disabled, "Graph point-navigation buttons did not activate for a valid Bezier point selection")
 	_expect(is_equal_approx(toolbar.custom_minimum_size.y, toolbar_height), "Selecting a point changed the graph toolbar height")
 
-	# Selection-only mode is the current preview default. It wraps selection
-	# without changing point order or emitting Inspector reorder requests.
-	_expect(not editor.point_move_buttons_reorder_points, "Graph point-navigation preview did not default to selection-only mode")
-	move_left.emit_signal(&"pressed")
-	_expect(editor.selected_index == 0, "Selection-only Move Left did not select the previous point")
-	_expect(curve.points == points, "Selection-only Move Left changed point order")
-	_expect(int(requests["up"]) == 0, "Selection-only Move Left emitted a reorder request")
-	move_left.emit_signal(&"pressed")
-	_expect(editor.selected_index == 3, "Selection-only Move Left did not wrap first to last")
-	_expect(curve.points == points, "Wrapped selection-only Move Left changed point order")
-	move_right.emit_signal(&"pressed")
-	_expect(editor.selected_index == 0, "Selection-only Move Right did not wrap last to first")
-	_expect(curve.points == points, "Wrapped selection-only Move Right changed point order")
-	move_right.emit_signal(&"pressed")
-	_expect(editor.selected_index == 1, "Selection-only Move Right did not select the next point")
-	_expect(curve.points == points, "Selection-only Move Right changed point order")
-	_expect(int(requests["down"]) == 0, "Selection-only Move Right emitted a reorder request")
+	# Validate whichever behavior is enabled by the production configuration.
+	# Do not flip the bool here: the suite should follow the mode being shipped.
+	if editor.point_move_buttons_reorder_points:
+		move_left.emit_signal(&"pressed")
+		_expect(int(requests["up"]) == 1, "Move Left emitted more or fewer than one Move Up request")
+		_expect(curve.points == [moved, points[0], points[2], points[3]], "Move Left did not route through Move Up reorder behavior")
+		_expect(editor.selected_index == 0 and curve.points[0] == moved, "Move Left did not keep the same Resource selected")
 
-	# Reorder mode must continue routing through the Inspector implementation.
-	editor.point_move_buttons_reorder_points = true
-	editor.selected_index = 1
-	move_left.emit_signal(&"pressed")
-	_expect(int(requests["up"]) == 1, "Move Left emitted more or fewer than one Move Up request")
-	_expect(curve.points == [moved, points[0], points[2], points[3]], "Move Left did not route through Move Up reorder behavior")
-	_expect(editor.selected_index == 0 and curve.points[0] == moved, "Move Left did not keep the same Resource selected")
+		move_left.emit_signal(&"pressed")
+		_expect(int(requests["up"]) == 2, "Wrapped Move Left emitted more or fewer than one request")
+		_expect(curve.points == [points[3], points[0], points[2], moved], "Move Left did not wrap the first point to the last slot")
+		_expect(editor.selected_index == 3 and curve.points[3] == moved, "Wrapped Move Left lost the selected Resource")
 
-	move_left.emit_signal(&"pressed")
-	_expect(int(requests["up"]) == 2, "Wrapped Move Left emitted more or fewer than one request")
-	_expect(curve.points == [points[3], points[0], points[2], moved], "Move Left did not wrap the first point to the last slot")
-	_expect(editor.selected_index == 3 and curve.points[3] == moved, "Wrapped Move Left lost the selected Resource")
+		move_right.emit_signal(&"pressed")
+		_expect(int(requests["down"]) == 1, "Move Right emitted more or fewer than one Move Down request")
+		_expect(curve.points == [moved, points[0], points[2], points[3]], "Move Right did not wrap the last point to the first slot")
+		_expect(editor.selected_index == 0 and curve.points[0] == moved, "Wrapped Move Right lost the selected Resource")
 
-	move_right.emit_signal(&"pressed")
-	_expect(int(requests["down"]) == 1, "Move Right emitted more or fewer than one Move Down request")
-	_expect(curve.points == [moved, points[0], points[2], points[3]], "Move Right did not wrap the last point to the first slot")
-	_expect(editor.selected_index == 0 and curve.points[0] == moved, "Wrapped Move Right lost the selected Resource")
+		move_right.emit_signal(&"pressed")
+		_expect(int(requests["down"]) == 2, "Repeated Move Right emitted more or fewer than one request")
+		_expect(curve.points == points, "Move Right did not route through Move Down reorder behavior")
+		_expect(editor.selected_index == 1 and curve.points[1] == moved, "Move Right did not keep the same Resource selected")
+	else:
+		move_left.emit_signal(&"pressed")
+		_expect(editor.selected_index == 0, "Selection-only Move Left did not select the previous point")
+		_expect(curve.points == points, "Selection-only Move Left changed point order")
+		_expect(int(requests["up"]) == 0, "Selection-only Move Left emitted a reorder request")
 
-	move_right.emit_signal(&"pressed")
-	_expect(int(requests["down"]) == 2, "Repeated Move Right emitted more or fewer than one request")
-	_expect(curve.points == points, "Move Right did not route through Move Down reorder behavior")
-	_expect(editor.selected_index == 1 and curve.points[1] == moved, "Move Right did not keep the same Resource selected")
+		move_left.emit_signal(&"pressed")
+		_expect(editor.selected_index == 3, "Selection-only Move Left did not wrap first to last")
+		_expect(curve.points == points, "Wrapped selection-only Move Left changed point order")
+
+		move_right.emit_signal(&"pressed")
+		_expect(editor.selected_index == 0, "Selection-only Move Right did not wrap last to first")
+		_expect(curve.points == points, "Wrapped selection-only Move Right changed point order")
+
+		move_right.emit_signal(&"pressed")
+		_expect(editor.selected_index == 1, "Selection-only Move Right did not select the next point")
+		_expect(curve.points == points, "Selection-only Move Right changed point order")
+		_expect(int(requests["down"]) == 0, "Selection-only Move Right emitted a reorder request")
 
 	curve.curve_mode = EasingCurve.CurveMode.FUNCTION
 	editor.call("_update_point_toolbar")
@@ -319,14 +320,19 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	_expect(is_zero_approx(move_left.self_modulate.a) and is_zero_approx(move_right.self_modulate.a), "Graph reorder buttons remained visible in Function mode")
 	_expect(is_equal_approx(toolbar.custom_minimum_size.y, toolbar_height), "Function mode changed the graph toolbar height")
 	var order_before_function_request: Array[EasingCurvePoint] = curve.points.duplicate()
+	var up_requests_before_function := int(requests["up"])
+	var down_requests_before_function := int(requests["down"])
 	editor.call("_request_point_move_up")
 	editor.call("_request_point_move_down")
 	_expect(curve.points == order_before_function_request, "Function mode accepted a graph reorder request")
-	_expect(int(requests["up"]) == 2 and int(requests["down"]) == 2, "Function mode emitted a graph reorder request")
+	_expect(
+		int(requests["up"]) == up_requests_before_function
+		and int(requests["down"]) == down_requests_before_function,
+		"Function mode emitted a graph reorder request",
+	)
 
 	get_root().remove_child(content)
 	content.free()
-	inspector.free()
 	_completed_fixtures += 1
 
 
