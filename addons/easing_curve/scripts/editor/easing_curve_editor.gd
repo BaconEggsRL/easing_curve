@@ -1265,6 +1265,7 @@ func _create_point_toolbar() -> void:
 	var point_label_row := HBoxContainer.new()
 	point_label_row.add_theme_constant_override("separation", 0)
 	point_label_row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	point_label_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_point_toolbar.add_child(point_label_row)
 
 	_point_reorder_buttons = HBoxContainer.new()
@@ -1383,6 +1384,22 @@ func _create_point_toolbar() -> void:
 	_point_reset_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_point_reset_button.pressed.connect(_on_point_toolbar_reset_pressed)
 	_point_toolbar.add_child(_point_reset_button)
+
+
+	var toolbar_row_height := SELECTION_TOOLBAR_HEIGHT * _editor_scale
+	for toolbar_control: Control in [
+		_point_handle_mode,
+		_point_left_state,
+		_point_right_state,
+		_point_reset_button,
+	]:
+		toolbar_row_height = maxf(
+			toolbar_row_height,
+			toolbar_control.get_combined_minimum_size().y,
+		)
+	_point_toolbar.custom_minimum_size.y = toolbar_row_height
+	_point_toolbar_panel.custom_minimum_size.y = toolbar_row_height
+
 	_set_point_toolbar_reset_available(false)
 
 
@@ -1452,7 +1469,10 @@ func _update_point_toolbar() -> void:
 			else "No Selection"
 		)
 		_point_label.modulate.a = 0.6
-		_point_handle_mode.visible = false
+		_point_handle_mode.visible = true
+		_point_handle_mode.self_modulate.a = 0.0
+		_point_handle_mode.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_point_handle_mode.disabled = true
 		_set_point_toolbar_reset_available(false)
 		_set_point_toolbar_control_state_visible(
 			EasingCurvePoint.ControlSide.LEFT,
@@ -1469,6 +1489,9 @@ func _update_point_toolbar() -> void:
 	_point_label.text = "P%d" % selected_index
 	_point_label.modulate.a = 1.0
 	_point_handle_mode.visible = true
+	_point_handle_mode.self_modulate.a = 1.0
+	_point_handle_mode.mouse_filter = Control.MOUSE_FILTER_STOP
+	_point_handle_mode.disabled = false
 
 	_updating_point_toolbar = true
 
