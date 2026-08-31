@@ -63,6 +63,7 @@ $suites = @(
 	@{ Name = "serialization_transition_contract_test.gd"; Editor = $false },
 	@{ Name = "tween_equivalence_test.gd"; Editor = $false },
 	@{ Name = "easing_curve_control_editability_test.gd"; Editor = $true },
+	@{ Name = "easing_curve_preview_generator_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_editor_position_x_drag_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_linear_control_alias_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_points_list_add_editor_test.gd"; Editor = $true },

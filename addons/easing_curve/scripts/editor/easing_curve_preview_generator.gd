@@ -31,7 +31,7 @@ func _generate(
 	image.set_pixel(0, previous_y, line_color)
 
 	for x in range(1, size.x):
-		var offset := float(x) / float(size.x)
+		var offset := float(x) / float(size.x - 1)
 		var y := _sample_y(curve, offset, size.y)
 		for pixel in Geometry2D.bresenham_line(
 			Vector2i(x - 1, previous_y),

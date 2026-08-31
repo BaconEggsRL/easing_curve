@@ -34,6 +34,10 @@ func _run() -> void:
 		var image := texture.get_image()
 		_expect(image.get_size() == Vector2i(64, 64), "Preview texture used the wrong dimensions")
 		_expect(_count_visible_pixels(image) >= 64, "Preview texture did not contain a plotted curve")
+		_expect(
+			image.get_pixel(image.get_width() - 1, 0).a > 0.0,
+			"Preview did not sample the curve's right endpoint",
+		)
 
 	if _failures == 0:
 		print("PASS: %d EasingCurve preview generator checks" % _checks)

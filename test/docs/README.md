@@ -4,10 +4,9 @@
 
 ## Automated suites
 
-`test/runners/run_all_tests.gd` is the source of truth for the explicit
-automated-suite manifest. It currently registers 17 suites: eight headless and
-nine Editor-host. `test/runners/run_all_tests.ps1` retains the same manifest
-as a legacy wrapper. Their entrypoint scripts and `.uid` sidecars live under
+`test/runners/run_all_tests.ps1` is the sole source of truth for the explicit
+automated-suite manifest. It currently registers 18 suites: eight headless and
+ten Editor-host. Their entrypoint scripts and `.uid` sidecars live under
 `test/scripts/`. Do not infer an automated suite or its mode from its filename.
 
 ### Headless suites
@@ -26,6 +25,7 @@ as a legacy wrapper. Their entrypoint scripts and `.uid` sidecars live under
 The following suites require an Editor-host launch:
 
 - `easing_curve_control_editability_test.gd`
+- `easing_curve_preview_generator_test.gd`
 - `easing_curve_editor_position_x_drag_test.gd`
 - `easing_curve_linear_control_alias_test.gd`
 - `easing_curve_points_list_add_editor_test.gd`
@@ -49,14 +49,13 @@ misleadingly report zero checks. It is not a valid result for these tests.
 Run every headless and Editor-host suite independently with:
 
 ```powershell
-& $env:EASING_CURVE_GODOT_PATH --headless --path . --script res://test/runners/run_all_tests.gd --log-file test/_temp/full-suite.log
+.\test\runners\run_all_tests.ps1 --run
 ```
 
-If `EASING_CURVE_GODOT_PATH` is not set, replace it with the path to the Godot
-4.7 console executable. The native runner starts its 8 compatible suites with
-`--headless`, and adds `--editor` only for the 9 suites that require an
-Editor/Inspector host. `test/runners/run_all_tests.ps1` remains available as a
-legacy wrapper.
+The PowerShell runner uses `EASING_CURVE_GODOT_PATH` when set and otherwise uses
+its configured Godot 4.7 console fallback. It starts the 8 compatible suites
+with `--headless`, and adds `--editor` only for the 10 suites that require an
+Editor/Inspector host.
 
 Only after that command exits successfully with every suite passing, immediately
 run:
@@ -72,8 +71,8 @@ missing PASS marker, script error, or any other unexpected result; retain those
 artifacts for debugging. If tests are rerun while investigating a problem, run
 cleanup only after the final full suite passes.
 
-The native runner uses the executing Godot binary, creates a separate process
-and isolated `APPDATA` directory for every suite, and writes each child log
+The PowerShell runner creates a separate process and isolated `APPDATA`
+directory for every suite, and writes each child log
 under `test/_temp/runner`. A suite fails if it times out, exits unsuccessfully,
 lacks a PASS marker, or logs a script error. Each suite has a 60-second timeout;
 the runner terminates timed-out process trees and continues with the remaining
@@ -81,7 +80,7 @@ suites. Update checks are suppressed for headless Editor-host tests, while the
 Easing Curve plugin and Inspector remain enabled for those tests.
 
 `test/runners/run_godot.ps1` retains its existing behavior for standalone or
-legacy-wrapper invocations, including selecting the configured Godot 4.7.1
+full-suite invocations, including selecting the configured Godot 4.7.1
 console executable and supplying a repository-local log when one is not given.
 
 Under Godot 4.7 `--editor --headless`, `editor_undo_redo_test.gd` skips its
@@ -91,19 +90,19 @@ those fixtures in a visible Editor session instead.
 
 ## Test-asset ownership
 
-Only the 17 scripts under `test/scripts/` in the explicit runner manifest
+Only the 18 scripts under `test/scripts/` in the explicit runner manifest
 above are release-gating automated suites. The following assets are
 intentionally documented by their observed repository role; none is registered
-by `test/runners/run_all_tests.gd`.
+by `test/runners/run_all_tests.ps1`.
 
 ### Shared automated-test harness and fixtures
 
-- `editor_host_test_harness.gd` is preloaded by the nine Editor-host suites to
+- `editor_host_test_harness.gd` is preloaded by the ten Editor-host suites to
   require an Editor/Inspector host and create their Inspector contexts.
 - `presets/legacy_pre_flat_triangle.tres` and
   `presets/legacy_flat_without_force_linear.tres` are serialization fixtures
   loaded by `serialization_transition_contract_test.gd`.
-- `runners/run_godot.ps1` is the shared launcher used by the legacy complete-suite
+- `runners/run_godot.ps1` is the shared launcher used by the complete-suite
   runner; it is not a suite entrypoint.
 
 ### Manual regression fixture
