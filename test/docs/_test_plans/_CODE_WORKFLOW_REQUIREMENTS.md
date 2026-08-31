@@ -544,7 +544,7 @@ A production-behavior work item normally closes with:
 - `git diff --check` passing;
 - final Git status/diff scope review;
 - authoritative full registered suite passing;
-- immediately after that fully passing suite, `test/scripts/_run_all_tests.ps1
+- immediately after that fully passing suite, `test/runners/run_all_tests.ps1
   --cleanup` passing, with temporary artifacts removed from `test/_temp` and
   its tracked `.gdignore` preserved;
 - applicable manual validation passing or an explicitly approved outstanding
@@ -569,7 +569,7 @@ commonly including:
 
 - authoritative full suite;
 - cleanup of successful-suite temporary artifacts with
-  `test/scripts/_run_all_tests.ps1 --cleanup`;
+  `test/runners/run_all_tests.ps1 --cleanup`;
 - `git diff --check`;
 - complete visible-editor smoke where applicable;
 - compatibility testing on claimed engine/runtime versions;

@@ -7,8 +7,23 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$godotLauncher = Join-Path $PSScriptRoot "_run_godot.ps1"
+
+function Resolve-ProjectRoot {
+	$candidate = (Resolve-Path $PSScriptRoot).Path
+	while ($true) {
+		if (Test-Path -LiteralPath (Join-Path $candidate "project.godot") -PathType Leaf) {
+			return $candidate
+		}
+		$parent = Split-Path -Parent $candidate
+		if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $candidate) {
+			throw "Could not locate project.godot above runner directory: $PSScriptRoot"
+		}
+		$candidate = $parent
+	}
+}
+
+$projectRoot = Resolve-ProjectRoot
+$godotLauncher = Join-Path $PSScriptRoot "run_godot.ps1"
 $suiteTimeoutSeconds = 60
 $killWaitMilliseconds = 5000
 $powerShellExecutable = (Get-Process -Id $PID).Path
@@ -59,7 +74,7 @@ $suites = @(
 )
 
 function Show-Help {
-	Write-Host "Usage: .\\_run_all_tests.ps1 [--help | --list | --run | --cleanup] [-GodotPath <path>]"
+	Write-Host "Usage: .\\run_all_tests.ps1 [--help | --list | --run | --cleanup] [-GodotPath <path>]"
 	Write-Host ""
 	Write-Host "Options:"
 	Write-Host "  --help  Show this help menu."

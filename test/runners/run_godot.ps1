@@ -35,7 +35,21 @@ function Remove-DirectoryIfEmpty {
 	}
 }
 
-$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+function Resolve-ProjectRoot {
+	$candidate = (Resolve-Path $PSScriptRoot).Path
+	while ($true) {
+		if (Test-Path -LiteralPath (Join-Path $candidate "project.godot") -PathType Leaf) {
+			return $candidate
+		}
+		$parent = Split-Path -Parent $candidate
+		if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $candidate) {
+			throw "Could not locate project.godot above runner directory: $PSScriptRoot"
+		}
+		$candidate = $parent
+	}
+}
+
+$projectRoot = Resolve-ProjectRoot
 for ($index = 0; $index -lt $GodotArgs.Count; $index += 1) {
 	$argument = $GodotArgs[$index]
 	$projectPath = ""
