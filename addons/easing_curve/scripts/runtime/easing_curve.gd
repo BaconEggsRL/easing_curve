@@ -55,6 +55,9 @@ const min_value := 0.0
 const max_value := 1.0
 const EASING_LIBRARY := preload("res://addons/easing_curve/scripts/runtime/easing.gd")
 const BEZIER_SOLVER := preload("res://addons/easing_curve/scripts/runtime/bezier_solver.gd")
+const PRESET_GEOMETRY_FACTORY := preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_preset_geometry_factory.gd"
+)
 const COMPILED_BEZIER_SEGMENTS := preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_compiled_segments.gd"
 )
@@ -1430,39 +1433,25 @@ func reset_selected_preset() -> bool:
 
 
 func cubic_bezier(x0, y0, x1, y1) -> void:
-	var p0 := EasingCurvePoint.new(Vector2(0, 0))
-	var p1 := EasingCurvePoint.new(Vector2(1, 1))
-	p0.right_control_point = Vector2(x0, y0)
-	p1.left_control_point = Vector2(x1, y1)
-	add_point(p0)
-	add_point(p1)
+	_append_preset_points(
+		PRESET_GEOMETRY_FACTORY.cubic_bezier(
+			Vector4(x0, y0, x1, y1),
+		)
+	)
 
 
 func cubic_bezier_pair(first_controls: Vector4, second_controls: Vector4) -> void:
-	# Combined Tween modes are two normalized halves joined at their mathematical transition.
-	# Scaling unit control sets around (0.5, 0.5) keeps that boundary editor-visible.
-	var p0 := EasingCurvePoint.new(Vector2.ZERO)
-	var midpoint := EasingCurvePoint.new(Vector2(0.5, 0.5))
-	var p1 := EasingCurvePoint.new(Vector2.ONE)
-	p0.right_control_point = Vector2(first_controls.x, first_controls.y) * 0.5
-	midpoint.left_control_point = Vector2(first_controls.z, first_controls.w) * 0.5
-	midpoint.right_control_point = Vector2(0.5, 0.5) + Vector2(second_controls.x, second_controls.y) * 0.5
-	p1.left_control_point = Vector2(0.5, 0.5) + Vector2(second_controls.z, second_controls.w) * 0.5
-	add_point(p0)
-	add_point(midpoint)
-	add_point(p1)
+	_append_preset_points(
+		PRESET_GEOMETRY_FACTORY.cubic_bezier_pair(
+			first_controls,
+			second_controls,
+		)
+	)
 
 
-func _set_composed_bezier_preset(in_controls: Vector4, out_controls: Vector4) -> void:
-	match ease_type:
-		EASE.IN:
-			cubic_bezier(in_controls.x, in_controls.y, in_controls.z, in_controls.w)
-		EASE.OUT:
-			cubic_bezier(out_controls.x, out_controls.y, out_controls.z, out_controls.w)
-		EASE.IN_OUT:
-			cubic_bezier_pair(in_controls, out_controls)
-		EASE.OUT_IN:
-			cubic_bezier_pair(out_controls, in_controls)
+func _append_preset_points(point_values: Array[EasingCurvePoint]) -> void:
+	for point in point_values:
+		add_point(point)
 
 
 func set_ease(_ease: EASE) -> void:
@@ -2799,83 +2788,17 @@ func _update_preset() -> void:
 	if curve_mode == CurveMode.FUNCTION:
 		_init_function()
 		return
+	if trans_type == TRANS.CUSTOM:
+		return
 
-	match trans_type:
-		TRANS.CUSTOM:
-			return
-		TRANS.CONSTANT:
-			add_point(EasingCurvePoint.new(Vector2(0, constant_value)))
-			add_point(EasingCurvePoint.new(Vector2(1, constant_value)))
-		TRANS.LINEAR:
-			add_point(EasingCurvePoint.new(Vector2(0, 0)))
-			add_point(EasingCurvePoint.new(Vector2(1, 1)))
-		TRANS.SINE:
-			# A sine graph is not polynomial; these handles are optimized approximations.
-			_set_composed_bezier_preset(
-				Vector4(.361149818, -.000326393, .673540771, .486909956),
-				Vector4(.326459229, .513090014, .638850212, 1.0003264),
-			)
-		TRANS.QUAD:
-			# Degree elevation makes each quadratic half an exact cubic Bézier.
-			_set_composed_bezier_preset(
-				Vector4(1.0 / 3.0, 0, 2.0 / 3.0, 1.0 / 3.0),
-				Vector4(1.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0, 1),
-			)
-		TRANS.CUBIC:
-			# Cubic easing is exact. OUT_IN simplifies to one global cubic, so it needs no midpoint.
-			match ease_type:
-				EASE.IN:
-					cubic_bezier(1.0 / 3.0, 0, 2.0 / 3.0, 0)
-				EASE.OUT:
-					cubic_bezier(1.0 / 3.0, 1, 2.0 / 3.0, 1)
-				EASE.IN_OUT:
-					cubic_bezier_pair(
-						Vector4(1.0 / 3.0, 0, 2.0 / 3.0, 0),
-						Vector4(1.0 / 3.0, 1, 2.0 / 3.0, 1),
-					)
-				EASE.OUT_IN:
-					cubic_bezier(1.0 / 3.0, 1, 2.0 / 3.0, 0)
-		TRANS.QUART:
-			# Degree-four and degree-five graphs require optimized cubic approximations.
-			_set_composed_bezier_preset(
-				Vector4(.439210773, .004901892, .732221782, -.067109145),
-				Vector4(.267778218, 1.06710911, .560789227, .995098114),
-			)
-		TRANS.QUINT:
-			_set_composed_bezier_preset(
-				Vector4(.522905409, .010620826, .775169373, -.113423072),
-				Vector4(.224830627, 1.11342311, .477094591, .989379168),
-			)
-		TRANS.EXPO:
-			# Godot's endpoint corrections introduce small discontinuities that continuous geometry cannot copy.
-			_set_composed_bezier_preset(
-				Vector4(.632421792, .015909066, .846576214, -.060294569),
-				Vector4(.153921053, 1.0531143, .359647602, .985371113),
-			)
-		TRANS.CIRC:
-			# A polynomial cubic can only approximate a circular arc.
-			_set_composed_bezier_preset(
-				Vector4(.565830648, .002238899, .999889314, .459180534),
-				Vector4(.000110686, .540819466, .434169352, .99776113),
-			)
-		TRANS.BACK:
-			# Back is cubic; combined modes are exact pieces, with Godot's larger IN_OUT overshoot.
-			match ease_type:
-				EASE.IN:
-					cubic_bezier(1.0 / 3.0, 0, 2.0 / 3.0, -overshoot / 3.0)
-				EASE.OUT:
-					cubic_bezier(1.0 / 3.0, 1.0 + overshoot / 3.0, 2.0 / 3.0, 1)
-				EASE.IN_OUT:
-					var in_out_overshoot := overshoot * 1.525
-					cubic_bezier_pair(
-						Vector4(1.0 / 3.0, 0, 2.0 / 3.0, -in_out_overshoot / 3.0),
-						Vector4(1.0 / 3.0, 1.0 + in_out_overshoot / 3.0, 2.0 / 3.0, 1),
-					)
-				EASE.OUT_IN:
-					cubic_bezier_pair(
-						Vector4(1.0 / 3.0, 1.0 + overshoot / 3.0, 2.0 / 3.0, 1),
-						Vector4(1.0 / 3.0, 0, 2.0 / 3.0, -overshoot / 3.0),
-					)
+	_append_preset_points(
+		PRESET_GEOMETRY_FACTORY.build(
+			StringName(TRANS.keys()[trans_type]),
+			StringName(EASE.keys()[ease_type]),
+			constant_value,
+			overshoot,
+		)
+	)
 
 	# Apply persistent global transforms to newly generated Bézier presets.
 	if reverse or invert:
