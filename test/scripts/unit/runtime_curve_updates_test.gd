@@ -1,4 +1,4 @@
-extends "res://test/scripts/test_case.gd"
+extends "res://test/scripts/support/test_case.gd"
 
 const EASING_LIBRARY = preload("res://addons/easing_curve/scripts/runtime/easing.gd")
 const BEZIER_SOLVER = preload("res://addons/easing_curve/scripts/runtime/bezier_solver.gd")

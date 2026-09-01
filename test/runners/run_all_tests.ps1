@@ -389,7 +389,7 @@ foreach ($suite in $suites) {
 	$arguments += @(
 		"--headless",
 		"--path", $isolatedProjectDirectory,
-		"--script", "res://test/scripts/$($suite.Name)",
+		"--script", "res://test/scripts/unit/$($suite.Name)",
 		"--log-file", $godotLogPath
 	)
 

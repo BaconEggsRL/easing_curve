@@ -38,7 +38,7 @@ The following suites require an Editor-host launch:
 Run an Editor-dependent test with:
 
 ```text
-./test/runners/run_godot.ps1 --editor --headless --path . --script res://test/scripts/<test_name>.gd
+./test/runners/run_godot.ps1 --editor --headless --path . --script res://test/scripts/unit/<test_name>.gd
 ```
 
 Plain `--headless` execution may not instantiate `EditorInspectorPlugin` and can
@@ -111,7 +111,7 @@ responses. It does not invoke real `git push`, tag mutation, or `gh` commands.
 
 ## Test-asset ownership
 
-Only the 18 scripts under `test/scripts/` in the explicit runner manifest
+Only the 18 scripts under `test/scripts/unit/` in the explicit runner manifest
 above are release-gating automated suites. The following assets are
 intentionally documented by their observed repository role; none is registered
 by `test/runners/run_all_tests.ps1`.

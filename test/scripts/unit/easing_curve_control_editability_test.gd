@@ -1,7 +1,7 @@
-extends "res://test/scripts/test_case.gd"
+extends "res://test/scripts/support/test_case.gd"
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
-const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
+const EDITOR_HOST = preload("res://test/scripts/support/editor_host_test_harness.gd")
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
 
 func _init() -> void:

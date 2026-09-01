@@ -1,4 +1,4 @@
-extends "res://test/scripts/test_case.gd"
+extends "res://test/scripts/support/test_case.gd"
 
 func _init() -> void:
 	_test_click_release_does_not_delete_next_point()

@@ -1,6 +1,6 @@
-extends "res://test/scripts/test_case.gd"
+extends "res://test/scripts/support/test_case.gd"
 
-const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
+const EDITOR_HOST = preload("res://test/scripts/support/editor_host_test_harness.gd")
 const PREVIEW_GENERATOR = preload(
 	"res://addons/easing_curve/scripts/editor/easing_curve_preview_generator.gd"
 )

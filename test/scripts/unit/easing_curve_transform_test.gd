@@ -1,4 +1,4 @@
-extends "res://test/scripts/test_case.gd"
+extends "res://test/scripts/support/test_case.gd"
 
 const EDITOR_UNDO := preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const CUSTOM_SAVE_PATH := "res://test/_transform_custom_round_trip.tres"

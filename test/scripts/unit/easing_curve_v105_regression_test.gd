@@ -1,4 +1,4 @@
-extends "res://test/scripts/test_case.gd"
+extends "res://test/scripts/support/test_case.gd"
 
 const ROUND_TRIP_PATH := "res://test/_v105_state_round_trip.tres"
 

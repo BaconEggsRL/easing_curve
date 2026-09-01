@@ -1,12 +1,12 @@
-extends "res://test/scripts/test_case.gd"
+extends "res://test/scripts/support/test_case.gd"
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
 const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
-const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
-const EDITOR_DRIVER = preload("res://test/scripts/easing_curve_editor_test_driver.gd")
+const EDITOR_HOST = preload("res://test/scripts/support/editor_host_test_harness.gd")
+const EDITOR_DRIVER = preload("res://test/scripts/support/easing_curve_editor_test_driver.gd")
 
 func _init() -> void:
 	if not EDITOR_HOST.require_inspector_host("editor_undo_redo_test.gd"):
