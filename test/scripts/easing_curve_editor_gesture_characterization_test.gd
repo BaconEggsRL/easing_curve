@@ -17,6 +17,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
+	await _test_autofit_waits_for_function_toolbar_layout()
 	_test_zoom_behavioral_invariants()
 	_test_bezier_draw_clipping_and_tessellation()
 	_test_pending_add_cancel_and_no_op_release()
@@ -205,6 +206,43 @@ func _test_loaded_resource_initial_autofit_gate() -> void:
 		)
 		loaded_editor.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
+
+
+func _test_autofit_waits_for_function_toolbar_layout() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
+	var content: Control = inspector.call("handle_easing_curve_editor", curve)
+	get_root().add_child(content)
+	var editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+	editor.size = Vector2(600.0, 300.0)
+	await process_frame
+
+	curve.trans_type = EasingCurve.TRANS.ELASTIC
+	editor.size = Vector2(600.0, 300.0)
+	inspector.call("_autofit_curve_editor")
+	await process_frame
+	await process_frame
+	await process_frame
+
+	_expect(
+		not editor.get("_point_toolbar_panel").visible,
+		"Function preset Autofit ran before the point toolbar was hidden",
+	)
+	var fitted_step := editor._zoom_step
+	var fitted_pan := editor.pan_offset
+	editor.autofit()
+	_expect(
+		editor._zoom_step == fitted_step,
+		"Second Autofit changed the Function preset zoom after layout settled",
+	)
+	_expect(
+		editor.pan_offset.is_equal_approx(fitted_pan),
+		"Second Autofit shifted the Function preset after layout settled",
+	)
+
+	get_root().remove_child(content)
+	content.free()
 
 
 func _test_zoom_behavioral_invariants() -> void:

@@ -14,7 +14,7 @@ const BEZIER_SOLVER = preload(
 )
 
 var use_pending_add := true
-var hide_point_toolbar_for_functions := false
+var hide_point_toolbar_for_functions := true
 # True: reorder through the Inspector. False: change graph selection only.
 var point_move_buttons_reorder_points := false
 
@@ -791,13 +791,19 @@ func select_point(point: EasingCurvePoint) -> bool:
 	return true
 
 
+func _is_point_toolbar_hidden() -> bool:
+	return (
+		hide_point_toolbar_for_functions
+		and _curve != null
+		and _curve.curve_mode == EasingCurve.CurveMode.FUNCTION
+	)
+
+
 func update_view_transform() -> void:
 	var margin := 4.0 * _editor_scale
 	var toolbar_height := (
 		0.0
-		if hide_point_toolbar_for_functions
-		and _curve != null
-		and _curve.curve_mode == EasingCurve.CurveMode.FUNCTION
+		if _is_point_toolbar_hidden()
 		else SELECTION_TOOLBAR_HEIGHT * _editor_scale
 	)
 
@@ -1014,9 +1020,7 @@ func _get_graph_view_rect() -> Rect2:
 	var margin := 4.0 * _editor_scale
 	var toolbar_height := (
 		0.0
-		if hide_point_toolbar_for_functions
-		and _curve != null
-		and _curve.curve_mode == EasingCurve.CurveMode.FUNCTION
+		if _is_point_toolbar_hidden()
 		else SELECTION_TOOLBAR_HEIGHT * _editor_scale
 	)
 	return Rect2(
@@ -1056,6 +1060,7 @@ func _on_curve_changed() -> void:
 		dragging_control = ControlIndex.NONE
 		_clear_axis_drag()
 	_update_point_toolbar()
+	update_minimum_size()
 	queue_redraw()
 
 
@@ -1064,10 +1069,15 @@ func _get_minimum_size() -> Vector2:
 		MIN_GRAPH_HEIGHT,
 		size.x * ASPECT_RATIO,
 	)
+	var toolbar_height := (
+		0.0
+		if _is_point_toolbar_hidden()
+		else SELECTION_TOOLBAR_HEIGHT
+	)
 
 	return Vector2(
 		64.0,
-		graph_height + SELECTION_TOOLBAR_HEIGHT,
+		graph_height + toolbar_height,
 	) * _editor_scale
 
 
@@ -1561,14 +1571,12 @@ func _update_point_toolbar() -> void:
 	if _point_toolbar == null:
 		return
 
-	var hide_toolbar := (
-		hide_point_toolbar_for_functions
-		and _curve != null
-		and _curve.curve_mode == EasingCurve.CurveMode.FUNCTION
-	)
+	var hide_toolbar := _is_point_toolbar_hidden()
 	_point_toolbar_panel.visible = not hide_toolbar
 
 	if hide_toolbar:
+		_set_point_toolbar_reorder_available(false, false)
+		_set_point_toolbar_reset_available(false)
 		return
 
 	var valid_selection := (

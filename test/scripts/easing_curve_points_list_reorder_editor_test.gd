@@ -233,7 +233,9 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	var move_left: Button = editor.get("_point_move_left_button")
 	var move_right: Button = editor.get("_point_move_right_button")
 	var toolbar: GridContainer = editor.get("_point_toolbar")
+	var toolbar_panel: VBoxContainer = editor.get("_point_toolbar_panel")
 	var toolbar_height := toolbar.custom_minimum_size.y
+	var bezier_minimum_size: Vector2 = editor.call("_get_minimum_size")
 	var up_connections := editor.point_move_up_requested.get_connections()
 	var down_connections := editor.point_move_down_requested.get_connections()
 	_expect(
@@ -316,9 +318,14 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 
 	curve.curve_mode = EasingCurve.CurveMode.FUNCTION
 	editor.call("_update_point_toolbar")
+	var function_minimum_size: Vector2 = editor.call("_get_minimum_size")
 	_expect(move_left.disabled and move_right.disabled, "Graph reorder buttons remained active in Function mode")
-	_expect(is_zero_approx(move_left.self_modulate.a) and is_zero_approx(move_right.self_modulate.a), "Graph reorder buttons remained visible in Function mode")
-	_expect(is_equal_approx(toolbar.custom_minimum_size.y, toolbar_height), "Function mode changed the graph toolbar height")
+	_expect(not toolbar_panel.visible, "Point-selection toolbar panel remained visible in Function mode")
+	_expect(is_equal_approx(toolbar.custom_minimum_size.y, toolbar_height), "Function mode changed the toolbar's internal row height")
+	_expect(
+		function_minimum_size.y < bezier_minimum_size.y,
+		"Function mode did not reclaim the point-selection toolbar spacing",
+	)
 	var order_before_function_request: Array[EasingCurvePoint] = curve.points.duplicate()
 	var up_requests_before_function := int(requests["up"])
 	var down_requests_before_function := int(requests["down"])

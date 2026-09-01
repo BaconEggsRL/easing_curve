@@ -2410,6 +2410,18 @@ func _consume_initial_autofit_for_loaded_resource(object: EasingCurve) -> bool:
 
 
 func _autofit_curve_editor() -> void:
+	if not is_instance_valid(easing_curve_editor):
+		return
+	var tree := easing_curve_editor.get_tree()
+	if tree == null:
+		return
+
+	# Preset/resource changes may rebuild the Inspector and hide/show the
+	# point toolbar. Let those minimum-size/layout changes settle before
+	# measuring the graph rect used by Autofit.
+	await tree.process_frame
+	await tree.process_frame
+
 	if (
 		is_instance_valid(easing_curve_editor)
 		and easing_curve_editor._slider != null
