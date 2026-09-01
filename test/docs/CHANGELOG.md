@@ -3,6 +3,36 @@
 Release entries are ordered newest to oldest. Add future releases above the
 current top entry.
 
+## v1.0.9
+
+### Added
+
+* Added EasingCurve thumbnail previews in the Godot resource browser.
+* Added selected-point navigation controls to the graph toolbar, including a centered `P#` indicator and previous/next selection with wraparound.
+
+### Improved
+
+* Expanded Bounce `num_bounces` from 1–10 to 1–20, enabled slider-preferred editing, and increased `bounce_damping` precision from 0.1 to 0.01.
+* External EasingCurve resources now receive one initial graph Autofit when first opened while later Inspector rebuilds continue to preserve the resource's current in-session view state.
+* Editor controls now reuse cached Godot editor-theme icons instead of bundling redundant copies, improving theme consistency and reducing plugin assets.
+* Reorganized editor/runtime/test internals and centralized point-state transition rules while preserving public curve, point, serialization, selection, and Undo/Redo behavior.
+
+### Performance
+
+* Improved graph rendering with visible-range clipping and adaptive Bézier tessellation.
+* Added a dirty-invalidated compiled Bézier segment cache with locality/binary lookup and compatibility fallback. Measured 150,000-sample speedups ranged from 1.39x for 2-point curves to 3.35x for 128-point curves versus the retained linear reference path.
+
+### Fixed
+
+* Fixed update-check notifications so `update_available` is no longer gated by debug logging.
+* Hardened automated test gating so previously unclassified top-level Godot `ERROR:` or `WARNING:` diagnostics fail the affected suite instead of being silently accepted.
+
+### Testing
+
+* Reorganized registered automated suites under `test/scripts/` and the PowerShell runners under `test/runners/`.
+* Expanded the authoritative manifest to 18 suites: 8 headless and 10 Editor-host.
+* Final v1.0.9 code closeout: 18/18 suites passed; runner exit 0; 18 PASS markers; 93 explicitly classified expected diagnostics; 0 unexpected diagnostics; 0 `SCRIPT ERROR:`.
+
 ## v1.0.8
 
 ### Added
