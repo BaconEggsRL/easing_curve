@@ -2,9 +2,6 @@ extends SceneTree
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
-const DEFERRED_PARAMETER_EDITOR_PROPERTY = preload(
-	"res://addons/easing_curve/scripts/editor/inspector/deferred_parameter_editor_property.gd"
-)
 const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
@@ -49,7 +46,6 @@ func _init() -> void:
 	_test_preset_ease_control_availability()
 	_test_preset_reset_undo_redo()
 	_test_function_parameter_changes()
-	_test_float_style_integer_parameter_slider()
 	_test_parameter_reset()
 	_test_generate_action()
 
@@ -959,94 +955,6 @@ func _test_function_parameter_changes() -> void:
 		)
 		_verify_single_action(history, curve, before, after, "%s parameter" % property_name, 2)
 		_dispose_history(history)
-
-
-func _test_float_style_integer_parameter_slider() -> void:
-	var editor := EasingCurveEditor.new()
-	var history := UndoRedo.new()
-	var curve := EasingCurve.new()
-	_expect(
-		typeof(curve.num_bounces) == TYPE_INT,
-		"num_bounces stopped being an integer runtime property",
-	)
-
-	var bounce_native := EditorProperty.new()
-	var bounce_input := EditorSpinSlider.new()
-	bounce_input.editing_integer = true
-	bounce_input.min_value = 1.0
-	bounce_input.max_value = 20.0
-	bounce_input.step = 1.0
-	bounce_native.add_child(bounce_input)
-	var bounce_wrapper := DEFERRED_PARAMETER_EDITOR_PROPERTY.new()
-	_expect(
-		bounce_wrapper.setup(
-			bounce_native,
-			&"num_bounces",
-			editor,
-			history,
-		),
-		"num_bounces deferred editor could not wrap its native slider",
-	)
-	_expect(
-		not bounce_wrapper.input.editing_integer,
-		"num_bounces did not switch to float-style value dragging",
-	)
-	_expect(
-		bounce_wrapper.input.get_control_state() == EditorSpinSlider.CONTROL_STATE_HIDE,
-		"num_bounces retained the range grabber that bypasses drag-speed scaling",
-	)
-	_expect(
-		is_equal_approx(bounce_wrapper.input.step, 1.0),
-		"num_bounces changed its normal whole-integer step outside a drag",
-	)
-	bounce_wrapper._set_float_backed_integer_drag_active(true)
-	_expect(
-		is_equal_approx(bounce_wrapper.input.step, 0.1),
-		"num_bounces did not reduce its internal step during value dragging",
-	)
-	bounce_wrapper.input.value = 3.64
-	_expect(
-		is_equal_approx(bounce_wrapper.input.value, 3.6),
-		"num_bounces drag backing value did not retain fractional precision",
-	)
-	_expect(
-		roundi(bounce_wrapper.input.value) == 4,
-		"num_bounces fractional drag value no longer rounds to an integer result",
-	)
-	bounce_wrapper._set_float_backed_integer_drag_active(false)
-	_expect(
-		is_equal_approx(bounce_wrapper.input.step, 1.0),
-		"num_bounces did not restore its whole-integer step after dragging",
-	)
-
-	var steps_native := EditorProperty.new()
-	var steps_input := EditorSpinSlider.new()
-	steps_input.editing_integer = true
-	steps_input.step = 1.0
-	steps_native.add_child(steps_input)
-	var steps_wrapper := DEFERRED_PARAMETER_EDITOR_PROPERTY.new()
-	_expect(
-		steps_wrapper.setup(
-			steps_native,
-			&"steps",
-			editor,
-			history,
-		),
-		"steps deferred editor could not wrap its native slider",
-	)
-	_expect(
-		steps_wrapper.input.editing_integer,
-		"Float-backed integer dragging leaked to other integer parameters",
-	)
-	_expect(
-		steps_wrapper.input.get_control_state() == EditorSpinSlider.CONTROL_STATE_DEFAULT,
-		"num_bounces grabber override leaked to other integer parameters",
-	)
-
-	bounce_wrapper.free()
-	steps_wrapper.free()
-	editor.free()
-	_dispose_history(history)
 
 
 func _test_generate_action() -> void:

@@ -697,7 +697,7 @@ var points: Array[EasingCurvePoint]:
 # ------------------
 ## Represents the number of random points to generate. Must be a positive integer >= 2.
 ## Irregular deviations shrink with more points; Jitter uses persistent-amplitude variation.
-@export_range(2, 100, 1) var num_points: int = 3:
+@export_range(2, 100, 1, "prefer_slider") var num_points: int = 3:
 	set(value):
 		if num_points == value:
 			return
@@ -738,7 +738,7 @@ var _irregular_points_y: Array[float] = []:
 # ------------------
 ## Represents the number of equal steps to divide the animation into.
 ## Must be a positive integer.
-@export_range(0, 100, 1) var steps: int = 4:
+@export_range(0, 100, 1, "prefer_slider") var steps: int = 4:
 	set(value):
 		if steps != value:
 			steps = value
@@ -798,7 +798,7 @@ var _irregular_points_y: Array[float] = []:
 # BOUNCE
 # ------------------
 ## The number of bounces before settling.
-@export_range(1, 20, 1) var num_bounces: int = 3:
+@export_range(1, 20, 1, "prefer_slider") var num_bounces: int = 3:
 	set(value):
 		if num_bounces != value:
 			num_bounces = value
