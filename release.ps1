@@ -131,6 +131,7 @@ $GodotLauncher = Join-Path $TestRunnersDirectory "run_godot.ps1"
 $Changelog = Join-Path $ProjectRoot "test\docs\CHANGELOG.md"
 $Tag = "v$Version"
 $ZipPath = Join-Path $ProjectRoot "_exports\_asset_store_builds\easing_curve_v$Version.zip"
+$ReleaseCommitMessage = "Release $Tag"
 
 function Write-Step {
     param([string]$Text)
@@ -213,6 +214,55 @@ function Test-GitClean {
     $Status = @(git status --porcelain)
     Assert-LastExitCode "git status"
     return $Status.Count -eq 0
+}
+
+
+function Assert-ReleaseBranchAndCleanTree {
+    param(
+        [string]$ModeName,
+        [string]$ActionName
+    )
+
+    $CurrentBranch = (git branch --show-current).Trim()
+    Assert-LastExitCode "git branch"
+
+    if ($CurrentBranch -ne $ReleaseBranch) {
+        throw "$ModeName must run from '$ReleaseBranch'. Current branch is '$CurrentBranch'."
+    }
+
+    if (-not (Test-GitClean)) {
+        throw (
+            "Working tree must be clean before $ActionName. " +
+            "Commit any validation/build changes first."
+        )
+    }
+
+}
+
+
+function Assert-ReleaseRemoteCurrency {
+    param([string]$ActionName)
+
+    git fetch origin
+    Assert-LastExitCode "git fetch"
+
+    $RemoteOnlyCount = (
+        git rev-list --right-only --count "$ReleaseBranch...origin/$ReleaseBranch"
+    ).Trim()
+    Assert-LastExitCode "git rev-list"
+
+    if ([int]$RemoteOnlyCount -ne 0) {
+        throw "Local '$ReleaseBranch' is behind origin. Update it before $ActionName."
+    }
+}
+
+
+function Assert-GitHubCliAvailable {
+    param([string]$ModeName)
+
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        throw "GitHub CLI 'gh' was not found. Install/authenticate it before $ModeName mode."
+    }
 }
 
 function Invoke-DiffCheck {
@@ -412,6 +462,162 @@ function Get-ChangelogReleaseNotes {
     return ($Lines[$Start..($End - 1)] -join [Environment]::NewLine)
 }
 
+
+function New-ReleaseNotesFile {
+    $ReleaseNotes = Get-ChangelogReleaseNotes
+    $ReleaseNotesPath = Join-Path (
+        [IO.Path]::GetTempPath()
+    ) ("easing-curve-{0}-release-notes.md" -f $Version)
+
+    try {
+        [System.IO.File]::WriteAllText(
+            $ReleaseNotesPath,
+            $ReleaseNotes,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+    }
+    catch {
+        Remove-Item -LiteralPath $ReleaseNotesPath -Force -ErrorAction SilentlyContinue
+        throw
+    }
+
+    return [pscustomobject]@{
+        Path = $ReleaseNotesPath
+        Text = $ReleaseNotes
+    }
+}
+
+
+function Remove-ReleaseNotesFile {
+    param([pscustomobject]$ReleaseNotesFile)
+
+    if ($null -eq $ReleaseNotesFile) {
+        return
+    }
+
+    Remove-Item `
+        -LiteralPath $ReleaseNotesFile.Path `
+        -Force `
+        -ErrorAction SilentlyContinue
+}
+
+
+function Write-ReleaseNotesPreview {
+    param([string]$ReleaseNotes)
+
+    Write-Host ""
+    Write-Host "Release notes:"
+    Write-Host "--------------"
+    Write-Host $ReleaseNotes
+    Write-Host "--------------"
+    Write-Host ""
+}
+
+
+function Publish-NewReleaseGitRefs {
+    git tag -a $Tag -m "$Tag"
+    Assert-LastExitCode "git tag"
+
+    git push origin $ReleaseBranch
+    Assert-LastExitCode "git push branch"
+
+    git push origin $Tag
+    Assert-LastExitCode "git push tag"
+}
+
+
+function Update-ExistingReleaseGitRefs {
+    param([string]$ReleaseHead)
+
+    # The release commit may have been amended, which changes its SHA.
+    # --force-with-lease protects against overwriting unexpected remote changes.
+    git push --force-with-lease origin $ReleaseBranch
+    Assert-LastExitCode "git push branch"
+
+    git tag -f -a $Tag -m "$Tag" $ReleaseHead
+    Assert-LastExitCode "git tag"
+
+    git push --force origin "refs/tags/$Tag"
+    Assert-LastExitCode "git push tag"
+}
+
+
+function New-GitHubRelease {
+    param([string]$ReleaseNotesPath)
+
+    gh release create `
+        $Tag `
+        $ZipPath `
+        --repo $Repository `
+        --title "$Tag" `
+        --notes-file $ReleaseNotesPath `
+        --latest
+    Assert-LastExitCode "gh release create"
+}
+
+
+function Update-GitHubRelease {
+    param([string]$ReleaseNotesPath)
+
+    gh release upload `
+        $Tag `
+        $ZipPath `
+        --repo $Repository `
+        --clobber
+    Assert-LastExitCode "gh release upload"
+
+    gh release edit `
+        $Tag `
+        --repo $Repository `
+        --title "$Tag" `
+        --target $ReleaseBranch `
+        --notes-file $ReleaseNotesPath `
+        --latest
+    Assert-LastExitCode "gh release edit"
+}
+
+
+function Assert-ReleaseTagTarget {
+    param([string]$ExpectedCommit)
+
+    $LocalTagType = (git cat-file -t $Tag).Trim()
+    Assert-LastExitCode "git cat-file tag"
+    if ($LocalTagType -ne "tag") {
+        throw "Local tag '$Tag' is not annotated. Found object type '$LocalTagType'."
+    }
+
+    $LocalTagCommit = (git rev-list -n 1 $Tag).Trim()
+    Assert-LastExitCode "git rev-list tag"
+    if ($LocalTagCommit -ne $ExpectedCommit) {
+        throw (
+            "Local tag '$Tag' points to '$LocalTagCommit', " +
+            "expected '$ExpectedCommit'."
+        )
+    }
+
+    $RemoteTagLine = (
+        git ls-remote origin "refs/tags/$Tag^{}"
+    ).Trim()
+    Assert-LastExitCode "git ls-remote peeled tag"
+    if (-not $RemoteTagLine) {
+        throw "Could not verify remote annotated tag '$Tag'."
+    }
+
+    $RemoteTagCommit = ($RemoteTagLine -split "\s+")[0]
+    if ($RemoteTagCommit -ne $ExpectedCommit) {
+        throw (
+            "Remote tag '$Tag' points to '$RemoteTagCommit', " +
+            "expected '$ExpectedCommit'."
+        )
+    }
+}
+
+
+function Show-GitHubRelease {
+    gh release view $Tag --repo $Repository
+    Assert-LastExitCode "gh release view"
+}
+
 function Invoke-PrepareCommit {
     Write-Step "Prepare release commit"
 
@@ -421,16 +627,14 @@ function Invoke-PrepareCommit {
         ).Trim()
         Assert-LastExitCode "git log"
 
-        $DesiredCommitMessage = "Release $Tag"
-
-        if ($CurrentCommitMessage -eq $DesiredCommitMessage) {
+        if ($CurrentCommitMessage -eq $ReleaseCommitMessage) {
             Write-Host "Release commit already exists." -ForegroundColor Green
             Write-Host "Current HEAD:"
             Write-Host "  $CurrentCommitMessage"
             return
         }
 
-        git commit --allow-empty -m $DesiredCommitMessage
+        git commit --allow-empty -m $ReleaseCommitMessage
         Assert-LastExitCode "git commit"
 
         Write-Host "Empty release commit created." -ForegroundColor Green
@@ -456,7 +660,7 @@ function Invoke-PrepareCommit {
     git diff --cached --stat
     Assert-LastExitCode "git diff --cached --stat"
 
-    git commit -m "Release $Tag"
+    git commit -m $ReleaseCommitMessage
     Assert-LastExitCode "git commit"
 
     Write-Host "Release commit created." -ForegroundColor Green
@@ -491,7 +695,7 @@ function Write-PostPublishSteps {
     Write-Host "2. Return to the development branch:"
     Write-Host "   git checkout dev"
     Write-Host "   git pull --ff-only origin dev"
-	Write-Host "   git merge --ff-only $ReleaseBranch"
+    Write-Host "   git merge --ff-only $ReleaseBranch"
     Write-Host ""
     Write-Host "3. Start the next development version:"
     Write-Host "   Update addons/easing_curve/plugin.cfg:"
@@ -508,39 +712,21 @@ function Write-PostPublishSteps {
 function Invoke-Publish {
     Write-Step "Publish $Tag"
 
-    $CurrentBranch = (git branch --show-current).Trim()
-    Assert-LastExitCode "git branch"
+    Assert-ReleaseBranchAndCleanTree -ModeName "Publish" -ActionName "publishing"
 
-    if ($CurrentBranch -ne $ReleaseBranch) {
-        throw "Publish must run from '$ReleaseBranch'. Current branch is '$CurrentBranch'."
-    }
-
-    if (-not (Test-GitClean)) {
-        throw "Working tree must be clean before publishing."
-    }
-
-    $DesiredCommitMessage = "Release $Tag"
     $CurrentCommitMessage = (
         git log -1 --pretty=%s $ReleaseBranch
     ).Trim()
     Assert-LastExitCode "git log"
 
-    if ($CurrentCommitMessage -ne $DesiredCommitMessage) {
+    if ($CurrentCommitMessage -ne $ReleaseCommitMessage) {
         throw (
-            "Release commit must be named '$DesiredCommitMessage'. " +
+            "Release commit must be named '$ReleaseCommitMessage'. " +
             "Current commit is '$CurrentCommitMessage'."
         )
     }
 
-    git fetch origin
-    Assert-LastExitCode "git fetch"
-
-    $RemoteOnlyCount = (git rev-list --right-only --count "$ReleaseBranch...origin/$ReleaseBranch").Trim()
-    Assert-LastExitCode "git rev-list"
-
-    if ([int]$RemoteOnlyCount -ne 0) {
-        throw "Local '$ReleaseBranch' is behind origin. Update it before publishing."
-    }
+    Assert-ReleaseRemoteCurrency -ActionName "publishing"
 
     $ExistingLocalTag = git tag --list $Tag
     Assert-LastExitCode "git tag --list"
@@ -554,84 +740,40 @@ function Invoke-Publish {
         throw "Remote tag '$Tag' already exists."
     }
 
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        throw "GitHub CLI 'gh' was not found. Install/authenticate it before Publish mode."
-    }
+    Assert-GitHubCliAvailable -ModeName "Publish"
 
-    $ReleaseNotes = Get-ChangelogReleaseNotes
-    $ReleaseNotesPath = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-{0}-release-notes.md" -f $Version)
+    $ReleaseHead = (git rev-parse $ReleaseBranch).Trim()
+    Assert-LastExitCode "git rev-parse"
+    $ReleaseNotesFile = $null
 
     try {
-        [System.IO.File]::WriteAllText(
-            $ReleaseNotesPath,
-            $ReleaseNotes,
-            [System.Text.UTF8Encoding]::new($false)
-        )
-
-        Write-Host ""
-        Write-Host "Release notes:"
-        Write-Host "--------------"
-        Write-Host $ReleaseNotes
-        Write-Host "--------------"
-        Write-Host ""
+        $ReleaseNotesFile = New-ReleaseNotesFile
+        Write-ReleaseNotesPreview -ReleaseNotes $ReleaseNotesFile.Text
 
         $Answer = Read-Host "Tag, push, and publish $Tag to GitHub? [y/N]"
         if ($Answer -notmatch '^[Yy]$') {
             throw "Publishing cancelled."
         }
 
-        git tag -a $Tag -m "$Tag"
-        Assert-LastExitCode "git tag"
+        Publish-NewReleaseGitRefs
+        Assert-ReleaseTagTarget -ExpectedCommit $ReleaseHead
+        New-GitHubRelease -ReleaseNotesPath $ReleaseNotesFile.Path
+        Show-GitHubRelease
 
-        git push origin $ReleaseBranch
-        Assert-LastExitCode "git push branch"
-
-        git push origin $Tag
-        Assert-LastExitCode "git push tag"
-
-        gh release create `
-			$Tag `
-			$ZipPath `
-			--repo $Repository `
-			--title "$Tag" `
-			--notes-file $ReleaseNotesPath `
-			--latest
-		Assert-LastExitCode "gh release create"
-
-		Write-Host ""
-		Write-Host "$Tag published successfully." -ForegroundColor Green
-		Write-PostPublishSteps
+        Write-Host ""
+        Write-Host "$Tag published successfully." -ForegroundColor Green
+        Write-PostPublishSteps
     }
     finally {
-        Remove-Item -LiteralPath $ReleaseNotesPath -Force -ErrorAction SilentlyContinue
+        Remove-ReleaseNotesFile -ReleaseNotesFile $ReleaseNotesFile
     }
 }
 
 function Invoke-Republish {
     Write-Step "Republish $Tag"
 
-    $CurrentBranch = (git branch --show-current).Trim()
-    Assert-LastExitCode "git branch"
-
-    if ($CurrentBranch -ne $ReleaseBranch) {
-        throw "Republish must run from '$ReleaseBranch'. Current branch is '$CurrentBranch'."
-    }
-
-    if (-not (Test-GitClean)) {
-        throw "Working tree must be clean before republishing."
-    }
-
-    git fetch origin
-    Assert-LastExitCode "git fetch"
-
-    $RemoteOnlyCount = (
-        git rev-list --right-only --count "$ReleaseBranch...origin/$ReleaseBranch"
-    ).Trim()
-    Assert-LastExitCode "git rev-list"
-
-    if ([int]$RemoteOnlyCount -ne 0) {
-        throw "Local '$ReleaseBranch' is behind origin. Update it before republishing."
-    }
+    Assert-ReleaseBranchAndCleanTree -ModeName "Republish" -ActionName "republishing"
+    Assert-ReleaseRemoteCurrency -ActionName "republishing"
 
     $ExistingRemoteTag = git ls-remote --tags origin "refs/tags/$Tag"
     Assert-LastExitCode "git ls-remote"
@@ -640,9 +782,7 @@ function Invoke-Republish {
         throw "Remote tag '$Tag' does not exist. Use Publish mode for a new release."
     }
 
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        throw "GitHub CLI 'gh' was not found. Install/authenticate it before Republish mode."
-    }
+    Assert-GitHubCliAvailable -ModeName "Republish"
 
     gh release view $Tag --repo $Repository *> $null
     if ($LASTEXITCODE -ne 0) {
@@ -652,7 +792,6 @@ function Invoke-Republish {
     $ReleaseHead = (git rev-parse $ReleaseBranch).Trim()
     Assert-LastExitCode "git rev-parse"
 
-    $DesiredCommitMessage = "Release $Tag"
     $CurrentCommitMessage = (
         git log -1 --pretty=%s $ReleaseBranch
     ).Trim()
@@ -666,17 +805,10 @@ function Invoke-Republish {
         $CurrentTagCommit = "(not available locally)"
     }
 
-    $ReleaseNotes = Get-ChangelogReleaseNotes
-    $ReleaseNotesPath = Join-Path (
-        [IO.Path]::GetTempPath()
-    ) ("easing-curve-{0}-release-notes.md" -f $Version)
+    $ReleaseNotesFile = $null
 
     try {
-        [System.IO.File]::WriteAllText(
-            $ReleaseNotesPath,
-            $ReleaseNotes,
-            [System.Text.UTF8Encoding]::new($false)
-        )
+        $ReleaseNotesFile = New-ReleaseNotesFile
 
         Write-Host ""
         Write-Host "Existing release:"
@@ -688,12 +820,12 @@ function Invoke-Republish {
         Write-Host "Current commit message:"
         Write-Host "  $CurrentCommitMessage"
         Write-Host "Release commit message:"
-        Write-Host "  $DesiredCommitMessage"
+        Write-Host "  $ReleaseCommitMessage"
         Write-Host "Replacement asset:"
         Write-Host "  $ZipPath"
         Write-Host ""
         Write-Host "This will:"
-        Write-Host "  - ensure the release commit message is '$DesiredCommitMessage'"
+        Write-Host "  - ensure the release commit message is '$ReleaseCommitMessage'"
         Write-Host "  - update '$ReleaseBranch' using force-with-lease if necessary"
         Write-Host "  - force-move '$Tag' to the current '$ReleaseBranch' commit"
         Write-Host "  - replace the existing ZIP asset"
@@ -705,17 +837,17 @@ function Invoke-Republish {
             throw "Republishing cancelled."
         }
 
-        if ($CurrentCommitMessage -ne $DesiredCommitMessage) {
+        if ($CurrentCommitMessage -ne $ReleaseCommitMessage) {
             Write-Host ""
             Write-Host "Updating release commit message:"
-            Write-Host "  $CurrentCommitMessage -> $DesiredCommitMessage"
+            Write-Host "  $CurrentCommitMessage -> $ReleaseCommitMessage"
 
-            git commit --amend -m $DesiredCommitMessage
+            git commit --amend -m $ReleaseCommitMessage
             Assert-LastExitCode "git commit --amend"
         }
         else {
             Write-Host ""
-            Write-Host "Release commit already uses '$DesiredCommitMessage'." `
+            Write-Host "Release commit already uses '$ReleaseCommitMessage'." `
                 -ForegroundColor Green
         }
 
@@ -723,65 +855,9 @@ function Invoke-Republish {
         $ReleaseHead = (git rev-parse $ReleaseBranch).Trim()
         Assert-LastExitCode "git rev-parse"
 
-        # The release commit may have been amended, which changes its SHA.
-        # --force-with-lease protects against overwriting unexpected remote changes.
-        git push --force-with-lease origin $ReleaseBranch
-        Assert-LastExitCode "git push branch"
-
-        # Recreate the annotated tag at the current master commit.
-        git tag -f -a $Tag -m "$Tag" $ReleaseHead
-        Assert-LastExitCode "git tag"
-
-        git push --force origin "refs/tags/$Tag"
-        Assert-LastExitCode "git push tag"
-
-        # Replace the existing ZIP asset with the exact ZIP that just
-        # passed the release validation and clean-project smoke tests.
-        gh release upload `
-            $Tag `
-            $ZipPath `
-            --repo $Repository `
-            --clobber
-        Assert-LastExitCode "gh release upload"
-
-        # Keep the release metadata synchronized with the tag/changelog.
-        gh release edit `
-            $Tag `
-            --repo $Repository `
-            --title "$Tag" `
-            --target $ReleaseBranch `
-            --notes-file $ReleaseNotesPath `
-            --latest
-        Assert-LastExitCode "gh release edit"
-
-        # Verify the tag resolves to the exact current release commit.
-        $LocalTagCommit = (git rev-list -n 1 $Tag).Trim()
-        Assert-LastExitCode "git rev-list tag"
-
-        if ($LocalTagCommit -ne $ReleaseHead) {
-            throw (
-                "Local tag '$Tag' points to '$LocalTagCommit', " +
-                "expected '$ReleaseHead'."
-            )
-        }
-
-        $RemoteTagLine = (
-            git ls-remote origin "refs/tags/$Tag^{}"
-        ).Trim()
-        Assert-LastExitCode "git ls-remote peeled tag"
-
-        if (-not $RemoteTagLine) {
-            throw "Could not verify remote annotated tag '$Tag'."
-        }
-
-        $RemoteTagCommit = ($RemoteTagLine -split "\s+")[0]
-
-        if ($RemoteTagCommit -ne $ReleaseHead) {
-            throw (
-                "Remote tag '$Tag' points to '$RemoteTagCommit', " +
-                "expected '$ReleaseHead'."
-            )
-        }
+        Update-ExistingReleaseGitRefs -ReleaseHead $ReleaseHead
+        Assert-ReleaseTagTarget -ExpectedCommit $ReleaseHead
+        Update-GitHubRelease -ReleaseNotesPath $ReleaseNotesFile.Path
 
         Write-Host ""
         Write-Host "$Tag republished successfully." -ForegroundColor Green
@@ -789,16 +865,12 @@ function Invoke-Republish {
         Write-Host "  $ReleaseHead"
         Write-Host ""
 
-        gh release view $Tag --repo $Repository
-        Assert-LastExitCode "gh release view"
+        Show-GitHubRelease
 
         Write-PostPublishSteps
     }
     finally {
-        Remove-Item `
-            -LiteralPath $ReleaseNotesPath `
-            -Force `
-            -ErrorAction SilentlyContinue
+        Remove-ReleaseNotesFile -ReleaseNotesFile $ReleaseNotesFile
     }
 }
 
@@ -860,20 +932,12 @@ try {
     }
 
     if ($Mode -eq "Publish") {
-        if (-not (Test-GitClean)) {
-            throw "Validation/build changed tracked files. Commit them before publishing."
-        }
-
         Invoke-Publish
     }
-	
-	if ($Mode -eq "Republish") {
-		if (-not (Test-GitClean)) {
-			throw "Validation/build changed tracked files. Commit them before republishing."
-		}
 
-		Invoke-Republish
-	}
+    if ($Mode -eq "Republish") {
+        Invoke-Republish
+    }
 }
 finally {
     Pop-Location

@@ -96,6 +96,19 @@ Under Godot 4.7 `--editor --headless`, `editor_undo_redo_test.gd` skips its
 responsive-layout fixtures because they require a visible Editor layout. Verify
 those fixtures in a visible Editor session instead.
 
+## Release workflow contract
+
+Run the non-publishing PowerShell contract check with:
+
+```powershell
+.\test\runners\release_workflow_contract_test.ps1
+```
+
+This check parses `release.ps1`, verifies that Publish and Republish delegate
+their shared high-risk steps to the expected helpers, and exercises validation,
+annotated-tag, release-note lifecycle, and version helpers with mocked Git
+responses. It does not invoke real `git push`, tag mutation, or `gh` commands.
+
 ## Test-asset ownership
 
 Only the 18 scripts under `test/scripts/` in the explicit runner manifest
