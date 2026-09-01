@@ -8,6 +8,10 @@ const SAMPLE_INPUTS := [0.0, 0.25, 0.5, 0.75, 1.0]
 func _init() -> void:
 	_test_legacy_resource_fixtures()
 	_test_missing_snapshot_force_linear_defaults()
+	_test_legacy_point_snapshot_fallbacks()
+	_test_sparse_point_storage_fallbacks()
+	_test_partial_function_snapshot_fallbacks()
+	_test_partial_editor_state_snapshot_fallbacks()
 	_test_enum_numeric_contracts()
 	_test_transition_catalog_contract()
 	_test_exported_property_contract()
@@ -89,6 +93,17 @@ func _test_legacy_resource_fixtures() -> void:
 		_expect(curve.points[0].right_control_point == fixture.first_right, "%s first handle changed" % fixture.label)
 		_expect(curve.points[2].right_control_point == fixture.last_right, "%s final handle changed" % fixture.label)
 		_expect(not curve.points[0].left_force_linear and not curve.points[0].right_force_linear, "%s Force Linear defaults changed" % fixture.label)
+		for point in curve.points:
+			_expect(point.handle_mode == EasingCurvePoint.HandleMode.FREE, "%s Handle Mode fallback changed" % fixture.label)
+			_expect(
+				point.locked == {
+					"position": false,
+					"left_control_point": false,
+					"right_control_point": false,
+				},
+				"%s lock fallback changed" % fixture.label,
+			)
+			_expect(not point.left_force_linear and not point.right_force_linear, "%s Force Linear fallback changed" % fixture.label)
 		var samples := _samples(curve)
 		_expect_approx(samples[0], 0.0, "%s sample at zero changed" % fixture.label)
 		_expect_approx(samples[2], 1.0, "%s midpoint sample changed" % fixture.label)
@@ -113,6 +128,117 @@ func _test_missing_snapshot_force_linear_defaults() -> void:
 	curve.set_point_snapshot(snapshot)
 	for point in curve.points:
 		_expect(not point.left_force_linear and not point.right_force_linear, "Missing snapshot Force Linear keys did not default to false")
+
+
+func _test_legacy_point_snapshot_fallbacks() -> void:
+	var legacy_snapshot := {
+		"positions": PackedVector2Array([
+			Vector2(0.0, 0.0),
+			Vector2(0.45, 0.8),
+			Vector2(1.0, 1.0),
+		]),
+		"left_control_points": PackedVector2Array([
+			Vector2(-0.1, -0.05),
+			Vector2(0.3, 0.7),
+			Vector2(0.85, 0.9),
+		]),
+		"right_control_points": PackedVector2Array([
+			Vector2(0.2, 0.3),
+			Vector2(0.7, 0.9),
+			Vector2(1.1, 1.05),
+		]),
+	}
+	var target := EasingCurve.new()
+	target.trans_type = EasingCurve.TRANS.CUSTOM
+	target.set_point_snapshot(legacy_snapshot)
+
+	_expect(target.points.size() == 3, "Legacy point snapshot did not rebuild topology from positions")
+	if target.points.size() != 3:
+		return
+
+	var expected_locks := {
+		"position": false,
+		"left_control_point": false,
+		"right_control_point": false,
+	}
+	for index in range(target.points.size()):
+		var point := target.points[index]
+		_expect(point.position == legacy_snapshot.positions[index], "Legacy point snapshot position %d changed" % index)
+		_expect(point.left_control_point == legacy_snapshot.left_control_points[index], "Legacy point snapshot left control %d changed" % index)
+		_expect(point.right_control_point == legacy_snapshot.right_control_points[index], "Legacy point snapshot right control %d changed" % index)
+		_expect(point.handle_mode == EasingCurvePoint.HandleMode.FREE, "Missing Handle Mode did not default to Free at point %d" % index)
+		_expect(point.locked == expected_locks, "Missing locks did not default to unlocked at point %d" % index)
+		_expect(not point.left_force_linear and not point.right_force_linear, "Missing Force Linear state did not default to false at point %d" % index)
+
+
+func _test_sparse_point_storage_fallbacks() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	curve.set(EasingCurve.POINT_STORAGE_COUNT, 1)
+	curve.set(&"_point_2/position", Vector2(0.75, 0.25))
+
+	_expect(curve.points.size() == 3, "Sparse flat point storage write did not grow point topology")
+	if curve.points.size() != 3:
+		return
+	_expect(curve.points[2].position == Vector2(0.75, 0.25), "Sparse flat point storage write lost its value")
+
+	curve.set(&"_point_2/locked", {"position": true})
+	_expect(
+		curve.points[2].locked == {
+			"position": true,
+			"left_control_point": false,
+			"right_control_point": false,
+		},
+		"Partial flat lock storage did not default omitted lock fields to false",
+	)
+
+
+func _test_partial_function_snapshot_fallbacks() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.SPRING
+	curve.frequency = 4.25
+	curve.decay = 3.75
+	var generated_x_before := curve._irregular_points_x.duplicate()
+	var generated_y_before := curve._irregular_points_y.duplicate()
+
+	curve.set_function_snapshot({"frequency": 5.5})
+	_expect(is_equal_approx(curve.frequency, 5.5), "Partial function snapshot did not apply a present parameter")
+	_expect(is_equal_approx(curve.decay, 3.75), "Partial function snapshot did not preserve an omitted parameter")
+	_expect(curve._irregular_points_x == generated_x_before, "Partial function snapshot did not preserve omitted generated X data")
+	_expect(curve._irregular_points_y == generated_y_before, "Partial function snapshot did not preserve omitted generated Y data")
+
+	curve.set_function_snapshot({
+		"generated_points_x": PackedFloat32Array([0.0, 0.5, 1.0]),
+		"generated_points_y": PackedFloat64Array([0.0, 0.25, 1.0]),
+	})
+	_expect(curve._irregular_points_x == [0.0, 0.5, 1.0], "Function snapshot stopped accepting PackedFloat32Array generated data")
+	_expect(curve._irregular_points_y == [0.0, 0.25, 1.0], "Function snapshot stopped accepting PackedFloat64Array generated data")
+
+	curve.set_function_snapshot({
+		"generated_points_x": [0.0, 0.4, 1.0],
+		"generated_points_y": [0.0, 0.6, 1.0],
+	})
+	_expect(curve._irregular_points_x == [0.0, 0.4, 1.0], "Function snapshot stopped accepting Array generated data")
+	_expect(curve._irregular_points_y == [0.0, 0.6, 1.0], "Function snapshot stopped accepting Array generated data")
+
+
+func _test_partial_editor_state_snapshot_fallbacks() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.BACK
+	curve.ease_type = EasingCurve.EASE.OUT
+	curve.overshoot = 2.75
+	curve.reverse = true
+	var point_snapshot_before := curve.get_point_snapshot()
+	var function_snapshot_before := curve.get_function_snapshot()
+
+	curve.set_editor_state_snapshot({"invert": true})
+	_expect(curve.trans_type == EasingCurve.TRANS.BACK, "Partial editor snapshot changed an omitted transition")
+	_expect(curve.ease_type == EasingCurve.EASE.OUT, "Partial editor snapshot changed an omitted Ease")
+	_expect(is_equal_approx(curve.overshoot, 2.75), "Partial editor snapshot changed an omitted Bézier parameter")
+	_expect(curve.reverse, "Partial editor snapshot changed an omitted Reverse flag")
+	_expect(curve.invert, "Partial editor snapshot did not apply a present Invert flag")
+	_expect(curve.get_point_snapshot() == point_snapshot_before, "Partial editor snapshot changed omitted point state")
+	_expect(curve.get_function_snapshot() == function_snapshot_before, "Partial editor snapshot changed omitted function state")
 
 
 func _test_enum_numeric_contracts() -> void:
