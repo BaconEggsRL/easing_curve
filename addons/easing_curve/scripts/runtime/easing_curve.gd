@@ -482,7 +482,7 @@ var ease_type: EASE = EASE.IN:
 			return
 		var revision_before := _change_revision
 		ease_type = value
-		if _edit_session_state.applying_editor_state_snapshot:
+		if _edit_session_state.is_applying_editor_state_snapshot():
 			return
 		if curve_mode == CurveMode.FUNCTION:
 			_init_function()
@@ -498,7 +498,7 @@ var trans_type: TRANS = TRANS.LINEAR:
 			return
 		var revision_before := _change_revision
 		trans_type = value
-		if _edit_session_state.applying_editor_state_snapshot:
+		if _edit_session_state.is_applying_editor_state_snapshot():
 			return
 		_update_preset()
 		if _change_revision == revision_before:
@@ -511,7 +511,7 @@ var curve_mode: CurveMode:
 		if curve_mode == value:
 			return
 		curve_mode = value
-		if _edit_session_state.applying_editor_state_snapshot:
+		if _edit_session_state.is_applying_editor_state_snapshot():
 			return
 		emit_changed()
 ## Store the callable used in curve_mode == CurveMode.FUNCTION
@@ -522,7 +522,7 @@ var function_callable: Callable:
 		if function_callable == value:
 			return
 		function_callable = value
-		if _edit_session_state.applying_editor_state_snapshot:
+		if _edit_session_state.is_applying_editor_state_snapshot():
 			return
 		emit_changed()
 
@@ -556,7 +556,7 @@ var function_callable: Callable:
 
 		constant_value = value
 
-		if _edit_session_state.applying_editor_state_snapshot:
+		if _edit_session_state.is_applying_editor_state_snapshot():
 			return
 
 		if trans_type == TRANS.CONSTANT:
@@ -565,7 +565,7 @@ var function_callable: Callable:
 			var revision_before := _change_revision
 			var snapshot := get_canonical_preset_point_snapshot()
 
-			if _edit_session_state.parameter_edit_depth > 0:
+			if _edit_session_state.is_parameter_edit_active():
 				snapshot[SNAPSHOT_CODEC.POINT_CHANGING] = true
 
 			set_point_snapshot(snapshot)
@@ -586,14 +586,14 @@ var function_callable: Callable:
 		if overshoot == value:
 			return
 		overshoot = value
-		if _edit_session_state.applying_editor_state_snapshot:
+		if _edit_session_state.is_applying_editor_state_snapshot():
 			return
 		if trans_type == TRANS.BACK:
 			# Preset regeneration can emit the required change itself. Notify only
 			# when the revision did not advance to avoid duplicate changed signals.
 			var revision_before := _change_revision
 			var snapshot := get_canonical_preset_point_snapshot()
-			if _edit_session_state.parameter_edit_depth > 0:
+			if _edit_session_state.is_parameter_edit_active():
 				snapshot[SNAPSHOT_CODEC.POINT_CHANGING] = true
 			set_point_snapshot(snapshot)
 			if _change_revision == revision_before:
@@ -874,7 +874,7 @@ var _css_cubic_bezier_controls := PackedFloat64Array([
 
 		reverse = value
 
-		if _edit_session_state.applying_editor_state_snapshot:
+		if _edit_session_state.is_applying_editor_state_snapshot():
 			return
 
 		if curve_mode == CurveMode.BEZIER:
@@ -895,7 +895,7 @@ var _css_cubic_bezier_controls := PackedFloat64Array([
 
 		invert = value
 
-		if _edit_session_state.applying_editor_state_snapshot:
+		if _edit_session_state.is_applying_editor_state_snapshot():
 			return
 
 		if curve_mode == CurveMode.BEZIER:
@@ -1156,7 +1156,7 @@ static func uses_generated_function_data(
 
 
 func _update_irregular_parameter() -> void:
-	if _edit_session_state.applying_function_snapshot:
+	if _edit_session_state.is_applying_function_snapshot():
 		_notify_parameter_changed()
 	else:
 		_generate_irregular()
@@ -1290,7 +1290,7 @@ func reset_selected_preset() -> bool:
 	if curve_mode == CurveMode.FUNCTION:
 		var default_curve := EasingCurve.new()
 
-		_edit_session_state.parameter_update_depth += 1
+		_edit_session_state.begin_parameter_update()
 
 		for property_name in get_transition_parameters(trans_type):
 			set(property_name, default_curve.get(property_name))
@@ -1300,11 +1300,8 @@ func reset_selected_preset() -> bool:
 				continue
 			set(property_name, default_curve.get(property_name))
 
-		_edit_session_state.parameter_update_depth -= 1
-
-		if _edit_session_state.parameter_update_change_pending:
-			_edit_session_state.parameter_update_change_pending = false
-			_notify_parameter_changed()
+		if _edit_session_state.finish_parameter_update():
+			emit_changed()
 
 		return true
 
@@ -1477,7 +1474,7 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 		right_force_linear,
 		snapshot,
 	)
-	_edit_session_state.point_notification_suppression_depth += 1
+	_edit_session_state.begin_point_notification_suppression()
 	if not topology_changed:
 		for i in range(positions.size()):
 			var point := _points[i]
@@ -1514,39 +1511,18 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 		_points = new_points
 		_mark_point_topology_dirty()
 		_synchronize_point_connections()
-	_edit_session_state.point_notification_suppression_depth -= 1
+	_edit_session_state.end_point_notification_suppression()
 
-	if _edit_session_state.applying_editor_state_snapshot:
-		_edit_session_state.point_snapshot_change_pending = false
-		_edit_session_state.point_snapshot_property_list_pending = false
-		return
-
-	if changing:
-		_edit_session_state.point_snapshot_change_pending = (
-			_edit_session_state.point_snapshot_change_pending or point_data_changed
-		)
-		_edit_session_state.point_snapshot_property_list_pending = (
-			_edit_session_state.point_snapshot_property_list_pending
-			or point_data_changed
-			or topology_changed
-		)
-		return
-
-	var notify_points := (
-		point_data_changed or _edit_session_state.point_snapshot_change_pending
+	var publication := _edit_session_state.record_point_snapshot(
+		changing,
+		point_data_changed,
+		topology_changed,
 	)
-	# Point fields are rendered by the custom Points Inspector section. Refresh it
-	# whenever a completed snapshot publishes changed point data, even when its
-	# topology did not change.
-	var notify_property_list := (
-		notify_points
-		or topology_changed
-		or _edit_session_state.point_snapshot_property_list_pending
-	)
-	_edit_session_state.point_snapshot_change_pending = false
-	_edit_session_state.point_snapshot_property_list_pending = false
-	if notify_points:
-		_notify_curve_changed(true, notify_property_list)
+	if publication.publish_curve_change:
+		_notify_curve_changed(
+			publication.point_data_changed,
+			publication.property_list_refresh_required,
+		)
 
 
 func _restore_point_snapshot_state(
@@ -1748,7 +1724,7 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 		or curve_mode != snapshot_mode
 	)
 
-	_edit_session_state.applying_editor_state_snapshot = true
+	_edit_session_state.begin_editor_state_snapshot()
 	ease_type = snapshot_ease
 	trans_type = snapshot_trans
 	curve_mode = snapshot_mode
@@ -1763,7 +1739,7 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 	set_point_snapshot(point_snapshot)
 	if curve_mode == CurveMode.FUNCTION and trans_type != TRANS.CUSTOM:
 		_init_function()
-	_edit_session_state.applying_editor_state_snapshot = false
+	_edit_session_state.finish_editor_state_snapshot()
 	_notify_curve_changed(
 		point_data_changed or resource_order_changed,
 		property_list_changed,
@@ -1833,8 +1809,7 @@ func set_function_snapshot(snapshot: Dictionary) -> void:
 	if not changed and not force_notify:
 		return
 
-	_edit_session_state.parameter_edit_depth += 1
-	_edit_session_state.applying_function_snapshot = true
+	_edit_session_state.begin_function_snapshot()
 
 	for property_name in get_all_function_parameters():
 		if snapshot.has(property_name):
@@ -1843,8 +1818,7 @@ func set_function_snapshot(snapshot: Dictionary) -> void:
 	_irregular_points_x = snapshot_points_x
 	_irregular_points_y = snapshot_points_y
 
-	_edit_session_state.applying_function_snapshot = false
-	_edit_session_state.parameter_edit_depth -= 1
+	_edit_session_state.finish_function_snapshot()
 	_notify_parameter_changed()
 
 
@@ -2078,46 +2052,28 @@ func _notify_curve_changed(point_data_changed: bool, property_list_changed: bool
 
 
 func _begin_editor_parameter_edit() -> void:
-	_edit_session_state.parameter_edit_depth += 1
+	_edit_session_state.begin_parameter_edit()
 
 
 func _cancel_editor_parameter_edit() -> void:
-	if _edit_session_state.parameter_edit_depth <= 0:
-		return
-	_edit_session_state.parameter_edit_depth -= 1
-	if _edit_session_state.parameter_edit_depth == 0:
-		_edit_session_state.point_snapshot_change_pending = false
-		_edit_session_state.point_snapshot_property_list_pending = false
+	_edit_session_state.cancel_parameter_edit()
 
 
 func _finish_editor_parameter_edit() -> void:
-	if _edit_session_state.parameter_edit_depth <= 0:
-		return
-	_edit_session_state.parameter_edit_depth -= 1
-	if _edit_session_state.parameter_edit_depth == 0 and (
-		_edit_session_state.point_snapshot_change_pending
-		or _edit_session_state.point_snapshot_property_list_pending
-	):
-		var point_data_changed := _edit_session_state.point_snapshot_change_pending
-		var property_list_changed := (
-			_edit_session_state.point_snapshot_property_list_pending
+	var publication := _edit_session_state.finish_parameter_edit()
+	if publication.publish_curve_change:
+		_notify_curve_changed(
+			publication.point_data_changed,
+			publication.property_list_refresh_required,
 		)
-		_edit_session_state.point_snapshot_change_pending = false
-		_edit_session_state.point_snapshot_property_list_pending = false
-		_notify_curve_changed(point_data_changed, property_list_changed)
 		return
-	_notify_parameter_changed()
+	if publication.publish_parameter_change:
+		_notify_parameter_changed()
 
 
 func _notify_parameter_changed() -> void:
-	if _edit_session_state.applying_editor_state_snapshot:
-		return
-	if _edit_session_state.parameter_update_depth > 0:
-		_edit_session_state.parameter_update_change_pending = true
-		return
-	if _edit_session_state.parameter_edit_depth > 0:
-		return
-	emit_changed()
+	if _edit_session_state.request_parameter_publication():
+		emit_changed()
 
 
 ## Generic callable for non-function CurveMode
@@ -2144,7 +2100,7 @@ func set_function(func_ref: Callable):
 	curve_mode = CurveMode.FUNCTION
 	function_callable = func_ref
 	_clear_points()
-	if _edit_session_state.applying_editor_state_snapshot:
+	if _edit_session_state.is_applying_editor_state_snapshot():
 		return
 	_notify_curve_changed(false, true)
 
@@ -2368,7 +2324,7 @@ func _on_curve_editor_pan_changed(pan: Vector2) -> void:
 
 
 func _generate_irregular() -> Dictionary:
-	_edit_session_state.parameter_update_depth += 1
+	_edit_session_state.begin_parameter_update()
 	var result := { "x": [], "y": [] }
 	var points_x: Array[float] = []
 	var points_y: Array[float] = []
@@ -2412,13 +2368,8 @@ func _generate_irregular() -> Dictionary:
 	_irregular_points_x = points_x
 	_irregular_points_y = points_y
 	_notify_parameter_changed()
-	_edit_session_state.parameter_update_depth -= 1
-	if (
-		_edit_session_state.parameter_update_depth == 0
-		and _edit_session_state.parameter_update_change_pending
-	):
-		_edit_session_state.parameter_update_change_pending = false
-		_notify_parameter_changed()
+	if _edit_session_state.finish_parameter_update():
+		emit_changed()
 
 	return result
 
@@ -2504,7 +2455,7 @@ func _update_preset() -> void:
 
 func _on_point_changed() -> void:
 	_mark_point_geometry_dirty()
-	if _edit_session_state.point_notification_suppression_depth > 0:
+	if _edit_session_state.is_point_notification_suppressed():
 		return
 	_notify_curve_changed(true, false)
 
