@@ -797,6 +797,10 @@ func is_graph_render_suppressed() -> bool:
 	return _graph_render_suppressed
 
 
+func is_autofit_ready() -> bool:
+	return _curve != null and is_instance_valid(_slider)
+
+
 func select_point(point: EasingCurvePoint) -> bool:
 	if _curve == null:
 		return false
@@ -1118,12 +1122,12 @@ func _get_display_points() -> Array[EasingCurvePoint]:
 	return display_points
 
 
-func _set_position_x_order_preview(point: EasingCurvePoint) -> void:
+func set_position_x_order_preview(point: EasingCurvePoint) -> void:
 	position_x_order_preview_point = point
 	queue_redraw()
 
 
-func _clear_position_x_order_preview() -> void:
+func clear_position_x_order_preview() -> void:
 	position_x_order_preview_point = null
 	queue_redraw()
 

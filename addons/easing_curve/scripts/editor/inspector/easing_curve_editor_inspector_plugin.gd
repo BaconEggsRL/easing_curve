@@ -822,8 +822,7 @@ func handle_easing_curve_editor(object) -> Control:
 		easing_curve_editor = EasingCurveEditor.new()
 		easing_curve_editor.editor_undo_redo = editor_undo_redo
 		easing_curve_editor.set_curve(object)
-		if _autofit_pending:
-			easing_curve_editor.set_graph_render_suppressed(true)
+		_apply_autofit_render_state()
 
 		# Restore last UI state
 		if object._last_zoom:
@@ -901,7 +900,7 @@ func handle_easing_curve_editor(object) -> Control:
 		zoom_slider_container.size_flags_stretch_ratio = 0.4
 		zoom_row.add_child(zoom_slider_container)
 
-		easing_curve_editor._slider = zoom_slider_container
+		easing_curve_editor.set_slider_container(zoom_slider_container)
 		easing_curve_editor.set_slider_value(object._last_slider_value)
 		if _consume_initial_autofit_for_loaded_resource(object):
 			_queue_autofit_curve_editor()
@@ -1376,14 +1375,14 @@ func _reorder_position_edited_point(
 	)
 	if not defer_list_reorder:
 		_position_x_order_preview_point = null
-		easing_curve_editor._clear_position_x_order_preview()
+		easing_curve_editor.clear_position_x_order_preview()
 	var point_index := point_order.find(point)
 	if point_index == -1:
 		return
 
 	if defer_list_reorder:
 		_position_x_order_preview_point = point
-		easing_curve_editor._set_position_x_order_preview(point)
+		easing_curve_editor.set_position_x_order_preview(point)
 		return
 
 	_assign_logical_point_selection(
@@ -2420,11 +2419,55 @@ func _consume_initial_autofit_for_loaded_resource(object: EasingCurve) -> bool:
 
 
 func _queue_autofit_curve_editor() -> void:
+	var request_id := _request_autofit()
+	call_deferred(&"_autofit_curve_editor", request_id)
+
+
+func _request_autofit() -> int:
 	_autofit_pending = true
 	_autofit_request_id += 1
+	_apply_autofit_render_state()
+	return _autofit_request_id
+
+
+func _cancel_autofit(request_id: int = -1) -> void:
+	if request_id >= 0 and not _is_current_autofit_request(request_id):
+		return
+	_autofit_pending = false
+	_autofit_request_id += 1
+	_apply_autofit_render_state()
+
+
+func _complete_autofit(request_id: int) -> void:
+	if not _is_current_autofit_request(request_id):
+		return
+	if not _is_autofit_ready():
+		_cancel_autofit(request_id)
+		return
+
+	easing_curve_editor.autofit()
+	_autofit_pending = false
+	_apply_autofit_render_state()
+
+
+func _is_current_autofit_request(request_id: int) -> bool:
+	return _autofit_pending and request_id == _autofit_request_id
+
+
+func _is_autofit_pending() -> bool:
+	return _autofit_pending
+
+
+func _is_autofit_ready() -> bool:
+	return (
+		is_instance_valid(easing_curve_editor)
+		and easing_curve_editor.is_autofit_ready()
+	)
+
+
+func _apply_autofit_render_state() -> void:
 	if is_instance_valid(easing_curve_editor):
-		easing_curve_editor.set_graph_render_suppressed(true)
-	call_deferred(&"_autofit_curve_editor", _autofit_request_id)
+		easing_curve_editor.set_graph_render_suppressed(_autofit_pending)
 
 
 func _on_curve_editor_section_folding_changed(is_folded: bool) -> void:
@@ -2435,15 +2478,13 @@ func _on_curve_editor_section_folding_changed(is_folded: bool) -> void:
 
 func _autofit_curve_editor(request_id: int = -1) -> void:
 	if request_id < 0:
-		if not _autofit_pending:
-			_autofit_pending = true
-			_autofit_request_id += 1
-			if is_instance_valid(easing_curve_editor):
-				easing_curve_editor.set_graph_render_suppressed(true)
-		request_id = _autofit_request_id
+		request_id = _request_autofit()
+	elif not _is_current_autofit_request(request_id):
+		return
 
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null:
+		_cancel_autofit(request_id)
 		return
 
 	# Preset/resource changes may rebuild the Inspector and hide/show the
@@ -2454,22 +2495,14 @@ func _autofit_curve_editor(request_id: int = -1) -> void:
 	await tree.process_frame
 	await tree.process_frame
 
-	if request_id != _autofit_request_id:
+	if not _is_current_autofit_request(request_id):
 		return
 	if (
 		is_instance_valid(_curve_editor_section)
 		and _curve_editor_section.folded
 	):
 		return
-	if (
-		is_instance_valid(easing_curve_editor)
-		and easing_curve_editor._slider != null
-	):
-		easing_curve_editor.autofit()
-		_autofit_pending = false
-		easing_curve_editor.set_graph_render_suppressed(false)
-	else:
-		_autofit_pending = false
+	_complete_autofit(request_id)
 
 
 func _on_reset_selected_preset(object: EasingCurve) -> void:

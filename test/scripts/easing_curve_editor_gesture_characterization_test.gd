@@ -17,6 +17,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
+	await _test_autofit_request_lifecycle()
 	await _test_autofit_waits_for_function_toolbar_layout()
 	await _test_automatic_autofit_suppresses_intermediate_render()
 	await _test_folded_curve_editor_defers_autofit_until_expand()
@@ -219,6 +220,7 @@ func _test_autofit_waits_for_function_toolbar_layout() -> void:
 	var editor: EasingCurveEditor = inspector.get("easing_curve_editor")
 	editor.size = Vector2(600.0, 300.0)
 	await process_frame
+	_expect(editor.is_autofit_ready(), "Inspector curve editor was not ready for Autofit after setup")
 
 	curve.trans_type = EasingCurve.TRANS.ELASTIC
 	editor.size = Vector2(600.0, 300.0)
@@ -246,6 +248,63 @@ func _test_autofit_waits_for_function_toolbar_layout() -> void:
 
 	get_root().remove_child(content)
 	content.free()
+
+
+func _test_autofit_request_lifecycle() -> void:
+	var missing_slider_context := EDITOR_HOST.create_inspector_context(EasingCurve.new())
+	var missing_slider_editor: EasingCurveEditor = missing_slider_context.editor
+	var missing_slider_inspector: Object = missing_slider_context.inspector
+	_expect(
+		not missing_slider_editor.is_autofit_ready(),
+		"Curve editor without a slider unexpectedly reported Autofit readiness",
+	)
+	missing_slider_inspector.call("_queue_autofit_curve_editor")
+	_expect(
+		bool(missing_slider_inspector.call("_is_autofit_pending"))
+		and missing_slider_editor.is_graph_render_suppressed(),
+		"Autofit request did not acquire pending render suppression",
+	)
+	await process_frame
+	await process_frame
+	await process_frame
+	_expect(
+		not bool(missing_slider_inspector.call("_is_autofit_pending"))
+		and not missing_slider_editor.is_graph_render_suppressed(),
+		"Missing-slider Autofit did not cancel and release render suppression",
+	)
+	missing_slider_editor.free()
+
+	var stale_context := EDITOR_HOST.create_inspector_context(EasingCurve.new())
+	var stale_editor: EasingCurveEditor = stale_context.editor
+	var stale_inspector: Object = stale_context.inspector
+	var stale_request_id := int(stale_inspector.call("_request_autofit"))
+	var current_request_id := int(stale_inspector.call("_request_autofit"))
+	stale_inspector.call("_cancel_autofit", stale_request_id)
+	_expect(
+		bool(stale_inspector.call("_is_autofit_pending"))
+		and stale_editor.is_graph_render_suppressed(),
+		"Stale Autofit cancellation released the current request's suppression",
+	)
+	stale_inspector.call("_cancel_autofit", current_request_id)
+	_expect(
+		not bool(stale_inspector.call("_is_autofit_pending"))
+		and not stale_editor.is_graph_render_suppressed(),
+		"Current Autofit cancellation did not release render suppression",
+	)
+	stale_editor.free()
+
+	var destruction_context := EDITOR_HOST.create_inspector_context(EasingCurve.new())
+	var destroyed_editor: EasingCurveEditor = destruction_context.editor
+	var destruction_inspector: Object = destruction_context.inspector
+	destruction_inspector.call("_queue_autofit_curve_editor")
+	destroyed_editor.free()
+	await process_frame
+	await process_frame
+	await process_frame
+	_expect(
+		not bool(destruction_inspector.call("_is_autofit_pending")),
+		"Destroyed curve editor left its Autofit request pending",
+	)
 
 
 func _test_automatic_autofit_suppresses_intermediate_render() -> void:
@@ -289,6 +348,10 @@ func _test_automatic_autofit_suppresses_intermediate_render() -> void:
 	_expect(
 		not replacement_editor.is_graph_render_suppressed(),
 		"Automatic Autofit did not reveal the graph after fitting completed",
+	)
+	_expect(
+		not bool(inspector.call("_is_autofit_pending")),
+		"Completed automatic Autofit remained pending",
 	)
 
 	var fitted_zoom := Vector2(replacement_editor._zoom_x, replacement_editor._zoom_y)
@@ -344,7 +407,7 @@ func _test_folded_curve_editor_defers_autofit_until_expand() -> void:
 		"Curve Editor fold state was not preserved across the Elastic rebuild",
 	)
 	_expect(
-		bool(inspector.get("_autofit_pending")),
+		bool(inspector.call("_is_autofit_pending")),
 		"Automatic Autofit completed while the Curve Editor was folded",
 	)
 	_expect(
@@ -358,7 +421,7 @@ func _test_folded_curve_editor_defers_autofit_until_expand() -> void:
 	await process_frame
 	await process_frame
 	_expect(
-		not bool(inspector.get("_autofit_pending")),
+		not bool(inspector.call("_is_autofit_pending")),
 		"Opening the Curve Editor did not complete the pending Autofit",
 	)
 	_expect(
