@@ -2,6 +2,7 @@ extends "res://test/scripts/support/test_case.gd"
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const EDITOR_HOST = preload("res://test/scripts/support/editor_host_test_harness.gd")
+const EDITOR_DRIVER = preload("res://test/scripts/support/easing_curve_editor_test_driver.gd")
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
 
 func _init() -> void:
@@ -11,6 +12,7 @@ func _init() -> void:
 	_test_control_editability_constraints()
 	_test_handle_mode_undo_redo_refreshes_inputs()
 	_test_snapshot_refreshes_bindings_without_input_signals()
+	_test_point_input_binding_lifecycle()
 
 	_finish("EasingCurve control editability")
 
@@ -23,8 +25,8 @@ func _register_control_inputs(point: EasingCurvePoint, inspector: Object) -> Dic
 			input.min_value = -1024.0
 			input.max_value = 1024.0
 			input.step = 0.001
-			inspector.call(
-				"_register_point_input_binding",
+			EDITOR_DRIVER.register_point_input_binding(
+				inspector,
 				point,
 				StringName(property_name),
 				axis,
@@ -209,3 +211,60 @@ func _test_snapshot_refreshes_bindings_without_input_signals() -> void:
 	inputs["left_control_pointx"].free()
 	point.left_control_point = Vector2(0.3, 0.4)
 	_free_inputs(inputs)
+
+
+func _test_point_input_binding_lifecycle() -> void:
+	var point_a := EasingCurvePoint.new(Vector2(0.33, 0.4))
+	var point_b := EasingCurvePoint.new(Vector2(0.66, 0.6))
+	var inspector := INSPECTOR_PLUGIN.new()
+	var inputs_a := _register_control_inputs(point_a, inspector)
+	_expect(
+		EDITOR_DRIVER.point_input_binding_count(inspector) == 1,
+		"One point created more than one binding registry entry",
+	)
+	_expect(
+		EDITOR_DRIVER.point_input_binding_input_count(inspector, point_a) == 4,
+		"Point binding did not retain all registered property inputs",
+	)
+	_expect(
+		EDITOR_DRIVER.point_input_binding_is_connected(inspector, point_a),
+		"Point binding did not connect its shared changed callback",
+	)
+
+	inputs_a["left_control_pointx"].free()
+	point_a.left_control_point = Vector2(0.2, 0.3)
+	_expect(
+		EDITOR_DRIVER.point_input_binding_input_count(inspector, point_a) == 3,
+		"Point binding did not prune a freed input",
+	)
+	_expect(
+		EDITOR_DRIVER.point_input_binding_is_connected(inspector, point_a),
+		"Point binding disconnected while live inputs remained",
+	)
+
+	var point_a_callback := EDITOR_DRIVER.point_input_binding_callback(inspector, point_a)
+	_free_inputs(inputs_a)
+	point_a.right_control_point = Vector2(0.8, 0.7)
+	_expect(
+		EDITOR_DRIVER.point_input_binding_count(inspector) == 0
+		and not point_a.changed.is_connected(point_a_callback),
+		"Point binding remained registered after its final input was freed",
+	)
+
+	inputs_a = _register_control_inputs(point_a, inspector)
+	var inputs_b := _register_control_inputs(point_b, inspector)
+	_expect(
+		EDITOR_DRIVER.point_input_binding_count(inspector) == 2,
+		"Distinct points did not receive distinct binding registry entries",
+	)
+	point_a_callback = EDITOR_DRIVER.point_input_binding_callback(inspector, point_a)
+	var point_b_callback := EDITOR_DRIVER.point_input_binding_callback(inspector, point_b)
+	EDITOR_DRIVER.clear_point_input_bindings(inspector)
+	_expect(
+		EDITOR_DRIVER.point_input_binding_count(inspector) == 0
+		and not point_a.changed.is_connected(point_a_callback)
+		and not point_b.changed.is_connected(point_b_callback),
+		"Clearing point bindings did not empty the registry and disconnect callbacks",
+	)
+	_free_inputs(inputs_a)
+	_free_inputs(inputs_b)

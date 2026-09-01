@@ -59,6 +59,73 @@ static func capture_point_selection(inspector: Object) -> Dictionary:
 	return inspector.call("_capture_point_selection_state")
 
 
+static func restore_point_selection(
+	inspector: Object,
+	selection: Dictionary,
+) -> void:
+	inspector.call("_restore_point_selection_state", selection)
+
+
+static func selected_point_index(inspector: Object) -> int:
+	return int(inspector.get("_selected_point_index"))
+
+
+static func selected_point_resource_id(inspector: Object) -> int:
+	return int(inspector.get("_selected_point_resource_id"))
+
+
+static func register_point_input_binding(
+	inspector: Object,
+	point: EasingCurvePoint,
+	property_name: StringName,
+	axis: String,
+	input: EditorSpinSlider,
+) -> void:
+	inspector.call(
+		"_register_point_input_binding",
+		point,
+		property_name,
+		axis,
+		input,
+	)
+
+
+static func clear_point_input_bindings(inspector: Object) -> void:
+	inspector.call("_clear_point_input_bindings")
+
+
+static func point_input_binding_count(inspector: Object) -> int:
+	var bindings: Dictionary = inspector.get("_point_input_bindings")
+	return bindings.size()
+
+
+static func point_input_binding_input_count(
+	inspector: Object,
+	point: EasingCurvePoint,
+) -> int:
+	var bindings: Dictionary = inspector.get("_point_input_bindings")
+	var binding: Dictionary = bindings.get(point.get_instance_id(), {})
+	var inputs: Dictionary = binding.get("inputs", {})
+	return inputs.size()
+
+
+static func point_input_binding_callback(
+	inspector: Object,
+	point: EasingCurvePoint,
+) -> Callable:
+	var bindings: Dictionary = inspector.get("_point_input_bindings")
+	var binding: Dictionary = bindings.get(point.get_instance_id(), {})
+	return binding.get("changed_callback", Callable())
+
+
+static func point_input_binding_is_connected(
+	inspector: Object,
+	point: EasingCurvePoint,
+) -> bool:
+	var changed_callback := point_input_binding_callback(inspector, point)
+	return changed_callback.is_valid() and point.changed.is_connected(changed_callback)
+
+
 static func change_point_property(
 	inspector: Object,
 	point_index: int,

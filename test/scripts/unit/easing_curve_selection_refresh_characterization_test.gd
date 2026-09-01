@@ -15,6 +15,7 @@ func _run() -> void:
 	_test_add_undo_redo_selection_symmetry()
 	_test_normal_property_row_order()
 	_test_property_selection_survives_reparse()
+	_test_logical_selection_capture_restore_invariants()
 	_test_topology_and_resource_switch_selection()
 	_test_resource_view_state_persistence()
 	_test_resource_view_state_is_transient()
@@ -164,6 +165,80 @@ func _test_property_selection_survives_reparse() -> void:
 		first.grid.free()
 		recreated.grid.free()
 	EDITOR_DRIVER.clear_point_selection(inspector)
+	editor.free()
+
+
+func _test_logical_selection_capture_restore_invariants() -> void:
+	var curve := _curve()
+	var context := EDITOR_HOST.create_inspector_context(curve)
+	var editor: EasingCurveEditor = context.editor
+	var inspector: Object = context.inspector
+	var selected_point: EasingCurvePoint = curve.points[2]
+	var property := _create_property_header(
+		inspector,
+		selected_point,
+		2,
+		&"left_control_point",
+	)
+	var property_header: PanelContainer = property.header
+	EDITOR_DRIVER.select_point_property(
+		inspector,
+		property_header,
+		2,
+		&"left_control_point",
+	)
+	var captured := EDITOR_DRIVER.capture_point_selection(inspector)
+	_expect(
+		bool(captured.get("has_selection", false))
+		and int(captured.get("point_index", -1)) == 2
+		and int(captured.get("point_resource_id", 0)) == selected_point.get_instance_id()
+		and StringName(captured.get("property_name", StringName())) == &"left_control_point",
+		"Logical selection capture did not preserve point identity and property",
+	)
+
+	EDITOR_DRIVER.move_point(inspector, 2, 1)
+	EDITOR_DRIVER.clear_point_selection(inspector)
+	editor.selected_index = -1
+	EDITOR_DRIVER.restore_point_selection(inspector, captured)
+	_expect(
+		EDITOR_DRIVER.selected_point_index(inspector) == 1
+		and EDITOR_DRIVER.selected_point_resource_id(inspector) == selected_point.get_instance_id()
+		and EDITOR_DRIVER.selected_point_property_name(inspector) == &"left_control_point",
+		"Selection restore trusted a stale index instead of point Resource identity",
+	)
+	_expect(
+		editor.selected_index == 1,
+		"Selection restore did not synchronize the graph index",
+	)
+	_expect(
+		EDITOR_DRIVER.selected_point_property_header(inspector) == null,
+		"Selection restore retained an ephemeral property header",
+	)
+
+	EDITOR_DRIVER.clear_point_selection(inspector)
+	var graph_fallback := EDITOR_DRIVER.capture_point_selection(inspector)
+	_expect(
+		bool(graph_fallback.get("has_selection", false))
+		and int(graph_fallback.get("point_index", -1)) == 1
+		and int(graph_fallback.get("point_resource_id", 0)) == selected_point.get_instance_id()
+		and StringName(graph_fallback.get("property_name", &"unexpected")) == StringName(),
+		"Selection capture did not fall back to the graph's logical point",
+	)
+	EDITOR_DRIVER.restore_point_selection(
+		inspector,
+		{
+			"has_selection": true,
+			"point_index": curve.points.size(),
+			"point_resource_id": 0,
+			"property_name": &"position",
+		},
+	)
+	_expect(
+		EDITOR_DRIVER.selected_point_index(inspector) == -1
+		and editor.selected_index == -1,
+		"Invalid selection restore did not clear list and graph selection",
+	)
+	property.grid.free()
 	editor.free()
 
 
