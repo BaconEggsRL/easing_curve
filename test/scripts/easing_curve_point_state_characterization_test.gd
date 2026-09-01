@@ -7,6 +7,9 @@ const POINT_STATE = preload(
 const SNAPSHOT_MUTATOR = preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_point_snapshot_mutator.gd"
 )
+const POINT_STATE_TRANSITION = preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_point_state_transition.gd"
+)
 
 var _failures := 0
 var _checks := 0
@@ -22,7 +25,10 @@ func _init() -> void:
 	_test_display_space_relationships()
 	_test_lock_force_linear_precedence()
 	_test_point_state_carrier()
+	_test_transition_input_is_unchanged()
+	_test_live_transition_policy_parity()
 	_test_live_snapshot_transition_parity()
+	_test_snapshot_transition_uses_saved_state()
 	_test_intentional_live_snapshot_policy_differences()
 	_test_point_signal_contract()
 	_test_inspector_snapshot_state_precedence_and_reset()
@@ -454,6 +460,114 @@ func _test_point_state_carrier() -> void:
 	_expect(point.locked["position"], "PointState Locks alias the source point dictionary")
 
 
+func _test_transition_input_is_unchanged() -> void:
+	var source = _capture_point_state(_point())
+	var original_left: Vector2 = source.left_control_point
+	var original_right: Vector2 = source.right_control_point
+	var result = POINT_STATE_TRANSITION.set_handle_mode(
+		source,
+		EasingCurvePoint.HandleMode.LINEAR,
+		POINT_STATE_TRANSITION.Policy.LIVE,
+	)
+
+	_expect(result != source, "Transition returned its mutable input state")
+	_expect(
+		source.handle_mode == EasingCurvePoint.HandleMode.FREE
+		and source.left_control_point == original_left
+		and source.right_control_point == original_right,
+		"Transition mutated its input geometry",
+	)
+	result.locks["position"] = true
+	_expect(
+		not source.locks["position"],
+		"Transition result Locks alias its input dictionary",
+	)
+
+
+func _test_live_transition_policy_parity() -> void:
+	for source in EasingCurvePoint.HandleMode.values():
+		for destination in EasingCurvePoint.HandleMode.values():
+			var point := _point()
+			point.handle_display_scale = Vector2(2.0, 5.0)
+			point.handle_mode = source
+			var state = _capture_point_state(point)
+
+			point.handle_mode = destination
+			state = POINT_STATE_TRANSITION.set_handle_mode(
+				state,
+				destination,
+				POINT_STATE_TRANSITION.Policy.LIVE,
+			)
+			_expect_states_match(
+				state,
+				_capture_point_state(point),
+				"Live policy Handle Mode parity %s -> %s" % [
+					EasingCurvePoint.HandleMode.keys()[source],
+					EasingCurvePoint.HandleMode.keys()[destination],
+				],
+			)
+
+	for mode in EasingCurvePoint.HandleMode.values():
+		for side in [EasingCurvePoint.ControlSide.LEFT, EasingCurvePoint.ControlSide.RIGHT]:
+			var force_property := (
+				&"left_force_linear"
+				if side == EasingCurvePoint.ControlSide.LEFT
+				else &"right_force_linear"
+			)
+			for enabled in [true, false]:
+				var point := _point()
+				point.handle_mode = mode
+				if not enabled:
+					point.set_force_linear_state(
+						side == EasingCurvePoint.ControlSide.LEFT,
+						side == EasingCurvePoint.ControlSide.RIGHT,
+					)
+				var state = _capture_point_state(point)
+
+				point.set(force_property, enabled)
+				state = POINT_STATE_TRANSITION.set_force_linear(
+					state,
+					side,
+					enabled,
+					POINT_STATE_TRANSITION.Policy.LIVE,
+				)
+				_expect_states_match(
+					state,
+					_capture_point_state(point),
+					"Live policy %s %s=%s parity" % [
+						EasingCurvePoint.HandleMode.keys()[mode],
+						force_property,
+						enabled,
+					],
+				)
+
+	for mode in EasingCurvePoint.HandleMode.values():
+		for property_name in [
+			&"position",
+			&"left_control_point",
+			&"right_control_point",
+		]:
+			var point := _point()
+			point.handle_mode = mode
+			var state = _capture_point_state(point)
+
+			point.set_locked(property_name, true)
+			state = POINT_STATE_TRANSITION.set_lock(
+				state,
+				property_name,
+				true,
+				POINT_STATE_TRANSITION.Policy.LIVE,
+			)
+			_expect_states_match(
+				state,
+				_capture_point_state(point),
+				"Live policy %s %s Lock parity" % [
+					EasingCurvePoint.HandleMode.keys()[mode],
+					property_name,
+				],
+			)
+
+
 func _test_live_snapshot_transition_parity() -> void:
 	var display_scale := Vector2(2.0, 5.0)
 	for source in EasingCurvePoint.HandleMode.values():
@@ -514,6 +628,92 @@ func _test_live_snapshot_transition_parity() -> void:
 				_capture_point_state(live),
 				"%s diverged" % label,
 			)
+
+
+func _test_snapshot_transition_uses_saved_state() -> void:
+	var point := _point()
+	var saved_position := Vector2(0.3, 0.6)
+	point.position = saved_position
+	var snapshot := _make_point_snapshot(point)
+
+	var live_position := Vector2(0.8, 0.2)
+	point.position = live_position
+	var applied: bool = SNAPSHOT_MUTATOR.apply(
+		snapshot,
+		point,
+		0,
+		&"handle_mode",
+		EasingCurvePoint.HandleMode.LINEAR,
+	)
+	var snapshot_state = _capture_snapshot_state(snapshot, 0, point)
+	_expect(applied, "Saved-state Linear transition was rejected")
+	_expect(
+		snapshot_state.position == saved_position,
+		"Snapshot transition changed the saved Position",
+	)
+	_expect(
+		snapshot_state.left_control_point == saved_position
+		and snapshot_state.right_control_point == saved_position,
+		"Snapshot transition used the post-save live Position",
+	)
+	_expect(
+		point.position == live_position,
+		"Snapshot transition mutated the live point resource",
+	)
+
+	point = _point()
+	snapshot = _make_point_snapshot(point)
+	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
+	applied = SNAPSHOT_MUTATOR.apply(
+		snapshot,
+		point,
+		0,
+		&"left_control_state",
+		EasingCurvePoint.ControlState.LOCKED,
+	)
+	snapshot_state = _capture_snapshot_state(snapshot, 0, point)
+	_expect(
+		applied and snapshot_state.locks["left_control_point"],
+		"Snapshot Control State eligibility used the post-save live Handle Mode",
+	)
+
+	point = _point()
+	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
+	snapshot = _make_point_snapshot(point)
+	point.handle_mode = EasingCurvePoint.HandleMode.FREE
+	applied = SNAPSHOT_MUTATOR.apply(
+		snapshot,
+		point,
+		0,
+		&"left_control_state",
+		EasingCurvePoint.ControlState.LOCKED,
+	)
+	_expect(
+		not applied,
+		"Snapshot Linear state accepted a Control State because the live mode changed",
+	)
+
+	point = _point()
+	point.position = saved_position
+	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
+	snapshot = _make_point_snapshot(point)
+	point.handle_mode = EasingCurvePoint.HandleMode.FREE
+	point.position = live_position
+	SNAPSHOT_MUTATOR.apply(
+		snapshot,
+		point,
+		0,
+		&"handle_mode",
+		EasingCurvePoint.HandleMode.FREE,
+	)
+	snapshot_state = _capture_snapshot_state(snapshot, 0, point)
+	_expect(
+		snapshot_state.left_control_point
+		== saved_position + Vector2.LEFT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+		and snapshot_state.right_control_point
+		== saved_position + Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH,
+		"Snapshot Linear-to-Free transition used post-save live geometry",
+	)
 
 
 func _test_intentional_live_snapshot_policy_differences() -> void:

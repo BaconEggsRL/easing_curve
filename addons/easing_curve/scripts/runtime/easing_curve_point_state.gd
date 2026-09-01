@@ -3,8 +3,7 @@ extends RefCounted
 ## Internal value carrier for EasingCurvePoint transition state.
 ##
 ## This type deliberately contains no transition, serialization, notification,
-## or editor policy. Those responsibilities remain unchanged until the later
-## point-state migration phases.
+## or editor policy. It is passed through those separate layers as plain state.
 
 var position := Vector2.ZERO
 var left_control_point := Vector2.ZERO
