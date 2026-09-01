@@ -83,7 +83,12 @@ func _test_position_x_drag_defers_list_reorder() -> void:
 	editor.selected_index = 1
 
 	_drag_position_x(inspector, curve, moved, 0.7)
-	var before_state: Dictionary = inspector.get("_point_edit_before_state").duplicate(true)
+	var transaction := EDITOR_DRIVER.point_edit_transaction_state(inspector)
+	_expect(bool(transaction["active"]), "Position X drag did not begin an edit transaction")
+	_expect(
+		transaction["action_name"] == "Move Easing Curve Point",
+		"Position X drag changed its Undo action name",
+	)
 	_expect(
 		curve.points == [left, moved, right],
 		"Position X drag reordered the Inspector list before the edit finished",
@@ -101,7 +106,7 @@ func _test_position_x_drag_defers_list_reorder() -> void:
 		"Equal-X Position X preview did not preserve both points in stable order",
 	)
 	_expect(
-		inspector.get("_point_edit_before_state") == before_state,
+		EDITOR_DRIVER.point_edit_transaction_state(inspector)["before"] == transaction["before"],
 		"Repeated Position X drag updates started more than one edit transaction",
 	)
 
@@ -119,7 +124,7 @@ func _test_position_x_drag_defers_list_reorder() -> void:
 	_expect(editor.selected_index == 2, "Position X commit did not select the moved point at its final index")
 	_expect(editor.position_x_order_preview_point == null, "Position X commit left a stale graph-order preview")
 	_expect(
-		inspector.get("_point_edit_before_state").is_empty(),
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
 		"Final Position X update did not close the drag edit transaction",
 	)
 	editor.free()
@@ -238,13 +243,15 @@ func _test_position_x_drag_continues_through_backtracking() -> void:
 		[points[0], moved, points[2], points[3], points[4]],
 		[points[0], moved, points[2], points[3], points[4]],
 	]
-	var before_state: Dictionary
+	var transaction_before: Dictionary
 	for step in range([0.3, 0.45, 0.6, 0.8, 0.4, 0.2].size()):
 		_drag_position_x(inspector, curve, moved, [0.3, 0.45, 0.6, 0.8, 0.4, 0.2][step])
+		var transaction := EDITOR_DRIVER.point_edit_transaction_state(inspector)
 		if step == 0:
-			before_state = inspector.get("_point_edit_before_state").duplicate(true)
+			transaction_before = transaction["before"]
+			_expect(bool(transaction["active"]), "Position X backtracking did not begin an edit transaction")
 		else:
-			_expect(inspector.get("_point_edit_before_state") == before_state, "Position X backtracking started a second edit transaction")
+			_expect(transaction["before"] == transaction_before, "Position X backtracking started a second edit transaction")
 		_expect(curve.points == points, "Position X backtracking rebuilt the Points list before commit")
 		_expect(editor._get_display_points() == expected_orders[step], "Position X backtracking did not preserve the live graph preview at step %d" % step)
 		_expect(editor.selected_index == 1, "Position X backtracking changed selection before commit")

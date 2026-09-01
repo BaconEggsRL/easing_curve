@@ -94,7 +94,12 @@ func _test_linear_control_x_uses_position_reorder() -> void:
 	editor.selected_index = 1
 
 	_send_x_edit(inspector, b, input, reset_btn, 0.7, "left_control_point")
-	var before_state: Dictionary = inspector.get("_point_edit_before_state").duplicate(true)
+	var transaction := EDITOR_DRIVER.point_edit_transaction_state(inspector)
+	_expect(bool(transaction["active"]), "Linear control drag did not begin an edit transaction")
+	_expect(
+		transaction["action_name"] == "Move Easing Curve Point",
+		"Linear control X alias changed its position Undo action name",
+	)
 	_expect_linear_point(b, Vector2(0.7, 0.5), "Linear left X edit")
 	_expect(curve.points == [a, b, c], "Linear control X edit reordered the list during drag")
 	_expect(editor._get_display_points() == [a, c, b], "Linear control X edit did not update live graph order")
@@ -103,12 +108,18 @@ func _test_linear_control_x_uses_position_reorder() -> void:
 	_send_x_edit(inspector, b, input, reset_btn, 0.3, "right_control_point")
 	_expect_linear_point(b, Vector2(0.3, 0.5), "Linear right X edit")
 	_expect(editor._get_display_points() == [a, b, c], "Linear control X edit did not restore graph order")
-	_expect(inspector.get("_point_edit_before_state") == before_state, "Linear control drag opened more than one edit transaction")
+	_expect(
+		EDITOR_DRIVER.point_edit_transaction_state(inspector)["before"] == transaction["before"],
+		"Linear control drag opened more than one edit transaction",
+	)
 
 	input.remove_meta(DRAGGING_META)
 	EDITOR_DRIVER.commit_point_edit(inspector)
 	_expect(curve.points == [a, b, c], "Linear control drag commit changed the final sorted order")
-	_expect(inspector.get("_point_edit_before_state").is_empty(), "Linear control drag did not close its edit transaction")
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Linear control drag did not close its edit transaction",
+	)
 	input.free()
 	reset_btn.free()
 	editor.free()
@@ -140,7 +151,7 @@ func _test_linear_control_x_drag_crosses_multiple_points() -> void:
 		[points[0], moved, points[2], points[3], points[4]],
 		[points[0], moved, points[2], points[3], points[4]],
 	]
-	var before_state: Dictionary
+	var transaction_before: Dictionary
 	for step in range(values.size()):
 		_send_x_edit(
 			inspector,
@@ -150,10 +161,12 @@ func _test_linear_control_x_drag_crosses_multiple_points() -> void:
 			values[step],
 			"left_control_point" if step % 2 == 0 else "right_control_point",
 		)
+		var transaction_state := EDITOR_DRIVER.point_edit_transaction_state(inspector)
 		if step == 0:
-			before_state = inspector.get("_point_edit_before_state").duplicate(true)
+			transaction_before = transaction_state["before"]
+			_expect(bool(transaction_state["active"]), "Linear control X backtracking did not begin an edit transaction")
 		else:
-			_expect(inspector.get("_point_edit_before_state") == before_state, "Linear control X backtracking started a second edit transaction")
+			_expect(transaction_state["before"] == transaction_before, "Linear control X backtracking started a second edit transaction")
 		_expect_linear_point(moved, Vector2(values[step], 0.5), "Linear control X drag step %d" % step)
 		_expect(curve.points == points, "Linear control X drag rebuilt the Points list before commit")
 		_expect(editor._get_display_points() == expected_orders[step], "Linear control X drag did not preserve the live graph preview at step %d" % step)

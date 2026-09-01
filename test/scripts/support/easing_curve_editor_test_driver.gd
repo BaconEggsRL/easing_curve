@@ -149,6 +149,21 @@ static func commit_point_edit(
 	inspector.call("_commit_point_edit", point_order)
 
 
+static func point_edit_transaction_state(inspector: Object) -> Dictionary:
+	var before_state: Dictionary = inspector.get("_point_edit_before_state")
+	var selection_before: Dictionary = inspector.get("_point_edit_selection_before")
+	var point_resource_ids_before: PackedInt64Array = inspector.get(
+		"_point_edit_point_resource_ids_before"
+	)
+	return {
+		"active": not before_state.is_empty(),
+		"before": before_state.duplicate(true),
+		"selection_before": selection_before.duplicate(true),
+		"point_resource_ids_before": point_resource_ids_before.duplicate(),
+		"action_name": String(inspector.get("_point_edit_action_name")),
+	}
+
+
 static func add_point_from_toolbar(inspector: Object) -> void:
 	inspector.call("_on_add_point_btn_pressed")
 

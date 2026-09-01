@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_axis_constraint_downstream_control_semantics()
 	_test_axis_constraint_view_and_order_geometry()
 	_test_axis_constraint_request_and_input_boundaries()
+	await _test_inspector_input_transaction_finish_boundaries()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
 	_finish("graph gesture characterization")
@@ -727,7 +728,10 @@ func _test_pending_add_cancel_and_no_op_release() -> void:
 	var point_position := _point_view(editor, curve.points[1])
 	editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_position, true))
 	editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_position, false))
-	_expect(inspector.get("_point_edit_before_state").is_empty(), "No-op point click created an edit transaction")
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"No-op point click created an edit transaction",
+	)
 	_expect(editor.dragging_point == -1 and editor.dragging_control == EasingCurveEditor.ControlIndex.NONE, "No-op point release leaked drag state")
 	editor.free()
 
@@ -1331,12 +1335,25 @@ func _test_axis_constraint_request_and_input_boundaries() -> void:
 	var point := point_curve.points[1]
 	var point_start := _point_view(point_editor, point)
 	point_editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_start, true))
+	var point_selection_before := EDITOR_DRIVER.capture_point_selection(point_inspector)
+	var point_resource_ids_before := point_curve._get_editor_point_resource_ids()
 	point_editor._gui_input(_motion(point_start + Vector2(48.0, 10.0), MOUSE_BUTTON_MASK_LEFT, true))
-	var point_transaction: Dictionary = point_inspector.get("_point_edit_before_state").duplicate(true)
-	_expect(not point_transaction.is_empty(), "Constrained point drag did not start an edit transaction")
-	_expect(point_inspector.get("_point_edit_action_name") == "Move Easing Curve Point", "Constrained point drag changed its Undo action name")
+	var point_transaction := EDITOR_DRIVER.point_edit_transaction_state(point_inspector)
+	_expect(bool(point_transaction["active"]), "Constrained point drag did not start an edit transaction")
+	_expect(point_transaction["action_name"] == "Move Easing Curve Point", "Constrained point drag changed its Undo action name")
+	_expect(
+		point_transaction["selection_before"] == point_selection_before,
+		"Constrained point drag did not capture selection at the transaction boundary",
+	)
+	_expect(
+		point_transaction["point_resource_ids_before"] == point_resource_ids_before,
+		"Constrained point drag did not capture point Resource identity order at the transaction boundary",
+	)
 	point_editor._gui_input(_motion(point_start + Vector2(56.0, 12.0), MOUSE_BUTTON_MASK_LEFT, true))
-	_expect(point_inspector.get("_point_edit_before_state") == point_transaction, "Repeated constrained point motion started a second edit transaction")
+	_expect(
+		EDITOR_DRIVER.point_edit_transaction_state(point_inspector)["before"] == point_transaction["before"],
+		"Repeated constrained point motion started a second edit transaction",
+	)
 	var point_request_names := []
 	var point_requests_all_changing := true
 	for request: Dictionary in point_requests:
@@ -1354,7 +1371,10 @@ func _test_axis_constraint_request_and_input_boundaries() -> void:
 	point_editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_start + Vector2(56.0, 12.0), false, true))
 	_expect(point_requests.size() == point_request_count_before_release, "Constrained point release emitted an extra point-property request")
 	_expect(int(point_finish["count"]) == 1, "Constrained point drag emitted the wrong number of edit-finished boundaries")
-	_expect(point_inspector.get("_point_edit_before_state").is_empty(), "Constrained point drag left the Inspector transaction open after release")
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(point_inspector)["active"]),
+		"Constrained point drag left the Inspector transaction open after release",
+	)
 	point_editor._slider.free()
 	point_editor.free()
 
@@ -1375,12 +1395,25 @@ func _test_axis_constraint_request_and_input_boundaries() -> void:
 	var handle_point := handle_curve.points[1]
 	var handle_start := handle_editor.get_view_pos(handle_point.right_control_point)
 	handle_editor._gui_input(_button(MOUSE_BUTTON_LEFT, handle_start, true))
+	var handle_selection_before := EDITOR_DRIVER.capture_point_selection(handle_inspector)
+	var handle_resource_ids_before := handle_curve._get_editor_point_resource_ids()
 	handle_editor._gui_input(_motion(handle_start + Vector2(46.0, -8.0), MOUSE_BUTTON_MASK_LEFT, true))
-	var handle_transaction: Dictionary = handle_inspector.get("_point_edit_before_state").duplicate(true)
-	_expect(not handle_transaction.is_empty(), "Constrained handle drag did not start an edit transaction")
-	_expect(handle_inspector.get("_point_edit_action_name") == "Move Easing Curve Handle", "Constrained handle drag changed its Undo action name")
+	var handle_transaction := EDITOR_DRIVER.point_edit_transaction_state(handle_inspector)
+	_expect(bool(handle_transaction["active"]), "Constrained handle drag did not start an edit transaction")
+	_expect(handle_transaction["action_name"] == "Move Easing Curve Handle", "Constrained handle drag changed its Undo action name")
+	_expect(
+		handle_transaction["selection_before"] == handle_selection_before,
+		"Constrained handle drag did not capture selection at the transaction boundary",
+	)
+	_expect(
+		handle_transaction["point_resource_ids_before"] == handle_resource_ids_before,
+		"Constrained handle drag did not capture point Resource identity order at the transaction boundary",
+	)
 	handle_editor._gui_input(_motion(handle_start + Vector2(54.0, -10.0), MOUSE_BUTTON_MASK_LEFT, true))
-	_expect(handle_inspector.get("_point_edit_before_state") == handle_transaction, "Repeated constrained handle motion started a second edit transaction")
+	_expect(
+		EDITOR_DRIVER.point_edit_transaction_state(handle_inspector)["before"] == handle_transaction["before"],
+		"Repeated constrained handle motion started a second edit transaction",
+	)
 	var handle_request_names := []
 	var handle_requests_all_changing := true
 	for request: Dictionary in handle_requests:
@@ -1390,7 +1423,10 @@ func _test_axis_constraint_request_and_input_boundaries() -> void:
 	_expect(handle_requests_all_changing, "Constrained handle drag emitted a non-changing motion request")
 	handle_editor._gui_input(_button(MOUSE_BUTTON_LEFT, handle_start + Vector2(54.0, -10.0), false, true))
 	_expect(int(handle_finish["count"]) == 1, "Constrained handle drag emitted the wrong number of edit-finished boundaries")
-	_expect(handle_inspector.get("_point_edit_before_state").is_empty(), "Constrained handle drag left the Inspector transaction open after release")
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(handle_inspector)["active"]),
+		"Constrained handle drag left the Inspector transaction open after release",
+	)
 	handle_editor._slider.free()
 	handle_editor.free()
 
@@ -1412,7 +1448,10 @@ func _test_axis_constraint_request_and_input_boundaries() -> void:
 		and noop_point.right_control_point.is_equal_approx(noop_right),
 		"Zero-displacement constrained drag changed point geometry",
 	)
-	_expect(noop_inspector.get("_point_edit_before_state").is_empty(), "Zero-displacement constrained drag left a transaction open")
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(noop_inspector)["active"]),
+		"Zero-displacement constrained drag left a transaction open",
+	)
 	noop_editor._slider.free()
 	noop_editor.free()
 
@@ -1479,6 +1518,157 @@ func _test_axis_constraint_request_and_input_boundaries() -> void:
 	function_editor.free()
 
 
+func _test_inspector_input_transaction_finish_boundaries() -> void:
+	var fixture := _fixture()
+	var curve: EasingCurve = fixture.curve
+	var editor: EasingCurveEditor = fixture.editor
+	var inspector: Object = fixture.inspector
+	var point := curve.points[1]
+	var input := EditorSpinSlider.new()
+	var reset_btn := Button.new()
+	var property_header := PanelContainer.new()
+	inspector.call("_connect_point_input_drag_signals", input)
+	EDITOR_DRIVER.select_point_property(
+		inspector,
+		property_header,
+		1,
+		&"right_control_point",
+	)
+
+	var selection_before := EDITOR_DRIVER.capture_point_selection(inspector)
+	var point_resource_ids_before := curve._get_editor_point_resource_ids()
+	input.emit_signal(&"grabbed")
+	inspector.call(
+		"_on_y_input_value_changed",
+		0.82,
+		point,
+		input,
+		reset_btn,
+		"right_control_point",
+	)
+	var drag_transaction := EDITOR_DRIVER.point_edit_transaction_state(inspector)
+	_expect(bool(drag_transaction["active"]), "Inspector slider drag did not begin an edit transaction")
+	_expect(
+		drag_transaction["action_name"] == "Move Easing Curve Handle",
+		"Inspector slider drag changed its Undo action name",
+	)
+	_expect(
+		drag_transaction["selection_before"] == selection_before,
+		"Inspector slider drag did not capture the selected property at transaction start",
+	)
+	_expect(
+		drag_transaction["point_resource_ids_before"] == point_resource_ids_before,
+		"Inspector slider drag did not capture point Resource identity order",
+	)
+	input.emit_signal(&"ungrabbed")
+	_expect(
+		bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Inspector slider ungrab committed synchronously instead of at its deferred boundary",
+	)
+	await process_frame
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Inspector slider ungrab did not finish its deferred edit transaction",
+	)
+
+	input.emit_signal(&"grabbed")
+	inspector.call(
+		"_on_y_input_value_changed",
+		0.76,
+		point,
+		input,
+		reset_btn,
+		"right_control_point",
+	)
+	_expect(
+		bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Second Inspector slider drag did not begin an edit transaction",
+	)
+	input.emit_signal(&"value_focus_entered")
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Inspector slider-to-value-focus handoff did not finish the active drag synchronously",
+	)
+
+	var position_input := EditorSpinSlider.new()
+	inspector.call("_on_position_x_input_focus_entered", position_input)
+	inspector.call(
+		"_on_x_input_value_changed",
+		0.75,
+		point,
+		position_input,
+		reset_btn,
+		"position",
+	)
+	var position_transaction := EDITOR_DRIVER.point_edit_transaction_state(inspector)
+	_expect(bool(position_transaction["active"]), "Position X focus edit did not begin an edit transaction")
+	_expect(
+		position_transaction["action_name"] == "Move Easing Curve Point",
+		"Position X focus edit changed its Undo action name",
+	)
+	_expect(
+		editor.position_x_order_preview_point == point,
+		"Position X focus edit did not defer list order behind the graph preview",
+	)
+	inspector.call("_on_position_x_input_focus_exited", position_input)
+	_expect(
+		bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Position X focus exit committed synchronously instead of at its deferred boundary",
+	)
+	await process_frame
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Position X focus exit did not finish its deferred edit transaction",
+	)
+	_expect(
+		editor.position_x_order_preview_point == null,
+		"Position X focus completion left a stale graph-order preview",
+	)
+
+	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
+	var linear_input := EditorSpinSlider.new()
+	inspector.call("_on_linear_control_x_input_focus_entered", linear_input, point)
+	inspector.call(
+		"_on_x_input_value_changed",
+		0.65,
+		point,
+		linear_input,
+		reset_btn,
+		"left_control_point",
+	)
+	var linear_transaction := EDITOR_DRIVER.point_edit_transaction_state(inspector)
+	_expect(bool(linear_transaction["active"]), "Linear control X focus did not begin a position edit transaction")
+	_expect(
+		linear_transaction["action_name"] == "Move Easing Curve Point",
+		"Linear control X focus did not retain the position Undo action name",
+	)
+	_expect(
+		editor.position_x_order_preview_point == point,
+		"Linear control X focus did not use the Position X order preview",
+	)
+	inspector.call("_on_linear_control_x_input_focus_exited", linear_input, point)
+	_expect(
+		bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Linear control X focus exit committed synchronously instead of at its deferred boundary",
+	)
+	await process_frame
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Linear control X focus exit did not finish its deferred edit transaction",
+	)
+	_expect(
+		editor.position_x_order_preview_point == null,
+		"Linear control X focus completion left a stale graph-order preview",
+	)
+
+	property_header.free()
+	reset_btn.free()
+	input.free()
+	position_input.free()
+	linear_input.free()
+	editor.free()
+
+
 func _test_point_and_control_drag_boundaries() -> void:
 	var fixture := _fixture()
 	var curve: EasingCurve = fixture.curve
@@ -1488,19 +1678,31 @@ func _test_point_and_control_drag_boundaries() -> void:
 	var start := _point_view(editor, point)
 	editor._gui_input(_button(MOUSE_BUTTON_LEFT, start, true))
 	editor._gui_input(_motion(start + Vector2(30.0, -20.0), MOUSE_BUTTON_MASK_LEFT))
-	_expect(not inspector.get("_point_edit_before_state").is_empty(), "Point drag did not begin one edit transaction")
+	_expect(
+		bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Point drag did not begin one edit transaction",
+	)
 	editor._gui_input(_motion(start + Vector2(45.0, -25.0), MOUSE_BUTTON_MASK_LEFT))
 	editor._gui_input(_button(MOUSE_BUTTON_LEFT, start + Vector2(45.0, -25.0), false))
-	_expect(inspector.get("_point_edit_before_state").is_empty(), "Point drag release did not complete its transaction")
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Point drag release did not complete its transaction",
+	)
 	_expect(editor.dragging_point == -1 and editor.dragging_control == EasingCurveEditor.ControlIndex.NONE, "Point drag release leaked graph state")
 
 	point = curve.points[editor.selected_index]
 	var control_view := editor.get_view_pos(point.right_control_point)
 	editor._gui_input(_button(MOUSE_BUTTON_LEFT, control_view, true))
 	editor._gui_input(_motion(control_view + Vector2(20.0, 15.0), MOUSE_BUTTON_MASK_LEFT))
-	_expect(not inspector.get("_point_edit_before_state").is_empty(), "Control drag did not begin one edit transaction")
+	_expect(
+		bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Control drag did not begin one edit transaction",
+	)
 	editor._gui_input(_button(MOUSE_BUTTON_LEFT, control_view + Vector2(20.0, 15.0), false))
-	_expect(inspector.get("_point_edit_before_state").is_empty(), "Control drag release did not complete its transaction")
+	_expect(
+		not bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Control drag release did not complete its transaction",
+	)
 	editor.free()
 
 
