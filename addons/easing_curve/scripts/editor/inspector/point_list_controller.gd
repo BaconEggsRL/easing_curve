@@ -149,8 +149,9 @@ func register_input_binding(
 	_refresh_input_bindings(point_id)
 
 
+## Returns a detached inspection snapshot so callers cannot mutate controller-owned state.
 func get_input_bindings() -> Dictionary:
-	return _input_bindings
+	return _input_bindings.duplicate(true)
 
 
 func _on_bound_point_changed(point_id: int) -> void:
