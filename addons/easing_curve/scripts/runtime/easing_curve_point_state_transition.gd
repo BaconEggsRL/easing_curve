@@ -8,6 +8,27 @@ extends RefCounted
 const POINT_STATE = preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_point_state.gd"
 )
+const DEFAULT_HANDLE_LENGTH := 0.1
+const LONGEST_HANDLE_WINS := true
+
+enum HandleMode {
+	FREE,
+	LINEAR,
+	BALANCED,
+	MIRRORED,
+	LINKED,
+}
+
+enum ControlSide {
+	LEFT,
+	RIGHT,
+}
+
+enum ControlState {
+	FREE,
+	LINEAR,
+	LOCKED,
+}
 
 enum Policy {
 	LIVE,
@@ -17,9 +38,119 @@ enum Policy {
 
 static func supports_control_state(state: POINT_STATE) -> bool:
 	return state.handle_mode in [
-		EasingCurvePoint.HandleMode.FREE,
-		EasingCurvePoint.HandleMode.LINKED,
+		HandleMode.FREE,
+		HandleMode.LINKED,
 	]
+
+
+static func is_lock_active(state: POINT_STATE, property_name: StringName) -> bool:
+	if property_name == &"position":
+		return state.locks.get(String(property_name), false)
+
+	if state.handle_mode not in [HandleMode.FREE, HandleMode.LINKED]:
+		return false
+
+	return state.locks.get(String(property_name), false)
+
+
+static func is_control_forced_linear(state: POINT_STATE, side: int) -> bool:
+	return _is_control_forced_linear(state, side)
+
+
+static func set_position(
+	source: POINT_STATE,
+	value: Vector2,
+	ignore_control_locks := false,
+) -> POINT_STATE:
+	var state := _copy(source)
+	if not value.is_finite() or state.position == value:
+		return state
+
+	var delta := value - state.position
+	var left_locked := (
+		is_lock_active(state, &"left_control_point")
+		and not ignore_control_locks
+	)
+	var right_locked := (
+		is_lock_active(state, &"right_control_point")
+		and not ignore_control_locks
+	)
+
+	if not left_locked:
+		state.left_control_point += delta
+	if not right_locked:
+		state.right_control_point += delta
+	state.position = value
+	return state
+
+
+static func get_control_point_pair(
+	state: POINT_STATE,
+	side: int,
+	value: Vector2,
+) -> Dictionary:
+	var left := state.left_control_point
+	var right := state.right_control_point
+
+	if state.handle_mode == HandleMode.LINEAR:
+		return {
+			"left": state.position,
+			"right": state.position,
+		}
+
+	if side == ControlSide.LEFT:
+		left = value
+	else:
+		right = value
+
+	match state.handle_mode:
+		HandleMode.BALANCED:
+			var opposite := (
+				state.right_control_point
+				if side == ControlSide.LEFT
+				else state.left_control_point
+			)
+			var moved_delta := _to_handle_space(state, value - state.position)
+			var opposite_delta := _to_handle_space(
+				state,
+				opposite - state.position,
+			)
+			var opposite_length := _get_safe_length(
+				opposite_delta,
+				Vector2.ZERO,
+			)
+			var direction := _get_safe_direction(-moved_delta)
+			var balanced_delta := _from_handle_space(
+				state,
+				direction * opposite_length,
+			)
+			var balanced := state.position + balanced_delta
+
+			if side == ControlSide.LEFT:
+				right = balanced
+			else:
+				left = balanced
+
+		HandleMode.MIRRORED:
+			var moved_delta := _to_handle_space(state, value - state.position)
+			var mirrored := (
+				state.position
+				+ _from_handle_space(state, -moved_delta)
+			)
+
+			if side == ControlSide.LEFT:
+				right = mirrored
+			else:
+				left = mirrored
+
+		HandleMode.LINKED:
+			left = value
+			right = value
+
+	return {
+		"left": left,
+		"right": right,
+	}
 
 
 static func set_handle_mode(
@@ -39,7 +170,7 @@ static func _set_handle_mode(
 ) -> void:
 	var handles := get_handles_for_mode_change(state, mode)
 
-	if policy == Policy.INSPECTOR and mode == EasingCurvePoint.HandleMode.LINKED:
+	if policy == Policy.INSPECTOR and mode == HandleMode.LINKED:
 		var shared_locked := (
 			bool(state.locks.get("left_control_point", false))
 			or bool(state.locks.get("right_control_point", false))
@@ -61,7 +192,7 @@ static func _set_handle_mode(
 
 static func set_control_state(
 	source: POINT_STATE,
-	side: EasingCurvePoint.ControlSide,
+	side: int,
 	control_state: int,
 ) -> POINT_STATE:
 	var state := _copy(source)
@@ -71,15 +202,15 @@ static func set_control_state(
 
 static func _set_control_state(
 	state: POINT_STATE,
-	side: EasingCurvePoint.ControlSide,
+	side: int,
 	control_state: int,
 ) -> void:
-	var linked := state.handle_mode == EasingCurvePoint.HandleMode.LINKED
-	var sides: Array[EasingCurvePoint.ControlSide] = [side]
+	var linked := state.handle_mode == HandleMode.LINKED
+	var sides: Array[int] = [side]
 	if linked:
 		sides = [
-			EasingCurvePoint.ControlSide.LEFT,
-			EasingCurvePoint.ControlSide.RIGHT,
+			ControlSide.LEFT,
+			ControlSide.RIGHT,
 		]
 
 	var had_force_linear := (
@@ -92,24 +223,24 @@ static func _set_control_state(
 		_set_force_linear_value(
 			state,
 			control_side,
-			control_state == EasingCurvePoint.ControlState.LINEAR,
+			control_state == ControlState.LINEAR,
 		)
 		state.locks[_control_property(control_side)] = (
-			control_state == EasingCurvePoint.ControlState.LOCKED
+			control_state == ControlState.LOCKED
 		)
 
-		if control_state == EasingCurvePoint.ControlState.LINEAR:
+		if control_state == ControlState.LINEAR:
 			_set_control(state, control_side, state.position)
 		elif had_force_linear:
 			_set_default_control(state, control_side)
 
-	if linked and control_state != EasingCurvePoint.ControlState.LINEAR and had_force_linear:
+	if linked and control_state != ControlState.LINEAR and had_force_linear:
 		_set_linked_default(state)
 
 
 static func set_force_linear(
 	source: POINT_STATE,
-	side: EasingCurvePoint.ControlSide,
+	side: int,
 	enabled: bool,
 	policy: Policy,
 ) -> POINT_STATE:
@@ -118,9 +249,28 @@ static func set_force_linear(
 	return state
 
 
+static func set_force_linear_state(
+	source: POINT_STATE,
+	left: bool,
+	right: bool,
+	apply_geometry := true,
+) -> POINT_STATE:
+	var state := _copy(source)
+	state.left_force_linear = left
+	state.right_force_linear = right
+
+	if apply_geometry:
+		if state.handle_mode == HandleMode.LINKED and not left and not right:
+			_set_linked_default(state)
+		else:
+			_apply_force_linear_geometry(state)
+
+	return state
+
+
 static func _set_force_linear(
 	state: POINT_STATE,
-	side: EasingCurvePoint.ControlSide,
+	side: int,
 	enabled: bool,
 	policy: Policy,
 ) -> void:
@@ -128,7 +278,7 @@ static func _set_force_linear(
 		_set_live_force_linear(state, side, enabled)
 		return
 
-	if state.handle_mode == EasingCurvePoint.HandleMode.LINKED:
+	if state.handle_mode == HandleMode.LINKED:
 		state.left_force_linear = enabled
 		state.right_force_linear = enabled
 
@@ -172,12 +322,12 @@ static func _set_locks(
 		return
 
 	var previous: Dictionary = state.locks
-	var linked := state.handle_mode == EasingCurvePoint.HandleMode.LINKED
+	var linked := state.handle_mode == HandleMode.LINKED
 	var cleared_linked_linear := false
 
 	for side in [
-		EasingCurvePoint.ControlSide.LEFT,
-		EasingCurvePoint.ControlSide.RIGHT,
+		ControlSide.LEFT,
+		ControlSide.RIGHT,
 	]:
 		var property_name := _control_property(side)
 		var newly_locked := (
@@ -218,7 +368,7 @@ static func _set_lock(
 	locks[property_name] = enabled
 	if (
 		policy == Policy.INSPECTOR
-		and state.handle_mode == EasingCurvePoint.HandleMode.LINKED
+		and state.handle_mode == HandleMode.LINKED
 		and property_name in [&"left_control_point", &"right_control_point"]
 	):
 		locks["left_control_point"] = enabled
@@ -233,17 +383,17 @@ static func get_handles_for_mode_change(
 	var left := state.left_control_point
 	var right := state.right_control_point
 
-	if mode == EasingCurvePoint.HandleMode.LINEAR:
+	if mode == HandleMode.LINEAR:
 		return {
 			"left": state.position,
 			"right": state.position,
 		}
 
-	if state.handle_mode == EasingCurvePoint.HandleMode.LINEAR:
-		left = state.position + Vector2.LEFT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
-		right = state.position + Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+	if state.handle_mode == HandleMode.LINEAR:
+		left = state.position + Vector2.LEFT * DEFAULT_HANDLE_LENGTH
+		right = state.position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
 
-		if mode == EasingCurvePoint.HandleMode.LINKED:
+		if mode == HandleMode.LINKED:
 			var linked := _get_linked_handle_position(state, left, right)
 			return {
 				"left": linked,
@@ -256,16 +406,16 @@ static func get_handles_for_mode_change(
 		}
 
 	match mode:
-		EasingCurvePoint.HandleMode.FREE:
+		HandleMode.FREE:
 			pass
 
-		EasingCurvePoint.HandleMode.BALANCED:
+		HandleMode.BALANCED:
 			var left_delta := _to_handle_space(state, left - state.position)
 			var right_delta := _to_handle_space(state, right - state.position)
 			var left_length := _get_safe_length(left_delta, Vector2.ZERO)
 			var right_length := _get_safe_length(right_delta, Vector2.ZERO)
 			var use_left := (
-				EasingCurvePoint.LONGEST_HANDLE_WINS
+				LONGEST_HANDLE_WINS
 				and left_length > right_length
 			)
 			var direction := -left_delta if use_left else right_delta
@@ -280,11 +430,11 @@ static func get_handles_for_mode_change(
 				+ _from_handle_space(state, direction * right_length)
 			)
 
-		EasingCurvePoint.HandleMode.MIRRORED:
+		HandleMode.MIRRORED:
 			var left_length := _get_safe_length(left, state.position)
 			var right_length := _get_safe_length(right, state.position)
 			var use_left := (
-				EasingCurvePoint.LONGEST_HANDLE_WINS
+				LONGEST_HANDLE_WINS
 				and left_length > right_length
 			)
 			var direction := (
@@ -295,16 +445,16 @@ static func get_handles_for_mode_change(
 			direction = _get_safe_direction(direction)
 			var length := (
 				maxf(left_length, right_length)
-				if EasingCurvePoint.LONGEST_HANDLE_WINS
+				if LONGEST_HANDLE_WINS
 				else right_length
 			)
 			if is_zero_approx(length):
-				length = EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+				length = DEFAULT_HANDLE_LENGTH
 
 			left = state.position - direction * length
 			right = state.position + direction * length
 
-		EasingCurvePoint.HandleMode.LINKED:
+		HandleMode.LINKED:
 			var linked := _get_linked_handle_position(state, left, right)
 			left = linked
 			right = linked
@@ -317,20 +467,20 @@ static func get_handles_for_mode_change(
 
 static func _set_live_force_linear(
 	state: POINT_STATE,
-	side: EasingCurvePoint.ControlSide,
+	side: int,
 	enabled: bool,
 ) -> void:
 	if _is_control_forced_linear(state, side) == enabled:
 		return
 
 	_set_force_linear_value(state, side, enabled)
-	if state.handle_mode == EasingCurvePoint.HandleMode.LINKED:
+	if state.handle_mode == HandleMode.LINKED:
 		if state.left_force_linear or state.right_force_linear:
 			state.left_control_point = state.position
 			state.right_control_point = state.position
 		else:
 			_set_linked_default(state)
-	elif state.handle_mode == EasingCurvePoint.HandleMode.FREE:
+	elif state.handle_mode == HandleMode.FREE:
 		if enabled:
 			_set_control(state, side, state.position)
 		else:
@@ -341,7 +491,7 @@ static func _apply_force_linear_geometry(state: POINT_STATE) -> void:
 	if not supports_control_state(state):
 		return
 
-	if state.handle_mode == EasingCurvePoint.HandleMode.LINKED:
+	if state.handle_mode == HandleMode.LINKED:
 		if state.left_force_linear or state.right_force_linear:
 			state.left_control_point = state.position
 			state.right_control_point = state.position
@@ -355,10 +505,10 @@ static func _apply_force_linear_geometry(state: POINT_STATE) -> void:
 
 static func _set_control(
 	state: POINT_STATE,
-	side: EasingCurvePoint.ControlSide,
+	side: int,
 	value: Vector2,
 ) -> void:
-	if side == EasingCurvePoint.ControlSide.LEFT:
+	if side == ControlSide.LEFT:
 		state.left_control_point = value
 	else:
 		state.right_control_point = value
@@ -366,23 +516,23 @@ static func _set_control(
 
 static func _set_default_control(
 	state: POINT_STATE,
-	side: EasingCurvePoint.ControlSide,
+	side: int,
 ) -> void:
 	var offset := (
 		Vector2.LEFT
-		if side == EasingCurvePoint.ControlSide.LEFT
+		if side == ControlSide.LEFT
 		else Vector2.RIGHT
 	)
 	_set_control(
 		state,
 		side,
-		state.position + offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH,
+		state.position + offset * DEFAULT_HANDLE_LENGTH,
 	)
 
 
 static func _set_linked_default(state: POINT_STATE) -> void:
 	var linked_default := (
-		state.position + Vector2.RIGHT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH
+		state.position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
 	)
 	state.left_control_point = linked_default
 	state.right_control_point = linked_default
@@ -390,39 +540,39 @@ static func _set_linked_default(state: POINT_STATE) -> void:
 
 static func _is_control_forced_linear(
 	state: POINT_STATE,
-	side: EasingCurvePoint.ControlSide,
+	side: int,
 ) -> bool:
-	if state.handle_mode == EasingCurvePoint.HandleMode.LINKED:
+	if state.handle_mode == HandleMode.LINKED:
 		return state.left_force_linear or state.right_force_linear
 	return _force_linear(state, side)
 
 
 static func _force_linear(
 	state: POINT_STATE,
-	side: EasingCurvePoint.ControlSide,
+	side: int,
 ) -> bool:
 	return (
 		state.left_force_linear
-		if side == EasingCurvePoint.ControlSide.LEFT
+		if side == ControlSide.LEFT
 		else state.right_force_linear
 	)
 
 
 static func _set_force_linear_value(
 	state: POINT_STATE,
-	side: EasingCurvePoint.ControlSide,
+	side: int,
 	value: bool,
 ) -> void:
-	if side == EasingCurvePoint.ControlSide.LEFT:
+	if side == ControlSide.LEFT:
 		state.left_force_linear = value
 	else:
 		state.right_force_linear = value
 
 
-static func _control_property(side: EasingCurvePoint.ControlSide) -> StringName:
+static func _control_property(side: int) -> StringName:
 	return (
 		&"left_control_point"
-		if side == EasingCurvePoint.ControlSide.LEFT
+		if side == ControlSide.LEFT
 		else &"right_control_point"
 	)
 
@@ -435,7 +585,7 @@ static func _get_linked_handle_position(
 	var left_length := _get_safe_length(left, state.position)
 	var right_length := _get_safe_length(right, state.position)
 	var use_left := (
-		EasingCurvePoint.LONGEST_HANDLE_WINS
+		LONGEST_HANDLE_WINS
 		and left_length > right_length
 	)
 	return left if use_left else right

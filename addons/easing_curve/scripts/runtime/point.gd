@@ -9,7 +9,13 @@ extends Resource
 ## Stores the locked state of each Vector2 property and conveys back to the editor plugin.
 signal lock_changed(property_name: String, locked: bool)
 
-const DEFAULT_HANDLE_LENGTH := 0.1
+const POINT_STATE = preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_point_state.gd"
+)
+const POINT_STATE_TRANSITION = preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_point_state_transition.gd"
+)
+const DEFAULT_HANDLE_LENGTH := POINT_STATE_TRANSITION.DEFAULT_HANDLE_LENGTH
 var handle_display_scale := Vector2.ONE
 
 var _ignore_control_locks_for_position_change := false
@@ -25,7 +31,7 @@ var use_display_space_handles := true
 # Mirrored: right handle determines both orientation and final length.
 #
 # If the handles have equal lengths, the right handle wins in either mode.
-const LONGEST_HANDLE_WINS := true
+const LONGEST_HANDLE_WINS := POINT_STATE_TRANSITION.LONGEST_HANDLE_WINS
 
 enum HandleMode {
 	FREE,
@@ -102,6 +108,20 @@ func _init(pos: Vector2 = Vector2.ZERO) -> void:
 	emit_changed()
 
 
+func _capture_transition_state() -> POINT_STATE:
+	var state := POINT_STATE.new()
+	state.position = position
+	state.left_control_point = _left_control_point
+	state.right_control_point = _right_control_point
+	state.handle_mode = handle_mode
+	state.locks = locked.duplicate(true)
+	state.left_force_linear = _left_force_linear
+	state.right_force_linear = _right_force_linear
+	state.handle_display_scale = handle_display_scale
+	state.use_display_space_handles = use_display_space_handles
+	return state
+
+
 func is_lock_active(property_name: StringName) -> bool:
 	if property_name == &"position":
 		return locked.get(String(property_name), false)
@@ -157,7 +177,13 @@ func set_locked(property_name: String, toggled_on: bool) -> void:
 	if locked.get(property_name, false) == toggled_on:
 		return
 
-	locked[property_name] = toggled_on
+	var state := POINT_STATE_TRANSITION.set_lock(
+		_capture_transition_state(),
+		StringName(property_name),
+		toggled_on,
+		POINT_STATE_TRANSITION.Policy.LIVE,
+	)
+	locked[property_name] = state.locks[property_name]
 
 	lock_changed.emit(property_name, toggled_on)
 	emit_changed()
@@ -167,7 +193,12 @@ func set_locks(value: Dictionary[String, bool]) -> void:
 	if locked == value:
 		return
 
-	locked = value
+	var state := POINT_STATE_TRANSITION.set_locks(
+		_capture_transition_state(),
+		value,
+		POINT_STATE_TRANSITION.Policy.LIVE,
+	)
+	locked = state.locks
 
 	emit_changed()
 
@@ -179,24 +210,14 @@ func set_position(value: Vector2) -> void:
 	if position == value:
 		return
 
-	var delta := value - position
-
-	var left_locked := (
-		is_lock_active("left_control_point")
-		and not _ignore_control_locks_for_position_change
+	var state := POINT_STATE_TRANSITION.set_position(
+		_capture_transition_state(),
+		value,
+		_ignore_control_locks_for_position_change,
 	)
-	var right_locked := (
-		is_lock_active("right_control_point")
-		and not _ignore_control_locks_for_position_change
-	)
-
-	if not left_locked:
-		_left_control_point += delta
-
-	if not right_locked:
-		_right_control_point += delta
-
-	position = value
+	_left_control_point = state.left_control_point
+	_right_control_point = state.right_control_point
+	position = state.position
 
 	emit_changed()
 
@@ -231,101 +252,11 @@ func get_control_point_pair(
 	side: ControlSide,
 	value: Vector2,
 ) -> Dictionary:
-	var left := _left_control_point
-	var right := _right_control_point
-
-	if handle_mode == HandleMode.LINEAR:
-		return {
-			"left": position,
-			"right": position,
-		}
-
-	if side == ControlSide.LEFT:
-		left = value
-	else:
-		right = value
-
-	match handle_mode:
-
-		HandleMode.BALANCED:
-			var opposite := (
-				_right_control_point
-				if side == ControlSide.LEFT
-				else _left_control_point
-			)
-
-			var moved_delta := _to_handle_space(
-				value - position
-			)
-
-			var opposite_delta := _to_handle_space(
-				opposite - position
-			)
-
-			var opposite_length := _get_safe_length(
-				opposite_delta,
-				Vector2.ZERO,
-			)
-
-			var direction := _get_safe_direction(
-				-moved_delta,
-			)
-
-			var balanced_delta := _from_handle_space(
-				direction * opposite_length
-			)
-
-			var balanced := position + balanced_delta
-
-			if not balanced.is_finite():
-				print(
-					"BALANCED OVERFLOW",
-					"\n  dragged value: ", value,
-					"\n  opposite: ", opposite,
-					"\n  display-space handles: ", use_display_space_handles,
-					"\n  display scale: ", handle_display_scale,
-					"\n  result: ", balanced,
-				)
-
-			if side == ControlSide.LEFT:
-				right = balanced
-			else:
-				left = balanced
-
-
-		HandleMode.MIRRORED:
-			var moved_delta := _to_handle_space(
-				value - position
-			)
-
-			var mirrored := (
-				position
-				+ _from_handle_space(-moved_delta)
-			)
-
-			if not mirrored.is_finite():
-				print(
-					"MIRRORED OVERFLOW",
-					"\n  position: ", position,
-					"\n  dragged value: ", value,
-					"\n  mirrored: ", mirrored,
-				)
-
-			if side == ControlSide.LEFT:
-				right = mirrored
-			else:
-				left = mirrored
-
-
-		HandleMode.LINKED:
-			left = value
-			right = value
-
-
-	return {
-		"left": left,
-		"right": right,
-	}
+	return POINT_STATE_TRANSITION.get_control_point_pair(
+		_capture_transition_state(),
+		side,
+		value,
+	)
 
 
 func _set_control_point(
@@ -377,12 +308,16 @@ func set_handle_mode(value: HandleMode) -> void:
 	if handle_mode == value:
 		return
 
-	var handles := get_handles_for_mode_change(value)
-	handle_mode = value
-	_left_control_point = handles["left"]
-	_right_control_point = handles["right"]
-
-	_apply_free_force_linear_state()
+	var state := POINT_STATE_TRANSITION.set_handle_mode(
+		_capture_transition_state(),
+		value,
+		POINT_STATE_TRANSITION.Policy.LIVE,
+	)
+	handle_mode = state.handle_mode
+	_left_control_point = state.left_control_point
+	_right_control_point = state.right_control_point
+	_left_force_linear = state.left_force_linear
+	_right_force_linear = state.right_force_linear
 
 	emit_changed()
 
@@ -418,130 +353,10 @@ func set_handle_mode(value: HandleMode) -> void:
 #Mirrored -> Balanced
 	#preserve geometry
 func get_handles_for_mode_change(value: HandleMode) -> Dictionary:
-	var left := left_control_point
-	var right := right_control_point
-
-	if value == HandleMode.LINEAR:
-		return {
-			"left": position,
-			"right": position,
-		}
-
-	if handle_mode == HandleMode.LINEAR:
-		left = position + Vector2.LEFT * DEFAULT_HANDLE_LENGTH
-		right = position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
-
-		if value == HandleMode.LINKED:
-			var linked := _get_linked_handle_position(left, right)
-			return {
-				"left": linked,
-				"right": linked,
-			}
-
-		return {
-			"left": left,
-			"right": right,
-		}
-
-	match value:
-		HandleMode.FREE:
-			pass
-
-		HandleMode.BALANCED:
-			var left_delta := _to_handle_space(
-				left - position
-			)
-			var right_delta := _to_handle_space(
-				right - position
-			)
-
-			var left_length := _get_safe_length(
-				left_delta,
-				Vector2.ZERO,
-			)
-			var right_length := _get_safe_length(
-				right_delta,
-				Vector2.ZERO,
-			)
-
-			var use_left := (
-				LONGEST_HANDLE_WINS
-				and left_length > right_length
-			)
-
-			var direction := (
-				-left_delta
-				if use_left
-				else right_delta
-			)
-
-			direction = _get_safe_direction(direction)
-
-			left = (
-				position
-				+ _from_handle_space(
-					-direction * left_length
-				)
-			)
-
-			right = (
-				position
-				+ _from_handle_space(
-					direction * right_length
-				)
-			)
-
-		HandleMode.MIRRORED:
-			var left_length := _get_safe_length(
-				left,
-				position,
-			)
-			var right_length := _get_safe_length(
-				right,
-				position,
-			)
-
-			var use_left := (
-				LONGEST_HANDLE_WINS
-				and left_length > right_length
-			)
-
-			var direction := (
-				position - left
-				if use_left
-				else right - position
-			)
-
-			direction = _get_safe_direction(direction)
-
-			var length := (
-				maxf(left_length, right_length)
-				if LONGEST_HANDLE_WINS
-				else right_length
-			)
-
-			if is_zero_approx(length):
-				length = DEFAULT_HANDLE_LENGTH
-
-			left = position - direction * length
-			right = position + direction * length
-
-
-		HandleMode.LINKED:
-			var linked := _get_linked_handle_position(
-				left,
-				right,
-			)
-
-			left = linked
-			right = linked
-
-
-	return {
-		"left": left,
-		"right": right,
-	}
-
+	return POINT_STATE_TRANSITION.get_handles_for_mode_change(
+		_capture_transition_state(),
+		value,
+	)
 
 
 func is_control_forced_linear(side: ControlSide) -> bool:
@@ -583,69 +398,18 @@ func _set_control_force_linear(
 	if is_control_forced_linear(side) == enabled:
 		return
 
-	if side == ControlSide.LEFT:
-		_left_force_linear = enabled
-	else:
-		_right_force_linear = enabled
-
-	if handle_mode == HandleMode.LINKED:
-		if _left_force_linear or _right_force_linear:
-			_set_control_point_direct(ControlSide.LEFT, position)
-			_set_control_point_direct(ControlSide.RIGHT, position)
-		else:
-			var linked_default := (
-				position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
-			)
-			_set_control_point_direct(ControlSide.LEFT, linked_default)
-			_set_control_point_direct(ControlSide.RIGHT, linked_default)
-
-	elif handle_mode == HandleMode.FREE:
-		if enabled:
-			_set_control_point_direct(side, position)
-		else:
-			_initialize_default_handle(side)
+	var state := POINT_STATE_TRANSITION.set_force_linear(
+		_capture_transition_state(),
+		side,
+		enabled,
+		POINT_STATE_TRANSITION.Policy.LIVE,
+	)
+	_left_force_linear = state.left_force_linear
+	_right_force_linear = state.right_force_linear
+	_left_control_point = state.left_control_point
+	_right_control_point = state.right_control_point
 
 	emit_changed()
-
-
-func _set_control_point_direct(
-	side: ControlSide,
-	value: Vector2,
-) -> void:
-	if side == ControlSide.LEFT:
-		_left_control_point = value
-	else:
-		_right_control_point = value
-
-
-func _initialize_default_handle(side: ControlSide) -> void:
-	var offset := (
-		Vector2.LEFT
-		if side == ControlSide.LEFT
-		else Vector2.RIGHT
-	)
-
-	_set_control_point_direct(
-		side,
-		position + offset * DEFAULT_HANDLE_LENGTH,
-	)
-
-
-func _apply_free_force_linear_state() -> void:
-	if not supports_control_state():
-		return
-
-	if handle_mode == HandleMode.LINKED:
-		if _left_force_linear or _right_force_linear:
-			_set_control_point_direct(ControlSide.LEFT, position)
-			_set_control_point_direct(ControlSide.RIGHT, position)
-		return
-
-	if _left_force_linear:
-		_set_control_point_direct(ControlSide.LEFT, position)
-
-	if _right_force_linear:
-		_set_control_point_direct(ControlSide.RIGHT, position)
 
 
 func set_force_linear_state(
@@ -653,98 +417,18 @@ func set_force_linear_state(
 	right: bool,
 	apply_geometry := true,
 ) -> void:
-	_left_force_linear = left
-	_right_force_linear = right
-
-	if apply_geometry:
-		if handle_mode == HandleMode.LINKED and not left and not right:
-			var linked_default := (
-				position + Vector2.RIGHT * DEFAULT_HANDLE_LENGTH
-			)
-			_set_control_point_direct(ControlSide.LEFT, linked_default)
-			_set_control_point_direct(ControlSide.RIGHT, linked_default)
-		else:
-			_apply_free_force_linear_state()
+	var state := POINT_STATE_TRANSITION.set_force_linear_state(
+		_capture_transition_state(),
+		left,
+		right,
+		apply_geometry,
+	)
+	_left_force_linear = state.left_force_linear
+	_right_force_linear = state.right_force_linear
+	_left_control_point = state.left_control_point
+	_right_control_point = state.right_control_point
 
 	emit_changed()
-
-
-func _get_linked_handle_position(
-	left: Vector2,
-	right: Vector2,
-) -> Vector2:
-	var left_length := _get_safe_length(
-		left,
-		position,
-	)
-	var right_length := _get_safe_length(
-		right,
-		position,
-	)
-
-	var use_left := (
-		LONGEST_HANDLE_WINS
-		and left_length > right_length
-	)
-
-	# Right wins when lengths are equal, or whenever
-	# LONGEST_HANDLE_WINS is false.
-	return left if use_left else right
-
-
-func _get_safe_direction(
-	direction: Vector2,
-	fallback := Vector2.RIGHT,
-) -> Vector2:
-	if not direction.is_finite():
-		return fallback
-
-	var max_component := maxf(
-		absf(direction.x),
-		absf(direction.y),
-	)
-
-	if is_zero_approx(max_component):
-		return fallback
-
-	var scaled := direction / max_component
-	var scaled_length := sqrt(
-		scaled.x * scaled.x
-		+ scaled.y * scaled.y
-	)
-
-	if (
-		not is_finite(scaled_length)
-		or is_zero_approx(scaled_length)
-	):
-		return fallback
-
-	return scaled / scaled_length
-
-
-func _get_safe_length(from: Vector2, to: Vector2) -> float:
-	var delta := from - to
-
-	if not delta.is_finite():
-		return 0.0
-
-	var max_component := maxf(
-		absf(delta.x),
-		absf(delta.y),
-	)
-
-	if is_zero_approx(max_component):
-		return 0.0
-
-	var scaled := delta / max_component
-
-	return (
-		max_component
-		* sqrt(
-			scaled.x * scaled.x
-			+ scaled.y * scaled.y
-		)
-	)
 
 
 func set_handle_display_scale(value: Vector2) -> void:
@@ -755,17 +439,3 @@ func set_handle_display_scale(value: Vector2) -> void:
 		return
 
 	handle_display_scale = value.abs()
-
-
-func _to_handle_space(delta: Vector2) -> Vector2:
-	if not use_display_space_handles:
-		return delta
-
-	return delta * handle_display_scale
-
-
-func _from_handle_space(delta: Vector2) -> Vector2:
-	if not use_display_space_handles:
-		return delta
-
-	return delta / handle_display_scale

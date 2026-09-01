@@ -25,6 +25,7 @@ func _init() -> void:
 	_test_display_space_relationships()
 	_test_lock_force_linear_precedence()
 	_test_point_state_carrier()
+	_test_transition_public_constant_parity()
 	_test_transition_input_is_unchanged()
 	_test_live_transition_policy_parity()
 	_test_live_snapshot_transition_parity()
@@ -458,6 +459,34 @@ func _test_point_state_carrier() -> void:
 
 	state.locks["position"] = false
 	_expect(point.locked["position"], "PointState Locks alias the source point dictionary")
+
+
+func _test_transition_public_constant_parity() -> void:
+	_expect(
+		POINT_STATE_TRANSITION.HandleMode.values()
+		== EasingCurvePoint.HandleMode.values(),
+		"Transition Handle Mode values diverged from the public point API",
+	)
+	_expect(
+		POINT_STATE_TRANSITION.ControlSide.values()
+		== EasingCurvePoint.ControlSide.values(),
+		"Transition Control Side values diverged from the public point API",
+	)
+	_expect(
+		POINT_STATE_TRANSITION.ControlState.values()
+		== EasingCurvePoint.ControlState.values(),
+		"Transition Control State values diverged from the public point API",
+	)
+	_expect(
+		POINT_STATE_TRANSITION.DEFAULT_HANDLE_LENGTH
+		== EasingCurvePoint.DEFAULT_HANDLE_LENGTH,
+		"Transition default handle length diverged from the public point API",
+	)
+	_expect(
+		POINT_STATE_TRANSITION.LONGEST_HANDLE_WINS
+		== EasingCurvePoint.LONGEST_HANDLE_WINS,
+		"Transition longest-handle policy diverged from the public point API",
+	)
 
 
 func _test_transition_input_is_unchanged() -> void:
