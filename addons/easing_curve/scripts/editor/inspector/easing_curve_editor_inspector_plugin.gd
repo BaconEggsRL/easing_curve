@@ -12,7 +12,9 @@ const EDITOR_THEME_CACHE = preload(
 const ZOOM_SLIDER_CONTAINER = preload(
 	"res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.tscn"
 )
-const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
+const PointEditTransactionController = preload(
+	"res://addons/easing_curve/scripts/editor/inspector/point_edit_transaction_controller.gd"
+)
 const POINT_SNAPSHOT_MUTATOR = preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_point_snapshot_mutator.gd"
 )
@@ -52,6 +54,7 @@ var _zero_margin_panel_stylebox: StyleBox = (
 	EDITOR_THEME_CACHE.make_zero_margin_panel_stylebox()
 )
 var _point_property_clipboard := PointPropertyClipboardController.new()
+var _point_edit_transaction_controller := PointEditTransactionController.new()
 
 
 ## Inspector-only transition grouping, ordering, and presentation.
@@ -334,7 +337,13 @@ func _create_selectable_point_property_header(
 
 
 ## Curve
-var editor_undo_redo: EditorUndoRedoManager # assigned from EditorPlugin
+var editor_undo_redo: EditorUndoRedoManager: # assigned from EditorPlugin
+	set(value):
+		editor_undo_redo = value
+		_point_edit_transaction_controller.setup(
+			value,
+			Callable(self, "_undo_source_property"),
+		)
 var easing_curve_editor: EasingCurveEditor
 var curve_editor_property: EditorProperty
 var _curve_editor_section: PointsFoldableSection
@@ -833,7 +842,7 @@ func _move_point(from_index: int, to_index: int) -> void:
 		return
 
 	var selection_before := _capture_point_selection_state()
-	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	var before := _point_edit_transaction_controller.capture_state(curve)
 	var point_resource_ids_before := curve._get_editor_point_resource_ids()
 	var moved_point := curve.points[from_index]
 	curve.swap_points(from_index, to_index)
@@ -842,7 +851,7 @@ func _move_point(from_index: int, to_index: int) -> void:
 	var point_resource_ids_after := curve._get_editor_point_resource_ids()
 	_commit_curve_action(
 		"Reorder Easing Curve Points",
-		EASING_CURVE_EDITOR_UNDO.ActionContext.new(before)
+		_point_edit_transaction_controller.create_action_context(before)
 			.with_selection(
 				Callable(self, "_restore_point_selection_state"),
 				selection_before,
@@ -1616,14 +1625,14 @@ func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
 	_point_edit_action_name = "Edit Easing Curve Point"
 	if not point_order.is_empty() and curve.points != point_order:
 		curve.points = point_order
-	var after := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	var after := _point_edit_transaction_controller.capture_state(curve)
 	var selection_after := _capture_point_selection_state()
 	var point_resource_ids_after := curve._get_editor_point_resource_ids()
 	# Flush the draft point notifications once at the drag boundary.
 	curve.set_point_snapshot(curve.get_point_snapshot())
 	_commit_curve_action(
 		action_name,
-		EASING_CURVE_EDITOR_UNDO.ActionContext.new(before, after)
+		_point_edit_transaction_controller.create_action_context(before, after)
 			.with_selection(
 				Callable(self, "_restore_point_selection_state"),
 				selection_before,
@@ -1638,14 +1647,12 @@ func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
 
 func _commit_curve_action(
 		action_name: String,
-		context: EasingCurveEditorUndo.ActionContext,
+		context,
 ) -> bool:
-	return EASING_CURVE_EDITOR_UNDO.commit_applied_action(
-		editor_undo_redo,
+	return _point_edit_transaction_controller.commit_applied_action(
 		curve,
 		action_name,
 		context,
-		_undo_source_property(),
 	)
 
 
@@ -1805,7 +1812,7 @@ func _apply_point_property_change(
 	if i < 0 or i >= curve.points.size():
 		return
 	_point_list_controller.request_selection_refresh_preservation()
-	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	var before := _point_edit_transaction_controller.capture_state(curve)
 	if changing and _point_edit_before_state.is_empty():
 		_point_edit_before_state = before
 		_point_edit_selection_before = _capture_point_selection_state()
@@ -1921,27 +1928,12 @@ func _apply_point_property_change(
 			return
 		_commit_curve_action(
 			_point_action_name(property_name),
-			EASING_CURVE_EDITOR_UNDO.ActionContext.new(before),
+			_point_edit_transaction_controller.create_action_context(before),
 		)
 
 
 func _point_action_name(property_name: StringName) -> String:
-	match property_name:
-		&"position":
-			return "Move Easing Curve Point"
-		&"left_control_point", &"right_control_point":
-			return "Move Easing Curve Handle"
-		&"left_control_state", &"right_control_state":
-			return "Change Easing Curve Handle State"
-		&"toolbar_options_reset":
-			return "Reset Easing Curve Point Options"
-		&"handle_mode":
-			return "Change Easing Curve Handle Mode"
-		&"locked", &"position_lock", &"left_control_lock", &"right_control_lock":
-			return "Change Easing Curve Point Lock"
-		&"left_force_linear", &"right_force_linear":
-			return "Change Easing Curve Handle Force Linear State"
-	return "Edit Easing Curve Point"
+	return PointEditTransactionController.point_action_name(property_name)
 
 
 func _add_point(
@@ -1949,7 +1941,7 @@ func _add_point(
 	selection_before: Dictionary = {},
 	select_added_immediately := false,
 ) -> EasingCurvePoint:
-	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	var before := _point_edit_transaction_controller.capture_state(curve)
 	var updated_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	updated_points.append(point)
 	updated_points = EasingCurve.build_ordered_points_with_endpoint_takeover(
@@ -1974,7 +1966,7 @@ func _add_point(
 	)
 	_commit_curve_action(
 		"Add Easing Curve Point",
-		EASING_CURVE_EDITOR_UNDO.ActionContext.new(before).with_selection(
+		_point_edit_transaction_controller.create_action_context(before).with_selection(
 			Callable(self, "_restore_point_selection_state") if not selection_before.is_empty() else Callable(),
 			selection_before,
 			selection_after,
@@ -1984,7 +1976,7 @@ func _add_point(
 
 func _remove_point(point: EasingCurvePoint) -> void:
 	var selection_before := _capture_point_selection_state()
-	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
+	var before := _point_edit_transaction_controller.capture_state(curve)
 	var updated_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	var point_index := updated_points.find(point)
 	if point_index == -1:
@@ -1994,7 +1986,7 @@ func _remove_point(point: EasingCurvePoint) -> void:
 	var selection_after := _capture_point_selection_state()
 	_commit_curve_action(
 		"Remove Easing Curve Point",
-		EASING_CURVE_EDITOR_UNDO.ActionContext.new(before).with_selection(
+		_point_edit_transaction_controller.create_action_context(before).with_selection(
 			Callable(self, "_restore_point_selection_state"),
 			selection_before,
 			selection_after,
@@ -2010,12 +2002,10 @@ func _emit_curve_property(property_name: StringName, value: Variant) -> void:
 		return
 	_queue_autofit_curve_editor()
 	var action_name := "Change Easing Curve Ease" if property_name == &"ease_type" else "Change Easing Curve Transition"
-	EASING_CURVE_EDITOR_UNDO.apply_action(
-		editor_undo_redo,
+	_point_edit_transaction_controller.apply_action(
 		curve,
 		action_name,
 		func(): curve.set(property_name, value),
-		_undo_source_property(),
 	)
 
 
@@ -2122,12 +2112,10 @@ func _autofit_curve_editor(request_id: int = -1) -> void:
 func _on_reset_selected_preset(object: EasingCurve) -> void:
 	if object == null:
 		return
-	EASING_CURVE_EDITOR_UNDO.apply_action(
-		editor_undo_redo,
+	_point_edit_transaction_controller.apply_action(
 		object,
 		"Reset Easing Curve Preset",
 		func(): object.reset_selected_preset(),
-		_undo_source_property(),
 	)
 
 
