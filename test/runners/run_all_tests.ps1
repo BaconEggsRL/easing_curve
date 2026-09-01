@@ -120,6 +120,73 @@ switch ($CommandArguments[0]) {
 
 New-Item -ItemType Directory -Force -Path $runnerTempDirectory | Out-Null
 
+$commonEditorDiagnosticPatterns = @(
+	'^WARNING: Scan thread aborted[.][.][.]$',
+	'^WARNING: [0-9]+ RIDs of type "Canvas" were leaked[.]$',
+	'^WARNING: [0-9]+ RIDs of type "CanvasItem" were leaked[.]$',
+	'^WARNING: [0-9]+ ObjectDB instances were leaked at exit [(]run with `--verbose` for details[)][.]$',
+	"^ERROR: [0-9]+ RID allocations of type '.+' were leaked at exit[.]$"
+)
+
+$suiteDiagnosticPatterns = @{
+	"serialization_transition_contract_test.gd" = @(
+		"^ERROR: Point property 'malformed_missing_lifecycle' is missing required 'snapshot_lifecycle'[.] Allowed values: 'ordinary', 'semantic'[.]$",
+		"^ERROR: Point property 'malformed_invalid_lifecycle' has invalid snapshot lifecycle 'invalid'[.] Allowed values: 'ordinary', 'semantic'[.]$",
+		"^ERROR: Unknown point property 'unknown'[.]$"
+	)
+	"easing_curve_editor_gesture_characterization_test.gd" = @(
+		'^ERROR: [0-9]+ resources still in use at exit [(]run with --verbose for details[)][.]$'
+	)
+}
+
+function Get-TopLevelDiagnostics {
+	param([string[]]$TextSources)
+
+	$diagnostics = @()
+	foreach ($text in $TextSources) {
+		if ([string]::IsNullOrWhiteSpace($text)) {
+			continue
+		}
+		foreach ($line in ($text -split '\r?\n')) {
+			$trimmed = $line.Trim()
+			if ($trimmed -match '^(?:SCRIPT ERROR:|ERROR:|WARNING:)') {
+				$diagnostics += $trimmed
+			}
+		}
+	}
+	return @($diagnostics | Sort-Object -Unique)
+}
+
+function Test-DiagnosticAllowed {
+	param(
+		[string]$Diagnostic,
+		[string]$SuiteName,
+		[bool]$IsEditor
+	)
+
+	if ($Diagnostic -match '^SCRIPT ERROR:') {
+		return $false
+	}
+
+	if ($IsEditor) {
+		foreach ($pattern in $commonEditorDiagnosticPatterns) {
+			if ($Diagnostic -match $pattern) {
+				return $true
+			}
+		}
+	}
+
+	if ($suiteDiagnosticPatterns.ContainsKey($SuiteName)) {
+		foreach ($pattern in $suiteDiagnosticPatterns[$SuiteName]) {
+			if ($Diagnostic -match $pattern) {
+				return $true
+			}
+		}
+	}
+
+	return $false
+}
+
 $results = @()
 foreach ($suite in $suites) {
 	$mode = if ($suite.Editor) { "editor-host" } else { "headless" }
@@ -200,12 +267,32 @@ foreach ($suite in $suites) {
 		}
 		$stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -Raw -LiteralPath $stdoutPath } else { "" }
 		$stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -Raw -LiteralPath $stderrPath } else { "" }
+		$godotLog = if (Test-Path -LiteralPath $godotLogPath) { Get-Content -Raw -LiteralPath $godotLogPath } else { "" }
 		$output = "$stdout`n$stderr"
 		if ($stdout) { Write-Host $stdout.TrimEnd() }
 		if ($stderr) { Write-Host $stderr.TrimEnd() }
 		$hasPass = $output -match '(?m)^PASS:'
-		$hasScriptError = $output -match 'SCRIPT ERROR:'
-		$passed = -not $timedOut -and $suiteExitCode -eq 0 -and $hasPass -and -not $hasScriptError
+		$diagnostics = @(Get-TopLevelDiagnostics -TextSources @($stdout, $stderr, $godotLog))
+		$allowedDiagnostics = @()
+		$unexpectedDiagnostics = @()
+		foreach ($diagnostic in $diagnostics) {
+			if (Test-DiagnosticAllowed -Diagnostic $diagnostic -SuiteName $suite.Name -IsEditor $suite.Editor) {
+				$allowedDiagnostics += $diagnostic
+			} else {
+				$unexpectedDiagnostics += $diagnostic
+			}
+		}
+		$hasScriptError = @($diagnostics | Where-Object { $_ -match '^SCRIPT ERROR:' }).Count -gt 0
+		if ($allowedDiagnostics.Count -gt 0) {
+			Write-Host "Allowed diagnostics: $($allowedDiagnostics.Count)"
+		}
+		if ($unexpectedDiagnostics.Count -gt 0) {
+			Write-Host "Unexpected diagnostics:" -ForegroundColor Red
+			foreach ($diagnostic in $unexpectedDiagnostics) {
+				Write-Host "  $diagnostic" -ForegroundColor Red
+			}
+		}
+		$passed = -not $timedOut -and $suiteExitCode -eq 0 -and $hasPass -and -not $hasScriptError -and $unexpectedDiagnostics.Count -eq 0
 		$results += [pscustomobject]@{
 			Suite = $suite.Name
 			Mode = $mode
@@ -213,6 +300,8 @@ foreach ($suite in $suites) {
 			TimedOut = $timedOut
 			PassMarker = $hasPass
 			ScriptError = $hasScriptError
+			AllowedDiagnostics = $allowedDiagnostics.Count
+			UnexpectedDiagnostics = $unexpectedDiagnostics.Count
 			Passed = $passed
 		}
 	} finally {
