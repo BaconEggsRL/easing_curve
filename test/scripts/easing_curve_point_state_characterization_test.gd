@@ -1,6 +1,12 @@
 extends SceneTree
 
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
+const POINT_STATE = preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_point_state.gd"
+)
+const SNAPSHOT_MUTATOR = preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_point_snapshot_mutator.gd"
+)
 
 var _failures := 0
 var _checks := 0
@@ -11,8 +17,14 @@ func _init() -> void:
 		quit(1)
 		return
 	_test_handle_mode_transition_matrix()
+	_test_control_move_matrix()
+	_test_position_move_lock_relationships()
 	_test_display_space_relationships()
 	_test_lock_force_linear_precedence()
+	_test_point_state_carrier()
+	_test_live_snapshot_transition_parity()
+	_test_intentional_live_snapshot_policy_differences()
+	_test_point_signal_contract()
 	_test_inspector_snapshot_state_precedence_and_reset()
 
 	if _failures == 0:
@@ -35,6 +47,106 @@ func _point() -> EasingCurvePoint:
 	point.left_control_point = Vector2(0.2, 0.1)
 	point.right_control_point = Vector2(0.6, 0.7)
 	return point
+
+
+func _set_control_point(
+	point: EasingCurvePoint,
+	side: EasingCurvePoint.ControlSide,
+	value: Vector2,
+) -> void:
+	if side == EasingCurvePoint.ControlSide.LEFT:
+		point.left_control_point = value
+	else:
+		point.right_control_point = value
+
+
+func _get_control_point(
+	point: EasingCurvePoint,
+	side: EasingCurvePoint.ControlSide,
+) -> Vector2:
+	return (
+		point.left_control_point
+		if side == EasingCurvePoint.ControlSide.LEFT
+		else point.right_control_point
+	)
+
+
+func _make_point_snapshot(point: EasingCurvePoint) -> Dictionary:
+	return EasingCurve.new().make_point_snapshot([point])
+
+
+func _capture_point_state(point: EasingCurvePoint):
+	var state = POINT_STATE.new()
+	state.position = point.position
+	state.left_control_point = point.left_control_point
+	state.right_control_point = point.right_control_point
+	state.handle_mode = point.handle_mode
+	state.locks = point.locked.duplicate(true)
+	state.left_force_linear = point.left_force_linear
+	state.right_force_linear = point.right_force_linear
+	state.handle_display_scale = point.handle_display_scale
+	state.use_display_space_handles = point.use_display_space_handles
+	return state
+
+
+func _capture_snapshot_state(
+	snapshot: Dictionary,
+	i: int,
+	context_point: EasingCurvePoint,
+):
+	var state = POINT_STATE.new()
+	state.position = Vector2(snapshot["positions"][i])
+	state.left_control_point = Vector2(snapshot["left_control_points"][i])
+	state.right_control_point = Vector2(snapshot["right_control_points"][i])
+	state.handle_mode = int(snapshot["handle_modes"][i])
+	state.locks = snapshot["locks"][i].duplicate(true)
+	state.left_force_linear = bool(snapshot["left_force_linear"][i])
+	state.right_force_linear = bool(snapshot["right_force_linear"][i])
+	state.handle_display_scale = context_point.handle_display_scale
+	state.use_display_space_handles = context_point.use_display_space_handles
+	return state
+
+
+func _states_match(a, b) -> bool:
+	return (
+		a.position.is_equal_approx(b.position)
+		and a.left_control_point.is_equal_approx(b.left_control_point)
+		and a.right_control_point.is_equal_approx(b.right_control_point)
+		and a.handle_mode == b.handle_mode
+		and a.locks == b.locks
+		and a.left_force_linear == b.left_force_linear
+		and a.right_force_linear == b.right_force_linear
+		and a.handle_display_scale.is_equal_approx(b.handle_display_scale)
+		and a.use_display_space_handles == b.use_display_space_handles
+	)
+
+
+func _state_summary(state) -> String:
+	return (
+		"position=%s left=%s right=%s mode=%s locks=%s linear=(%s,%s) scale=%s display=%s"
+		% [
+			state.position,
+			state.left_control_point,
+			state.right_control_point,
+			state.handle_mode,
+			state.locks,
+			state.left_force_linear,
+			state.right_force_linear,
+			state.handle_display_scale,
+			state.use_display_space_handles,
+		]
+	)
+
+
+func _expect_states_match(actual, expected, label: String) -> void:
+	_expect(
+		_states_match(actual, expected),
+		"%s\n  actual: %s\n  expected: %s" % [
+			label,
+			_state_summary(actual),
+			_state_summary(expected),
+		],
+	)
 
 
 func _is_opposite_in_handle_space(point: EasingCurvePoint, left: Vector2, right: Vector2) -> bool:
@@ -107,6 +219,153 @@ func _test_handle_mode_transition_matrix() -> void:
 					)
 
 
+func _test_control_move_matrix() -> void:
+	for mode in EasingCurvePoint.HandleMode.values():
+		for side in [EasingCurvePoint.ControlSide.LEFT, EasingCurvePoint.ControlSide.RIGHT]:
+			var point := _point()
+			point.handle_display_scale = Vector2(2.0, 5.0)
+			point.handle_mode = mode
+			var before_left := point.left_control_point
+			var before_right := point.right_control_point
+			var target := (
+				Vector2(0.1, 0.8)
+				if side == EasingCurvePoint.ControlSide.LEFT
+				else Vector2(0.9, 0.2)
+			)
+			_set_control_point(point, side, target)
+			var label := "%s %s control move" % [
+				EasingCurvePoint.HandleMode.keys()[mode],
+				EasingCurvePoint.ControlSide.keys()[side],
+			]
+
+			_expect(
+				point.left_control_point.is_finite()
+				and point.right_control_point.is_finite(),
+				"%s produced non-finite geometry" % label,
+			)
+			match mode:
+				EasingCurvePoint.HandleMode.FREE:
+					_expect(
+						_get_control_point(point, side) == target,
+						"%s did not apply the dragged control" % label,
+					)
+					_expect(
+						(
+							point.right_control_point == before_right
+							if side == EasingCurvePoint.ControlSide.LEFT
+							else point.left_control_point == before_left
+						),
+						"%s changed the opposite Free control" % label,
+					)
+				EasingCurvePoint.HandleMode.LINEAR:
+					_expect(
+						point.left_control_point == point.position
+						and point.right_control_point == point.position,
+						"%s did not retain collapsed Linear controls" % label,
+					)
+				EasingCurvePoint.HandleMode.BALANCED:
+					_expect(
+						_get_control_point(point, side) == target,
+						"%s did not apply the dragged control" % label,
+					)
+					_expect(
+						_is_opposite_in_handle_space(
+							point,
+							point.left_control_point,
+							point.right_control_point,
+						),
+						"%s lost its opposite-direction relationship" % label,
+					)
+				EasingCurvePoint.HandleMode.MIRRORED:
+					var left_delta := (
+						(point.left_control_point - point.position)
+						* point.handle_display_scale
+					)
+					var right_delta := (
+						(point.right_control_point - point.position)
+						* point.handle_display_scale
+					)
+					_expect(
+						right_delta.is_equal_approx(-left_delta),
+						"%s lost its display-space mirrored relationship" % label,
+					)
+				EasingCurvePoint.HandleMode.LINKED:
+					_expect(
+						point.left_control_point == target
+						and point.right_control_point == target,
+						"%s did not move both controls together" % label,
+					)
+
+			if mode in [EasingCurvePoint.HandleMode.FREE, EasingCurvePoint.HandleMode.LINKED]:
+				point.set_force_linear_state(
+					side == EasingCurvePoint.ControlSide.LEFT,
+					side == EasingCurvePoint.ControlSide.RIGHT,
+				)
+				_set_control_point(point, side, target)
+				_expect(
+					_get_control_point(point, side) == point.position,
+					"%s allowed an active Force Linear control to move" % label,
+				)
+
+
+func _test_position_move_lock_relationships() -> void:
+	for locked_side in [
+		-1,
+		EasingCurvePoint.ControlSide.LEFT,
+		EasingCurvePoint.ControlSide.RIGHT,
+	]:
+		var point := _point()
+		var before_position := point.position
+		var before_left := point.left_control_point
+		var before_right := point.right_control_point
+		if locked_side == EasingCurvePoint.ControlSide.LEFT:
+			point.set_locked("left_control_point", true)
+		elif locked_side == EasingCurvePoint.ControlSide.RIGHT:
+			point.set_locked("right_control_point", true)
+		var target := Vector2(0.65, 0.35)
+		var delta := target - before_position
+		point.position = target
+
+		_expect(point.position == target, "Position move did not apply its target")
+		_expect(
+			point.left_control_point == (
+				before_left
+				if locked_side == EasingCurvePoint.ControlSide.LEFT
+				else before_left + delta
+			),
+			"Position move violated the left control lock relationship",
+		)
+		_expect(
+			point.right_control_point == (
+				before_right
+				if locked_side == EasingCurvePoint.ControlSide.RIGHT
+				else before_right + delta
+			),
+			"Position move violated the right control lock relationship",
+		)
+
+	var forced_move := _point()
+	forced_move.set_locked("left_control_point", true)
+	forced_move.set_locked("right_control_point", true)
+	var forced_left_offset := forced_move.left_control_point - forced_move.position
+	var forced_right_offset := forced_move.right_control_point - forced_move.position
+	forced_move.move_horizontally(0.2, true)
+	_expect(
+		forced_move.left_control_point - forced_move.position == forced_left_offset
+		and forced_move.right_control_point - forced_move.position == forced_right_offset,
+		"Lock-ignoring horizontal move did not preserve both handle offsets",
+	)
+
+	var rejected := _point()
+	var rejected_state = _capture_point_state(rejected)
+	rejected.position = Vector2(INF, 0.5)
+	_expect_states_match(
+		_capture_point_state(rejected),
+		rejected_state,
+		"Non-finite Position input changed point state",
+	)
+
+
 func _test_display_space_relationships() -> void:
 	var balanced := _point()
 	balanced.handle_display_scale = Vector2(2.0, 5.0)
@@ -171,6 +430,268 @@ func _test_lock_force_linear_precedence() -> void:
 	linked.left_force_linear = true
 	linked.handle_mode = EasingCurvePoint.HandleMode.FREE
 	_expect(linked.left_control_point == linked.position, "Handle mode change did not retain active left Force Linear geometry")
+
+
+func _test_point_state_carrier() -> void:
+	var point := _point()
+	point.handle_display_scale = Vector2(2.0, 3.0)
+	point.use_display_space_handles = false
+	point.left_force_linear = true
+	point.set_locked("position", true)
+
+	var state = _capture_point_state(point)
+	_expect(state.position == point.position, "PointState did not capture Position")
+	_expect(state.left_control_point == point.left_control_point, "PointState did not capture Left Control")
+	_expect(state.right_control_point == point.right_control_point, "PointState did not capture Right Control")
+	_expect(state.handle_mode == point.handle_mode, "PointState did not capture Handle Mode")
+	_expect(state.locks == point.locked, "PointState did not capture Locks")
+	_expect(state.left_force_linear == point.left_force_linear, "PointState did not capture Left Force Linear")
+	_expect(state.right_force_linear == point.right_force_linear, "PointState did not capture Right Force Linear")
+	_expect(state.handle_display_scale == point.handle_display_scale, "PointState did not capture Handle Display Scale")
+	_expect(state.use_display_space_handles == point.use_display_space_handles, "PointState did not capture display-space policy")
+
+	state.locks["position"] = false
+	_expect(point.locked["position"], "PointState Locks alias the source point dictionary")
+
+
+func _test_live_snapshot_transition_parity() -> void:
+	var display_scale := Vector2(2.0, 5.0)
+	for source in EasingCurvePoint.HandleMode.values():
+		for destination in EasingCurvePoint.HandleMode.values():
+			var live := _point()
+			var snapshot_context := _point()
+			live.handle_display_scale = display_scale
+			snapshot_context.handle_display_scale = display_scale
+			live.handle_mode = source
+			snapshot_context.handle_mode = source
+			var snapshot := _make_point_snapshot(snapshot_context)
+
+			live.handle_mode = destination
+			var applied: bool = SNAPSHOT_MUTATOR.apply(
+				snapshot,
+				snapshot_context,
+				0,
+				&"handle_mode",
+				destination,
+			)
+			var label := "Neutral Handle Mode parity %s -> %s" % [
+				EasingCurvePoint.HandleMode.keys()[source],
+				EasingCurvePoint.HandleMode.keys()[destination],
+			]
+			_expect(applied, "%s rejected the snapshot mutation" % label)
+			_expect_states_match(
+				_capture_snapshot_state(snapshot, 0, snapshot_context),
+				_capture_point_state(live),
+				"%s diverged" % label,
+			)
+
+	for side in [EasingCurvePoint.ControlSide.LEFT, EasingCurvePoint.ControlSide.RIGHT]:
+		var property_name := (
+			&"left_force_linear"
+			if side == EasingCurvePoint.ControlSide.LEFT
+			else &"right_force_linear"
+		)
+		for enabled in [true, false]:
+			var live := _point()
+			var snapshot_context := _point()
+			if not enabled:
+				live.set(property_name, true)
+				snapshot_context.set(property_name, true)
+			var snapshot := _make_point_snapshot(snapshot_context)
+
+			live.set(property_name, enabled)
+			var applied: bool = SNAPSHOT_MUTATOR.apply(
+				snapshot,
+				snapshot_context,
+				0,
+				property_name,
+				enabled,
+			)
+			var label := "Unlocked Free %s=%s parity" % [property_name, enabled]
+			_expect(applied, "%s rejected the snapshot mutation" % label)
+			_expect_states_match(
+				_capture_snapshot_state(snapshot, 0, snapshot_context),
+				_capture_point_state(live),
+				"%s diverged" % label,
+			)
+
+
+func _test_intentional_live_snapshot_policy_differences() -> void:
+	for side in [EasingCurvePoint.ControlSide.LEFT, EasingCurvePoint.ControlSide.RIGHT]:
+		var control_property := (
+			"left_control_point"
+			if side == EasingCurvePoint.ControlSide.LEFT
+			else "right_control_point"
+		)
+		var force_property := (
+			&"left_force_linear"
+			if side == EasingCurvePoint.ControlSide.LEFT
+			else &"right_force_linear"
+		)
+		var live := _point()
+		var snapshot_context := _point()
+		live.set_locked(control_property, true)
+		snapshot_context.set_locked(control_property, true)
+		var snapshot := _make_point_snapshot(snapshot_context)
+
+		live.set(force_property, true)
+		SNAPSHOT_MUTATOR.apply(snapshot, snapshot_context, 0, force_property, true)
+		var snapshot_state = _capture_snapshot_state(snapshot, 0, snapshot_context)
+		_expect(
+			live.locked[control_property],
+			"Live Force Linear no longer retains a prior %s lock" % control_property,
+		)
+		_expect(
+			not snapshot_state.locks[control_property],
+			"Inspector Force Linear no longer wins over a prior %s lock" % control_property,
+		)
+		_expect(
+			live.get(force_property) and (
+				snapshot_state.left_force_linear
+				if side == EasingCurvePoint.ControlSide.LEFT
+				else snapshot_state.right_force_linear
+			),
+			"Force Linear did not remain enabled in both policy paths for %s" % control_property,
+		)
+
+		live = _point()
+		snapshot_context = _point()
+		live.set(force_property, true)
+		snapshot_context.set(force_property, true)
+		snapshot = _make_point_snapshot(snapshot_context)
+		var next_locks: Dictionary[String, bool] = snapshot_context.locked.duplicate(true)
+		next_locks[control_property] = true
+
+		live.set_locked(control_property, true)
+		SNAPSHOT_MUTATOR.apply(snapshot, snapshot_context, 0, &"locked", next_locks)
+		snapshot_state = _capture_snapshot_state(snapshot, 0, snapshot_context)
+		_expect(
+			bool(live.get(force_property)),
+			"Live Lock no longer retains active %s" % force_property,
+		)
+		_expect(
+			not (
+				snapshot_state.left_force_linear
+				if side == EasingCurvePoint.ControlSide.LEFT
+				else snapshot_state.right_force_linear
+			),
+			"Inspector Lock no longer wins over active %s" % force_property,
+		)
+
+	var linked_live := _point()
+	var linked_snapshot_context := _point()
+	linked_live.handle_mode = EasingCurvePoint.HandleMode.LINKED
+	linked_snapshot_context.handle_mode = EasingCurvePoint.HandleMode.LINKED
+	var linked_snapshot := _make_point_snapshot(linked_snapshot_context)
+	linked_live.set_locked("left_control_point", true)
+	SNAPSHOT_MUTATOR.apply(
+		linked_snapshot,
+		linked_snapshot_context,
+		0,
+		&"left_control_lock",
+		true,
+	)
+	var linked_snapshot_state = _capture_snapshot_state(
+		linked_snapshot,
+		0,
+		linked_snapshot_context,
+	)
+	_expect(
+		linked_live.locked["left_control_point"]
+		and not linked_live.locked["right_control_point"],
+		"Live Linked Lock no longer preserves an asymmetric raw state",
+	)
+	_expect(
+		linked_snapshot_state.locks["left_control_point"]
+		and linked_snapshot_state.locks["right_control_point"],
+		"Inspector Linked Lock no longer normalizes both sides",
+	)
+
+	linked_live = _point()
+	linked_snapshot_context = _point()
+	linked_live.handle_mode = EasingCurvePoint.HandleMode.LINKED
+	linked_snapshot_context.handle_mode = EasingCurvePoint.HandleMode.LINKED
+	linked_snapshot = _make_point_snapshot(linked_snapshot_context)
+	linked_live.right_force_linear = true
+	SNAPSHOT_MUTATOR.apply(
+		linked_snapshot,
+		linked_snapshot_context,
+		0,
+		&"right_force_linear",
+		true,
+	)
+	linked_snapshot_state = _capture_snapshot_state(
+		linked_snapshot,
+		0,
+		linked_snapshot_context,
+	)
+	_expect(
+		not linked_live.left_force_linear and linked_live.right_force_linear,
+		"Live Linked Force Linear no longer preserves an asymmetric raw state",
+	)
+	_expect(
+		linked_snapshot_state.left_force_linear
+		and linked_snapshot_state.right_force_linear,
+		"Inspector Linked Force Linear no longer normalizes both sides",
+	)
+
+
+func _record_point_events(point: EasingCurvePoint) -> Array[String]:
+	var events: Array[String] = []
+	point.lock_changed.connect(
+		func(property_name: String, locked_value: bool) -> void:
+			events.append("lock:%s:%s" % [property_name, locked_value])
+	)
+	point.changed.connect(func() -> void: events.append("changed"))
+	return events
+
+
+func _test_point_signal_contract() -> void:
+	var point := _point()
+	var events := _record_point_events(point)
+	point.set_locked("position", true)
+	_expect(
+		events == ["lock:position:true", "changed"],
+		"set_locked() signal order changed: %s" % [events],
+	)
+
+	point = _point()
+	events = _record_point_events(point)
+	var locks: Dictionary[String, bool] = point.locked.duplicate(true)
+	locks["position"] = true
+	point.set_locks(locks)
+	_expect(events == ["changed"], "set_locks() signal contract changed: %s" % [events])
+
+	point = _point()
+	events = _record_point_events(point)
+	point.position = Vector2(0.55, 0.45)
+	_expect(events == ["changed"], "Position mutation signal count changed: %s" % [events])
+
+	point = _point()
+	events = _record_point_events(point)
+	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
+	_expect(events == ["changed"], "Handle Mode mutation signal count changed: %s" % [events])
+
+	point = _point()
+	events = _record_point_events(point)
+	point.left_force_linear = true
+	_expect(events == ["changed"], "Force Linear mutation signal count changed: %s" % [events])
+
+	point = _point()
+	events = _record_point_events(point)
+	point.position = point.position
+	point.handle_mode = point.handle_mode
+	point.set_locked("position", false)
+	point.left_force_linear = false
+	_expect(events.is_empty(), "No-op point setters emitted signals: %s" % [events])
+
+	point = _point()
+	events = _record_point_events(point)
+	point.set_force_linear_state(false, false, false)
+	_expect(
+		events == ["changed"],
+		"set_force_linear_state() no-op notification contract changed: %s" % [events],
+	)
 
 
 func _test_inspector_snapshot_state_precedence_and_reset() -> void:
