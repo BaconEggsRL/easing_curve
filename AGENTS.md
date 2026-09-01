@@ -7,3 +7,7 @@ Use EASING_CURVE_GODOT_PATH when available.
 If a direct headless test fails before script execution, verify that a
 repository-local --log-file was supplied before falling back to editor-host
 testing.
+
+# SKILLS:
+
+Use basic-programming-skill, review-code-smells, apply-clean-code, apply-software-patterns and apply-solid-principles when available.
