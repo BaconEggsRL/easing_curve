@@ -53,9 +53,13 @@ Run every headless and Editor-host suite independently with:
 ```
 
 The PowerShell runner uses `EASING_CURVE_GODOT_PATH` when set and otherwise uses
-its configured Godot 4.7 console fallback. It starts the 8 compatible suites
-with `--headless`, and adds `--editor` only for the 10 suites that require an
-Editor/Inspector host.
+its configured Godot 4.7 console fallback. Before running the suites, it creates
+a generated project under `test/_temp/runner` containing only the Easing Curve
+addon, test scripts, and test presets. The generated project enables only the
+Easing Curve plugin, so root-project development plugins and autoloads cannot
+affect product-test startup. An Editor import pass initializes its script-class
+cache, then the runner starts the 8 compatible suites with `--headless` and adds
+`--editor` only for the 10 suites that require an Editor/Inspector host.
 
 Only after that command exits successfully with every suite passing, immediately
 run:
@@ -72,12 +76,16 @@ artifacts for debugging. If tests are rerun while investigating a problem, run
 cleanup only after the final full suite passes.
 
 The PowerShell runner creates a separate process and isolated `APPDATA`
-directory for every suite, and writes each child log
-under `test/_temp/runner`. A suite fails if it times out, exits unsuccessfully,
-lacks a PASS marker, or logs a script error. Each suite has a 60-second timeout;
-the runner terminates timed-out process trees and continues with the remaining
-suites. Update checks are suppressed for headless Editor-host tests, while the
-Easing Curve plugin and Inspector remain enabled for those tests.
+directory for every suite, and writes each child log under
+`test/_temp/runner`. A suite fails if it times out, exits unsuccessfully, lacks
+a PASS marker, or logs a script error. Each suite has a 60-second timeout; the
+runner terminates timed-out process trees and continues with the remaining
+suites. The generated project and logs are preserved after a failure and
+removed after a successful run. Update checks are suppressed for headless
+Editor-host tests, while the Easing Curve plugin and Inspector remain enabled
+for those tests. Godot 4.7.1's exact Windows root-certificate-store diagnostic
+is classified separately because it also occurs in the isolated product-only
+host; other unexpected diagnostics still fail the suite.
 
 `test/runners/run_godot.ps1` retains its existing behavior for standalone or
 full-suite invocations, including selecting the configured Godot 4.7.1
