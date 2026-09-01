@@ -423,6 +423,7 @@ func _create_selectable_point_property_header(
 var editor_undo_redo: EditorUndoRedoManager # assigned from EditorPlugin
 var easing_curve_editor: EasingCurveEditor
 var curve_editor_property: EditorProperty
+var _curve_editor_section: PointsFoldableSection
 var ease_option: OptionButton
 var preset_reset_button: Button
 var curve: EasingCurve
@@ -904,12 +905,15 @@ func handle_easing_curve_editor(object) -> Control:
 			_queue_autofit_curve_editor()
 
 
-		var curve_editor_section := _create_foldable_section(
+		_curve_editor_section = _create_foldable_section(
 			"Curve Editor",
 			curve_editor_content,
 			object,
+		) as PointsFoldableSection
+		_curve_editor_section.folding_changed.connect(
+			_on_curve_editor_section_folding_changed
 		)
-		curve_section.add_child(curve_editor_section)
+		curve_section.add_child(_curve_editor_section)
 		########################################
 		return curve_section
 	return null
@@ -2421,6 +2425,12 @@ func _queue_autofit_curve_editor() -> void:
 	call_deferred(&"_autofit_curve_editor", _autofit_request_id)
 
 
+func _on_curve_editor_section_folding_changed(is_folded: bool) -> void:
+	if is_folded or not _autofit_pending:
+		return
+	call_deferred(&"_autofit_curve_editor", _autofit_request_id)
+
+
 func _autofit_curve_editor(request_id: int = -1) -> void:
 	if request_id < 0:
 		if not _autofit_pending:
@@ -2443,6 +2453,11 @@ func _autofit_curve_editor(request_id: int = -1) -> void:
 	await tree.process_frame
 
 	if request_id != _autofit_request_id:
+		return
+	if (
+		is_instance_valid(_curve_editor_section)
+		and _curve_editor_section.folded
+	):
 		return
 	if (
 		is_instance_valid(easing_curve_editor)

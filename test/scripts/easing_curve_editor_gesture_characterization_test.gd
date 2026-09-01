@@ -19,6 +19,7 @@ func _run() -> void:
 	_test_loaded_resource_initial_autofit_gate()
 	await _test_autofit_waits_for_function_toolbar_layout()
 	await _test_automatic_autofit_suppresses_intermediate_render()
+	await _test_folded_curve_editor_defers_autofit_until_expand()
 	_test_zoom_behavioral_invariants()
 	_test_bezier_draw_clipping_and_tessellation()
 	_test_pending_add_cancel_and_no_op_release()
@@ -300,6 +301,81 @@ func _test_automatic_autofit_suppresses_intermediate_render() -> void:
 	_expect(
 		replacement_editor.pan_offset.is_equal_approx(fitted_pan),
 		"Manual Autofit shifted pan after the automatic fitted graph was revealed",
+	)
+
+	get_root().remove_child(replacement_content)
+	replacement_content.free()
+
+
+func _test_folded_curve_editor_defers_autofit_until_expand() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.LINEAR
+	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
+	var initial_content: Control = inspector.call("handle_easing_curve_editor", curve)
+	get_root().add_child(initial_content)
+	var initial_section: Control = inspector.get("_curve_editor_section")
+	var initial_editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+
+	initial_section.call("fold")
+	await process_frame
+	await process_frame
+	_expect(
+		bool(initial_section.get("folded")),
+		"Curve Editor fixture did not fold before preset change",
+	)
+
+	inspector.call("_queue_autofit_curve_editor")
+	curve.trans_type = EasingCurve.TRANS.ELASTIC
+
+	# Simulate the Inspector rebuild caused by the preset switch while the
+	# Curve Editor section remains folded.
+	get_root().remove_child(initial_content)
+	initial_content.free()
+	var replacement_content: Control = inspector.call("handle_easing_curve_editor", curve)
+	get_root().add_child(replacement_content)
+	var replacement_section: Control = inspector.get("_curve_editor_section")
+	var replacement_editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+
+	await process_frame
+	await process_frame
+	await process_frame
+	_expect(
+		bool(replacement_section.get("folded")),
+		"Curve Editor fold state was not preserved across the Elastic rebuild",
+	)
+	_expect(
+		bool(inspector.get("_autofit_pending")),
+		"Automatic Autofit completed while the Curve Editor was folded",
+	)
+	_expect(
+		replacement_editor.is_graph_render_suppressed(),
+		"Folded Curve Editor revealed the graph before pending Autofit could use expanded layout",
+	)
+
+	replacement_section.call("expand")
+	await process_frame
+	await process_frame
+	await process_frame
+	await process_frame
+	_expect(
+		not bool(inspector.get("_autofit_pending")),
+		"Opening the Curve Editor did not complete the pending Autofit",
+	)
+	_expect(
+		not replacement_editor.is_graph_render_suppressed(),
+		"Curve Editor graph remained suppressed after expanded-layout Autofit",
+	)
+
+	var fitted_zoom := Vector2(replacement_editor._zoom_x, replacement_editor._zoom_y)
+	var fitted_pan := replacement_editor.pan_offset
+	replacement_editor.autofit()
+	_expect(
+		Vector2(replacement_editor._zoom_x, replacement_editor._zoom_y).is_equal_approx(fitted_zoom),
+		"Manual Autofit changed zoom after folded Elastic preset was opened",
+	)
+	_expect(
+		replacement_editor.pan_offset.is_equal_approx(fitted_pan),
+		"Manual Autofit shifted pan after folded Elastic preset was opened",
 	)
 
 	get_root().remove_child(replacement_content)

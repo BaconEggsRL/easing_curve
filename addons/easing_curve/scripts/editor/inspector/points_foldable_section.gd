@@ -1,6 +1,8 @@
 @tool
 extends VBoxContainer
 
+signal folding_changed(is_folded: bool)
+
 const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
@@ -195,6 +197,7 @@ func expand() -> void:
 
 func _on_folding_changed(is_folded: bool) -> void:
 	folded_by_section[fold_state_key] = is_folded
+	folding_changed.emit(is_folded)
 
 func _toggle_fallback() -> void:
 	_set_fallback_folded(not _fallback_folded)
