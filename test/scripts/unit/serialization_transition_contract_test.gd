@@ -16,6 +16,7 @@ func _init() -> void:
 	_test_partial_function_snapshot_fallbacks()
 	_test_partial_editor_state_snapshot_fallbacks()
 	_test_snapshot_schema_and_validation_boundary()
+	_test_snapshot_codec_encode_decode_transform_boundary()
 	_test_enum_numeric_contracts()
 	_test_transition_catalog_contract()
 	_test_exported_property_contract()
@@ -30,6 +31,15 @@ func _init() -> void:
 
 func _expect_approx(actual: float, expected: float, message: String) -> void:
 	_expect(is_equal_approx(actual, expected), "%s: %f != %f" % [message, actual, expected])
+
+
+func _vector_arrays_equal_approx(a: PackedVector2Array, b: PackedVector2Array) -> bool:
+	if a.size() != b.size():
+		return false
+	for index in range(a.size()):
+		if not a[index].is_equal_approx(b[index]):
+			return false
+	return true
 
 
 func _property_by_name(object: Object, property_name: StringName) -> Dictionary:
@@ -313,6 +323,71 @@ func _test_snapshot_schema_and_validation_boundary() -> void:
 		SNAPSHOT_CODEC.EDITOR_POINT_SNAPSHOT: [],
 	})
 	_expect(not bool(bad_editor_validation.compatible), "Editor snapshot validation accepted a non-Dictionary point snapshot")
+
+
+func _test_snapshot_codec_encode_decode_transform_boundary() -> void:
+	var curve := EasingCurve.new()
+	var encoded := SNAPSHOT_CODEC.encode_point_snapshot(
+		curve.points,
+		EasingCurve.POINT_PROPERTY_DEFINITIONS,
+	)
+	_expect(encoded == curve.get_point_snapshot(), "Codec point encoding diverged from the EasingCurve facade")
+	_expect(encoded[SNAPSHOT_CODEC.POINT_POSITIONS] is PackedVector2Array, "Codec point positions changed storage type")
+	_expect(encoded[SNAPSHOT_CODEC.POINT_HANDLE_MODES] is PackedInt32Array, "Codec Handle Modes changed storage type")
+	_expect(encoded[SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR] is PackedByteArray, "Codec Force Linear changed storage type")
+	_expect(encoded[SNAPSHOT_CODEC.POINT_LOCKS] is Array, "Codec locks changed storage type")
+
+	var decoded := SNAPSHOT_CODEC.decode_point_snapshot({
+		SNAPSHOT_CODEC.POINT_POSITIONS: PackedVector2Array([Vector2.ZERO, Vector2.ONE]),
+		SNAPSHOT_CODEC.POINT_CHANGING: true,
+	})
+	_expect(decoded[SNAPSHOT_CODEC.POINT_POSITIONS].size() == 2, "Codec point decoding changed topology discovery")
+	_expect(decoded[SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS].is_empty(), "Codec point decoding stopped defaulting missing left controls")
+	_expect(decoded[SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS].is_empty(), "Codec point decoding stopped defaulting missing right controls")
+	_expect(decoded[SNAPSHOT_CODEC.POINT_HANDLE_MODES].is_empty(), "Codec point decoding stopped defaulting missing Handle Modes")
+	_expect(decoded[SNAPSHOT_CODEC.POINT_LOCKS].is_empty(), "Codec point decoding stopped defaulting missing locks")
+	_expect(decoded[SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR].is_empty(), "Codec point decoding stopped defaulting missing left Force Linear")
+	_expect(decoded[SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR].is_empty(), "Codec point decoding stopped defaulting missing right Force Linear")
+	_expect(decoded[SNAPSHOT_CODEC.POINT_CHANGING], "Codec point decoding lost changing metadata")
+
+	var source := {
+		SNAPSHOT_CODEC.POINT_POSITIONS: PackedVector2Array([
+			Vector2(0.0, 0.2),
+			Vector2(1.0, 0.8),
+		]),
+		SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS: PackedVector2Array([
+			Vector2(-0.1, 0.1),
+			Vector2(0.7, 0.7),
+		]),
+		SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS: PackedVector2Array([
+			Vector2(0.3, 0.3),
+			Vector2(1.2, 0.9),
+		]),
+		SNAPSHOT_CODEC.POINT_HANDLE_MODES: PackedInt32Array([1, 2]),
+		SNAPSHOT_CODEC.POINT_LOCKS: [
+			{"position": true, "left_control_point": true, "right_control_point": false},
+			{"position": false, "left_control_point": false, "right_control_point": true},
+		],
+		SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR: PackedByteArray([1, 0]),
+		SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR: PackedByteArray([0, 1]),
+		"marker": "preserved",
+	}
+	var reversed := SNAPSHOT_CODEC.reverse_point_snapshot(source, [], 2)
+	_expect(_vector_arrays_equal_approx(reversed[SNAPSHOT_CODEC.POINT_POSITIONS], PackedVector2Array([Vector2(0.0, 0.8), Vector2(1.0, 0.2)])), "Codec reverse changed point position semantics")
+	_expect(_vector_arrays_equal_approx(reversed[SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS], PackedVector2Array([Vector2(-0.2, 0.9), Vector2(0.7, 0.3)])), "Codec reverse changed left-handle role swapping")
+	_expect(_vector_arrays_equal_approx(reversed[SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS], PackedVector2Array([Vector2(0.3, 0.7), Vector2(1.1, 0.1)])), "Codec reverse changed right-handle role swapping")
+	_expect(reversed[SNAPSHOT_CODEC.POINT_HANDLE_MODES] == PackedInt32Array([2, 1]), "Codec reverse changed Handle Mode ordering")
+	_expect(reversed[SNAPSHOT_CODEC.POINT_LOCKS][0] == {"position": false, "left_control_point": true, "right_control_point": false}, "Codec reverse changed lock role swapping")
+	_expect(reversed[SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR] == PackedByteArray([1, 0]), "Codec reverse changed left Force Linear role swapping")
+	_expect(reversed[SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR] == PackedByteArray([0, 1]), "Codec reverse changed right Force Linear role swapping")
+	_expect(reversed.marker == "preserved", "Codec reverse dropped unrelated snapshot metadata")
+
+	var inverted := SNAPSHOT_CODEC.invert_point_snapshot(source)
+	_expect(_vector_arrays_equal_approx(inverted[SNAPSHOT_CODEC.POINT_POSITIONS], PackedVector2Array([Vector2(0.0, 0.8), Vector2(1.0, 0.2)])), "Codec invert changed point Y reflection")
+	_expect(_vector_arrays_equal_approx(inverted[SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS], PackedVector2Array([Vector2(-0.1, 0.9), Vector2(0.7, 0.3)])), "Codec invert changed left-handle Y reflection")
+	_expect(_vector_arrays_equal_approx(inverted[SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS], PackedVector2Array([Vector2(0.3, 0.7), Vector2(1.2, 0.1)])), "Codec invert changed right-handle Y reflection")
+	_expect(inverted[SNAPSHOT_CODEC.POINT_LOCKS] == source[SNAPSHOT_CODEC.POINT_LOCKS], "Codec invert changed lock state")
+	_expect(inverted.marker == "preserved", "Codec invert dropped unrelated snapshot metadata")
 
 
 func _test_enum_numeric_contracts() -> void:
