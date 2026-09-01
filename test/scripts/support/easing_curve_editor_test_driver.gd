@@ -3,26 +3,16 @@ extends RefCounted
 
 static func connect_curve_editor(editor: EasingCurveEditor, inspector: Object) -> void:
 	editor.point_property_change_requested.connect(
-		func(index: int, property_name: StringName, value: Variant, changing: bool) -> void:
-			inspector.call(
-				"_on_curve_editor_point_property_change_requested",
-				index,
-				property_name,
-				value,
-				changing,
-			)
+		Callable(inspector, "_apply_point_property_change")
 	)
 	editor.point_edit_finished.connect(
-		func(point_order: Array[EasingCurvePoint]) -> void:
-			inspector.call("_on_curve_editor_point_edit_finished", point_order)
+		Callable(inspector, "_commit_point_edit")
 	)
 	editor.point_add_requested.connect(
-		func(point: EasingCurvePoint) -> void:
-			inspector.call("_on_curve_editor_point_add_requested", point)
+		Callable(inspector, "_on_curve_editor_point_add_requested")
 	)
 	editor.point_remove_requested.connect(
-		func(point: EasingCurvePoint) -> void:
-			inspector.call("_remove_point", point)
+		Callable(inspector, "_remove_point")
 	)
 
 
@@ -32,6 +22,10 @@ static func create_curve_editor(inspector: Object, curve: EasingCurve) -> Contro
 
 static func create_points_list(inspector: Object, curve: EasingCurve) -> VBoxContainer:
 	return inspector.call("handle_points", curve) as VBoxContainer
+
+
+static func point_list_controller(inspector: Object) -> RefCounted:
+	return inspector.get("_point_list_controller") as RefCounted
 
 
 static func curve_editor(inspector: Object) -> EasingCurveEditor:
@@ -71,11 +65,11 @@ static func restore_point_selection(
 
 
 static func selected_point_index(inspector: Object) -> int:
-	return int(inspector.get("_selected_point_index"))
+	return int(point_list_controller(inspector).get("selected_point_index"))
 
 
 static func selected_point_resource_id(inspector: Object) -> int:
-	return int(inspector.get("_selected_point_resource_id"))
+	return int(point_list_controller(inspector).get("selected_point_resource_id"))
 
 
 static func register_point_input_binding(
@@ -85,8 +79,8 @@ static func register_point_input_binding(
 	axis: String,
 	input: EditorSpinSlider,
 ) -> void:
-	inspector.call(
-		"_register_point_input_binding",
+	point_list_controller(inspector).call(
+		"register_input_binding",
 		point,
 		property_name,
 		axis,
@@ -95,11 +89,11 @@ static func register_point_input_binding(
 
 
 static func clear_point_input_bindings(inspector: Object) -> void:
-	inspector.call("_clear_point_input_bindings")
+	point_list_controller(inspector).call("clear_input_bindings")
 
 
 static func point_input_binding_count(inspector: Object) -> int:
-	var bindings: Dictionary = inspector.get("_point_input_bindings")
+	var bindings: Dictionary = point_list_controller(inspector).call("get_input_bindings")
 	return bindings.size()
 
 
@@ -107,7 +101,7 @@ static func point_input_binding_input_count(
 	inspector: Object,
 	point: EasingCurvePoint,
 ) -> int:
-	var bindings: Dictionary = inspector.get("_point_input_bindings")
+	var bindings: Dictionary = point_list_controller(inspector).call("get_input_bindings")
 	var binding: Dictionary = bindings.get(point.get_instance_id(), {})
 	var inputs: Dictionary = binding.get("inputs", {})
 	return inputs.size()
@@ -117,7 +111,7 @@ static func point_input_binding_callback(
 	inspector: Object,
 	point: EasingCurvePoint,
 ) -> Callable:
-	var bindings: Dictionary = inspector.get("_point_input_bindings")
+	var bindings: Dictionary = point_list_controller(inspector).call("get_input_bindings")
 	var binding: Dictionary = bindings.get(point.get_instance_id(), {})
 	return binding.get("changed_callback", Callable())
 
@@ -172,11 +166,21 @@ static func move_point(inspector: Object, from_index: int, to_index: int) -> voi
 
 
 static func move_point_up(inspector: Object, point_index: int) -> void:
-	inspector.call("_move_point_up", point_index)
+	point_list_controller(inspector).call(
+		"request_move_up",
+		point_index,
+		inspector.get("curve"),
+		Callable(inspector, "_move_point"),
+	)
 
 
 static func move_point_down(inspector: Object, point_index: int) -> void:
-	inspector.call("_move_point_down", point_index)
+	point_list_controller(inspector).call(
+		"request_move_down",
+		point_index,
+		inspector.get("curve"),
+		Callable(inspector, "_move_point"),
+	)
 
 
 static func paste_point_property_value(
@@ -266,4 +270,6 @@ static func selected_point_property_header(
 static func selected_point_property_name(
 	inspector: Object,
 ) -> StringName:
-	return StringName(inspector.get("_selected_point_property_name"))
+	return StringName(
+		point_list_controller(inspector).get("selected_point_property_name")
+	)

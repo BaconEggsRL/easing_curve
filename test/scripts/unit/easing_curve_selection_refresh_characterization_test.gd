@@ -83,7 +83,7 @@ func _test_add_undo_redo_selection_symmetry() -> void:
 	_commit_add(history, curve, inspector, point_a)
 	_expect(editor.selected_index == 1, "First add did not select point A")
 	history.undo()
-	_expect(editor.selected_index == -1 and int(inspector.get("_selected_point_index")) == -1, "Undo first add did not restore no selection")
+	_expect(editor.selected_index == -1 and EDITOR_DRIVER.selected_point_index(inspector) == -1, "Undo first add did not restore no selection")
 	history.redo()
 	_expect(editor.selected_index == 1, "Redo first add did not restore point A selection")
 
@@ -158,8 +158,8 @@ func _test_property_selection_survives_reparse() -> void:
 		EDITOR_DRIVER.rebuild_for_curve(inspector, curve)
 		var recreated := _create_property_header(inspector, selected_point, 2, property_name)
 		var recreated_header: PanelContainer = recreated.header
-		_expect(int(inspector.get("_selected_point_index")) == 2, "%s reparse changed the logical point" % property_name)
-		_expect(StringName(inspector.get("_selected_point_property_name")) == property_name, "%s reparse lost the property name" % property_name)
+		_expect(EDITOR_DRIVER.selected_point_index(inspector) == 2, "%s reparse changed the logical point" % property_name)
+		_expect(EDITOR_DRIVER.selected_point_property_name(inspector) == property_name, "%s reparse lost the property name" % property_name)
 		_expect(inspector.get("_selected_point_property_header") as PanelContainer == recreated_header, "%s reparse did not attach the recreated header" % property_name)
 		_expect(editor.selected_index == 2, "%s reparse lost graph selection synchronization" % property_name)
 		first.grid.free()

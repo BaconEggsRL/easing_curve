@@ -171,8 +171,8 @@ static func create_normal_point_property_rows(
 
 
 func request_move_up(
-	curve: EasingCurve,
 	point_index: int,
+	curve: EasingCurve,
 	move_point: Callable,
 ) -> void:
 	var point_count := curve.points.size()
@@ -182,8 +182,8 @@ func request_move_up(
 
 
 func request_move_down(
-	curve: EasingCurve,
 	point_index: int,
+	curve: EasingCurve,
 	move_point: Callable,
 ) -> void:
 	var point_count := curve.points.size()
@@ -209,7 +209,7 @@ func _create_point_side_vbox(
 	move_up_btn.flat = true
 	move_up_btn.tooltip_text = "Move Point Up"
 	move_up_btn.pressed.connect(
-		request_move_up.bind(curve, point_index, move_point)
+		request_move_up.bind(point_index, curve, move_point)
 	)
 	side_vbox.add_child(move_up_btn)
 
@@ -232,7 +232,7 @@ func _create_point_side_vbox(
 	move_down_btn.flat = true
 	move_down_btn.tooltip_text = "Move Point Down"
 	move_down_btn.pressed.connect(
-		request_move_down.bind(curve, point_index, move_point)
+		request_move_down.bind(point_index, curve, move_point)
 	)
 	side_vbox.add_child(move_down_btn)
 

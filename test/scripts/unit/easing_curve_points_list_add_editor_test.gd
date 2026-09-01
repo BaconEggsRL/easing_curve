@@ -291,5 +291,5 @@ func _expect_selected_point(
 	label: String,
 ) -> void:
 	_expect(editor.selected_index == point_index, "%s did not select the added point in the curve editor" % label)
-	_expect(int(inspector.get("_selected_point_index")) == point_index, "%s did not store the added point index" % label)
-	_expect(int(inspector.get("_selected_point_resource_id")) == curve.points[point_index].get_instance_id(), "%s did not store the added point resource" % label)
+	_expect(EDITOR_DRIVER.selected_point_index(inspector) == point_index, "%s did not store the added point index" % label)
+	_expect(EDITOR_DRIVER.selected_point_resource_id(inspector) == curve.points[point_index].get_instance_id(), "%s did not store the added point resource" % label)

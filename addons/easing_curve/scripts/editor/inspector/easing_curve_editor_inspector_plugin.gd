@@ -118,12 +118,12 @@ const TRANSITION_PRESENTATION := [
 
 
 func _parse_begin(object: Object) -> void:
-	_clear_point_input_bindings()
+	_point_list_controller.clear_input_bindings()
 
 	if not object is EasingCurve:
 		return
 
-	if _consume_point_selection_refresh_preservation():
+	if _point_list_controller.consume_selection_refresh_preservation():
 		return
 
 	_clear_point_property_selection()
@@ -272,8 +272,8 @@ func _create_selectable_point_property_header(
 	)
 
 	if (
-		_selected_point_index == i
-		and _selected_point_property_name == property_name
+		_point_list_controller.selected_point_index == i
+		and _point_list_controller.selected_point_property_name == property_name
 	):
 		_attach_selected_point_property_header(property_header)
 
@@ -348,59 +348,10 @@ var _point_edit_point_resource_ids_before := PackedInt64Array()
 var _point_edit_action_name := "Edit Easing Curve Point"
 var _selected_point_property_header: PanelContainer
 var _point_list_controller := PointListController.new()
-var _selected_point_index: int:
-	get:
-		return _point_list_controller.selected_point_index
-var _selected_point_property_name: StringName:
-	get:
-		return _point_list_controller.selected_point_property_name
-var _selected_point_resource_id: int:
-	get:
-		return _point_list_controller.selected_point_resource_id
-var _point_input_bindings: Dictionary:
-	get:
-		return _point_list_controller.get_input_bindings()
 var _position_x_order_preview_point: EasingCurvePoint
 var _initial_autofit_resource_ids: Dictionary[int, bool] = {}
 var _autofit_pending := false
 var _autofit_request_id := 0
-
-
-func _clear_point_input_bindings() -> void:
-	_point_list_controller.clear_input_bindings()
-
-
-func _register_point_input_binding(
-		point: EasingCurvePoint,
-		property_name: StringName,
-		axis: String,
-		input: EditorSpinSlider,
-) -> void:
-	_point_list_controller.register_input_binding(
-		point,
-		property_name,
-		axis,
-		input,
-	)
-
-
-func _request_point_selection_refresh_preservation() -> void:
-	_point_list_controller.request_selection_refresh_preservation()
-
-
-func _consume_point_selection_refresh_preservation() -> bool:
-	return _point_list_controller.consume_selection_refresh_preservation()
-
-
-func _assign_logical_point_selection(
-		point_index: int,
-		property_name: StringName,
-) -> void:
-	_point_list_controller.assign_logical_selection(
-		curve,
-		point_index,
-		property_name,
-	)
 
 
 func _detach_selected_point_property_header() -> void:
@@ -450,7 +401,7 @@ func _restore_point_selection_state(selection: Dictionary) -> void:
 		_sync_graph_selected_point_index(-1)
 		return
 
-	_request_point_selection_refresh_preservation()
+	_point_list_controller.request_selection_refresh_preservation()
 	_detach_selected_point_property_header()
 	_sync_graph_selected_point_index(point_index)
 
@@ -563,12 +514,22 @@ func handle_easing_curve_editor(object) -> Control:
 		easing_curve_editor.zoom_changed.connect(object._on_curve_editor_zoom_changed)
 		easing_curve_editor.pan_changed.connect(object._on_curve_editor_pan_changed)
 		easing_curve_editor.point_changed.connect(_on_curve_editor_point_changed)
-		easing_curve_editor.point_property_change_requested.connect(_on_curve_editor_point_property_change_requested)
+		easing_curve_editor.point_property_change_requested.connect(_apply_point_property_change)
 		easing_curve_editor.point_add_requested.connect(_on_curve_editor_point_add_requested)
-		easing_curve_editor.point_remove_requested.connect(_on_curve_editor_point_remove_requested)
-		easing_curve_editor.point_move_up_requested.connect(_move_point_up)
-		easing_curve_editor.point_move_down_requested.connect(_move_point_down)
-		easing_curve_editor.point_edit_finished.connect(_on_curve_editor_point_edit_finished)
+		easing_curve_editor.point_remove_requested.connect(_remove_point)
+		easing_curve_editor.point_move_up_requested.connect(
+			Callable(_point_list_controller, "request_move_up").bind(
+				object,
+				Callable(self, "_move_point"),
+			)
+		)
+		easing_curve_editor.point_move_down_requested.connect(
+			Callable(_point_list_controller, "request_move_down").bind(
+				object,
+				Callable(self, "_move_point"),
+			)
+		)
+		easing_curve_editor.point_edit_finished.connect(_commit_point_edit)
 
 		# Store reference to curve resource
 		curve = object
@@ -762,7 +723,7 @@ func _on_reset_btn_pressed(
 	var i := _get_current_point_index(point)
 	if i == -1:
 		return
-	_request_point_selection_refresh_preservation()
+	_point_list_controller.request_selection_refresh_preservation()
 	var edit_property_name := _get_point_input_edit_property(point, property_name)
 	var new_default := curve.get_default_for_property(i, edit_property_name)
 
@@ -850,22 +811,6 @@ func _is_point_input_editable(
 	return point.is_position_input_editable(property_name)
 
 
-func _move_point_up(i: int) -> void:
-	_point_list_controller.request_move_up(
-		curve,
-		i,
-		Callable(self, "_move_point"),
-	)
-
-
-func _move_point_down(i: int) -> void:
-	_point_list_controller.request_move_down(
-		curve,
-		i,
-		Callable(self, "_move_point"),
-	)
-
-
 func _move_point(from_index: int, to_index: int) -> void:
 	if DEBUG_POINT_LIST_DRAG:
 		print(
@@ -913,10 +858,11 @@ func _select_reordered_point(point: EasingCurvePoint) -> void:
 	var point_index := _get_current_point_index(point)
 	if point_index == -1:
 		return
-	_request_point_selection_refresh_preservation()
-	_assign_logical_point_selection(
+	_point_list_controller.request_selection_refresh_preservation()
+	_point_list_controller.assign_logical_selection(
+		curve,
 		point_index,
-		_selected_point_property_name,
+		_point_list_controller.selected_point_property_name,
 	)
 	_sync_graph_selected_point_index(point_index)
 
@@ -1026,7 +972,7 @@ func _select_point_property(
 			false
 		)
 
-	_assign_logical_point_selection(point_index, property_name)
+	_point_list_controller.assign_logical_selection(curve,point_index, property_name)
 	_attach_selected_point_property_header(property_header)
 
 
@@ -1064,9 +1010,10 @@ func _reorder_position_edited_point(
 		easing_curve_editor.set_position_x_order_preview(point)
 		return
 
-	_assign_logical_point_selection(
+	_point_list_controller.assign_logical_selection(
+		curve,
 		point_index,
-		_selected_point_property_name,
+		_point_list_controller.selected_point_property_name,
 	)
 	_sync_graph_selected_point_index(point_index)
 
@@ -1459,7 +1406,7 @@ func _create_point_lock_button(
 	lock_btn.modulate.a = 0.25 if not lock_available else 1.0 if toggled_on else 0.5
 	lock_btn.toggled.connect(
 		func(next_toggled_on: bool):
-			_request_point_selection_refresh_preservation()
+			_point_list_controller.request_selection_refresh_preservation()
 			_select_point_property(property_header, i, StringName(property_name))
 			lock_btn.icon = EDITOR_THEME_CACHE.get_icon(
 				EDITOR_THEME_CACHE.ICON_LOCK
@@ -1548,7 +1495,7 @@ func _create_vector2_axis_row(
 			StringName(property_name),
 		)
 	)
-	_register_point_input_binding(point, StringName(property_name), axis, input)
+	_point_list_controller.register_input_binding(point, StringName(property_name), axis, input)
 
 	row.add_child(label)
 	row.add_child(input)
@@ -1594,7 +1541,7 @@ func _on_add_point_btn_pressed() -> void:
 
 
 func _add_points_list_point(point: EasingCurvePoint) -> void:
-	_request_point_selection_refresh_preservation()
+	_point_list_controller.request_selection_refresh_preservation()
 	_add_point(
 		point,
 		_capture_point_selection_state(),
@@ -1619,31 +1566,31 @@ func _create_inspector_section(
 	var section := PointsFoldableSection.new()
 
 	section.copy_value_callback = func():
-		if _selected_point_index >= 0:
+		if _point_list_controller.selected_point_index >= 0:
 			_copy_point_property_value(
-				_selected_point_index,
-				_selected_point_property_name
+				_point_list_controller.selected_point_index,
+				_point_list_controller.selected_point_property_name
 			)
 
 	section.paste_value_callback = func():
-		if _selected_point_index >= 0:
+		if _point_list_controller.selected_point_index >= 0:
 			_paste_point_property_value(
-				_selected_point_index,
-				_selected_point_property_name
+				_point_list_controller.selected_point_index,
+				_point_list_controller.selected_point_property_name
 			)
 
 	section.copy_path_callback = func():
-		if _selected_point_index >= 0:
+		if _point_list_controller.selected_point_index >= 0:
 			_copy_point_property_path(
-				_selected_point_index,
-				_selected_point_property_name
+				_point_list_controller.selected_point_index,
+				_point_list_controller.selected_point_property_name
 			)
 
 	section.can_paste_callback = func():
 		return (
-			_selected_point_index >= 0
+			_point_list_controller.selected_point_index >= 0
 			and _clipboard_has_compatible_point_property_value(
-				_selected_point_property_name,
+				_point_list_controller.selected_point_property_name,
 			)
 		)
 
@@ -1653,14 +1600,6 @@ func _create_inspector_section(
 
 func _on_curve_editor_point_changed(_i: int, _new_point: EasingCurvePoint) -> void:
 	easing_curve_editor.queue_redraw()
-
-
-func _on_curve_editor_point_property_change_requested(i: int, property_name: StringName, value: Variant, changing: bool) -> void:
-	_apply_point_property_change(i, property_name, value, changing)
-
-
-func _on_curve_editor_point_edit_finished(point_order: Array[EasingCurvePoint]) -> void:
-	_commit_point_edit(point_order)
 
 
 func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
@@ -1760,10 +1699,6 @@ func _on_linear_control_x_input_focus_exited(
 
 func _on_curve_editor_point_add_requested(point: EasingCurvePoint) -> void:
 	_add_point(point, _capture_point_selection_state())
-
-
-func _on_curve_editor_point_remove_requested(point: EasingCurvePoint) -> void:
-	_remove_point(point)
 
 
 func _create_handle_mode_property(
@@ -1869,7 +1804,7 @@ func _apply_point_property_change(
 ) -> void:
 	if i < 0 or i >= curve.points.size():
 		return
-	_request_point_selection_refresh_preservation()
+	_point_list_controller.request_selection_refresh_preservation()
 	var before := EASING_CURVE_EDITOR_UNDO.capture_state(curve)
 	if changing and _point_edit_before_state.is_empty():
 		_point_edit_before_state = before

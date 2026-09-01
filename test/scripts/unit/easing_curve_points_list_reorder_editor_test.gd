@@ -290,13 +290,13 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	var down_connections := editor.point_move_down_requested.get_connections()
 	_expect(
 		up_connections.size() == 1
-		and up_connections[0]["callable"].get_method() == &"_move_point_up",
-		"Graph Move Up request was not routed directly to Inspector _move_point_up",
+		and up_connections[0]["callable"].get_method() == &"request_move_up",
+		"Graph Move Up request was not routed through PointListController request_move_up",
 	)
 	_expect(
 		down_connections.size() == 1
-		and down_connections[0]["callable"].get_method() == &"_move_point_down",
-		"Graph Move Down request was not routed directly to Inspector _move_point_down",
+		and down_connections[0]["callable"].get_method() == &"request_move_down",
+		"Graph Move Down request was not routed through PointListController request_move_down",
 	)
 
 	var requests := {"up": 0, "down": 0}
@@ -465,13 +465,13 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 	history.undo()
 	_expect(curve.points[1] == selected, "Move Down Undo did not return the selected Resource to P2")
 	_expect(editor.selected_index == 1, "Move Down Undo did not resolve the graph index from the selected Resource")
-	_expect(int(inspector.get("_selected_point_index")) == 1, "Move Down Undo retained a stale Inspector index")
-	_expect(int(inspector.get("_selected_point_resource_id")) == selected.get_instance_id(), "Move Down Undo changed the selected Resource")
-	_expect(StringName(inspector.get("_selected_point_property_name")) == &"position", "Move Down Undo lost the selected property")
+	_expect(EDITOR_DRIVER.selected_point_index(inspector) == 1, "Move Down Undo retained a stale Inspector index")
+	_expect(EDITOR_DRIVER.selected_point_resource_id(inspector) == selected.get_instance_id(), "Move Down Undo changed the selected Resource")
+	_expect(EDITOR_DRIVER.selected_point_property_name(inspector) == &"position", "Move Down Undo lost the selected property")
 	history.redo()
 	_expect(curve.points[2] == selected, "Move Down Redo did not return the selected Resource to P3")
 	_expect(editor.selected_index == 2, "Move Down Redo did not resolve the graph index from the selected Resource")
-	_expect(int(inspector.get("_selected_point_index")) == 2, "Move Down Redo retained a stale Inspector index")
+	_expect(EDITOR_DRIVER.selected_point_index(inspector) == 2, "Move Down Redo retained a stale Inspector index")
 
 	var drag_before := EDITOR_UNDO.capture_state(curve)
 	var drag_selection_before := EDITOR_DRIVER.capture_point_selection(inspector)
@@ -494,10 +494,10 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 	_expect(curve.points[0] == selected, "Drag reorder did not move the selected Resource")
 	history.undo()
 	_expect(curve.points[2] == selected, "Drag reorder Undo did not restore the selected Resource identity")
-	_expect(editor.selected_index == 2 and int(inspector.get("_selected_point_index")) == 2, "Drag reorder Undo did not synchronize graph and Inspector selection")
+	_expect(editor.selected_index == 2 and EDITOR_DRIVER.selected_point_index(inspector) == 2, "Drag reorder Undo did not synchronize graph and Inspector selection")
 	history.redo()
 	_expect(curve.points[0] == selected, "Drag reorder Redo did not restore the selected Resource identity")
-	_expect(editor.selected_index == 0 and int(inspector.get("_selected_point_index")) == 0, "Drag reorder Redo did not synchronize graph and Inspector selection")
+	_expect(editor.selected_index == 0 and EDITOR_DRIVER.selected_point_index(inspector) == 0, "Drag reorder Redo did not synchronize graph and Inspector selection")
 
 	history.clear_history(false)
 	history.free()
