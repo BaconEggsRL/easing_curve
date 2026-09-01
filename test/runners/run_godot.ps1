@@ -144,8 +144,15 @@ try {
 	}
 	Write-Host "Godot version: $godotVersion"
 
-	& $Godot @launchArguments
-	$exitCode = $LASTEXITCODE
+	$previousErrorActionPreference = $ErrorActionPreference
+	try {
+		$ErrorActionPreference = "Continue"
+		& $Godot @launchArguments
+		$exitCode = $LASTEXITCODE
+	}
+	finally {
+		$ErrorActionPreference = $previousErrorActionPreference
+	}
 } finally {
 	if ($null -eq $previousAppData) {
 		Remove-Item Env:APPDATA -ErrorAction SilentlyContinue

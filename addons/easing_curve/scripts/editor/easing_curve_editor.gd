@@ -37,7 +37,9 @@ signal pan_changed
 enum GrabMode { NONE, ADD, MOVE }
 enum ControlIndex { NONE = -1, LEFT = 0, RIGHT = 1 }
 
-const ZOOM_SLIDER_CONTAINER = preload("uid://r1ymwr6nae")
+const ZOOM_SLIDER_CONTAINER = preload(
+	"res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.tscn"
+)
 const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const ZOOM_MIN := EasingCurve.ZOOM_MIN
 const ZOOM_MAX := EasingCurve.ZOOM_MAX

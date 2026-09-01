@@ -9,7 +9,9 @@ extends EditorInspectorPlugin
 const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
-const ZOOM_SLIDER_CONTAINER = preload("uid://r1ymwr6nae")
+const ZOOM_SLIDER_CONTAINER = preload(
+	"res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.tscn"
+)
 const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const POINT_SNAPSHOT_MUTATOR = preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_point_snapshot_mutator.gd"

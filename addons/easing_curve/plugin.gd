@@ -7,7 +7,9 @@ extends EditorPlugin
 ## Detects when an EasingCurve resource has been saved, and changes the trans_type to CUSTOM.
 ## This prevents _update_preset() from running when the resource is initialized; keeping the user's custom settings intact.
 
-const EasingCurveEditorInspectorPlugin = preload("uid://bqic40cwwnu7l")
+const EasingCurveEditorInspectorPlugin = preload(
+	"res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd"
+)
 const EasingCurvePreviewGenerator = preload(
 	"res://addons/easing_curve/scripts/editor/easing_curve_preview_generator.gd"
 )
