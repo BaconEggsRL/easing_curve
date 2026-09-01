@@ -14,7 +14,9 @@ const BEZIER_SOLVER = preload(
 )
 
 var use_pending_add := true
-var hide_point_toolbar_for_functions := true
+# True: hide the point-selection toolbar in Function mode and reclaim its height.
+# False: keep the toolbar row visible, with point-only controls inactive.
+var hide_selection_toolbar_for_functions := true
 # True: reorder through the Inspector. False: change graph selection only.
 var point_move_buttons_reorder_points := false
 
@@ -125,6 +127,7 @@ var _point_right_state_label: Label
 var _point_right_state: OptionButton
 var _point_reset_button: Button
 var _updating_point_toolbar := false
+var _graph_render_suppressed := false
 
 
 func _ready() -> void:
@@ -585,7 +588,7 @@ func _restore_right_delete_drag_state() -> void:
 # DRAWING POINTS & CONTROLS
 # =========================
 func _draw():
-	if _curve == null:
+	if _curve == null or _graph_render_suppressed:
 		return
 
 	update_view_transform()
@@ -781,6 +784,17 @@ func get_curve() -> EasingCurve:
 	return _curve
 
 
+func set_graph_render_suppressed(suppressed: bool) -> void:
+	if _graph_render_suppressed == suppressed:
+		return
+	_graph_render_suppressed = suppressed
+	queue_redraw()
+
+
+func is_graph_render_suppressed() -> bool:
+	return _graph_render_suppressed
+
+
 func select_point(point: EasingCurvePoint) -> bool:
 	if _curve == null:
 		return false
@@ -793,7 +807,7 @@ func select_point(point: EasingCurvePoint) -> bool:
 
 func _is_point_toolbar_hidden() -> bool:
 	return (
-		hide_point_toolbar_for_functions
+		hide_selection_toolbar_for_functions
 		and _curve != null
 		and _curve.curve_mode == EasingCurve.CurveMode.FUNCTION
 	)
@@ -1069,15 +1083,13 @@ func _get_minimum_size() -> Vector2:
 		MIN_GRAPH_HEIGHT,
 		size.x * ASPECT_RATIO,
 	)
-	var toolbar_height := (
-		0.0
-		if _is_point_toolbar_hidden()
-		else SELECTION_TOOLBAR_HEIGHT
-	)
 
+	# Keep the overall editor section height stable across Bezier/Function
+	# mode changes. When the selection toolbar is hidden, the graph simply
+	# expands into this reserved height instead of shrinking the Inspector.
 	return Vector2(
 		64.0,
-		graph_height + toolbar_height,
+		graph_height + SELECTION_TOOLBAR_HEIGHT,
 	) * _editor_scale
 
 

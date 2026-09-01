@@ -18,6 +18,7 @@ func _run() -> void:
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
 	await _test_autofit_waits_for_function_toolbar_layout()
+	await _test_automatic_autofit_suppresses_intermediate_render()
 	_test_zoom_behavioral_invariants()
 	_test_bezier_draw_clipping_and_tessellation()
 	_test_pending_add_cancel_and_no_op_release()
@@ -225,9 +226,10 @@ func _test_autofit_waits_for_function_toolbar_layout() -> void:
 	await process_frame
 	await process_frame
 
+	var toolbar_panel: VBoxContainer = editor.get("_point_toolbar_panel")
 	_expect(
-		not editor.get("_point_toolbar_panel").visible,
-		"Function preset Autofit ran before the point toolbar was hidden",
+		toolbar_panel.visible != editor.hide_selection_toolbar_for_functions,
+		"Function preset toolbar visibility did not match the production hide-selection-toolbar setting before Autofit",
 	)
 	var fitted_step := editor._zoom_step
 	var fitted_pan := editor.pan_offset
@@ -243,6 +245,65 @@ func _test_autofit_waits_for_function_toolbar_layout() -> void:
 
 	get_root().remove_child(content)
 	content.free()
+
+
+func _test_automatic_autofit_suppresses_intermediate_render() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.LINEAR
+	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
+	var initial_content: Control = inspector.call("handle_easing_curve_editor", curve)
+	get_root().add_child(initial_content)
+	var initial_editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+
+	inspector.call("_queue_autofit_curve_editor")
+	_expect(
+		initial_editor.is_graph_render_suppressed(),
+		"Automatic Autofit did not suppress graph rendering immediately",
+	)
+
+	# Simulate the Inspector rebuild caused by switching to a Function preset.
+	curve.trans_type = EasingCurve.TRANS.ELASTIC
+	get_root().remove_child(initial_content)
+	initial_content.free()
+	var replacement_content: Control = inspector.call("handle_easing_curve_editor", curve)
+	get_root().add_child(replacement_content)
+	var replacement_editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+	_expect(
+		replacement_editor.is_graph_render_suppressed(),
+		"Inspector rebuild did not inherit pending Autofit render suppression",
+	)
+	var replacement_toolbar_panel: VBoxContainer = replacement_editor.get("_point_toolbar_panel")
+	_expect(
+		replacement_toolbar_panel.visible != replacement_editor.hide_selection_toolbar_for_functions,
+		"Elastic rebuild toolbar visibility did not match the production hide-selection-toolbar setting before Autofit",
+	)
+
+	await process_frame
+	_expect(
+		replacement_editor.is_graph_render_suppressed(),
+		"Automatic Autofit revealed the graph before the layout-settle window completed",
+	)
+	await process_frame
+	await process_frame
+	_expect(
+		not replacement_editor.is_graph_render_suppressed(),
+		"Automatic Autofit did not reveal the graph after fitting completed",
+	)
+
+	var fitted_zoom := Vector2(replacement_editor._zoom_x, replacement_editor._zoom_y)
+	var fitted_pan := replacement_editor.pan_offset
+	replacement_editor.autofit()
+	_expect(
+		Vector2(replacement_editor._zoom_x, replacement_editor._zoom_y).is_equal_approx(fitted_zoom),
+		"Manual Autofit changed zoom after the automatic fitted graph was revealed",
+	)
+	_expect(
+		replacement_editor.pan_offset.is_equal_approx(fitted_pan),
+		"Manual Autofit shifted pan after the automatic fitted graph was revealed",
+	)
+
+	get_root().remove_child(replacement_content)
+	replacement_content.free()
 
 
 func _test_zoom_behavioral_invariants() -> void:

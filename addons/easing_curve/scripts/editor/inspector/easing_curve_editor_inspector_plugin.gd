@@ -439,6 +439,8 @@ var _preserve_point_selection_on_refresh := false
 var _position_x_order_preview_point: EasingCurvePoint
 var _point_input_bindings: Dictionary[int, Dictionary] = {}
 var _initial_autofit_resource_ids: Dictionary[int, bool] = {}
+var _autofit_pending := false
+var _autofit_request_id := 0
 
 
 func _clear_point_input_bindings() -> void:
@@ -817,6 +819,8 @@ func handle_easing_curve_editor(object) -> Control:
 		easing_curve_editor = EasingCurveEditor.new()
 		easing_curve_editor.editor_undo_redo = editor_undo_redo
 		easing_curve_editor.set_curve(object)
+		if _autofit_pending:
+			easing_curve_editor.set_graph_render_suppressed(true)
 
 		# Restore last UI state
 		if object._last_zoom:
@@ -897,7 +901,7 @@ func handle_easing_curve_editor(object) -> Control:
 		easing_curve_editor._slider = zoom_slider_container
 		easing_curve_editor.set_slider_value(object._last_slider_value)
 		if _consume_initial_autofit_for_loaded_resource(object):
-			call_deferred(&"_autofit_curve_editor")
+			_queue_autofit_curve_editor()
 
 
 		var curve_editor_section := _create_foldable_section(
@@ -2385,6 +2389,7 @@ func _emit_curve_property(property_name: StringName, value: Variant) -> void:
 		and curve.is_selected_preset_modified()
 	):
 		return
+	_queue_autofit_curve_editor()
 	var action_name := "Change Easing Curve Ease" if property_name == &"ease_type" else "Change Easing Curve Transition"
 	EASING_CURVE_EDITOR_UNDO.apply_action(
 		editor_undo_redo,
@@ -2393,7 +2398,6 @@ func _emit_curve_property(property_name: StringName, value: Variant) -> void:
 		func(): curve.set(property_name, value),
 		_undo_source_property(),
 	)
-	call_deferred(&"_autofit_curve_editor")
 
 
 func _consume_initial_autofit_for_loaded_resource(object: EasingCurve) -> bool:
@@ -2409,24 +2413,46 @@ func _consume_initial_autofit_for_loaded_resource(object: EasingCurve) -> bool:
 	return true
 
 
-func _autofit_curve_editor() -> void:
-	if not is_instance_valid(easing_curve_editor):
-		return
-	var tree := easing_curve_editor.get_tree()
+func _queue_autofit_curve_editor() -> void:
+	_autofit_pending = true
+	_autofit_request_id += 1
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.set_graph_render_suppressed(true)
+	call_deferred(&"_autofit_curve_editor", _autofit_request_id)
+
+
+func _autofit_curve_editor(request_id: int = -1) -> void:
+	if request_id < 0:
+		if not _autofit_pending:
+			_autofit_pending = true
+			_autofit_request_id += 1
+			if is_instance_valid(easing_curve_editor):
+				easing_curve_editor.set_graph_render_suppressed(true)
+		request_id = _autofit_request_id
+
+	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return
 
 	# Preset/resource changes may rebuild the Inspector and hide/show the
 	# point toolbar. Let those minimum-size/layout changes settle before
-	# measuring the graph rect used by Autofit.
+	# measuring the graph rect used by Autofit. The graph stays suppressed
+	# until the fitted view is ready, so no intermediate default-view frame
+	# is presented.
 	await tree.process_frame
 	await tree.process_frame
 
+	if request_id != _autofit_request_id:
+		return
 	if (
 		is_instance_valid(easing_curve_editor)
 		and easing_curve_editor._slider != null
 	):
 		easing_curve_editor.autofit()
+		_autofit_pending = false
+		easing_curve_editor.set_graph_render_suppressed(false)
+	else:
+		_autofit_pending = false
 
 
 func _on_reset_selected_preset(object: EasingCurve) -> void:

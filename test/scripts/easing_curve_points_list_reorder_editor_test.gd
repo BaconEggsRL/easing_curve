@@ -320,12 +320,20 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	editor.call("_update_point_toolbar")
 	var function_minimum_size: Vector2 = editor.call("_get_minimum_size")
 	_expect(move_left.disabled and move_right.disabled, "Graph reorder buttons remained active in Function mode")
-	_expect(not toolbar_panel.visible, "Point-selection toolbar panel remained visible in Function mode")
+	# Follow the production comparison switch without changing it in the test.
+	if editor.hide_selection_toolbar_for_functions:
+		_expect(not toolbar_panel.visible, "Point-selection toolbar panel remained visible in Function mode")
+		_expect(
+			function_minimum_size.y < bezier_minimum_size.y,
+			"Function mode did not reclaim the point-selection toolbar spacing",
+		)
+	else:
+		_expect(toolbar_panel.visible, "Point-selection toolbar panel was hidden with Function-mode hiding disabled")
+		_expect(
+			is_equal_approx(function_minimum_size.y, bezier_minimum_size.y),
+			"Function mode reclaimed toolbar spacing with Function-mode hiding disabled",
+		)
 	_expect(is_equal_approx(toolbar.custom_minimum_size.y, toolbar_height), "Function mode changed the toolbar's internal row height")
-	_expect(
-		function_minimum_size.y < bezier_minimum_size.y,
-		"Function mode did not reclaim the point-selection toolbar spacing",
-	)
 	var order_before_function_request: Array[EasingCurvePoint] = curve.points.duplicate()
 	var up_requests_before_function := int(requests["up"])
 	var down_requests_before_function := int(requests["down"])
