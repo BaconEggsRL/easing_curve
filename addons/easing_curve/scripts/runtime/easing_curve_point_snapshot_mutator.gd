@@ -11,6 +11,9 @@ const POINT_STATE = preload(
 const POINT_STATE_TRANSITION = preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_point_state_transition.gd"
 )
+const SNAPSHOT_CODEC = preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_snapshot_codec.gd"
+)
 
 
 static func apply(
@@ -20,6 +23,8 @@ static func apply(
 	property_name: StringName,
 	value: Variant,
 ) -> bool:
+	if context_point == null or not SNAPSHOT_CODEC.can_mutate_point_snapshot(snapshot, i):
+		return false
 	var state := _read(snapshot, context_point, i)
 
 	match property_name:
@@ -101,25 +106,25 @@ static func _read(
 	i: int,
 ) -> POINT_STATE:
 	var state := POINT_STATE.new()
-	state.position = Vector2(snapshot["positions"][i])
-	state.left_control_point = Vector2(snapshot["left_control_points"][i])
-	state.right_control_point = Vector2(snapshot["right_control_points"][i])
-	state.handle_mode = int(snapshot["handle_modes"][i])
-	state.locks = snapshot["locks"][i].duplicate(true)
-	state.left_force_linear = bool(snapshot["left_force_linear"][i])
-	state.right_force_linear = bool(snapshot["right_force_linear"][i])
+	state.position = Vector2(snapshot[SNAPSHOT_CODEC.POINT_POSITIONS][i])
+	state.left_control_point = Vector2(snapshot[SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS][i])
+	state.right_control_point = Vector2(snapshot[SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS][i])
+	state.handle_mode = int(snapshot[SNAPSHOT_CODEC.POINT_HANDLE_MODES][i])
+	state.locks = snapshot[SNAPSHOT_CODEC.POINT_LOCKS][i].duplicate(true)
+	state.left_force_linear = bool(snapshot[SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR][i])
+	state.right_force_linear = bool(snapshot[SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR][i])
 	state.handle_display_scale = context_point.handle_display_scale
 	state.use_display_space_handles = context_point.use_display_space_handles
 	return state
 
 
 static func _write(snapshot: Dictionary, i: int, state: POINT_STATE) -> void:
-	var left_controls: PackedVector2Array = snapshot["left_control_points"]
-	var right_controls: PackedVector2Array = snapshot["right_control_points"]
-	var modes: PackedInt32Array = snapshot["handle_modes"]
-	var locks: Array = snapshot["locks"]
-	var left_linear: PackedByteArray = snapshot["left_force_linear"]
-	var right_linear: PackedByteArray = snapshot["right_force_linear"]
+	var left_controls: PackedVector2Array = snapshot[SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS]
+	var right_controls: PackedVector2Array = snapshot[SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS]
+	var modes: PackedInt32Array = snapshot[SNAPSHOT_CODEC.POINT_HANDLE_MODES]
+	var locks: Array = snapshot[SNAPSHOT_CODEC.POINT_LOCKS]
+	var left_linear: PackedByteArray = snapshot[SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR]
+	var right_linear: PackedByteArray = snapshot[SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR]
 
 	left_controls[i] = state.left_control_point
 	right_controls[i] = state.right_control_point
@@ -128,12 +133,12 @@ static func _write(snapshot: Dictionary, i: int, state: POINT_STATE) -> void:
 	left_linear[i] = int(state.left_force_linear)
 	right_linear[i] = int(state.right_force_linear)
 
-	snapshot["left_control_points"] = left_controls
-	snapshot["right_control_points"] = right_controls
-	snapshot["handle_modes"] = modes
-	snapshot["locks"] = locks
-	snapshot["left_force_linear"] = left_linear
-	snapshot["right_force_linear"] = right_linear
+	snapshot[SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS] = left_controls
+	snapshot[SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS] = right_controls
+	snapshot[SNAPSHOT_CODEC.POINT_HANDLE_MODES] = modes
+	snapshot[SNAPSHOT_CODEC.POINT_LOCKS] = locks
+	snapshot[SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR] = left_linear
+	snapshot[SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR] = right_linear
 
 
 static func _side(property_name: StringName) -> EasingCurvePoint.ControlSide:

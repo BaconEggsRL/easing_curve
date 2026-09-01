@@ -58,6 +58,9 @@ const BEZIER_SOLVER := preload("res://addons/easing_curve/scripts/runtime/bezier
 const PRESET_GEOMETRY_FACTORY := preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_preset_geometry_factory.gd"
 )
+const SNAPSHOT_CODEC := preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_snapshot_codec.gd"
+)
 const COMPILED_BEZIER_SEGMENTS := preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_compiled_segments.gd"
 )
@@ -160,11 +163,11 @@ const TRANSITION_DEFINITIONS := {
 	},
 }
 ## Editor/live-debug bridge containing only primitive values, never point Resources.
-const POINT_SNAPSHOT_PROPERTY := &"_point_snapshot"
-const FUNCTION_SNAPSHOT_PROPERTY := &"_function_snapshot"
-const EDITOR_STATE_SNAPSHOT_PROPERTY := &"_editor_state_snapshot"
-const POINT_STORAGE_COUNT := &"_point_count"
-const POINT_STORAGE_PREFIX := "_point_"
+const POINT_SNAPSHOT_PROPERTY := SNAPSHOT_CODEC.POINT_SNAPSHOT_PROPERTY
+const FUNCTION_SNAPSHOT_PROPERTY := SNAPSHOT_CODEC.FUNCTION_SNAPSHOT_PROPERTY
+const EDITOR_STATE_SNAPSHOT_PROPERTY := SNAPSHOT_CODEC.EDITOR_STATE_SNAPSHOT_PROPERTY
+const POINT_STORAGE_COUNT := SNAPSHOT_CODEC.POINT_STORAGE_COUNT
+const POINT_STORAGE_PREFIX := SNAPSHOT_CODEC.POINT_STORAGE_PREFIX
 const POINT_EDITOR_KIND_BOOL := &"bool"
 const POINT_EDITOR_KIND_VECTOR2 := &"vector2"
 const POINT_EDITOR_KIND_HANDLE_MODE := &"handle_mode"
@@ -203,7 +206,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"resettable": true,
 		"copy_paste_enabled": true,
 		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
-		"snapshot_key": &"positions",
+		"snapshot_key": SNAPSHOT_CODEC.POINT_POSITIONS,
 		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
@@ -215,7 +218,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"resettable": true,
 		"copy_paste_enabled": true,
 		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
-		"snapshot_key": &"left_control_points",
+		"snapshot_key": SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS,
 		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
@@ -227,7 +230,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"resettable": true,
 		"copy_paste_enabled": true,
 		"editor_kind": POINT_EDITOR_KIND_VECTOR2,
-		"snapshot_key": &"right_control_points",
+		"snapshot_key": SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS,
 		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
@@ -241,7 +244,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"inspector_visible": false,
 		"resettable": false,
 		"copy_paste_enabled": false,
-		"snapshot_key": &"locks",
+		"snapshot_key": SNAPSHOT_CODEC.POINT_LOCKS,
 		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
@@ -253,7 +256,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"resettable": true,
 		"copy_paste_enabled": true,
 		"editor_kind": POINT_EDITOR_KIND_HANDLE_MODE,
-		"snapshot_key": &"handle_modes",
+		"snapshot_key": SNAPSHOT_CODEC.POINT_HANDLE_MODES,
 		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
@@ -263,7 +266,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"inspector_visible": false,
 		"resettable": false,
 		"copy_paste_enabled": false,
-		"snapshot_key": &"left_force_linear",
+		"snapshot_key": SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR,
 		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 	{
@@ -273,7 +276,7 @@ const POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = [
 		"inspector_visible": false,
 		"resettable": false,
 		"copy_paste_enabled": false,
-		"snapshot_key": &"right_force_linear",
+		"snapshot_key": SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR,
 		"snapshot_lifecycle": POINT_SNAPSHOT_LIFECYCLE_SEMANTIC,
 	},
 ]
@@ -645,7 +648,7 @@ var function_callable: Callable:
 			var snapshot := get_canonical_preset_point_snapshot()
 
 			if _parameter_edit_depth > 0:
-				snapshot["changing"] = true
+				snapshot[SNAPSHOT_CODEC.POINT_CHANGING] = true
 
 			set_point_snapshot(snapshot)
 
@@ -673,7 +676,7 @@ var function_callable: Callable:
 			var revision_before := _change_revision
 			var snapshot := get_canonical_preset_point_snapshot()
 			if _parameter_edit_depth > 0:
-				snapshot["changing"] = true
+				snapshot[SNAPSHOT_CODEC.POINT_CHANGING] = true
 			set_point_snapshot(snapshot)
 			if _change_revision == revision_before:
 				_notify_parameter_changed()
@@ -1586,13 +1589,13 @@ func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 		right_force_linear.append(int(point.right_force_linear))
 
 	var snapshot := {
-		"positions": positions,
-		"left_control_points": left_control_points,
-		"right_control_points": right_control_points,
-		"handle_modes": handle_modes,
-		"locks": locks,
-		"left_force_linear": left_force_linear,
-		"right_force_linear": right_force_linear,
+		SNAPSHOT_CODEC.POINT_POSITIONS: positions,
+		SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS: left_control_points,
+		SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS: right_control_points,
+		SNAPSHOT_CODEC.POINT_HANDLE_MODES: handle_modes,
+		SNAPSHOT_CODEC.POINT_LOCKS: locks,
+		SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR: left_force_linear,
+		SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR: right_force_linear,
 	}
 	_capture_ordinary_point_snapshot_values(snapshot, point_values)
 	return snapshot
@@ -1619,28 +1622,28 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 	var result := snapshot.duplicate(true)
 
 	var positions: PackedVector2Array = snapshot.get(
-		"positions",
+		SNAPSHOT_CODEC.POINT_POSITIONS,
 		PackedVector2Array(),
 	)
 	var left_controls: PackedVector2Array = snapshot.get(
-		"left_control_points",
+		SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS,
 		PackedVector2Array(),
 	)
 	var right_controls: PackedVector2Array = snapshot.get(
-		"right_control_points",
+		SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS,
 		PackedVector2Array(),
 	)
-	var locks: Array = snapshot.get("locks", [])
+	var locks: Array = snapshot.get(SNAPSHOT_CODEC.POINT_LOCKS, [])
 	var handle_modes: PackedInt32Array = snapshot.get(
-		"handle_modes",
+		SNAPSHOT_CODEC.POINT_HANDLE_MODES,
 		PackedInt32Array(),
 	)
 	var left_force_linear: PackedByteArray = snapshot.get(
-		"left_force_linear",
+		SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR,
 		PackedByteArray(),
 	)
 	var right_force_linear: PackedByteArray = snapshot.get(
-		"right_force_linear",
+		SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR,
 		PackedByteArray(),
 	)
 
@@ -1698,13 +1701,13 @@ func _reverse_point_snapshot(snapshot: Dictionary) -> Dictionary:
 			),
 		})
 
-	result["positions"] = reversed_positions
-	result["left_control_points"] = reversed_left_controls
-	result["right_control_points"] = reversed_right_controls
-	result["locks"] = reversed_locks
-	result["handle_modes"] = reversed_handle_modes
-	result["left_force_linear"] = reversed_left_force_linear
-	result["right_force_linear"] = reversed_right_force_linear
+	result[SNAPSHOT_CODEC.POINT_POSITIONS] = reversed_positions
+	result[SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS] = reversed_left_controls
+	result[SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS] = reversed_right_controls
+	result[SNAPSHOT_CODEC.POINT_LOCKS] = reversed_locks
+	result[SNAPSHOT_CODEC.POINT_HANDLE_MODES] = reversed_handle_modes
+	result[SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR] = reversed_left_force_linear
+	result[SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR] = reversed_right_force_linear
 	_reverse_ordinary_point_snapshot_values(snapshot, result)
 
 	return result
@@ -1726,15 +1729,15 @@ func _invert_point_snapshot(snapshot: Dictionary) -> Dictionary:
 	var result := snapshot.duplicate(true)
 
 	var positions: PackedVector2Array = snapshot.get(
-		"positions",
+		SNAPSHOT_CODEC.POINT_POSITIONS,
 		PackedVector2Array(),
 	)
 	var left_controls: PackedVector2Array = snapshot.get(
-		"left_control_points",
+		SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS,
 		PackedVector2Array(),
 	)
 	var right_controls: PackedVector2Array = snapshot.get(
-		"right_control_points",
+		SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS,
 		PackedVector2Array(),
 	)
 
@@ -1757,28 +1760,28 @@ func _invert_point_snapshot(snapshot: Dictionary) -> Dictionary:
 		transformed.y = 1.0 - transformed.y
 		inverted_right_controls.append(transformed)
 
-	result["positions"] = inverted_positions
-	result["left_control_points"] = inverted_left_controls
-	result["right_control_points"] = inverted_right_controls
+	result[SNAPSHOT_CODEC.POINT_POSITIONS] = inverted_positions
+	result[SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS] = inverted_left_controls
+	result[SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS] = inverted_right_controls
 
 	return result
 
 
 func set_point_snapshot(snapshot: Dictionary) -> void:
-	var positions: PackedVector2Array = snapshot.get("positions", PackedVector2Array())
-	var left_control_points: PackedVector2Array = snapshot.get("left_control_points", PackedVector2Array())
-	var right_control_points: PackedVector2Array = snapshot.get("right_control_points", PackedVector2Array())
-	var handle_modes: PackedInt32Array = snapshot.get("handle_modes", PackedInt32Array())
+	var positions: PackedVector2Array = snapshot.get(SNAPSHOT_CODEC.POINT_POSITIONS, PackedVector2Array())
+	var left_control_points: PackedVector2Array = snapshot.get(SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS, PackedVector2Array())
+	var right_control_points: PackedVector2Array = snapshot.get(SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS, PackedVector2Array())
+	var handle_modes: PackedInt32Array = snapshot.get(SNAPSHOT_CODEC.POINT_HANDLE_MODES, PackedInt32Array())
 	var left_force_linear: PackedByteArray = snapshot.get(
-		"left_force_linear",
+		SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR,
 		PackedByteArray(),
 	)
 	var right_force_linear: PackedByteArray = snapshot.get(
-		"right_force_linear",
+		SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR,
 		PackedByteArray(),
 	)
-	var locks: Array = snapshot.get("locks", [])
-	var changing := bool(snapshot.get("changing", false))
+	var locks: Array = snapshot.get(SNAPSHOT_CODEC.POINT_LOCKS, [])
+	var changing := bool(snapshot.get(SNAPSHOT_CODEC.POINT_CHANGING, false))
 	var topology_changed := positions.size() != _points.size() or _points.has(null)
 	var point_data_changed := _point_snapshot_differs(
 		positions,
@@ -1917,15 +1920,15 @@ func _restore_ordinary_point_snapshot_values(
 
 func get_editor_state_snapshot() -> Dictionary:
 	return {
-		"ease_type": ease_type,
-		"trans_type": trans_type,
-		"curve_mode": curve_mode,
-		"from_start": from_start,
-		"reverse": reverse,
-		"invert": invert,
-		"bezier_parameter_snapshot": _get_bezier_parameter_snapshot(),
-		"point_snapshot": get_point_snapshot(),
-		"function_snapshot": get_function_snapshot(),
+		SNAPSHOT_CODEC.EDITOR_EASE_TYPE: ease_type,
+		SNAPSHOT_CODEC.EDITOR_TRANS_TYPE: trans_type,
+		SNAPSHOT_CODEC.EDITOR_CURVE_MODE: curve_mode,
+		SNAPSHOT_CODEC.EDITOR_FROM_START: from_start,
+		SNAPSHOT_CODEC.EDITOR_REVERSE: reverse,
+		SNAPSHOT_CODEC.EDITOR_INVERT: invert,
+		SNAPSHOT_CODEC.EDITOR_BEZIER_PARAMETER_SNAPSHOT: _get_bezier_parameter_snapshot(),
+		SNAPSHOT_CODEC.EDITOR_POINT_SNAPSHOT: get_point_snapshot(),
+		SNAPSHOT_CODEC.EDITOR_FUNCTION_SNAPSHOT: get_function_snapshot(),
 	}
 
 
@@ -1971,7 +1974,7 @@ func _set_editor_state_snapshot_with_point_resource_order(
 		point_resource_ids: PackedInt64Array,
 ) -> void:
 	var editor_snapshot := snapshot.duplicate(true)
-	editor_snapshot["point_resource_ids"] = point_resource_ids
+	editor_snapshot[SNAPSHOT_CODEC.EDITOR_POINT_RESOURCE_IDS] = point_resource_ids
 	set_editor_state_snapshot(editor_snapshot)
 
 
@@ -1985,30 +1988,30 @@ func _get_bezier_parameter_snapshot() -> Dictionary:
 
 
 func set_editor_state_snapshot(snapshot: Dictionary) -> void:
-	var snapshot_ease := int(snapshot.get("ease_type", ease_type))
-	var snapshot_trans := int(snapshot.get("trans_type", trans_type))
-	var snapshot_mode := int(snapshot.get("curve_mode", curve_mode))
-	var snapshot_from_start := bool(snapshot.get("from_start", from_start))
-	var snapshot_reverse := bool(snapshot.get("reverse", reverse))
-	var snapshot_invert := bool(snapshot.get("invert", invert))
+	var snapshot_ease := int(snapshot.get(SNAPSHOT_CODEC.EDITOR_EASE_TYPE, ease_type))
+	var snapshot_trans := int(snapshot.get(SNAPSHOT_CODEC.EDITOR_TRANS_TYPE, trans_type))
+	var snapshot_mode := int(snapshot.get(SNAPSHOT_CODEC.EDITOR_CURVE_MODE, curve_mode))
+	var snapshot_from_start := bool(snapshot.get(SNAPSHOT_CODEC.EDITOR_FROM_START, from_start))
+	var snapshot_reverse := bool(snapshot.get(SNAPSHOT_CODEC.EDITOR_REVERSE, reverse))
+	var snapshot_invert := bool(snapshot.get(SNAPSHOT_CODEC.EDITOR_INVERT, invert))
 	var bezier_parameter_snapshot: Dictionary = snapshot.get(
-		"bezier_parameter_snapshot",
+		SNAPSHOT_CODEC.EDITOR_BEZIER_PARAMETER_SNAPSHOT,
 		_get_bezier_parameter_snapshot(),
 	)
-	var point_snapshot: Dictionary = snapshot.get("point_snapshot", get_point_snapshot())
-	var function_snapshot: Dictionary = snapshot.get("function_snapshot", get_function_snapshot())
+	var point_snapshot: Dictionary = snapshot.get(SNAPSHOT_CODEC.EDITOR_POINT_SNAPSHOT, get_point_snapshot())
+	var function_snapshot: Dictionary = snapshot.get(SNAPSHOT_CODEC.EDITOR_FUNCTION_SNAPSHOT, get_function_snapshot())
 	var point_resource_ids: PackedInt64Array = snapshot.get(
-		"point_resource_ids",
+		SNAPSHOT_CODEC.EDITOR_POINT_RESOURCE_IDS,
 		PackedInt64Array(),
 	)
 
-	var positions: PackedVector2Array = point_snapshot.get("positions", PackedVector2Array())
-	var left_control_points: PackedVector2Array = point_snapshot.get("left_control_points", PackedVector2Array())
-	var right_control_points: PackedVector2Array = point_snapshot.get("right_control_points", PackedVector2Array())
-	var handle_modes: PackedInt32Array = point_snapshot.get("handle_modes", PackedInt32Array())
-	var locks: Array = point_snapshot.get("locks", [])
-	var left_force_linear: PackedByteArray = point_snapshot.get("left_force_linear", PackedByteArray())
-	var right_force_linear: PackedByteArray = point_snapshot.get("right_force_linear", PackedByteArray())
+	var positions: PackedVector2Array = point_snapshot.get(SNAPSHOT_CODEC.POINT_POSITIONS, PackedVector2Array())
+	var left_control_points: PackedVector2Array = point_snapshot.get(SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS, PackedVector2Array())
+	var right_control_points: PackedVector2Array = point_snapshot.get(SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS, PackedVector2Array())
+	var handle_modes: PackedInt32Array = point_snapshot.get(SNAPSHOT_CODEC.POINT_HANDLE_MODES, PackedInt32Array())
+	var locks: Array = point_snapshot.get(SNAPSHOT_CODEC.POINT_LOCKS, [])
+	var left_force_linear: PackedByteArray = point_snapshot.get(SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR, PackedByteArray())
+	var right_force_linear: PackedByteArray = point_snapshot.get(SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR, PackedByteArray())
 	var resource_order_changed := _restore_editor_point_resource_order(
 		point_resource_ids
 	)
@@ -2074,10 +2077,10 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 
 func _get_generated_function_snapshot() -> Dictionary:
 	return {
-		"generated_points_x": PackedFloat64Array(
+		SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_X: PackedFloat64Array(
 			_irregular_points_x
 		),
-		"generated_points_y": PackedFloat64Array(
+		SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_Y: PackedFloat64Array(
 			_irregular_points_y
 		),
 	}
@@ -2101,13 +2104,13 @@ func _parse_generated_function_snapshot(
 	return {
 		"points_x": _function_snapshot_float_array(
 			snapshot.get(
-				"generated_points_x",
+				SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_X,
 				PackedFloat64Array(_irregular_points_x),
 			),
 		),
 		"points_y": _function_snapshot_float_array(
 			snapshot.get(
-				"generated_points_y",
+				SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_Y,
 				PackedFloat64Array(_irregular_points_y),
 			),
 		),
@@ -2119,7 +2122,7 @@ func set_function_snapshot(snapshot: Dictionary) -> void:
 	var snapshot_points_x: Array[float] = generated["points_x"]
 	var snapshot_points_y: Array[float] = generated["points_y"]
 
-	var force_notify := bool(snapshot.get("force_notify", false))
+	var force_notify := bool(snapshot.get(SNAPSHOT_CODEC.FUNCTION_FORCE_NOTIFY, false))
 	var changed := false
 
 	for property_name in get_all_function_parameters():
@@ -2236,10 +2239,10 @@ func _point_snapshot_locks_differ(locks: Array) -> bool:
 
 
 func _point_snapshot_matches(snapshot: Dictionary, tolerance: float) -> bool:
-	var positions: PackedVector2Array = snapshot.get("positions", PackedVector2Array())
-	var left_control_points: PackedVector2Array = snapshot.get("left_control_points", PackedVector2Array())
-	var right_control_points: PackedVector2Array = snapshot.get("right_control_points", PackedVector2Array())
-	var locks: Array = snapshot.get("locks", [])
+	var positions: PackedVector2Array = snapshot.get(SNAPSHOT_CODEC.POINT_POSITIONS, PackedVector2Array())
+	var left_control_points: PackedVector2Array = snapshot.get(SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS, PackedVector2Array())
+	var right_control_points: PackedVector2Array = snapshot.get(SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS, PackedVector2Array())
+	var locks: Array = snapshot.get(SNAPSHOT_CODEC.POINT_LOCKS, [])
 	if (
 		positions.size() != _points.size()
 		or left_control_points.size() != _points.size()

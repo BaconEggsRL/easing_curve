@@ -4,6 +4,9 @@ const LEGACY_PRE_FLAT_PATH := "res://test/presets/legacy_pre_flat_triangle.tres"
 const LEGACY_MISSING_FORCE_PATH := "res://test/presets/legacy_flat_without_force_linear.tres"
 const ROUND_TRIP_DIRECTORY := "user://_serialization_transition_contract"
 const SAMPLE_INPUTS := [0.0, 0.25, 0.5, 0.75, 1.0]
+const SNAPSHOT_CODEC := preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_snapshot_codec.gd"
+)
 
 func _init() -> void:
 	_test_legacy_resource_fixtures()
@@ -12,6 +15,7 @@ func _init() -> void:
 	_test_sparse_point_storage_fallbacks()
 	_test_partial_function_snapshot_fallbacks()
 	_test_partial_editor_state_snapshot_fallbacks()
+	_test_snapshot_schema_and_validation_boundary()
 	_test_enum_numeric_contracts()
 	_test_transition_catalog_contract()
 	_test_exported_property_contract()
@@ -239,6 +243,76 @@ func _test_partial_editor_state_snapshot_fallbacks() -> void:
 	_expect(curve.invert, "Partial editor snapshot did not apply a present Invert flag")
 	_expect(curve.get_point_snapshot() == point_snapshot_before, "Partial editor snapshot changed omitted point state")
 	_expect(curve.get_function_snapshot() == function_snapshot_before, "Partial editor snapshot changed omitted function state")
+
+
+func _test_snapshot_schema_and_validation_boundary() -> void:
+	_expect(SNAPSHOT_CODEC.POINT_SNAPSHOT_PROPERTY == EasingCurve.POINT_SNAPSHOT_PROPERTY, "Point snapshot bridge property name changed")
+	_expect(SNAPSHOT_CODEC.FUNCTION_SNAPSHOT_PROPERTY == EasingCurve.FUNCTION_SNAPSHOT_PROPERTY, "Function snapshot bridge property name changed")
+	_expect(SNAPSHOT_CODEC.EDITOR_STATE_SNAPSHOT_PROPERTY == EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY, "Editor-state snapshot bridge property name changed")
+	_expect(SNAPSHOT_CODEC.POINT_STORAGE_COUNT == EasingCurve.POINT_STORAGE_COUNT, "Point storage count property name changed")
+	_expect(SNAPSHOT_CODEC.POINT_STORAGE_PREFIX == EasingCurve.POINT_STORAGE_PREFIX, "Point storage prefix changed")
+
+	var expected_snapshot_keys := {
+		&"position": SNAPSHOT_CODEC.POINT_POSITIONS,
+		&"left_control_point": SNAPSHOT_CODEC.POINT_LEFT_CONTROL_POINTS,
+		&"right_control_point": SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS,
+		&"locked": SNAPSHOT_CODEC.POINT_LOCKS,
+		&"handle_mode": SNAPSHOT_CODEC.POINT_HANDLE_MODES,
+		&"left_force_linear": SNAPSHOT_CODEC.POINT_LEFT_FORCE_LINEAR,
+		&"right_force_linear": SNAPSHOT_CODEC.POINT_RIGHT_FORCE_LINEAR,
+	}
+	for property_name: StringName in expected_snapshot_keys:
+		_expect(
+			EasingCurve.get_point_property_snapshot_key(property_name) == expected_snapshot_keys[property_name],
+			"Shared snapshot schema key changed for %s" % property_name,
+		)
+
+	var legacy_snapshot := {
+		"positions": PackedVector2Array([Vector2.ZERO, Vector2.ONE]),
+		"left_control_points": PackedVector2Array([Vector2.ZERO, Vector2.ONE]),
+		"right_control_points": PackedVector2Array([Vector2.ZERO, Vector2.ONE]),
+	}
+	var legacy_validation := SNAPSHOT_CODEC.validate_point_snapshot(
+		legacy_snapshot,
+		EasingCurve.POINT_PROPERTY_DEFINITIONS,
+	)
+	_expect(bool(legacy_validation.compatible), "Validation rejected a characterized legacy point snapshot")
+	_expect(int(legacy_validation.point_count) == 2, "Validation changed point-count discovery")
+
+	var malformed_point_snapshot := legacy_snapshot.duplicate(true)
+	malformed_point_snapshot[SNAPSHOT_CODEC.POINT_POSITIONS] = [Vector2.ZERO, Vector2.ONE]
+	var malformed_point_validation := SNAPSHOT_CODEC.validate_point_snapshot(
+		malformed_point_snapshot,
+		EasingCurve.POINT_PROPERTY_DEFINITIONS,
+	)
+	_expect(not bool(malformed_point_validation.compatible), "Validation accepted Array point positions instead of PackedVector2Array")
+	_expect(not malformed_point_validation.errors.is_empty(), "Malformed point validation did not report an error")
+
+	var complete_snapshot := EasingCurve.new().get_point_snapshot()
+	_expect(SNAPSHOT_CODEC.can_mutate_point_snapshot(complete_snapshot, 0), "Current point snapshot was rejected by the semantic mutation boundary")
+	var partial_snapshot := complete_snapshot.duplicate(true)
+	partial_snapshot.erase(SNAPSHOT_CODEC.POINT_HANDLE_MODES)
+	_expect(not SNAPSHOT_CODEC.can_mutate_point_snapshot(partial_snapshot, 0), "Semantic mutation boundary accepted missing Handle Mode state")
+	_expect(not SNAPSHOT_CODEC.can_mutate_point_snapshot(complete_snapshot, -1), "Semantic mutation boundary accepted a negative point index")
+
+	var function_validation := SNAPSHOT_CODEC.validate_function_snapshot({
+		SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_X: PackedFloat32Array([0.0, 1.0]),
+		SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_Y: [0.0, 1.0],
+	})
+	_expect(bool(function_validation.compatible), "Function snapshot validation rejected characterized array forms")
+	var bad_function_validation := SNAPSHOT_CODEC.validate_function_snapshot({
+		SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_X: "invalid",
+	})
+	_expect(not bool(bad_function_validation.compatible), "Function snapshot validation accepted an invalid generated-array container")
+
+	var editor_validation := SNAPSHOT_CODEC.validate_editor_state_snapshot({
+		SNAPSHOT_CODEC.EDITOR_INVERT: true,
+	})
+	_expect(bool(editor_validation.compatible), "Editor snapshot validation rejected a characterized partial snapshot")
+	var bad_editor_validation := SNAPSHOT_CODEC.validate_editor_state_snapshot({
+		SNAPSHOT_CODEC.EDITOR_POINT_SNAPSHOT: [],
+	})
+	_expect(not bool(bad_editor_validation.compatible), "Editor snapshot validation accepted a non-Dictionary point snapshot")
 
 
 func _test_enum_numeric_contracts() -> void:
