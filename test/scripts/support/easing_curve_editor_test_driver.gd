@@ -30,6 +30,10 @@ static func create_curve_editor(inspector: Object, curve: EasingCurve) -> Contro
 	return inspector.call("handle_easing_curve_editor", curve)
 
 
+static func create_points_list(inspector: Object, curve: EasingCurve) -> VBoxContainer:
+	return inspector.call("handle_points", curve) as VBoxContainer
+
+
 static func curve_editor(inspector: Object) -> EasingCurveEditor:
 	return inspector.get("easing_curve_editor") as EasingCurveEditor
 

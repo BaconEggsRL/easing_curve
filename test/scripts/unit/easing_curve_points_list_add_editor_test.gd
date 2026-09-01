@@ -10,6 +10,7 @@ func _init() -> void:
 		return
 	_test_points_list_add_preserves_endpoints()
 	_test_points_list_remove_button_undo_redo()
+	_test_constructed_points_list_routes_add_and_remove()
 
 	_finish("Points-list Add")
 
@@ -59,6 +60,51 @@ func _test_points_list_remove_button_undo_redo() -> void:
 	remove_button.free()
 	history.clear_history(false)
 	history.free()
+	editor.free()
+
+
+func _test_constructed_points_list_routes_add_and_remove() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	curve.points = [
+		EasingCurvePoint.new(Vector2.ZERO),
+		EasingCurvePoint.new(Vector2(0.5, 0.75)),
+		EasingCurvePoint.new(Vector2.ONE),
+	]
+	var editor_context := EDITOR_HOST.create_inspector_context(curve)
+	var editor: EasingCurveEditor = editor_context.editor
+	var inspector: Object = editor_context.inspector
+
+	var point_list := EDITOR_DRIVER.create_points_list(inspector, curve)
+	var point_panels: Array[PanelContainer] = []
+	for child in point_list.get_children():
+		if child is PanelContainer:
+			point_panels.append(child)
+	_expect(point_panels.size() == 3, "Constructed point list did not create one panel per point")
+	if point_panels.size() == 3:
+		var point_row := point_panels[1].get_child(0) as HBoxContainer
+		var remove_button := point_row.get_child(point_row.get_child_count() - 1) as Button
+		_expect(
+			remove_button != null and remove_button.tooltip_text == "Remove Point",
+			"Constructed point list did not route the point Remove control",
+		)
+		if remove_button != null:
+			remove_button.pressed.emit()
+			_expect(curve.points.size() == 2, "Constructed Remove control did not reach the Inspector mutation path")
+	point_list.free()
+
+	var refreshed_list := EDITOR_DRIVER.create_points_list(inspector, curve)
+	var add_button: Button
+	for child in refreshed_list.get_children():
+		if child is Button and child.text == "Add Point":
+			add_button = child
+			break
+	_expect(add_button != null, "Constructed Bezier point list did not create its Add Point control")
+	if add_button != null:
+		add_button.pressed.emit()
+		_expect(curve.points.size() == 3, "Constructed Add Point control did not reach the Inspector mutation path")
+		_expect_selected_point(inspector, editor, curve, 1, "Constructed Add Point control")
+	refreshed_list.free()
 	editor.free()
 
 

@@ -15,6 +15,7 @@ func _init() -> void:
 
 func _run() -> void:
 	await _test_drop_reorder_waits_for_safe_drag_completion()
+	_test_constructed_list_routes_move_controls_and_drag_swap()
 	_test_repeated_arrow_moves_keep_the_logical_point_selected()
 	_test_graph_toolbar_reorder_requests_use_inspector_path()
 	_test_committed_drag_reorder_selects_the_dragged_point()
@@ -22,10 +23,10 @@ func _run() -> void:
 	_test_handle_mode_reset_uses_the_normal_transition()
 	_test_handle_mode_property_cell_layout_selection_and_copy_paste()
 
-	if _completed_fixtures != 7:
+	if _completed_fixtures != 8:
 		_failures += 1
 		push_error(
-			"Only %d of 7 Points-list submitted reorder fixtures completed" % _completed_fixtures
+			"Only %d of 8 Points-list submitted reorder fixtures completed" % _completed_fixtures
 		)
 	_finish("Points-list submitted reorder")
 
@@ -130,6 +131,66 @@ func _test_drop_reorder_waits_for_safe_drag_completion() -> void:
 
 	point_list.queue_free()
 	_completed_fixtures += 1
+
+
+func _test_constructed_list_routes_move_controls_and_drag_swap() -> void:
+	var fixture := _make_fixture()
+	var curve: EasingCurve = fixture.curve
+	var editor: EasingCurveEditor = fixture.editor
+	var inspector: Object = fixture.inspector
+	var points: Array[EasingCurvePoint] = fixture.points
+	var moved := points[1]
+	editor.selected_index = 1
+
+	var point_list := EDITOR_DRIVER.create_points_list(inspector, curve)
+	var point_panels: Array[PanelContainer] = []
+	for child in point_list.get_children():
+		if child is PanelContainer:
+			point_panels.append(child)
+	_expect(point_panels.size() == curve.points.size(), "Constructed point list did not create one reorder panel per point")
+	if point_panels.size() == curve.points.size():
+		var point_row := point_panels[1].get_child(0) as HBoxContainer
+		var side_controls := point_row.get_child(0) as VBoxContainer
+		var move_up_button := side_controls.get_child(0) as Button
+		var drag_handle := side_controls.get_child(1) as EasingCurveDragHandle
+		var move_down_button := side_controls.get_child(2) as Button
+		_expect(
+			move_up_button != null and move_up_button.tooltip_text == "Move Point Up",
+			"Constructed point list did not create its Move Up control",
+		)
+		_expect(
+			move_down_button != null and move_down_button.tooltip_text == "Move Point Down",
+			"Constructed point list did not create its Move Down control",
+		)
+		_expect(
+			drag_handle != null
+			and drag_handle.index == 1
+			and drag_handle.point_panel == point_panels[1]
+			and drag_handle.point_list == point_list,
+			"Constructed point list did not bind its drag handle to the owning list/panel",
+		)
+
+		var swap_connections: Array = point_list.point_swap_requested.get_connections()
+		_expect(
+			swap_connections.size() == 1
+			and swap_connections[0]["callable"].get_method() == &"_move_point",
+			"Constructed list drag-swap intent was not routed to the Inspector mutation path",
+		)
+
+		if move_down_button != null:
+			move_down_button.pressed.emit()
+			_expect(
+				curve.points == [points[0], points[2], moved, points[3]],
+				"Constructed Move Down control did not route through point reorder behavior",
+			)
+			_expect(
+				editor.selected_index == 2 and curve.points[2] == moved,
+				"Constructed Move Down control did not keep the moved Resource selected",
+			)
+
+	point_list.free()
+	_completed_fixtures += 1
+	editor.free()
 
 
 func _create_handle_mode_fixture(

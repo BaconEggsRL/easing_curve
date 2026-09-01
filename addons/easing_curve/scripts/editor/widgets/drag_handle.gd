@@ -3,14 +3,11 @@ class_name EasingCurveDragHandle
 extends TextureRect
 ## Drag handle used to re-order points in a list.
 ##
-## This is used in the EasingCurve editor inspector plugin when generating the point list.
-## Contains reference for the curve, editor, and undo redo.
+## This is used by the Inspector point-list controller when generating the point list.
 
 var index: int
 var point_panel: PanelContainer
 var point_list: VBoxContainer
-var curve: EasingCurve
-var easing_curve_editor: EasingCurveEditor
 
 
 func _ready():

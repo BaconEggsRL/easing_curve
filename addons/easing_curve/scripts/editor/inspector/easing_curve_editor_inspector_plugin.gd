@@ -25,9 +25,6 @@ const GenerateFunctionEditorProperty = preload(
 const PointsEditorProperty = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/points_editor_property.gd"
 )
-const PointsListContainer = preload(
-	"res://addons/easing_curve/scripts/editor/inspector/points_list_container.gd"
-)
 const PointsFoldableSection = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/points_foldable_section.gd"
 )
@@ -37,6 +34,8 @@ const PointPropertyClipboardController = preload(
 const PointListController = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/point_list_controller.gd"
 )
+# Compatibility/test seam; construction ownership lives in PointListController.
+const PointsListContainer = PointListController.PointsListContainer
 ## Vector2 slider step
 const SLIDER_INPUT_STEP = 0.001
 const DRAGGING_META := &"_easing_curve_dragging"
@@ -46,12 +45,6 @@ const SHOW_MODIFIED_ASTERISK := true
 # alignment
 const POINT_PROPERTY_HEADER_RATIO := 0.35
 const POINT_PROPERTY_VALUE_RATIO := 0.65
-const POINT_INSPECTOR_PROPERTY_ORDER: Array[StringName] = [
-	&"position",
-	&"handle_mode",
-	&"left_control_point",
-	&"right_control_point",
-]
 # debug
 const DEBUG_POINT_LIST_DRAG := false
 
@@ -462,99 +455,27 @@ func _restore_point_selection_state(selection: Dictionary) -> void:
 	_sync_graph_selected_point_index(point_index)
 
 func handle_points(curve: EasingCurve) -> VBoxContainer:
-	# Contains the list of points
-	var point_list = PointsListContainer.new()
-	point_list.point_swap_requested.connect(_move_point)
-
-	# Add a gap between "Points" header label and the list of points.
-	point_list.add_spacer(true)
-	point_list.add_theme_constant_override("separation", _point_separation())
-
-	# Show list of points
-	for i in range(curve.points.size()):
-		var point := curve.points[i]
-		var position := point.position
-
-		# Panel container for each point
-		var point_panel := PanelContainer.new() # contains the point
-		point_panel.add_theme_stylebox_override(
-			"panel",
-			_zero_margin_panel_stylebox,
-		)
-
-		# Keep point controls on one stable row and let the editable fields shrink.
-		var point_main_hbox := HBoxContainer.new()
-		point_main_hbox.add_theme_constant_override("separation", _compact_separation())
-		point_panel.add_child(point_main_hbox)
-
-		# Left side VBox with Move Up / TripleBar / Move Down
-		var side_vbox := _create_point_side_vbox(i, point_list, point_panel, point)
-		point_main_hbox.add_child(side_vbox)
-
-		var point_properties_grid := GridContainer.new()
-		point_properties_grid.columns = 2
-		point_properties_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		point_properties_grid.add_theme_constant_override(
-			"h_separation",
-			_compact_separation(),
-		)
-		point_properties_grid.add_theme_constant_override(
-			"v_separation",
-			_compact_separation(),
-		)
-		point_main_hbox.add_child(point_properties_grid)
-
-		# Remove button (centered vertically)
-		var remove_btn := Button.new()
-		remove_btn.icon = EDITOR_THEME_CACHE.get_icon(
-			EDITOR_THEME_CACHE.ICON_REMOVE
-		)
-		remove_btn.flat = true
-		remove_btn.tooltip_text = "Remove Point"
-		remove_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		remove_btn.pressed.connect(_on_remove_btn_pressed.bind(point))
-
-		point_main_hbox.add_child(remove_btn)
-
-		_create_normal_point_property_rows(
-			point,
-			i,
-			curve.points.size(),
-			point_properties_grid,
-		)
-
-		# IMPORTANT: add panel to list
-		point_list.add_child(point_panel)
-		point_list.enable_drop_forwarding(point_panel)
-
-	# Add Point button
-	if curve.curve_mode == curve.CurveMode.BEZIER:
-		var add_point_btn := Button.new()
-		add_point_btn.icon = EDITOR_THEME_CACHE.get_icon(
-			EDITOR_THEME_CACHE.ICON_ADD
-		)
-		add_point_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		add_point_btn.text = "Add Point"
-		add_point_btn.pressed.connect(_on_add_point_btn_pressed)
-		point_list.add_child(add_point_btn)
-
-	return point_list
+	return _point_list_controller.build_point_list(
+		curve,
+		_compact_separation(),
+		_point_separation(),
+		Callable(self, "_create_bool_property"),
+		Callable(self, "_create_vector2_property"),
+		Callable(self, "_create_handle_mode_property"),
+		Callable(self, "_move_point"),
+		Callable(self, "_on_remove_btn_pressed"),
+		Callable(self, "_on_add_point_btn_pressed"),
+	)
 
 
 static func _get_normal_point_property_definitions(
 		point_index: int,
 		point_count: int,
 ) -> Array[Dictionary]:
-	var definitions: Array[Dictionary] = []
-	for property_name in POINT_INSPECTOR_PROPERTY_ORDER:
-		if not EasingCurve.is_point_property_inspector_visible(property_name):
-			continue
-		if property_name == &"left_control_point" and point_index == 0:
-			continue
-		if property_name == &"right_control_point" and point_index == point_count - 1:
-			continue
-		definitions.append(EasingCurve.get_point_property_definition(property_name))
-	return definitions
+	return PointListController.get_normal_point_property_definitions(
+		point_index,
+		point_count,
+	)
 
 
 func _create_normal_point_property_rows(
@@ -563,32 +484,15 @@ func _create_normal_point_property_rows(
 		point_count: int,
 		property_grid: GridContainer,
 ) -> void:
-	for definition in _get_normal_point_property_definitions(
+	PointListController.create_normal_point_property_rows(
+		point,
 		point_index,
 		point_count,
-	):
-		match StringName(definition["editor_kind"]):
-			EasingCurve.POINT_EDITOR_KIND_BOOL:
-				_create_bool_property(
-					point,
-					point_index,
-					definition,
-					property_grid,
-				)
-			EasingCurve.POINT_EDITOR_KIND_VECTOR2:
-				_create_vector2_property(
-					point,
-					point_index,
-					definition,
-					property_grid,
-				)
-			EasingCurve.POINT_EDITOR_KIND_HANDLE_MODE:
-				_create_handle_mode_property(
-					point,
-					point_index,
-					definition,
-					property_grid,
-				)
+		property_grid,
+		Callable(self, "_create_bool_property"),
+		Callable(self, "_create_vector2_property"),
+		Callable(self, "_create_handle_mode_property"),
+	)
 
 
 func handle_easing_curve_editor(object) -> Control:
@@ -947,24 +851,18 @@ func _is_point_input_editable(
 
 
 func _move_point_up(i: int) -> void:
-	var point_count := curve.points.size()
-	if point_count < 2:
-		return
-
-	_move_point(
+	_point_list_controller.request_move_up(
+		curve,
 		i,
-		wrapi(i - 1, 0, point_count),
+		Callable(self, "_move_point"),
 	)
 
 
 func _move_point_down(i: int) -> void:
-	var point_count := curve.points.size()
-	if point_count < 2:
-		return
-
-	_move_point(
+	_point_list_controller.request_move_down(
+		curve,
 		i,
-		wrapi(i + 1, 0, point_count),
+		Callable(self, "_move_point"),
 	)
 
 
@@ -1021,51 +919,6 @@ func _select_reordered_point(point: EasingCurvePoint) -> void:
 		_selected_point_property_name,
 	)
 	_sync_graph_selected_point_index(point_index)
-
-
-# remember bind() arguments are at the end
-func _create_point_side_vbox(i: int, point_list: VBoxContainer, point_panel: PanelContainer, point: EasingCurvePoint) -> VBoxContainer:
-	var side_vbox = VBoxContainer.new()
-	side_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-
-	# Move Up Button
-	var move_up_btn = Button.new()
-	move_up_btn.icon = EDITOR_THEME_CACHE.get_icon(
-		EDITOR_THEME_CACHE.ICON_MOVE_UP
-	)
-	move_up_btn.flat = true
-	move_up_btn.tooltip_text = "Move Point Up"
-	move_up_btn.pressed.connect(_move_point_up.bind(i))
-	side_vbox.add_child(move_up_btn)
-
-	# TripleBar TextureRect (drag handle)
-	var triple_bar = EasingCurveDragHandle.new()
-	triple_bar.texture = EDITOR_THEME_CACHE.get_icon(
-		EDITOR_THEME_CACHE.ICON_TRIPLE_BAR
-	)
-	triple_bar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	triple_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	triple_bar.set_focus_mode(Control.FOCUS_ALL)
-
-	triple_bar.index = i
-	triple_bar.point_panel = point_panel
-	triple_bar.point_list = point_list
-	triple_bar.curve = curve
-	triple_bar.easing_curve_editor = easing_curve_editor
-
-	side_vbox.add_child(triple_bar)
-
-	# Move Down Button
-	var move_down_btn = Button.new()
-	move_down_btn.icon = EDITOR_THEME_CACHE.get_icon(
-		EDITOR_THEME_CACHE.ICON_MOVE_DOWN
-	)
-	move_down_btn.flat = true
-	move_down_btn.tooltip_text = "Move Point Down"
-	move_down_btn.pressed.connect(_move_point_down.bind(i))
-	side_vbox.add_child(move_down_btn)
-
-	return side_vbox
 
 
 static func _set_point_reset_button_available(
