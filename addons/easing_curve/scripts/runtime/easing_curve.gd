@@ -777,7 +777,7 @@ var _irregular_points_y: Array[float] = []:
 ## Controls the amplitude of oscillation.[br]
 ## Values below 1.0 are unsupported by the Godot/Penner elastic equation.
 ## Higher values produce larger overshoots.
-@export_range(1.0, 5.0, 0.01) var amplitude: float = 1.0:
+@export_range(1.0, 3.0, 0.001) var amplitude: float = 1.0:
 	set(value):
 		value = maxf(value, 1.0)
 		if amplitude != value:
@@ -787,7 +787,7 @@ var _irregular_points_y: Array[float] = []:
 ## Controls the period of oscillation.[br]
 ## Lower the period to produce faster, more frequent oscillations.[br]
 ## Increase the period to produce slower, wider oscillations.
-@export_range(0.01, 1.0, 0.01) var period: float = 0.3:
+@export_range(0.01, 1.0, 0.001) var period: float = 0.3:
 	set(value):
 		if period != value:
 			period = value
