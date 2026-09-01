@@ -798,7 +798,7 @@ var _irregular_points_y: Array[float] = []:
 # BOUNCE
 # ------------------
 ## The number of bounces before settling.
-@export_range(1, 20, 1, "prefer_slider") var num_bounces: int = 3:
+@export_range(1, 20, 1) var num_bounces: int = 3:
 	set(value):
 		if num_bounces != value:
 			num_bounces = value

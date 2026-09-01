@@ -4,6 +4,9 @@ extends EditorProperty
 
 const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const DRAGGING_META := &"_easing_curve_dragging"
+const FLOAT_BACKED_INTEGER_DRAG_STEPS := {
+	&"num_bounces": 0.01,
+}
 
 
 var input: EditorSpinSlider
@@ -11,6 +14,7 @@ var property_name: StringName
 var curve_editor: EasingCurveEditor
 var drag_original_snapshot: Dictionary
 var undo_redo: Object
+var input_default_step := 1.0
 
 
 func setup(
@@ -32,6 +36,10 @@ func setup(
 	property_name = name
 	curve_editor = editor
 	undo_redo = undo_manager
+	input_default_step = input.step
+	if FLOAT_BACKED_INTEGER_DRAG_STEPS.has(property_name):
+		input.editing_integer = false
+		input.set_control_state(EditorSpinSlider.CONTROL_STATE_HIDE)
 
 	native_editor.remove_child(input)
 	native_editor.free()
@@ -74,11 +82,22 @@ func _on_grabbed() -> void:
 		return
 	input.set_meta(DRAGGING_META, true)
 	drag_original_snapshot = EASING_CURVE_EDITOR_UNDO.capture_state(object)
+	_set_float_backed_integer_drag_active(true)
 	object._begin_editor_parameter_edit()
 
 
 func _on_ungrabbed() -> void:
 	_commit_drag.call_deferred()
+
+
+func _set_float_backed_integer_drag_active(active: bool) -> void:
+	if input == null or not FLOAT_BACKED_INTEGER_DRAG_STEPS.has(property_name):
+		return
+	input.step = (
+		float(FLOAT_BACKED_INTEGER_DRAG_STEPS[property_name])
+		if active
+		else input_default_step
+	)
 
 
 func _on_value_focus_entered() -> void:
@@ -91,7 +110,7 @@ func _on_value_changed(value: float) -> void:
 	var object := get_edited_object() as EasingCurve
 	if object == null:
 		return
-	var property_value: Variant = int(value) if object.get(property_name) is int else value
+	var property_value: Variant = roundi(value) if object.get(property_name) is int else value
 	if input.has_meta(DRAGGING_META):
 		object.set(property_name, property_value)
 	else:
@@ -108,6 +127,9 @@ func _commit_drag() -> void:
 		return
 	input.remove_meta(DRAGGING_META)
 	var object := get_edited_object() as EasingCurve
+	_set_float_backed_integer_drag_active(false)
+	if FLOAT_BACKED_INTEGER_DRAG_STEPS.has(property_name) and object != null:
+		input.set_value_no_signal(float(object.get(property_name)))
 	if object == null:
 		return
 
