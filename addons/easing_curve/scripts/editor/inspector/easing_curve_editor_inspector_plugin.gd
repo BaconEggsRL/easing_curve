@@ -15,9 +15,6 @@ const ZOOM_SLIDER_CONTAINER = preload(
 const PointEditTransactionController = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/point_edit_transaction_controller.gd"
 )
-const POINT_SNAPSHOT_MUTATOR = preload(
-	"res://addons/easing_curve/scripts/runtime/easing_curve_point_snapshot_mutator.gd"
-)
 const DeferredParameterEditorProperty = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/deferred_parameter_editor_property.gd"
 )
@@ -118,6 +115,13 @@ const TRANSITION_PRESENTATION := [
 	},
 ]
 
+
+func _init() -> void:
+	_point_edit_transaction_controller.setup_point_edit_callbacks(
+		Callable(self, "_capture_point_selection_state"),
+		Callable(self, "_restore_point_selection_state"),
+		Callable(self, "_reorder_position_edited_point"),
+	)
 
 
 func _parse_begin(object: Object) -> void:
@@ -351,10 +355,6 @@ var ease_option: OptionButton
 var preset_reset_button: Button
 var curve: EasingCurve
 var _instantiating_default_property := false
-var _point_edit_before_state: Dictionary
-var _point_edit_selection_before: Dictionary
-var _point_edit_point_resource_ids_before := PackedInt64Array()
-var _point_edit_action_name := "Edit Easing Curve Point"
 var _selected_point_property_header: PanelContainer
 var _point_list_controller := PointListController.new()
 var _position_x_order_preview_point: EasingCurvePoint
@@ -542,10 +542,7 @@ func handle_easing_curve_editor(object) -> Control:
 
 		# Store reference to curve resource
 		curve = object
-		_point_edit_before_state = {}
-		_point_edit_selection_before = {}
-		_point_edit_point_resource_ids_before = PackedInt64Array()
-		_point_edit_action_name = "Edit Easing Curve Point"
+		_point_edit_transaction_controller.reset_point_edit()
 		# Connect ease/trans preset selected signals
 		ease_option.item_selected.connect(
 			func(idx):
@@ -1613,36 +1610,7 @@ func _on_curve_editor_point_changed(_i: int, _new_point: EasingCurvePoint) -> vo
 
 func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
 	_commit_position_x_order_preview()
-	if _point_edit_before_state.is_empty():
-		return
-	var before := _point_edit_before_state
-	var selection_before := _point_edit_selection_before
-	var point_resource_ids_before := _point_edit_point_resource_ids_before
-	var action_name := _point_edit_action_name
-	_point_edit_before_state = {}
-	_point_edit_selection_before = {}
-	_point_edit_point_resource_ids_before = PackedInt64Array()
-	_point_edit_action_name = "Edit Easing Curve Point"
-	if not point_order.is_empty() and curve.points != point_order:
-		curve.points = point_order
-	var after := _point_edit_transaction_controller.capture_state(curve)
-	var selection_after := _capture_point_selection_state()
-	var point_resource_ids_after := curve._get_editor_point_resource_ids()
-	# Flush the draft point notifications once at the drag boundary.
-	curve.set_point_snapshot(curve.get_point_snapshot())
-	_commit_curve_action(
-		action_name,
-		_point_edit_transaction_controller.create_action_context(before, after)
-			.with_selection(
-				Callable(self, "_restore_point_selection_state"),
-				selection_before,
-				selection_after,
-			)
-			.with_point_resource_ids(
-				point_resource_ids_before,
-				point_resource_ids_after,
-			),
-	)
+	_point_edit_transaction_controller.finish_point_edit(curve, point_order)
 
 
 func _commit_curve_action(
@@ -1812,124 +1780,14 @@ func _apply_point_property_change(
 	if i < 0 or i >= curve.points.size():
 		return
 	_point_list_controller.request_selection_refresh_preservation()
-	var before := _point_edit_transaction_controller.capture_state(curve)
-	if changing and _point_edit_before_state.is_empty():
-		_point_edit_before_state = before
-		_point_edit_selection_before = _capture_point_selection_state()
-		_point_edit_point_resource_ids_before = curve._get_editor_point_resource_ids()
-		_point_edit_action_name = _point_action_name(property_name)
-	var snapshot := curve.get_point_snapshot()
-	match property_name:
-		&"position":
-			var point := curve.points[i]
-			var positions: PackedVector2Array = snapshot["positions"]
-			var old_position := positions[i]
-			var new_position: Vector2 = value
-			positions[i] = new_position
-			snapshot["positions"] = positions
-
-			var delta := new_position - old_position
-			if not point.is_lock_active(&"left_control_point"):
-				var left_control_points: PackedVector2Array = snapshot[
-					"left_control_points"
-				]
-				left_control_points[i] += delta
-				snapshot["left_control_points"] = left_control_points
-
-			if not point.is_lock_active(&"right_control_point"):
-				var right_control_points: PackedVector2Array = snapshot[
-					"right_control_points"
-				]
-				right_control_points[i] += delta
-				snapshot["right_control_points"] = right_control_points
-
-		&"left_control_point", &"right_control_point":
-			var point := curve.points[i]
-
-			var side := (
-				EasingCurvePoint.ControlSide.LEFT
-				if property_name == &"left_control_point"
-				else EasingCurvePoint.ControlSide.RIGHT
-			)
-
-			var pair := point.get_control_point_pair(side, value)
-
-			var left_control_points: PackedVector2Array = snapshot[
-				"left_control_points"
-			]
-			var right_control_points: PackedVector2Array = snapshot[
-				"right_control_points"
-			]
-
-			left_control_points[i] = pair["left"]
-			right_control_points[i] = pair["right"]
-
-			snapshot["left_control_points"] = left_control_points
-			snapshot["right_control_points"] = right_control_points
-
-		&"handle_mode":
-			if not POINT_SNAPSHOT_MUTATOR.apply(
-				snapshot, curve.points[i], i, property_name, value
-			):
-				return
-
-
-		&"left_control_state", &"right_control_state":
-			if not POINT_SNAPSHOT_MUTATOR.apply(
-				snapshot, curve.points[i], i, property_name, value
-			):
-				return
-
-
-		&"toolbar_options_reset":
-			if not POINT_SNAPSHOT_MUTATOR.apply(
-				snapshot, curve.points[i], i, property_name, value
-			):
-				return
-
-
-		&"left_force_linear", &"right_force_linear":
-			if not POINT_SNAPSHOT_MUTATOR.apply(
-				snapshot, curve.points[i], i, property_name, value
-			):
-				return
-
-
-		&"locked":
-			if not POINT_SNAPSHOT_MUTATOR.apply(
-				snapshot, curve.points[i], i, property_name, value
-			):
-				return
-
-		&"position_lock", &"left_control_lock", &"right_control_lock":
-			if not POINT_SNAPSHOT_MUTATOR.apply(
-				snapshot, curve.points[i], i, property_name, value
-			):
-				return
-
-		_:
-			if (
-				not EasingCurve.is_point_property_snapshot_lifecycle_ordinary(property_name)
-				or not EasingCurve.set_point_snapshot_property_value(snapshot, property_name, i, value)
-			):
-				return
-
-	var defer_notification := position_reorder_point != null
-	snapshot["changing"] = changing or defer_notification
-	curve.set_point_snapshot(snapshot)
-	if position_reorder_point != null:
-		_reorder_position_edited_point(position_reorder_point, changing)
-		if not changing:
-			curve.set_point_snapshot(curve.get_point_snapshot())
-
-	if not changing:
-		if not _point_edit_before_state.is_empty():
-			_commit_point_edit()
-			return
-		_commit_curve_action(
-			_point_action_name(property_name),
-			_point_edit_transaction_controller.create_action_context(before),
-		)
+	_point_edit_transaction_controller.apply_point_property_change(
+		curve,
+		i,
+		property_name,
+		value,
+		changing,
+		position_reorder_point,
+	)
 
 
 func _point_action_name(property_name: StringName) -> String:
