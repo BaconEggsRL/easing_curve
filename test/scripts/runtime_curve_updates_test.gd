@@ -2,6 +2,9 @@ extends SceneTree
 
 const EASING_LIBRARY = preload("res://addons/easing_curve/scripts/runtime/easing.gd")
 const BEZIER_SOLVER = preload("res://addons/easing_curve/scripts/runtime/bezier_solver.gd")
+const COMPILED_BEZIER_SEGMENTS = preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_compiled_segments.gd"
+)
 const ROUND_TRIP_PATH := "res://test/_runtime_curve_round_trip.tres"
 const GENERATED_ROUND_TRIP_PATH := "res://test/_generated_curve_round_trip.tres"
 const BACK_ROUND_TRIP_PATH := "res://test/_back_overshoot_round_trip.tres"
@@ -232,8 +235,9 @@ func _test_compiled_bezier_segment_lookup() -> void:
 			),
 			"Compiled binary lookup changed non-sequential output at x=%f" % x,
 		)
+	var ordered_compiled_segments := COMPILED_BEZIER_SEGMENTS.new()
 	_expect(
-		ordered_curve._compiled_segments_binary_search_safe,
+		ordered_compiled_segments.supports_binary_search(ordered_points),
 		"Strictly ordered segments did not enable compiled binary lookup",
 	)
 
@@ -252,13 +256,15 @@ func _test_compiled_bezier_segment_lookup() -> void:
 		and ordered_curve.get_last_solved_t() >= 1.0 - 0.000001,
 		"Compiled previous-segment shortcut changed a backward shared-boundary sample",
 	)
-	var compiled_revision := ordered_curve._compiled_segment_revision
 	var before_control_edit := ordered_curve.sample(0.1)
 	ordered_curve.points[0].right_control_point = Vector2(0.02, 0.95)
 	var after_control_edit := ordered_curve.sample(0.1)
 	_expect(
-		ordered_curve._compiled_segment_revision > compiled_revision
-		and not is_equal_approx(after_control_edit, before_control_edit),
+		not is_equal_approx(after_control_edit, before_control_edit)
+		and is_equal_approx(
+			after_control_edit,
+			EasingCurve.sample_bezier_points(ordered_points, 0.1),
+		),
 		"Point geometry edits did not invalidate the compiled segment cache",
 	)
 	var preview_snapshot := ordered_curve.get_point_snapshot()
@@ -268,12 +274,10 @@ func _test_compiled_bezier_segment_lookup() -> void:
 	preview_positions[1] = preview_position
 	preview_snapshot.positions = preview_positions
 	preview_snapshot.changing = true
-	compiled_revision = ordered_curve._compiled_segment_revision
 	ordered_curve.set_point_snapshot(preview_snapshot)
 	var preview_expected := EasingCurve.sample_bezier_points(ordered_points, 0.18)
 	_expect(
-		is_equal_approx(ordered_curve.sample(0.18), preview_expected)
-		and ordered_curve._compiled_segment_revision > compiled_revision,
+		is_equal_approx(ordered_curve.sample(0.18), preview_expected),
 		"Notification-suppressed preview geometry reused stale compiled segments",
 	)
 
@@ -287,9 +291,10 @@ func _test_compiled_bezier_segment_lookup() -> void:
 		EasingCurvePoint.new(Vector2.ONE),
 	]
 	var duplicate_expected := EasingCurve.sample_bezier_points(duplicate_curve.points, 0.5)
+	var duplicate_compiled_segments := COMPILED_BEZIER_SEGMENTS.new()
 	_expect(
 		is_equal_approx(duplicate_curve.sample(0.5), duplicate_expected)
-		and not duplicate_curve._compiled_segments_binary_search_safe,
+		and not duplicate_compiled_segments.supports_binary_search(duplicate_curve.points),
 		"Duplicate-X segments did not retain linear first-match sampling",
 	)
 
@@ -320,8 +325,9 @@ func _test_compiled_bezier_segment_lookup() -> void:
 			),
 			"Overlapping segments changed first-match output at x=%f" % x,
 		)
+	var overlapping_compiled_segments := COMPILED_BEZIER_SEGMENTS.new()
 	_expect(
-		not overlapping_curve._compiled_segments_binary_search_safe,
+		not overlapping_compiled_segments.supports_binary_search(overlapping_points),
 		"Overlapping or reversed segments incorrectly enabled binary lookup",
 	)
 
@@ -332,8 +338,7 @@ func _test_compiled_bezier_segment_lookup() -> void:
 		0.4,
 	)
 	_expect(
-		is_equal_approx(ordered_curve.sample(0.4), externally_mutated_expected)
-		and not ordered_curve._compiled_segments_binary_search_safe,
+		is_equal_approx(ordered_curve.sample(0.4), externally_mutated_expected),
 		"In-place topology mutation reused stale compiled segments",
 	)
 
