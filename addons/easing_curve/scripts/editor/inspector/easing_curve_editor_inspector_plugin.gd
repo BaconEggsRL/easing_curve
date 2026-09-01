@@ -34,6 +34,9 @@ const PointsFoldableSection = preload(
 const PointPropertyClipboardController = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/point_property_clipboard_controller.gd"
 )
+const PointListController = preload(
+	"res://addons/easing_curve/scripts/editor/inspector/point_list_controller.gd"
+)
 ## Vector2 slider step
 const SLIDER_INPUT_STEP = 0.001
 const DRAGGING_META := &"_easing_curve_dragging"
@@ -351,28 +354,27 @@ var _point_edit_selection_before: Dictionary
 var _point_edit_point_resource_ids_before := PackedInt64Array()
 var _point_edit_action_name := "Edit Easing Curve Point"
 var _selected_point_property_header: PanelContainer
-var _selected_point_index := -1
-var _selected_point_property_name := StringName()
-var _selected_point_resource_id := 0
-var _preserve_point_selection_on_refresh := false
+var _point_list_controller := PointListController.new()
+var _selected_point_index: int:
+	get:
+		return _point_list_controller.selected_point_index
+var _selected_point_property_name: StringName:
+	get:
+		return _point_list_controller.selected_point_property_name
+var _selected_point_resource_id: int:
+	get:
+		return _point_list_controller.selected_point_resource_id
+var _point_input_bindings: Dictionary:
+	get:
+		return _point_list_controller.get_input_bindings()
 var _position_x_order_preview_point: EasingCurvePoint
-var _point_input_bindings: Dictionary[int, Dictionary] = {}
 var _initial_autofit_resource_ids: Dictionary[int, bool] = {}
 var _autofit_pending := false
 var _autofit_request_id := 0
 
 
 func _clear_point_input_bindings() -> void:
-	for binding in _point_input_bindings.values():
-		var point: EasingCurvePoint = binding.get("point")
-		var changed_callback: Callable = binding.get("changed_callback", Callable())
-		if (
-			point != null
-			and changed_callback.is_valid()
-			and point.changed.is_connected(changed_callback)
-		):
-			point.changed.disconnect(changed_callback)
-	_point_input_bindings.clear()
+	_point_list_controller.clear_input_bindings()
 
 
 func _register_point_input_binding(
@@ -381,92 +383,31 @@ func _register_point_input_binding(
 		axis: String,
 		input: EditorSpinSlider,
 ) -> void:
-	if point == null or input == null:
-		return
-
-	var point_id := point.get_instance_id()
-	if not _point_input_bindings.has(point_id):
-		var changed_callback := _on_bound_point_changed.bind(point_id)
-		_point_input_bindings[point_id] = {
-			"point": point,
-			"changed_callback": changed_callback,
-			"inputs": {},
-		}
-		point.changed.connect(changed_callback)
-
-	var binding: Dictionary = _point_input_bindings[point_id]
-	var inputs: Dictionary = binding["inputs"]
-	inputs[property_name + axis] = {
-		"property_name": property_name,
-		"axis": axis,
-		"input": weakref(input),
-	}
-	binding["inputs"] = inputs
-	_point_input_bindings[point_id] = binding
-	_refresh_point_input_bindings(point_id)
-
-
-func _on_bound_point_changed(point_id: int) -> void:
-	_refresh_point_input_bindings(point_id)
-
-
-func _refresh_point_input_bindings(point_id: int) -> void:
-	if not _point_input_bindings.has(point_id):
-		return
-
-	var binding: Dictionary = _point_input_bindings[point_id]
-	var point: EasingCurvePoint = binding.get("point")
-	if point == null:
-		_point_input_bindings.erase(point_id)
-		return
-
-	var inputs: Dictionary = binding["inputs"]
-	for input_key in inputs.keys():
-		var input_binding: Dictionary = inputs[input_key]
-		var input_ref: WeakRef = input_binding["input"]
-		var input := input_ref.get_ref() if input_ref != null else null
-		if input == null:
-			inputs.erase(input_key)
-			continue
-
-		var property_name: StringName = input_binding["property_name"]
-		var value: Vector2 = point.get(property_name)
-		input.set_value_no_signal(value.x if input_binding["axis"] == "x" else value.y)
-		input.read_only = not point.is_position_input_editable(String(property_name))
-
-	if inputs.is_empty():
-		var changed_callback: Callable = binding["changed_callback"]
-		if point.changed.is_connected(changed_callback):
-			point.changed.disconnect(changed_callback)
-		_point_input_bindings.erase(point_id)
-		return
-
-	binding["inputs"] = inputs
-	_point_input_bindings[point_id] = binding
+	_point_list_controller.register_input_binding(
+		point,
+		property_name,
+		axis,
+		input,
+	)
 
 
 func _request_point_selection_refresh_preservation() -> void:
-	_preserve_point_selection_on_refresh = true
+	_point_list_controller.request_selection_refresh_preservation()
 
 
 func _consume_point_selection_refresh_preservation() -> bool:
-	if not _preserve_point_selection_on_refresh:
-		return false
-	_preserve_point_selection_on_refresh = false
-	return true
+	return _point_list_controller.consume_selection_refresh_preservation()
 
 
 func _assign_logical_point_selection(
 		point_index: int,
 		property_name: StringName,
 ) -> void:
-	_selected_point_index = point_index
-	_selected_point_resource_id = (
-		curve.points[point_index].get_instance_id()
-		if curve != null and point_index >= 0 and point_index < curve.points.size()
-		else 0
+	_point_list_controller.assign_logical_selection(
+		curve,
+		point_index,
+		property_name,
 	)
-	_selected_point_property_name = property_name
 
 
 func _detach_selected_point_property_header() -> void:
@@ -494,67 +435,30 @@ func _clear_point_property_selection() -> void:
 		)
 
 	_detach_selected_point_property_header()
-	_assign_logical_point_selection(-1, StringName())
+	_point_list_controller.clear_logical_selection()
 
 
 func _capture_point_selection_state() -> Dictionary:
-	if curve == null:
-		return {"has_selection": false}
-
-	var point_index := -1
-	var property_name := StringName()
-	if _selected_point_index >= 0 and _selected_point_index < curve.points.size():
-		var selected_point := curve.points[_selected_point_index]
-		if (
-			_selected_point_resource_id == 0
-			or selected_point.get_instance_id() == _selected_point_resource_id
-		):
-			point_index = _selected_point_index
-			property_name = _selected_point_property_name
-
-	if (
-		point_index == -1
-		and is_instance_valid(easing_curve_editor)
-		and easing_curve_editor.selected_index >= 0
-		and easing_curve_editor.selected_index < curve.points.size()
-	):
-		point_index = easing_curve_editor.selected_index
-
-	if point_index == -1:
-		return {"has_selection": false}
-
-	return {
-		"has_selection": true,
-		"point_index": point_index,
-		"point_resource_id": curve.points[point_index].get_instance_id(),
-		"property_name": property_name,
-	}
+	var graph_selected_index := -1
+	if is_instance_valid(easing_curve_editor):
+		graph_selected_index = easing_curve_editor.selected_index
+	return _point_list_controller.capture_selection(
+		curve,
+		graph_selected_index,
+	)
 
 
 func _restore_point_selection_state(selection: Dictionary) -> void:
-	if not bool(selection.get("has_selection", false)):
-		_clear_point_property_selection()
+	var point_index := _point_list_controller.restore_selection(curve, selection)
+	if point_index == -1:
+		if is_instance_valid(_selected_point_property_header):
+			_set_point_property_selected(_selected_point_property_header, false)
+		_detach_selected_point_property_header()
 		_sync_graph_selected_point_index(-1)
-		return
-
-	var point_index := int(selection.get("point_index", -1))
-	var point_resource_id := int(selection.get("point_resource_id", 0))
-	if point_resource_id != 0:
-		for i in range(curve.points.size()):
-			if curve.points[i].get_instance_id() == point_resource_id:
-				point_index = i
-				break
-
-	if point_index < 0 or point_index >= curve.points.size():
-		_restore_point_selection_state({"has_selection": false})
 		return
 
 	_request_point_selection_refresh_preservation()
 	_detach_selected_point_property_header()
-	_assign_logical_point_selection(
-		point_index,
-		StringName(selection.get("property_name", StringName())),
-	)
 	_sync_graph_selected_point_index(point_index)
 
 func handle_points(curve: EasingCurve) -> VBoxContainer:
