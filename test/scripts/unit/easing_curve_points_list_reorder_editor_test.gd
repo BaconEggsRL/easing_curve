@@ -506,6 +506,12 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	var inspector: Object = fixture.inspector
 	var source: EasingCurvePoint = fixture.points[1]
 	var target: EasingCurvePoint = fixture.points[2]
+	var clipboard_supported := DisplayServer.has_feature(
+		DisplayServer.FEATURE_CLIPBOARD
+	)
+	var original_clipboard := ""
+	if clipboard_supported:
+		original_clipboard = DisplayServer.clipboard_get()
 	var handle_parts := _create_handle_mode_fixture(inspector, source, 1)
 	var handle_grid: GridContainer = handle_parts.property_grid
 	if not handle_parts.has("property_header"):
@@ -523,6 +529,8 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 		editor.free()
 		return
 	var target_handle_header: PanelContainer = target_handle_parts.property_header
+	get_root().add_child(handle_grid)
+	get_root().add_child(target_handle_grid)
 
 	_expect(handle_grid.get_child_count() == 2, "Handle Mode grid did not use property and value regions")
 	_expect(handle_header.size_flags_horizontal == Control.SIZE_EXPAND_FILL, "Handle Mode property cell did not use the shared property-cell width")
@@ -533,10 +541,63 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	left_click.button_index = MOUSE_BUTTON_LEFT
 	left_click.pressed = true
 	handle_header.emit_signal(&"gui_input", left_click)
-	_expect(inspector.get("_selected_point_property_header") as PanelContainer == handle_header, "Clicking Handle Mode did not select its property cell")
-	_expect(StringName(inspector.get("_selected_point_property_name")) == &"handle_mode", "Handle Mode selection did not record its property name")
+	_expect(EDITOR_DRIVER.selected_point_property_header(inspector) == handle_header, "Clicking Handle Mode did not select its property cell")
+	_expect(EDITOR_DRIVER.selected_point_property_name(inspector) == &"handle_mode", "Handle Mode selection did not record its property name")
 	target_handle_header.emit_signal(&"gui_input", left_click)
-	_expect(inspector.get("_selected_point_property_header") as PanelContainer == target_handle_header, "Selecting another Handle Mode cell did not replace the property selection")
+	_expect(EDITOR_DRIVER.selected_point_property_header(inspector) == target_handle_header, "Selecting another Handle Mode cell did not replace the property selection")
+
+	_expect(
+		EDITOR_DRIVER.point_property_path(inspector, 2, &"handle_mode")
+		== "points/2/handle_mode",
+		"Handle Mode property path format changed",
+	)
+	if clipboard_supported:
+		source.handle_mode = EasingCurvePoint.HandleMode.BALANCED
+		EDITOR_DRIVER.copy_point_property_value(inspector, 1, &"handle_mode")
+		_expect(
+			DisplayServer.clipboard_get() == var_to_str(source.handle_mode),
+			"Copy Value changed the serialized clipboard format",
+		)
+		EDITOR_DRIVER.copy_point_property_path(inspector, 1, &"handle_mode")
+		_expect(
+			DisplayServer.clipboard_get() == "points/1/handle_mode",
+			"Copy Property Path changed its clipboard text",
+		)
+	else:
+		print("SKIP: system clipboard integration requires a clipboard-capable display server")
+
+	_expect(
+		EDITOR_DRIVER.is_point_property_value_compatible(
+			inspector,
+			&"position",
+			Vector2(0.25, 0.75),
+		),
+		"Position paste no longer accepts Vector2 values",
+	)
+	_expect(
+		not EDITOR_DRIVER.is_point_property_value_compatible(
+			inspector,
+			&"position",
+			0.25,
+		),
+		"Position paste accepted a value with the wrong Variant type",
+	)
+	_expect(
+		not EDITOR_DRIVER.is_point_property_value_compatible(
+			inspector,
+			&"locked",
+			{},
+		),
+		"Clipboard eligibility ignored disabled point-property metadata",
+	)
+	_expect(
+		not EDITOR_DRIVER.is_point_property_value_compatible(
+			inspector,
+			&"unknown",
+			Vector2.ZERO,
+		),
+		"Clipboard eligibility accepted an unknown point property",
+	)
 
 	for mode in [
 		EasingCurvePoint.HandleMode.LINEAR,
@@ -546,11 +607,58 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	]:
 		source.handle_mode = mode
 		target.handle_mode = EasingCurvePoint.HandleMode.FREE
-		_expect(bool(inspector.call("_is_point_property_value_compatible", &"handle_mode", mode)), "Handle Mode copy value was not accepted for %s" % EasingCurvePoint.HandleMode.keys()[mode])
+		_expect(EDITOR_DRIVER.is_point_property_value_compatible(inspector, &"handle_mode", mode), "Handle Mode copy value was not accepted for %s" % EasingCurvePoint.HandleMode.keys()[mode])
 		EDITOR_DRIVER.paste_point_property_value(inspector, 2, &"handle_mode", mode)
 		_expect(target.handle_mode == mode, "Handle Mode paste did not apply %s" % EasingCurvePoint.HandleMode.keys()[mode])
-	_expect(bool(inspector.call("_is_point_property_value_compatible", &"position", Vector2(0.25, 0.75))), "Position paste no longer accepts Vector2 values")
-	_expect(not bool(inspector.call("_is_point_property_value_compatible", &"handle_mode", 99)), "Handle Mode paste accepted an out-of-range integer")
+	_expect(not EDITOR_DRIVER.is_point_property_value_compatible(inspector, &"handle_mode", 99), "Handle Mode paste accepted an out-of-range integer")
+
+	if clipboard_supported:
+		DisplayServer.clipboard_set(var_to_str(EasingCurvePoint.HandleMode.MIRRORED))
+		_expect(
+			EDITOR_DRIVER.clipboard_has_compatible_point_property_value(
+				inspector,
+				&"handle_mode",
+			),
+			"Compatible Handle Mode clipboard text was rejected",
+		)
+		target.handle_mode = EasingCurvePoint.HandleMode.FREE
+		EDITOR_DRIVER.paste_clipboard_point_property_value(
+			inspector,
+			2,
+			&"handle_mode",
+		)
+		_expect(
+			target.handle_mode == EasingCurvePoint.HandleMode.MIRRORED,
+			"Paste Value no longer parses the serialized clipboard value",
+		)
+
+		var context_menu: PopupMenu = handle_parts.context_menu
+		var paste_menu_index := -1
+		for menu_index in range(context_menu.item_count):
+			if context_menu.get_item_text(menu_index) == "Paste Value":
+				paste_menu_index = menu_index
+				break
+		_expect(paste_menu_index >= 0, "Point-property context menu lost Paste Value")
+		DisplayServer.clipboard_set(var_to_str(EasingCurvePoint.HandleMode.LINEAR))
+		EDITOR_DRIVER.open_point_property_context_menu(handle_header)
+		_expect(
+			EDITOR_DRIVER.selected_point_property_header(inspector) == handle_header,
+			"Right-clicking a property did not select that property cell",
+		)
+		_expect(
+			paste_menu_index >= 0
+			and not context_menu.is_item_disabled(paste_menu_index),
+			"Context-menu Paste Value remained disabled for compatible clipboard text",
+		)
+		context_menu.hide()
+		DisplayServer.clipboard_set(var_to_str(Vector2.ZERO))
+		EDITOR_DRIVER.open_point_property_context_menu(handle_header)
+		_expect(
+			paste_menu_index >= 0
+			and context_menu.is_item_disabled(paste_menu_index),
+			"Context-menu Paste Value remained enabled for an incompatible Variant type",
+		)
+		context_menu.hide()
 
 	var before := EDITOR_UNDO.capture_state(curve)
 	source.handle_mode = EasingCurvePoint.HandleMode.LINEAR
@@ -565,12 +673,15 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	_expect(target.left_control_point == target.position and target.right_control_point == target.position, "Pasting Linear did not use Linear transition geometry")
 	var history := UndoRedo.new()
 	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Change Easing Curve Handle Mode", EasingCurveEditorUndo.ActionContext.new(before, after)), "Handle Mode paste did not create an Undo/Redo action")
+	_expect(history.get_history_count() == 1, "Handle Mode paste did not create exactly one Undo/Redo action")
 	history.undo()
 	_expect(curve.get_editor_state_snapshot() == before, "Handle Mode paste Undo did not restore geometry")
 	history.redo()
 	_expect(curve.get_editor_state_snapshot() == after, "Handle Mode paste Redo did not reapply geometry")
 	history.clear_history(false)
 	history.free()
+	if clipboard_supported:
+		DisplayServer.clipboard_set(original_clipboard)
 	_completed_fixtures += 1
 	handle_grid.free()
 	target_handle_grid.free()

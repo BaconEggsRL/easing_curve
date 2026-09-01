@@ -115,3 +115,84 @@ static func paste_point_property_value(
 	value: Variant,
 ) -> void:
 	inspector.call("_apply_pasted_point_property_value", point_index, property_name, value)
+
+
+static func point_property_path(
+	inspector: Object,
+	point_index: int,
+	property_name: StringName,
+) -> String:
+	return String(
+		inspector.call("_point_property_path", point_index, property_name)
+	)
+
+
+static func copy_point_property_value(
+	inspector: Object,
+	point_index: int,
+	property_name: StringName,
+) -> void:
+	inspector.call("_copy_point_property_value", point_index, property_name)
+
+
+static func paste_clipboard_point_property_value(
+	inspector: Object,
+	point_index: int,
+	property_name: StringName,
+) -> void:
+	inspector.call("_paste_point_property_value", point_index, property_name)
+
+
+static func copy_point_property_path(
+	inspector: Object,
+	point_index: int,
+	property_name: StringName,
+) -> void:
+	inspector.call("_copy_point_property_path", point_index, property_name)
+
+
+static func is_point_property_value_compatible(
+	inspector: Object,
+	property_name: StringName,
+	value: Variant,
+) -> bool:
+	return bool(
+		inspector.call(
+			"_is_point_property_value_compatible",
+			property_name,
+			value,
+		)
+	)
+
+
+static func clipboard_has_compatible_point_property_value(
+	inspector: Object,
+	property_name: StringName,
+) -> bool:
+	return bool(
+		inspector.call(
+			"_clipboard_has_compatible_point_property_value",
+			property_name,
+		)
+	)
+
+
+static func open_point_property_context_menu(
+	property_header: PanelContainer,
+) -> void:
+	var right_click := InputEventMouseButton.new()
+	right_click.button_index = MOUSE_BUTTON_RIGHT
+	right_click.pressed = true
+	property_header.emit_signal(&"gui_input", right_click)
+
+
+static func selected_point_property_header(
+	inspector: Object,
+) -> PanelContainer:
+	return inspector.get("_selected_point_property_header") as PanelContainer
+
+
+static func selected_point_property_name(
+	inspector: Object,
+) -> StringName:
+	return StringName(inspector.get("_selected_point_property_name"))
