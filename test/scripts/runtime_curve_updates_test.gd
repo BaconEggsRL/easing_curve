@@ -242,6 +242,16 @@ func _test_compiled_bezier_segment_lookup() -> void:
 		ordered_curve.get_last_solved_t() >= 1.0 - 0.000001,
 		"Compiled lookup changed first-segment-wins behavior at a shared boundary",
 	)
+	ordered_curve.sample(0.9)
+	var backward_boundary_expected := EasingCurve.sample_bezier_points(
+		ordered_points,
+		0.55,
+	)
+	_expect(
+		is_equal_approx(ordered_curve.sample(0.55), backward_boundary_expected)
+		and ordered_curve.get_last_solved_t() >= 1.0 - 0.000001,
+		"Compiled previous-segment shortcut changed a backward shared-boundary sample",
+	)
 	var compiled_revision := ordered_curve._compiled_segment_revision
 	var before_control_edit := ordered_curve.sample(0.1)
 	ordered_curve.points[0].right_control_point = Vector2(0.02, 0.95)

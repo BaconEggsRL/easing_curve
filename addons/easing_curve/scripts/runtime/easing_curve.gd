@@ -2591,11 +2591,15 @@ func _sample_compiled_bezier_points_with_t(offset: float) -> Vector2:
 				return _sample_compiled_bezier_segment_with_t(segment_index, offset)
 
 		if segment_index > 0:
-			var previous_bounds := _compiled_segment_x_bounds[segment_index - 1]
-			if offset >= previous_bounds.x and offset <= previous_bounds.y:
-				segment_index -= 1
-				_last_compiled_segment_index = segment_index
-				return _sample_compiled_bezier_segment_with_t(segment_index, offset)
+			var previous_index := segment_index - 1
+			var previous_bounds := _compiled_segment_x_bounds[previous_index]
+			if (
+				offset >= previous_bounds.x
+				and offset <= previous_bounds.y
+				and (previous_index == 0 or offset > previous_bounds.x)
+			):
+				_last_compiled_segment_index = previous_index
+				return _sample_compiled_bezier_segment_with_t(previous_index, offset)
 
 	segment_index = _find_compiled_segment_index(offset)
 	if segment_index < 0:
