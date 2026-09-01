@@ -31,14 +31,13 @@ const PointsListContainer = preload(
 const PointsFoldableSection = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/points_foldable_section.gd"
 )
+const PointPropertyClipboardController = preload(
+	"res://addons/easing_curve/scripts/editor/inspector/point_property_clipboard_controller.gd"
+)
 ## Vector2 slider step
 const SLIDER_INPUT_STEP = 0.001
 const DRAGGING_META := &"_easing_curve_dragging"
 const POSITION_X_EDITING_META := &"_easing_curve_position_x_editing"
-# copy functions
-const POINT_MENU_COPY_VALUE := 0
-const POINT_MENU_PASTE_VALUE := 1
-const POINT_MENU_COPY_PATH := 2
 # modified preset indicator
 const SHOW_MODIFIED_ASTERISK := true
 # alignment
@@ -56,6 +55,7 @@ const DEBUG_POINT_LIST_DRAG := false
 var _zero_margin_panel_stylebox: StyleBox = (
 	EDITOR_THEME_CACHE.make_zero_margin_panel_stylebox()
 )
+var _point_property_clipboard := PointPropertyClipboardController.new()
 
 
 ## Inspector-only transition grouping, ordering, and presentation.
@@ -137,45 +137,29 @@ static func _point_property_path(
 	point_index: int,
 	property_name: StringName,
 ) -> String:
-	return "points/%d/%s" % [
+	return PointPropertyClipboardController.property_path(
 		point_index,
-		String(property_name),
-	]
+		property_name,
+	)
 
 
 func _copy_point_property_value(
 	point_index: int,
 	property_name: StringName,
 ) -> void:
-	if (
-		point_index < 0
-		or point_index >= curve.points.size()
-		or not EasingCurve.is_point_property_copy_paste_enabled(property_name)
-	):
-		return
-
-	var value: Variant = curve.points[point_index].get(property_name)
-
-	DisplayServer.clipboard_set(
-		var_to_str(value)
-	)
+	_point_property_clipboard.copy_value(curve, point_index, property_name)
 
 
 func _paste_point_property_value(
 	point_index: int,
 	property_name: StringName,
 ) -> void:
-	if (
-		point_index < 0
-		or point_index >= curve.points.size()
-		or not EasingCurve.is_point_property_copy_paste_enabled(property_name)
-	):
-		return
-
-	var clipboard := DisplayServer.clipboard_get()
-	var value: Variant = str_to_var(clipboard)
-
-	_apply_pasted_point_property_value(point_index, property_name, value)
+	_point_property_clipboard.paste_value(
+		curve,
+		point_index,
+		property_name,
+		Callable(self, "_apply_point_property_change"),
+	)
 
 
 func _apply_pasted_point_property_value(
@@ -183,16 +167,12 @@ func _apply_pasted_point_property_value(
 	property_name: StringName,
 	value: Variant,
 ) -> void:
-	if (
-		not EasingCurve.is_point_property_copy_paste_enabled(property_name)
-		or not _is_point_property_value_compatible(property_name, value)
-	):
-		return
-
-	_apply_point_property_change(
+	_point_property_clipboard.apply_value(
+		curve,
 		point_index,
 		property_name,
-		value
+		value,
+		Callable(self, "_apply_point_property_change"),
 	)
 
 
@@ -200,43 +180,24 @@ func _copy_point_property_path(
 	point_index: int,
 	property_name: StringName,
 ) -> void:
-	DisplayServer.clipboard_set(
-		_point_property_path(
-			point_index,
-			property_name
-		)
-	)
+	PointPropertyClipboardController.copy_path(point_index, property_name)
 
 
 static func _is_point_property_value_compatible(
 	property_name: StringName,
 	value: Variant,
 ) -> bool:
-	var definition := EasingCurve.get_point_property_definition(property_name)
-	if (
-		definition.is_empty()
-		or not EasingCurve.is_point_property_copy_paste_enabled(property_name)
-		or typeof(value) != definition["type"]
-	):
-		return false
-
-	if property_name == &"handle_mode":
-		return int(value) in EasingCurvePoint.HandleMode.values()
-
-	return true
+	return PointPropertyClipboardController.is_value_compatible(
+		property_name,
+		value,
+	)
 
 
-static func _clipboard_has_compatible_point_property_value(
+func _clipboard_has_compatible_point_property_value(
 	property_name: StringName,
 ) -> bool:
-	var clipboard := DisplayServer.clipboard_get()
-
-	if clipboard.is_empty():
-		return false
-
-	return _is_point_property_value_compatible(
-		property_name,
-		str_to_var(clipboard),
+	return PointPropertyClipboardController.clipboard_has_compatible_value(
+		property_name
 	)
 
 
@@ -244,51 +205,12 @@ func _create_point_property_context_menu(
 	point_index: int,
 	property_name: StringName,
 ) -> PopupMenu:
-	var menu := PopupMenu.new()
-
-	menu.add_item(
-		"Copy Value",
-		POINT_MENU_COPY_VALUE,
-		KEY_MASK_CTRL | KEY_C
+	return _point_property_clipboard.create_context_menu(
+		curve,
+		point_index,
+		property_name,
+		Callable(self, "_apply_point_property_change"),
 	)
-
-	menu.add_item(
-		"Paste Value",
-		POINT_MENU_PASTE_VALUE,
-		KEY_MASK_CTRL | KEY_V
-	)
-
-	menu.add_separator()
-
-	menu.add_item(
-		"Copy Property Path",
-		POINT_MENU_COPY_PATH,
-		KEY_MASK_CTRL | KEY_MASK_SHIFT | KEY_C
-	)
-
-	menu.id_pressed.connect(
-		func(id: int):
-			match id:
-				POINT_MENU_COPY_VALUE:
-					_copy_point_property_value(
-						point_index,
-						property_name
-					)
-
-				POINT_MENU_PASTE_VALUE:
-					_paste_point_property_value(
-						point_index,
-						property_name
-					)
-
-				POINT_MENU_COPY_PATH:
-					_copy_point_property_path(
-						point_index,
-						property_name
-					)
-	)
-
-	return menu
 
 
 func _create_selectable_point_property_header(
@@ -341,15 +263,9 @@ func _create_selectable_point_property_header(
 					property_name,
 				)
 
-				var paste_index := property_context_menu.get_item_index(
-					POINT_MENU_PASTE_VALUE,
-				)
-
-				property_context_menu.set_item_disabled(
-					paste_index,
-					not _clipboard_has_compatible_point_property_value(
-						property_name,
-					),
+				_point_property_clipboard.update_context_menu_paste_enabled(
+					property_context_menu,
+					property_name,
 				)
 
 				property_context_menu.position = (
