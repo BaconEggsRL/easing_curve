@@ -917,42 +917,10 @@ func _init() -> void:
 
 
 func _get_property_list() -> Array[Dictionary]:
-	var properties: Array[Dictionary] = [
-		{
-			"name": POINT_SNAPSHOT_PROPERTY,
-			"type": TYPE_DICTIONARY,
-			"usage": PROPERTY_USAGE_EDITOR,
-		},
-		{
-			"name": FUNCTION_SNAPSHOT_PROPERTY,
-			"type": TYPE_DICTIONARY,
-			"usage": PROPERTY_USAGE_EDITOR,
-		},
-		{
-			"name": EDITOR_STATE_SNAPSHOT_PROPERTY,
-			"type": TYPE_DICTIONARY,
-			"usage": PROPERTY_USAGE_EDITOR,
-		},
-		{
-			"name": POINT_STORAGE_COUNT,
-			"type": TYPE_INT,
-			"usage": PROPERTY_USAGE_STORAGE,
-		},
-	]
-
-	for i in range(_points.size()):
-		for definition in POINT_PROPERTY_DEFINITIONS:
-			var property_name: StringName = definition["name"]
-			var property_type: int = definition["type"]
-			properties.append(
-				{
-					"name": _get_point_storage_name(i, property_name),
-					"type": property_type,
-					"usage": PROPERTY_USAGE_STORAGE,
-				},
-			)
-
-	return properties
+	return SNAPSHOT_CODEC.build_dynamic_property_list(
+		_points.size(),
+		POINT_PROPERTY_DEFINITIONS,
+	)
 
 
 func _get(property: StringName) -> Variant:
@@ -975,7 +943,7 @@ func _get(property: StringName) -> Variant:
 		return null
 
 	var value: Variant = _points[index].get(point_property.name)
-	return value.duplicate(true) if value is Dictionary else value
+	return SNAPSHOT_CODEC.encode_point_storage_value(value)
 
 
 func _set(property: StringName, value: Variant) -> bool:
@@ -1021,23 +989,14 @@ func _set(property: StringName, value: Variant) -> bool:
 
 
 func _get_point_storage_name(index: int, property_name: StringName) -> StringName:
-	return StringName("%s%d/%s" % [POINT_STORAGE_PREFIX, index, property_name])
+	return SNAPSHOT_CODEC.get_point_storage_name(index, property_name)
 
 
 func _parse_point_storage_name(property: StringName) -> Dictionary:
-	var property_string := String(property)
-	if not property_string.begins_with(POINT_STORAGE_PREFIX):
-		return {}
-
-	var parts := property_string.trim_prefix(POINT_STORAGE_PREFIX).split("/", false, 1)
-	if parts.size() != 2 or not parts[0].is_valid_int():
-		return {}
-
-	var property_name := StringName(parts[1])
-	if get_point_property_definition(property_name).is_empty():
-		return {}
-
-	return {"index": parts[0].to_int(), "name": property_name}
+	return SNAPSHOT_CODEC.parse_point_storage_name(
+		property,
+		POINT_PROPERTY_DEFINITIONS,
+	)
 
 
 func _property_belongs_to_transition(
@@ -1644,17 +1603,17 @@ func _restore_ordinary_point_snapshot_values(
 
 
 func get_editor_state_snapshot() -> Dictionary:
-	return {
-		SNAPSHOT_CODEC.EDITOR_EASE_TYPE: ease_type,
-		SNAPSHOT_CODEC.EDITOR_TRANS_TYPE: trans_type,
-		SNAPSHOT_CODEC.EDITOR_CURVE_MODE: curve_mode,
-		SNAPSHOT_CODEC.EDITOR_FROM_START: from_start,
-		SNAPSHOT_CODEC.EDITOR_REVERSE: reverse,
-		SNAPSHOT_CODEC.EDITOR_INVERT: invert,
-		SNAPSHOT_CODEC.EDITOR_BEZIER_PARAMETER_SNAPSHOT: _get_bezier_parameter_snapshot(),
-		SNAPSHOT_CODEC.EDITOR_POINT_SNAPSHOT: get_point_snapshot(),
-		SNAPSHOT_CODEC.EDITOR_FUNCTION_SNAPSHOT: get_function_snapshot(),
-	}
+	return SNAPSHOT_CODEC.encode_editor_state_snapshot(
+		ease_type,
+		trans_type,
+		curve_mode,
+		from_start,
+		reverse,
+		invert,
+		_get_bezier_parameter_snapshot(),
+		get_point_snapshot(),
+		get_function_snapshot(),
+	)
 
 
 func _get_editor_point_resource_ids() -> PackedInt64Array:
@@ -1698,9 +1657,12 @@ func _set_editor_state_snapshot_with_point_resource_order(
 		snapshot: Dictionary,
 		point_resource_ids: PackedInt64Array,
 ) -> void:
-	var editor_snapshot := snapshot.duplicate(true)
-	editor_snapshot[SNAPSHOT_CODEC.EDITOR_POINT_RESOURCE_IDS] = point_resource_ids
-	set_editor_state_snapshot(editor_snapshot)
+	set_editor_state_snapshot(
+		SNAPSHOT_CODEC.with_editor_point_resource_ids(
+			snapshot,
+			point_resource_ids,
+		),
+	)
 
 
 func _get_bezier_parameter_snapshot() -> Dictionary:
@@ -1713,22 +1675,25 @@ func _get_bezier_parameter_snapshot() -> Dictionary:
 
 
 func set_editor_state_snapshot(snapshot: Dictionary) -> void:
-	var snapshot_ease := int(snapshot.get(SNAPSHOT_CODEC.EDITOR_EASE_TYPE, ease_type))
-	var snapshot_trans := int(snapshot.get(SNAPSHOT_CODEC.EDITOR_TRANS_TYPE, trans_type))
-	var snapshot_mode := int(snapshot.get(SNAPSHOT_CODEC.EDITOR_CURVE_MODE, curve_mode))
-	var snapshot_from_start := bool(snapshot.get(SNAPSHOT_CODEC.EDITOR_FROM_START, from_start))
-	var snapshot_reverse := bool(snapshot.get(SNAPSHOT_CODEC.EDITOR_REVERSE, reverse))
-	var snapshot_invert := bool(snapshot.get(SNAPSHOT_CODEC.EDITOR_INVERT, invert))
-	var bezier_parameter_snapshot: Dictionary = snapshot.get(
-		SNAPSHOT_CODEC.EDITOR_BEZIER_PARAMETER_SNAPSHOT,
-		_get_bezier_parameter_snapshot(),
+	var current_snapshot := get_editor_state_snapshot()
+	var decoded := SNAPSHOT_CODEC.decode_editor_state_snapshot(
+		snapshot,
+		current_snapshot,
 	)
-	var point_snapshot: Dictionary = snapshot.get(SNAPSHOT_CODEC.EDITOR_POINT_SNAPSHOT, get_point_snapshot())
-	var function_snapshot: Dictionary = snapshot.get(SNAPSHOT_CODEC.EDITOR_FUNCTION_SNAPSHOT, get_function_snapshot())
-	var point_resource_ids: PackedInt64Array = snapshot.get(
-		SNAPSHOT_CODEC.EDITOR_POINT_RESOURCE_IDS,
-		PackedInt64Array(),
-	)
+	var snapshot_ease: int = decoded[SNAPSHOT_CODEC.EDITOR_EASE_TYPE]
+	var snapshot_trans: int = decoded[SNAPSHOT_CODEC.EDITOR_TRANS_TYPE]
+	var snapshot_mode: int = decoded[SNAPSHOT_CODEC.EDITOR_CURVE_MODE]
+	var snapshot_from_start: bool = decoded[SNAPSHOT_CODEC.EDITOR_FROM_START]
+	var snapshot_reverse: bool = decoded[SNAPSHOT_CODEC.EDITOR_REVERSE]
+	var snapshot_invert: bool = decoded[SNAPSHOT_CODEC.EDITOR_INVERT]
+	var bezier_parameter_snapshot: Dictionary = decoded[
+		SNAPSHOT_CODEC.EDITOR_BEZIER_PARAMETER_SNAPSHOT
+	]
+	var point_snapshot: Dictionary = decoded[SNAPSHOT_CODEC.EDITOR_POINT_SNAPSHOT]
+	var function_snapshot: Dictionary = decoded[SNAPSHOT_CODEC.EDITOR_FUNCTION_SNAPSHOT]
+	var point_resource_ids: PackedInt64Array = decoded[
+		SNAPSHOT_CODEC.EDITOR_POINT_RESOURCE_IDS
+	]
 
 	var decoded_points := SNAPSHOT_CODEC.decode_point_snapshot(point_snapshot)
 	var positions: PackedVector2Array = decoded_points[SNAPSHOT_CODEC.POINT_POSITIONS]
@@ -1802,45 +1767,30 @@ func set_editor_state_snapshot(snapshot: Dictionary) -> void:
 
 
 func _get_generated_function_snapshot() -> Dictionary:
-	return {
-		SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_X: PackedFloat64Array(
-			_irregular_points_x
-		),
-		SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_Y: PackedFloat64Array(
-			_irregular_points_y
-		),
-	}
-
-func get_function_snapshot() -> Dictionary:
-	var snapshot := {}
-
-	for property_name in get_all_function_parameters():
-		snapshot[property_name] = get(property_name)
-
-	snapshot.merge(
-		_get_generated_function_snapshot()
+	return SNAPSHOT_CODEC.encode_generated_function_snapshot(
+		_irregular_points_x,
+		_irregular_points_y,
 	)
 
-	return snapshot
+func get_function_snapshot() -> Dictionary:
+	var parameter_values := {}
+	for property_name in get_all_function_parameters():
+		parameter_values[property_name] = get(property_name)
+	return SNAPSHOT_CODEC.encode_function_snapshot(
+		parameter_values,
+		_irregular_points_x,
+		_irregular_points_y,
+	)
 
 
 func _parse_generated_function_snapshot(
 		snapshot: Dictionary,
 ) -> Dictionary:
-	return {
-		"points_x": _function_snapshot_float_array(
-			snapshot.get(
-				SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_X,
-				PackedFloat64Array(_irregular_points_x),
-			),
-		),
-		"points_y": _function_snapshot_float_array(
-			snapshot.get(
-				SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_Y,
-				PackedFloat64Array(_irregular_points_y),
-			),
-		),
-	}
+	return SNAPSHOT_CODEC.decode_generated_function_snapshot(
+		snapshot,
+		_irregular_points_x,
+		_irregular_points_y,
+	)
 
 
 func set_function_snapshot(snapshot: Dictionary) -> void:
@@ -1895,11 +1845,7 @@ func set_function_snapshot(snapshot: Dictionary) -> void:
 
 
 func _function_snapshot_float_array(value: Variant) -> Array[float]:
-	var result: Array[float] = []
-	if value is Array or value is PackedFloat32Array or value is PackedFloat64Array:
-		for item in value:
-			result.append(float(item))
-	return result
+	return SNAPSHOT_CODEC.function_snapshot_float_array(value)
 
 
 func _point_snapshot_differs(

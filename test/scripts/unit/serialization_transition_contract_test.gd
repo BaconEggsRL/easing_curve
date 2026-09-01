@@ -17,6 +17,7 @@ func _init() -> void:
 	_test_partial_editor_state_snapshot_fallbacks()
 	_test_snapshot_schema_and_validation_boundary()
 	_test_snapshot_codec_encode_decode_transform_boundary()
+	_test_dynamic_storage_and_remaining_codec_boundary()
 	_test_enum_numeric_contracts()
 	_test_transition_catalog_contract()
 	_test_exported_property_contract()
@@ -388,6 +389,126 @@ func _test_snapshot_codec_encode_decode_transform_boundary() -> void:
 	_expect(_vector_arrays_equal_approx(inverted[SNAPSHOT_CODEC.POINT_RIGHT_CONTROL_POINTS], PackedVector2Array([Vector2(0.3, 0.7), Vector2(1.2, 0.1)])), "Codec invert changed right-handle Y reflection")
 	_expect(inverted[SNAPSHOT_CODEC.POINT_LOCKS] == source[SNAPSHOT_CODEC.POINT_LOCKS], "Codec invert changed lock state")
 	_expect(inverted.marker == "preserved", "Codec invert dropped unrelated snapshot metadata")
+
+
+func _test_dynamic_storage_and_remaining_codec_boundary() -> void:
+	var curve := EasingCurve.new()
+	curve.set(EasingCurve.POINT_STORAGE_COUNT, 2)
+	var codec_properties := SNAPSHOT_CODEC.build_dynamic_property_list(
+		2,
+		EasingCurve.POINT_PROPERTY_DEFINITIONS,
+	)
+	_expect(
+		curve._get_property_list() == codec_properties,
+		"EasingCurve dynamic property list diverged from the codec",
+	)
+	_expect(
+		codec_properties.size() == 4 + 2 * EasingCurve.POINT_PROPERTY_DEFINITIONS.size(),
+		"Codec dynamic property list changed its bridge/storage field count",
+	)
+	_expect(
+		codec_properties[0].name == EasingCurve.POINT_SNAPSHOT_PROPERTY
+		and codec_properties[1].name == EasingCurve.FUNCTION_SNAPSHOT_PROPERTY
+		and codec_properties[2].name == EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY
+		and codec_properties[3].name == EasingCurve.POINT_STORAGE_COUNT,
+		"Codec dynamic property list changed bridge/storage header ordering",
+	)
+
+	var storage_name := SNAPSHOT_CODEC.get_point_storage_name(2, &"right_control_point")
+	_expect(storage_name == &"_point_2/right_control_point", "Codec point storage name encoding changed")
+	_expect(curve._get_point_storage_name(2, &"right_control_point") == storage_name, "EasingCurve point storage naming diverged from the codec")
+	var parsed := SNAPSHOT_CODEC.parse_point_storage_name(
+		storage_name,
+		EasingCurve.POINT_PROPERTY_DEFINITIONS,
+	)
+	_expect(parsed == {"index": 2, "name": &"right_control_point"}, "Codec point storage name decoding changed")
+	_expect(curve._parse_point_storage_name(storage_name) == parsed, "EasingCurve point storage parsing diverged from the codec")
+	_expect(SNAPSHOT_CODEC.parse_point_storage_name(&"_point_x/position", EasingCurve.POINT_PROPERTY_DEFINITIONS).is_empty(), "Codec accepted a non-numeric point storage index")
+	_expect(SNAPSHOT_CODEC.parse_point_storage_name(&"_point_0/unknown", EasingCurve.POINT_PROPERTY_DEFINITIONS).is_empty(), "Codec accepted an unknown point storage property")
+	_expect(SNAPSHOT_CODEC.parse_point_storage_name(&"position", EasingCurve.POINT_PROPERTY_DEFINITIONS).is_empty(), "Codec accepted a non-storage property name")
+
+	var lock_source := {"position": true}
+	var lock_encoded: Dictionary = SNAPSHOT_CODEC.encode_point_storage_value(lock_source)
+	lock_source.position = false
+	_expect(bool(lock_encoded.position), "Codec point storage value encoding aliased a Dictionary caller")
+
+	var function_parameters := {
+		&"frequency": 4.25,
+		&"decay": 3.5,
+	}
+	var generated_x: Array[float] = [0.0, 0.4, 1.0]
+	var generated_y: Array[float] = [0.0, 0.7, 1.0]
+	var function_snapshot := SNAPSHOT_CODEC.encode_function_snapshot(
+		function_parameters,
+		generated_x,
+		generated_y,
+	)
+	_expect(is_equal_approx(float(function_snapshot.frequency), 4.25), "Codec function snapshot changed parameter encoding")
+	_expect(function_snapshot[SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_X] is PackedFloat64Array, "Codec generated function X data changed storage type")
+	_expect(function_snapshot[SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_Y] is PackedFloat64Array, "Codec generated function Y data changed storage type")
+	_expect(function_snapshot[SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_X] == PackedFloat64Array(generated_x), "Codec generated function X data changed values")
+	_expect(function_snapshot[SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_Y] == PackedFloat64Array(generated_y), "Codec generated function Y data changed values")
+
+	var generated_fallback := SNAPSHOT_CODEC.decode_generated_function_snapshot(
+		{},
+		generated_x,
+		generated_y,
+	)
+	_expect(generated_fallback.points_x == generated_x and generated_fallback.points_y == generated_y, "Codec generated function fallback stopped preserving current values")
+	var generated_decoded := SNAPSHOT_CODEC.decode_generated_function_snapshot(
+		{
+			SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_X: PackedFloat32Array([0.0, 0.5, 1.0]),
+			SNAPSHOT_CODEC.FUNCTION_GENERATED_POINTS_Y: PackedFloat64Array([0.0, 0.25, 1.0]),
+		},
+		generated_x,
+		generated_y,
+	)
+	_expect(generated_decoded.points_x == [0.0, 0.5, 1.0], "Codec generated function X decoding changed accepted PackedFloat32Array input")
+	_expect(generated_decoded.points_y == [0.0, 0.25, 1.0], "Codec generated function Y decoding changed accepted PackedFloat64Array input")
+	_expect(SNAPSHOT_CODEC.function_snapshot_float_array([0, 0.5, 1]) == [0.0, 0.5, 1.0], "Codec function float-array normalization changed")
+
+	curve.trans_type = EasingCurve.TRANS.SPRING
+	curve.frequency = 4.25
+	curve.decay = 3.5
+	curve._irregular_points_x = generated_x
+	curve._irregular_points_y = generated_y
+	var curve_parameter_values := {}
+	for property_name in EasingCurve.get_all_function_parameters():
+		curve_parameter_values[property_name] = curve.get(property_name)
+	_expect(
+		curve.get_function_snapshot() == SNAPSHOT_CODEC.encode_function_snapshot(
+			curve_parameter_values,
+			curve._irregular_points_x,
+			curve._irregular_points_y,
+		),
+		"EasingCurve function snapshot encoding diverged from the codec",
+	)
+
+	var editor_snapshot := SNAPSHOT_CODEC.encode_editor_state_snapshot(
+		EasingCurve.EASE.OUT,
+		EasingCurve.TRANS.BACK,
+		EasingCurve.CurveMode.BEZIER,
+		false,
+		true,
+		false,
+		{"overshoot": 2.75},
+		{"point": "snapshot"},
+		{"function": "snapshot"},
+	)
+	_expect(editor_snapshot[SNAPSHOT_CODEC.EDITOR_EASE_TYPE] == EasingCurve.EASE.OUT, "Codec editor snapshot changed Ease encoding")
+	_expect(editor_snapshot[SNAPSHOT_CODEC.EDITOR_POINT_SNAPSHOT] == {"point": "snapshot"}, "Codec editor snapshot changed nested point snapshot encoding")
+	var decoded_editor := SNAPSHOT_CODEC.decode_editor_state_snapshot(
+		{SNAPSHOT_CODEC.EDITOR_INVERT: true},
+		editor_snapshot,
+	)
+	_expect(decoded_editor[SNAPSHOT_CODEC.EDITOR_INVERT], "Codec partial editor snapshot did not apply a present flag")
+	_expect(decoded_editor[SNAPSHOT_CODEC.EDITOR_REVERSE], "Codec partial editor snapshot did not preserve an omitted flag")
+	_expect(decoded_editor[SNAPSHOT_CODEC.EDITOR_TRANS_TYPE] == EasingCurve.TRANS.BACK, "Codec partial editor snapshot did not preserve an omitted transition")
+	_expect(decoded_editor[SNAPSHOT_CODEC.EDITOR_POINT_SNAPSHOT] == {"point": "snapshot"}, "Codec partial editor snapshot did not preserve omitted point state")
+	var point_ids := PackedInt64Array([12, 34])
+	var editor_with_ids := SNAPSHOT_CODEC.with_editor_point_resource_ids(editor_snapshot, point_ids)
+	_expect(editor_with_ids[SNAPSHOT_CODEC.EDITOR_POINT_RESOURCE_IDS] == point_ids, "Codec editor snapshot point Resource ID injection changed")
+	_expect(not editor_snapshot.has(SNAPSHOT_CODEC.EDITOR_POINT_RESOURCE_IDS), "Codec editor snapshot point Resource ID injection mutated the source snapshot")
 
 
 func _test_enum_numeric_contracts() -> void:

@@ -44,6 +44,79 @@ const EDITOR_FUNCTION_SNAPSHOT := &"function_snapshot"
 const EDITOR_POINT_RESOURCE_IDS := &"point_resource_ids"
 
 
+static func build_dynamic_property_list(
+		point_count: int,
+		property_definitions: Array[Dictionary],
+) -> Array[Dictionary]:
+	var properties: Array[Dictionary] = [
+		{
+			"name": POINT_SNAPSHOT_PROPERTY,
+			"type": TYPE_DICTIONARY,
+			"usage": PROPERTY_USAGE_EDITOR,
+		},
+		{
+			"name": FUNCTION_SNAPSHOT_PROPERTY,
+			"type": TYPE_DICTIONARY,
+			"usage": PROPERTY_USAGE_EDITOR,
+		},
+		{
+			"name": EDITOR_STATE_SNAPSHOT_PROPERTY,
+			"type": TYPE_DICTIONARY,
+			"usage": PROPERTY_USAGE_EDITOR,
+		},
+		{
+			"name": POINT_STORAGE_COUNT,
+			"type": TYPE_INT,
+			"usage": PROPERTY_USAGE_STORAGE,
+		},
+	]
+	for index in range(maxi(point_count, 0)):
+		for definition in property_definitions:
+			var property_name: StringName = definition.get("name", StringName())
+			var property_type := int(definition.get("type", TYPE_NIL))
+			if property_name.is_empty() or property_type == TYPE_NIL:
+				continue
+			properties.append({
+				"name": get_point_storage_name(index, property_name),
+				"type": property_type,
+				"usage": PROPERTY_USAGE_STORAGE,
+			})
+	return properties
+
+
+static func get_point_storage_name(
+		index: int,
+		property_name: StringName,
+) -> StringName:
+	return StringName("%s%d/%s" % [POINT_STORAGE_PREFIX, index, property_name])
+
+
+static func parse_point_storage_name(
+		property: StringName,
+		property_definitions: Array[Dictionary],
+) -> Dictionary:
+	var property_string := String(property)
+	if not property_string.begins_with(POINT_STORAGE_PREFIX):
+		return {}
+
+	var parts := property_string.trim_prefix(POINT_STORAGE_PREFIX).split("/", false, 1)
+	if parts.size() != 2 or not parts[0].is_valid_int():
+		return {}
+
+	var property_name := StringName(parts[1])
+	for definition in property_definitions:
+		if definition.get("name", StringName()) == property_name:
+			return {
+				"index": parts[0].to_int(),
+				"name": property_name,
+			}
+	return {}
+
+
+static func encode_point_storage_value(value: Variant) -> Variant:
+	return value.duplicate(true) if value is Dictionary else value
+
+
 static func create_point_snapshot_values(property_type: int) -> Variant:
 	match property_type:
 		TYPE_VECTOR2:
@@ -410,6 +483,136 @@ static func is_point_snapshot_container(values: Variant, property_type: int) -> 
 		TYPE_DICTIONARY:
 			return values is Array
 	return false
+
+
+static func encode_generated_function_snapshot(
+		points_x: Array[float],
+		points_y: Array[float],
+) -> Dictionary:
+	return {
+		FUNCTION_GENERATED_POINTS_X: PackedFloat64Array(points_x),
+		FUNCTION_GENERATED_POINTS_Y: PackedFloat64Array(points_y),
+	}
+
+
+static func encode_function_snapshot(
+		parameter_values: Dictionary,
+		points_x: Array[float],
+		points_y: Array[float],
+) -> Dictionary:
+	var snapshot := parameter_values.duplicate(true)
+	snapshot.merge(encode_generated_function_snapshot(points_x, points_y))
+	return snapshot
+
+
+static func decode_generated_function_snapshot(
+		snapshot: Dictionary,
+		current_points_x: Array[float],
+		current_points_y: Array[float],
+) -> Dictionary:
+	return {
+		"points_x": function_snapshot_float_array(
+			snapshot.get(
+				FUNCTION_GENERATED_POINTS_X,
+				PackedFloat64Array(current_points_x),
+			),
+		),
+		"points_y": function_snapshot_float_array(
+			snapshot.get(
+				FUNCTION_GENERATED_POINTS_Y,
+				PackedFloat64Array(current_points_y),
+			),
+		),
+	}
+
+
+static func function_snapshot_float_array(value: Variant) -> Array[float]:
+	var result: Array[float] = []
+	if value is Array or value is PackedFloat32Array or value is PackedFloat64Array:
+		for item in value:
+			result.append(float(item))
+	return result
+
+
+static func encode_editor_state_snapshot(
+		ease_type: int,
+		trans_type: int,
+		curve_mode: int,
+		from_start: bool,
+		reverse: bool,
+		invert: bool,
+		bezier_parameter_snapshot: Dictionary,
+		point_snapshot: Dictionary,
+		function_snapshot: Dictionary,
+) -> Dictionary:
+	return {
+		EDITOR_EASE_TYPE: ease_type,
+		EDITOR_TRANS_TYPE: trans_type,
+		EDITOR_CURVE_MODE: curve_mode,
+		EDITOR_FROM_START: from_start,
+		EDITOR_REVERSE: reverse,
+		EDITOR_INVERT: invert,
+		EDITOR_BEZIER_PARAMETER_SNAPSHOT: bezier_parameter_snapshot,
+		EDITOR_POINT_SNAPSHOT: point_snapshot,
+		EDITOR_FUNCTION_SNAPSHOT: function_snapshot,
+	}
+
+
+static func decode_editor_state_snapshot(
+		snapshot: Dictionary,
+		fallback: Dictionary,
+) -> Dictionary:
+	return {
+		EDITOR_EASE_TYPE: int(snapshot.get(
+			EDITOR_EASE_TYPE,
+			fallback.get(EDITOR_EASE_TYPE, 0),
+		)),
+		EDITOR_TRANS_TYPE: int(snapshot.get(
+			EDITOR_TRANS_TYPE,
+			fallback.get(EDITOR_TRANS_TYPE, 0),
+		)),
+		EDITOR_CURVE_MODE: int(snapshot.get(
+			EDITOR_CURVE_MODE,
+			fallback.get(EDITOR_CURVE_MODE, 0),
+		)),
+		EDITOR_FROM_START: bool(snapshot.get(
+			EDITOR_FROM_START,
+			fallback.get(EDITOR_FROM_START, false),
+		)),
+		EDITOR_REVERSE: bool(snapshot.get(
+			EDITOR_REVERSE,
+			fallback.get(EDITOR_REVERSE, false),
+		)),
+		EDITOR_INVERT: bool(snapshot.get(
+			EDITOR_INVERT,
+			fallback.get(EDITOR_INVERT, false),
+		)),
+		EDITOR_BEZIER_PARAMETER_SNAPSHOT: snapshot.get(
+			EDITOR_BEZIER_PARAMETER_SNAPSHOT,
+			fallback.get(EDITOR_BEZIER_PARAMETER_SNAPSHOT, {}),
+		),
+		EDITOR_POINT_SNAPSHOT: snapshot.get(
+			EDITOR_POINT_SNAPSHOT,
+			fallback.get(EDITOR_POINT_SNAPSHOT, {}),
+		),
+		EDITOR_FUNCTION_SNAPSHOT: snapshot.get(
+			EDITOR_FUNCTION_SNAPSHOT,
+			fallback.get(EDITOR_FUNCTION_SNAPSHOT, {}),
+		),
+		EDITOR_POINT_RESOURCE_IDS: snapshot.get(
+			EDITOR_POINT_RESOURCE_IDS,
+			fallback.get(EDITOR_POINT_RESOURCE_IDS, PackedInt64Array()),
+		),
+	}
+
+
+static func with_editor_point_resource_ids(
+		snapshot: Dictionary,
+		point_resource_ids: PackedInt64Array,
+) -> Dictionary:
+	var result := snapshot.duplicate(true)
+	result[EDITOR_POINT_RESOURCE_IDS] = point_resource_ids
+	return result
 
 
 static func validate_function_snapshot(snapshot: Dictionary) -> Dictionary:
