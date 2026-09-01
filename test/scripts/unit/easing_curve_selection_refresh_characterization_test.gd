@@ -33,6 +33,10 @@ func _curve() -> EasingCurve:
 	return curve
 
 
+func _view_state(curve: EasingCurve) -> Dictionary:
+	return curve._get_curve_editor_view_state()
+
+
 func _commit_add(
 		history: UndoRedo,
 		curve: EasingCurve,
@@ -203,9 +207,19 @@ func _test_resource_view_state_persistence() -> void:
 	editor_a.pan_offset = pan_a
 	editor_a.pan_changed.emit(pan_a)
 	var zoom_a := Vector2(editor_a.step_to_zoom(step_a), editor_a.step_to_zoom(step_a))
-	_expect(curve_a._last_slider_value == step_a, "Curve A did not store its zoom slider step")
-	_expect(curve_a._last_zoom.is_equal_approx(zoom_a), "Curve A did not store its zoom vector")
-	_expect(curve_a._last_pan == pan_a, "Curve A did not store its pan offset")
+	var view_state_a := _view_state(curve_a)
+	_expect(
+		int(view_state_a[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]) == step_a,
+		"Curve A did not store its zoom slider step",
+	)
+	_expect(
+		(view_state_a[EasingCurve.CURVE_EDITOR_VIEW_ZOOM] as Vector2).is_equal_approx(zoom_a),
+		"Curve A did not store its zoom vector",
+	)
+	_expect(
+		view_state_a[EasingCurve.CURVE_EDITOR_VIEW_PAN] == pan_a,
+		"Curve A did not store its pan offset",
+	)
 	section_a.free()
 
 	var refreshed_a := EDITOR_DRIVER.create_curve_editor(inspector, curve_a)
@@ -230,9 +244,19 @@ func _test_resource_view_state_persistence() -> void:
 	editor_b.pan_offset = pan_b
 	editor_b.pan_changed.emit(pan_b)
 	var zoom_b := Vector2(editor_b.step_to_zoom(step_b), editor_b.step_to_zoom(step_b))
-	_expect(curve_b._last_slider_value == step_b, "Curve B did not store its independent zoom slider step")
-	_expect(curve_b._last_zoom.is_equal_approx(zoom_b), "Curve B did not store its independent zoom vector")
-	_expect(curve_b._last_pan == pan_b, "Curve B did not store its independent pan offset")
+	var view_state_b := _view_state(curve_b)
+	_expect(
+		int(view_state_b[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]) == step_b,
+		"Curve B did not store its independent zoom slider step",
+	)
+	_expect(
+		(view_state_b[EasingCurve.CURVE_EDITOR_VIEW_ZOOM] as Vector2).is_equal_approx(zoom_b),
+		"Curve B did not store its independent zoom vector",
+	)
+	_expect(
+		view_state_b[EasingCurve.CURVE_EDITOR_VIEW_PAN] == pan_b,
+		"Curve B did not store its independent pan offset",
+	)
 	section_b.free()
 
 	var returned_a := EDITOR_DRIVER.create_curve_editor(inspector, curve_a)
@@ -242,7 +266,13 @@ func _test_resource_view_state_persistence() -> void:
 	_expect(editor_a._slider.slider.value == step_a, "Returning to Curve A restored the wrong slider value")
 	_expect(Vector2(editor_a._zoom_x, editor_a._zoom_y).is_equal_approx(zoom_a), "Returning to Curve A restored the wrong zoom vector")
 	_expect(editor_a.pan_offset == pan_a, "Returning to Curve A restored the wrong pan offset")
-	_expect(curve_b._last_slider_value == step_b and curve_b._last_zoom.is_equal_approx(zoom_b) and curve_b._last_pan == pan_b, "Returning to Curve A mutated Curve B's stored view state")
+	view_state_b = _view_state(curve_b)
+	_expect(
+		int(view_state_b[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]) == step_b
+		and (view_state_b[EasingCurve.CURVE_EDITOR_VIEW_ZOOM] as Vector2).is_equal_approx(zoom_b)
+		and view_state_b[EasingCurve.CURVE_EDITOR_VIEW_PAN] == pan_b,
+		"Returning to Curve A mutated Curve B's stored view state",
+	)
 	returned_a.free()
 
 
@@ -264,10 +294,20 @@ func _test_resource_view_state_is_transient() -> void:
 	editor.pan_offset = pan
 	editor.pan_changed.emit(pan)
 	var zoom := Vector2(editor.step_to_zoom(step), editor.step_to_zoom(step))
+	var view_state := _view_state(curve)
 
-	_expect(curve._last_slider_value == step, "Transient view-state characterization did not store the slider step")
-	_expect(curve._last_zoom.is_equal_approx(zoom), "Transient view-state characterization did not store zoom")
-	_expect(curve._last_pan == pan, "Transient view-state characterization did not store pan")
+	_expect(
+		int(view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]) == step,
+		"Transient view-state characterization did not store the slider step",
+	)
+	_expect(
+		(view_state[EasingCurve.CURVE_EDITOR_VIEW_ZOOM] as Vector2).is_equal_approx(zoom),
+		"Transient view-state characterization did not store zoom",
+	)
+	_expect(
+		view_state[EasingCurve.CURVE_EDITOR_VIEW_PAN] == pan,
+		"Transient view-state characterization did not store pan",
+	)
 	_expect(int(changed_counter["count"]) == 0, "Editor view-state updates unexpectedly emitted Resource.changed")
 	_expect(curve.get_editor_state_snapshot() == editor_snapshot_before, "Editor view state leaked into the Undo/editor-state snapshot")
 	section.free()
@@ -282,10 +322,20 @@ func _test_resource_view_state_is_transient() -> void:
 	) as EasingCurve
 	_expect(loaded != null, "Could not reload transient view-state characterization resource")
 	if loaded != null:
+		var loaded_view_state := _view_state(loaded)
 		_expect(
-			loaded._last_slider_value == EasingCurve.DEFAULT_SLIDER_VALUE,
+			is_equal_approx(
+				float(loaded_view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]),
+				EasingCurve.DEFAULT_SLIDER_VALUE,
+			),
 			"Slider view state unexpectedly persisted across resource reload",
 		)
-		_expect(loaded._last_zoom == Vector2.ONE, "Zoom view state unexpectedly persisted across resource reload")
-		_expect(loaded._last_pan == Vector2.ZERO, "Pan view state unexpectedly persisted across resource reload")
+		_expect(
+			loaded_view_state[EasingCurve.CURVE_EDITOR_VIEW_ZOOM] == Vector2.ONE,
+			"Zoom view state unexpectedly persisted across resource reload",
+		)
+		_expect(
+			loaded_view_state[EasingCurve.CURVE_EDITOR_VIEW_PAN] == Vector2.ZERO,
+			"Pan view state unexpectedly persisted across resource reload",
+		)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))

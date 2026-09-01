@@ -61,6 +61,9 @@ const PRESET_GEOMETRY_FACTORY := preload(
 const SNAPSHOT_CODEC := preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_snapshot_codec.gd"
 )
+const EDITOR_VIEW_STATE := preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_editor_view_state.gd"
+)
 const COMPILED_BEZIER_SEGMENTS := preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_compiled_segments.gd"
 )
@@ -168,6 +171,9 @@ const FUNCTION_SNAPSHOT_PROPERTY := SNAPSHOT_CODEC.FUNCTION_SNAPSHOT_PROPERTY
 const EDITOR_STATE_SNAPSHOT_PROPERTY := SNAPSHOT_CODEC.EDITOR_STATE_SNAPSHOT_PROPERTY
 const POINT_STORAGE_COUNT := SNAPSHOT_CODEC.POINT_STORAGE_COUNT
 const POINT_STORAGE_PREFIX := SNAPSHOT_CODEC.POINT_STORAGE_PREFIX
+const CURVE_EDITOR_VIEW_SLIDER_VALUE := EDITOR_VIEW_STATE.SLIDER_VALUE
+const CURVE_EDITOR_VIEW_ZOOM := EDITOR_VIEW_STATE.ZOOM
+const CURVE_EDITOR_VIEW_PAN := EDITOR_VIEW_STATE.PAN
 const POINT_EDITOR_KIND_BOOL := &"bool"
 const POINT_EDITOR_KIND_VECTOR2 := &"vector2"
 const POINT_EDITOR_KIND_HANDLE_MODE := &"handle_mode"
@@ -449,10 +455,8 @@ static func get_point_property_editor_kind(
 ) -> StringName:
 	return StringName(get_point_property_definition(property_name).get("editor_kind", StringName()))
 
-## Zoom slider variables
-var _last_slider_value: float = DEFAULT_SLIDER_VALUE
-var _last_zoom := Vector2(1, 1)
-var _last_pan := Vector2.ZERO
+## Transient per-resource Curve Editor view state.
+var _editor_view_state := EDITOR_VIEW_STATE.new(DEFAULT_SLIDER_VALUE)
 var _last_solved_t := 0.0
 var _points: Array[EasingCurvePoint] = []
 var _connected_points: Array[EasingCurvePoint] = []
@@ -2345,16 +2349,20 @@ func derivative(func_ref: Callable, x: float, eps := 0.0001) -> float:
 	return (func_ref.call(x + eps) - func_ref.call(x - eps)) / (2.0 * eps)
 
 
+func _get_curve_editor_view_state() -> Dictionary:
+	return _editor_view_state.to_dictionary()
+
+
 func _on_curve_editor_slider_value_changed(slider_value: float) -> void:
-	_last_slider_value = slider_value
+	_editor_view_state.slider_value = slider_value
 
 
 func _on_curve_editor_zoom_changed(zoom: Vector2) -> void:
-	_last_zoom = zoom
+	_editor_view_state.zoom = zoom
 
 
 func _on_curve_editor_pan_changed(pan: Vector2) -> void:
-	_last_pan = pan
+	_editor_view_state.pan = pan
 
 
 func _generate_irregular() -> Dictionary:

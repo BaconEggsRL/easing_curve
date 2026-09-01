@@ -83,6 +83,10 @@ func _point_view(editor: EasingCurveEditor, point: EasingCurvePoint) -> Vector2:
 	return editor.get_view_pos(point.position)
 
 
+func _view_state(curve: EasingCurve) -> Dictionary:
+	return curve._get_curve_editor_view_state()
+
+
 func _handles_are_opposite_in_display_space(point: EasingCurvePoint) -> bool:
 	var left_delta := (point.left_control_point - point.position) * point.handle_display_scale
 	var right_delta := (point.right_control_point - point.position) * point.handle_display_scale
@@ -204,16 +208,21 @@ func _test_view_state_update_ownership() -> void:
 	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, zoom_anchor, true))
 	var expected_step := mini(zoom_step_before + 1, EasingCurve.ZOOM_STEPS)
 	var expected_zoom := editor.step_to_zoom(expected_step)
+	var view_state := _view_state(curve)
 	_expect(
-		int(curve._last_slider_value) == expected_step,
+		int(view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]) == expected_step,
 		"Wheel zoom did not update the owning EasingCurve slider view state",
 	)
 	_expect(
-		curve._last_zoom.is_equal_approx(Vector2(expected_zoom, expected_zoom)),
+		(view_state[EasingCurve.CURVE_EDITOR_VIEW_ZOOM] as Vector2).is_equal_approx(
+			Vector2(expected_zoom, expected_zoom)
+		),
 		"Wheel zoom did not update the owning EasingCurve zoom view state",
 	)
 	_expect(
-		curve._last_pan.is_equal_approx(editor.pan_offset),
+		(view_state[EasingCurve.CURVE_EDITOR_VIEW_PAN] as Vector2).is_equal_approx(
+			editor.pan_offset
+		),
 		"Pointer-anchored wheel zoom did not publish its pan adjustment to the owning EasingCurve",
 	)
 
@@ -223,17 +232,23 @@ func _test_view_state_update_ownership() -> void:
 	editor._gui_input(_button(MOUSE_BUTTON_MIDDLE, pan_start, true))
 	editor._gui_input(_motion(pan_end, MOUSE_BUTTON_MASK_MIDDLE))
 	editor._gui_input(_button(MOUSE_BUTTON_MIDDLE, pan_end, false))
+	view_state = _view_state(curve)
+	var stored_pan: Vector2 = view_state[EasingCurve.CURVE_EDITOR_VIEW_PAN]
 	_expect(
-		curve._last_pan.is_equal_approx(pan_before + (pan_end - pan_start))
-		and curve._last_pan.is_equal_approx(editor.pan_offset),
+		stored_pan.is_equal_approx(pan_before + (pan_end - pan_start))
+		and stored_pan.is_equal_approx(editor.pan_offset),
 		"Middle-mouse pan did not update the owning EasingCurve pan view state",
 	)
 
 	var other_curve := EasingCurve.new()
+	var other_view_state := _view_state(other_curve)
 	_expect(
-		is_equal_approx(other_curve._last_slider_value, EasingCurve.DEFAULT_SLIDER_VALUE)
-		and other_curve._last_zoom == Vector2.ONE
-		and other_curve._last_pan == Vector2.ZERO,
+		is_equal_approx(
+			float(other_view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]),
+			EasingCurve.DEFAULT_SLIDER_VALUE,
+		)
+		and other_view_state[EasingCurve.CURVE_EDITOR_VIEW_ZOOM] == Vector2.ONE
+		and other_view_state[EasingCurve.CURVE_EDITOR_VIEW_PAN] == Vector2.ZERO,
 		"Graph navigation state leaked from one EasingCurve resource to another",
 	)
 
@@ -250,9 +265,9 @@ func _test_view_state_restore_and_rebuild_order() -> void:
 	)
 	var pre_slider_zoom := Vector2(3.0, 2.0)
 	var saved_pan := Vector2(37.0, -21.0)
-	curve._last_slider_value = saved_step
-	curve._last_zoom = pre_slider_zoom
-	curve._last_pan = saved_pan
+	curve._on_curve_editor_slider_value_changed(saved_step)
+	curve._on_curve_editor_zoom_changed(pre_slider_zoom)
+	curve._on_curve_editor_pan_changed(saved_pan)
 
 	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
 	var content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
@@ -260,6 +275,7 @@ func _test_view_state_restore_and_rebuild_order() -> void:
 	var editor := EDITOR_DRIVER.curve_editor(inspector)
 	var expected_zoom_value := editor.step_to_zoom(saved_step)
 	var expected_zoom := Vector2(expected_zoom_value, expected_zoom_value)
+	var restored_view_state := _view_state(curve)
 
 	_expect(
 		editor._zoom_step == saved_step
@@ -267,14 +283,16 @@ func _test_view_state_restore_and_rebuild_order() -> void:
 		and is_equal_approx(editor._zoom_y, expected_zoom_value),
 		"Inspector rebuild no longer restores zoom from the saved slider step after passive zoom restore",
 	)
+	var restored_zoom: Vector2 = restored_view_state[EasingCurve.CURVE_EDITOR_VIEW_ZOOM]
 	_expect(
-		curve._last_zoom.is_equal_approx(expected_zoom)
-		and not curve._last_zoom.is_equal_approx(pre_slider_zoom),
+		restored_zoom.is_equal_approx(expected_zoom)
+		and not restored_zoom.is_equal_approx(pre_slider_zoom),
 		"Inspector slider initialization no longer re-publishes the canonical slider-derived zoom",
 	)
+	var restored_pan: Vector2 = restored_view_state[EasingCurve.CURVE_EDITOR_VIEW_PAN]
 	_expect(
 		editor.pan_offset.is_equal_approx(saved_pan)
-		and curve._last_pan.is_equal_approx(saved_pan),
+		and restored_pan.is_equal_approx(saved_pan),
 		"Inspector rebuild no longer restores pan without changing the stored pan value",
 	)
 
@@ -285,9 +303,12 @@ func _test_view_state_restore_and_rebuild_order() -> void:
 	editor._gui_input(_button(MOUSE_BUTTON_MIDDLE, pan_start, true))
 	editor._gui_input(_motion(pan_end, MOUSE_BUTTON_MASK_MIDDLE))
 	editor._gui_input(_button(MOUSE_BUTTON_MIDDLE, pan_end, false))
-	var persisted_slider := curve._last_slider_value
-	var persisted_zoom := curve._last_zoom
-	var persisted_pan := curve._last_pan
+	var persisted_view_state := _view_state(curve)
+	var persisted_slider: float = persisted_view_state[
+		EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE
+	]
+	var persisted_zoom: Vector2 = persisted_view_state[EasingCurve.CURVE_EDITOR_VIEW_ZOOM]
+	var persisted_pan: Vector2 = persisted_view_state[EasingCurve.CURVE_EDITOR_VIEW_PAN]
 
 	get_root().remove_child(content)
 	content.free()
@@ -552,8 +573,12 @@ func _test_zoom_behavioral_invariants() -> void:
 	var default_step := int(EasingCurve.DEFAULT_SLIDER_VALUE)
 	var default_zoom := editor.step_to_zoom(default_step)
 
+	var default_view_state := _view_state(curve)
 	_expect(
-		curve._last_slider_value == EasingCurve.DEFAULT_SLIDER_VALUE,
+		is_equal_approx(
+			float(default_view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]),
+			EasingCurve.DEFAULT_SLIDER_VALUE,
+		),
 		"New EasingCurve resource no longer starts at the canonical slider value",
 	)
 

@@ -1061,7 +1061,7 @@ func _apply_zoom_from_step():
 	var zoom := step_to_zoom(_zoom_step)
 	_zoom_x = zoom
 	_zoom_y = zoom
-	_curve._last_slider_value = _zoom_step
+	slider_changed.emit(_zoom_step)
 	_slider.slider.value = _zoom_step
 	queue_redraw()
 	zoom_changed.emit(Vector2(zoom, zoom))

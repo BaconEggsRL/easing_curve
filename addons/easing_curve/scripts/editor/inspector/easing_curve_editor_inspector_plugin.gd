@@ -824,11 +824,15 @@ func handle_easing_curve_editor(object) -> Control:
 		easing_curve_editor.set_curve(object)
 		_apply_autofit_render_state()
 
-		# Restore last UI state
-		if object._last_zoom:
-			easing_curve_editor.set_zoom(object._last_zoom)
-		if object._last_pan:
-			easing_curve_editor.set_pan(object._last_pan)
+		# Restore the Resource-owned transient Curve Editor view state. The later
+		# slider initialization intentionally remains the canonical zoom source.
+		var view_state: Dictionary = object._get_curve_editor_view_state()
+		easing_curve_editor.set_zoom(
+			view_state[EasingCurve.CURVE_EDITOR_VIEW_ZOOM]
+		)
+		easing_curve_editor.set_pan(
+			view_state[EasingCurve.CURVE_EDITOR_VIEW_PAN]
+		)
 
 		# Connect curve editor signals
 		easing_curve_editor.slider_changed.connect(object._on_curve_editor_slider_value_changed)
@@ -901,7 +905,9 @@ func handle_easing_curve_editor(object) -> Control:
 		zoom_row.add_child(zoom_slider_container)
 
 		easing_curve_editor.set_slider_container(zoom_slider_container)
-		easing_curve_editor.set_slider_value(object._last_slider_value)
+		easing_curve_editor.set_slider_value(
+			view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]
+		)
 		if _consume_initial_autofit_for_loaded_resource(object):
 			_queue_autofit_curve_editor()
 
