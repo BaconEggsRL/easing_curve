@@ -846,7 +846,8 @@ func _move_point(from_index: int, to_index: int) -> void:
 	_select_reordered_point(moved_point)
 	var selection_after := _capture_point_selection_state()
 	var point_resource_ids_after := curve._get_editor_point_resource_ids()
-	_commit_curve_action(
+	_point_edit_transaction_controller.commit_applied_action(
+		curve,
 		"Reorder Easing Curve Points",
 		_point_edit_transaction_controller.create_action_context(before)
 			.with_selection(
@@ -1613,17 +1614,6 @@ func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
 	_point_edit_transaction_controller.finish_point_edit(curve, point_order)
 
 
-func _commit_curve_action(
-		action_name: String,
-		context,
-) -> bool:
-	return _point_edit_transaction_controller.commit_applied_action(
-		curve,
-		action_name,
-		context,
-	)
-
-
 func _connect_point_input_drag_signals(input: EditorSpinSlider) -> void:
 	input.grabbed.connect(_on_point_input_grabbed.bind(input))
 	input.ungrabbed.connect(_on_point_input_ungrabbed.bind(input))
@@ -1790,10 +1780,6 @@ func _apply_point_property_change(
 	)
 
 
-func _point_action_name(property_name: StringName) -> String:
-	return PointEditTransactionController.point_action_name(property_name)
-
-
 func _add_point(
 	point: EasingCurvePoint,
 	selection_before: Dictionary = {},
@@ -1822,7 +1808,8 @@ func _add_point(
 			"property_name": StringName(),
 		}
 	)
-	_commit_curve_action(
+	_point_edit_transaction_controller.commit_applied_action(
+		curve,
 		"Add Easing Curve Point",
 		_point_edit_transaction_controller.create_action_context(before).with_selection(
 			Callable(self, "_restore_point_selection_state") if not selection_before.is_empty() else Callable(),
@@ -1842,7 +1829,8 @@ func _remove_point(point: EasingCurvePoint) -> void:
 	updated_points.remove_at(point_index)
 	curve.set_point_snapshot(curve.make_point_snapshot(updated_points))
 	var selection_after := _capture_point_selection_state()
-	_commit_curve_action(
+	_point_edit_transaction_controller.commit_applied_action(
+		curve,
 		"Remove Easing Curve Point",
 		_point_edit_transaction_controller.create_action_context(before).with_selection(
 			Callable(self, "_restore_point_selection_state"),
