@@ -220,8 +220,8 @@ func _test_graph_point_adds() -> void:
 	var takeover_editor: EasingCurveEditor = takeover_context.editor
 	var takeover_inspector: Object = takeover_context.inspector
 
-	takeover_inspector.call(
-		"_on_curve_editor_point_add_requested",
+	EDITOR_DRIVER.add_point_from_graph(
+		takeover_inspector,
 		EasingCurvePoint.new(Vector2(1.0, 0.8)),
 	)
 
@@ -245,5 +245,5 @@ func _expect_selected_point(
 	label: String,
 ) -> void:
 	_expect(editor.selected_index == point_index, "%s did not select the added point in the curve editor" % label)
-	_expect(EDITOR_DRIVER.selected_point_index(inspector) == point_index, "%s did not store the added point index" % label)
-	_expect(EDITOR_DRIVER.selected_point_resource_id(inspector) == curve.points[point_index].get_instance_id(), "%s did not store the added point resource" % label)
+	_expect(int(inspector.get("_selected_point_index")) == point_index, "%s did not store the added point index" % label)
+	_expect(int(inspector.get("_selected_point_resource_id")) == curve.points[point_index].get_instance_id(), "%s did not store the added point resource" % label)

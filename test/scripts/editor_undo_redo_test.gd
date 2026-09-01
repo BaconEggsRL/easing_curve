@@ -244,18 +244,14 @@ func _test_topology_selection_undo_redo() -> void:
 	editor.selected_index = -1
 
 	var add_a_before := EDITOR_UNDO.capture_state(curve)
-	var add_a_before_selection: Dictionary = inspector.call(
-		"_capture_point_selection_state"
-	)
+	var add_a_before_selection: Dictionary = EDITOR_DRIVER.capture_point_selection(inspector)
 	var point_a := EasingCurvePoint.new(Vector2(0.33, 0.25))
 	var add_a_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	add_a_points.append(point_a)
 	var point_a_index := add_a_points.find(point_a)
 	curve.set_point_snapshot(curve.make_point_snapshot(add_a_points))
 	EDITOR_DRIVER.select_point(inspector, curve.points[point_a_index])
-	var add_a_after_selection: Dictionary = inspector.call(
-		"_capture_point_selection_state"
-	)
+	var add_a_after_selection: Dictionary = EDITOR_DRIVER.capture_point_selection(inspector)
 	_expect(
 		EDITOR_UNDO.commit_applied_action(
 			history,
@@ -272,25 +268,21 @@ func _test_topology_selection_undo_redo() -> void:
 	_expect(editor.selected_index == point_a_index, "Add A did not select its point")
 	history.undo()
 	_expect(editor.selected_index == -1, "Undo Add A did not restore no graph selection")
-	_expect(EDITOR_DRIVER.selected_point_index(inspector) == -1, "Undo Add A did not restore no list selection")
+	_expect(int(inspector.get("_selected_point_index")) == -1, "Undo Add A did not restore no list selection")
 	history.redo()
 	point_a_index = int(add_a_after_selection.point_index)
 	_expect(editor.selected_index == point_a_index, "Redo Add A did not restore graph selection")
-	_expect(EDITOR_DRIVER.selected_point_index(inspector) == point_a_index, "Redo Add A did not restore list selection")
+	_expect(int(inspector.get("_selected_point_index")) == point_a_index, "Redo Add A did not restore list selection")
 
 	var add_b_before := EDITOR_UNDO.capture_state(curve)
-	var add_b_before_selection: Dictionary = inspector.call(
-		"_capture_point_selection_state"
-	)
+	var add_b_before_selection: Dictionary = EDITOR_DRIVER.capture_point_selection(inspector)
 	var point_b := EasingCurvePoint.new(Vector2(0.66, 0.75))
 	var add_b_points: Array[EasingCurvePoint] = curve.points.duplicate()
 	add_b_points.append(point_b)
 	var point_b_index := add_b_points.find(point_b)
 	curve.set_point_snapshot(curve.make_point_snapshot(add_b_points))
 	EDITOR_DRIVER.select_point(inspector, curve.points[point_b_index])
-	var add_b_after_selection: Dictionary = inspector.call(
-		"_capture_point_selection_state"
-	)
+	var add_b_after_selection: Dictionary = EDITOR_DRIVER.capture_point_selection(inspector)
 	_expect(
 		EDITOR_UNDO.commit_applied_action(
 			history,
@@ -313,7 +305,7 @@ func _test_topology_selection_undo_redo() -> void:
 	history.undo()
 	history.undo()
 	_expect(editor.selected_index == -1, "Undoing both adds did not restore no graph selection")
-	_expect(EDITOR_DRIVER.selected_point_index(inspector) == -1, "Undoing both adds did not restore no list selection")
+	_expect(int(inspector.get("_selected_point_index")) == -1, "Undoing both adds did not restore no list selection")
 	history.redo()
 	_expect(editor.selected_index == point_a_index, "Redo Add A after no selection did not restore A")
 	history.redo()

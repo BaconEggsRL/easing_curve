@@ -34,6 +34,10 @@ static func curve_editor(inspector: Object) -> EasingCurveEditor:
 	return inspector.get("easing_curve_editor") as EasingCurveEditor
 
 
+static func request_autofit(inspector: Object) -> void:
+	inspector.call("_autofit_curve_editor")
+
+
 static func select_point_property(
 	inspector: Object,
 	property_header: PanelContainer,
@@ -53,22 +57,6 @@ static func clear_point_selection(inspector: Object) -> void:
 
 static func capture_point_selection(inspector: Object) -> Dictionary:
 	return inspector.call("_capture_point_selection_state")
-
-
-static func selected_point_index(inspector: Object) -> int:
-	return int(inspector.get("_selected_point_index"))
-
-
-static func selected_point_resource_id(inspector: Object) -> int:
-	return int(inspector.get("_selected_point_resource_id"))
-
-
-static func selected_point_property_name(inspector: Object) -> StringName:
-	return StringName(inspector.get("_selected_point_property_name"))
-
-
-static func selected_point_property_header(inspector: Object) -> PanelContainer:
-	return inspector.get("_selected_point_property_header") as PanelContainer
 
 
 static func change_point_property(
@@ -118,14 +106,6 @@ static func move_point_up(inspector: Object, point_index: int) -> void:
 
 static func move_point_down(inspector: Object, point_index: int) -> void:
 	inspector.call("_move_point_down", point_index)
-
-
-static func is_point_property_value_compatible(
-	inspector: Object,
-	property_name: StringName,
-	value: Variant,
-) -> bool:
-	return bool(inspector.call("_is_point_property_value_compatible", property_name, value))
 
 
 static func paste_point_property_value(

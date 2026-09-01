@@ -200,7 +200,7 @@ func _test_autofit_waits_for_function_toolbar_layout() -> void:
 
 	curve.trans_type = EasingCurve.TRANS.ELASTIC
 	editor.size = Vector2(600.0, 300.0)
-	inspector.call("_autofit_curve_editor")
+	EDITOR_DRIVER.request_autofit(inspector)
 	await process_frame
 	await process_frame
 	await process_frame

@@ -404,13 +404,13 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 	history.undo()
 	_expect(curve.points[1] == selected, "Move Down Undo did not return the selected Resource to P2")
 	_expect(editor.selected_index == 1, "Move Down Undo did not resolve the graph index from the selected Resource")
-	_expect(EDITOR_DRIVER.selected_point_index(inspector) == 1, "Move Down Undo retained a stale Inspector index")
-	_expect(EDITOR_DRIVER.selected_point_resource_id(inspector) == selected.get_instance_id(), "Move Down Undo changed the selected Resource")
-	_expect(EDITOR_DRIVER.selected_point_property_name(inspector) == &"position", "Move Down Undo lost the selected property")
+	_expect(int(inspector.get("_selected_point_index")) == 1, "Move Down Undo retained a stale Inspector index")
+	_expect(int(inspector.get("_selected_point_resource_id")) == selected.get_instance_id(), "Move Down Undo changed the selected Resource")
+	_expect(StringName(inspector.get("_selected_point_property_name")) == &"position", "Move Down Undo lost the selected property")
 	history.redo()
 	_expect(curve.points[2] == selected, "Move Down Redo did not return the selected Resource to P3")
 	_expect(editor.selected_index == 2, "Move Down Redo did not resolve the graph index from the selected Resource")
-	_expect(EDITOR_DRIVER.selected_point_index(inspector) == 2, "Move Down Redo retained a stale Inspector index")
+	_expect(int(inspector.get("_selected_point_index")) == 2, "Move Down Redo retained a stale Inspector index")
 
 	var drag_before := EDITOR_UNDO.capture_state(curve)
 	var drag_selection_before := EDITOR_DRIVER.capture_point_selection(inspector)
@@ -433,10 +433,10 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 	_expect(curve.points[0] == selected, "Drag reorder did not move the selected Resource")
 	history.undo()
 	_expect(curve.points[2] == selected, "Drag reorder Undo did not restore the selected Resource identity")
-	_expect(editor.selected_index == 2 and EDITOR_DRIVER.selected_point_index(inspector) == 2, "Drag reorder Undo did not synchronize graph and Inspector selection")
+	_expect(editor.selected_index == 2 and int(inspector.get("_selected_point_index")) == 2, "Drag reorder Undo did not synchronize graph and Inspector selection")
 	history.redo()
 	_expect(curve.points[0] == selected, "Drag reorder Redo did not restore the selected Resource identity")
-	_expect(editor.selected_index == 0 and EDITOR_DRIVER.selected_point_index(inspector) == 0, "Drag reorder Redo did not synchronize graph and Inspector selection")
+	_expect(editor.selected_index == 0 and int(inspector.get("_selected_point_index")) == 0, "Drag reorder Redo did not synchronize graph and Inspector selection")
 
 	history.clear_history(false)
 	history.free()
@@ -533,10 +533,10 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	left_click.button_index = MOUSE_BUTTON_LEFT
 	left_click.pressed = true
 	handle_header.emit_signal(&"gui_input", left_click)
-	_expect(EDITOR_DRIVER.selected_point_property_header(inspector) == handle_header, "Clicking Handle Mode did not select its property cell")
-	_expect(EDITOR_DRIVER.selected_point_property_name(inspector) == &"handle_mode", "Handle Mode selection did not record its property name")
+	_expect(inspector.get("_selected_point_property_header") as PanelContainer == handle_header, "Clicking Handle Mode did not select its property cell")
+	_expect(StringName(inspector.get("_selected_point_property_name")) == &"handle_mode", "Handle Mode selection did not record its property name")
 	target_handle_header.emit_signal(&"gui_input", left_click)
-	_expect(EDITOR_DRIVER.selected_point_property_header(inspector) == target_handle_header, "Selecting another Handle Mode cell did not replace the property selection")
+	_expect(inspector.get("_selected_point_property_header") as PanelContainer == target_handle_header, "Selecting another Handle Mode cell did not replace the property selection")
 
 	for mode in [
 		EasingCurvePoint.HandleMode.LINEAR,
@@ -546,17 +546,17 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	]:
 		source.handle_mode = mode
 		target.handle_mode = EasingCurvePoint.HandleMode.FREE
-		_expect(EDITOR_DRIVER.is_point_property_value_compatible(inspector, &"handle_mode", mode), "Handle Mode copy value was not accepted for %s" % EasingCurvePoint.HandleMode.keys()[mode])
+		_expect(bool(inspector.call("_is_point_property_value_compatible", &"handle_mode", mode)), "Handle Mode copy value was not accepted for %s" % EasingCurvePoint.HandleMode.keys()[mode])
 		EDITOR_DRIVER.paste_point_property_value(inspector, 2, &"handle_mode", mode)
 		_expect(target.handle_mode == mode, "Handle Mode paste did not apply %s" % EasingCurvePoint.HandleMode.keys()[mode])
-	_expect(EDITOR_DRIVER.is_point_property_value_compatible(inspector, &"position", Vector2(0.25, 0.75)), "Position paste no longer accepts Vector2 values")
-	_expect(not EDITOR_DRIVER.is_point_property_value_compatible(inspector, &"handle_mode", 99), "Handle Mode paste accepted an out-of-range integer")
+	_expect(bool(inspector.call("_is_point_property_value_compatible", &"position", Vector2(0.25, 0.75))), "Position paste no longer accepts Vector2 values")
+	_expect(not bool(inspector.call("_is_point_property_value_compatible", &"handle_mode", 99)), "Handle Mode paste accepted an out-of-range integer")
 
 	var before := EDITOR_UNDO.capture_state(curve)
 	source.handle_mode = EasingCurvePoint.HandleMode.LINEAR
 	target.handle_mode = EasingCurvePoint.HandleMode.MIRRORED
-	inspector.call(
-		"_apply_pasted_point_property_value",
+	EDITOR_DRIVER.paste_point_property_value(
+		inspector,
 		2,
 		&"handle_mode",
 		source.handle_mode,
