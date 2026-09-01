@@ -235,7 +235,9 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	var toolbar: GridContainer = editor.get("_point_toolbar")
 	var toolbar_panel: VBoxContainer = editor.get("_point_toolbar_panel")
 	var toolbar_height := toolbar.custom_minimum_size.y
+	editor.size = Vector2(600.0, 300.0)
 	var bezier_minimum_size: Vector2 = editor.call("_get_minimum_size")
+	var bezier_graph_rect: Rect2 = editor.call("_get_graph_view_rect")
 	var up_connections := editor.point_move_up_requested.get_connections()
 	var down_connections := editor.point_move_down_requested.get_connections()
 	_expect(
@@ -319,19 +321,24 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	curve.curve_mode = EasingCurve.CurveMode.FUNCTION
 	editor.call("_update_point_toolbar")
 	var function_minimum_size: Vector2 = editor.call("_get_minimum_size")
+	var function_graph_rect: Rect2 = editor.call("_get_graph_view_rect")
 	_expect(move_left.disabled and move_right.disabled, "Graph reorder buttons remained active in Function mode")
+	_expect(
+		function_minimum_size.is_equal_approx(bezier_minimum_size),
+		"Switching between Bezier and Function mode changed the Easing Curve editor section size",
+	)
 	# Follow the production comparison switch without changing it in the test.
 	if editor.hide_selection_toolbar_for_functions:
 		_expect(not toolbar_panel.visible, "Point-selection toolbar panel remained visible in Function mode")
 		_expect(
-			function_minimum_size.y < bezier_minimum_size.y,
-			"Function mode did not reclaim the point-selection toolbar spacing",
+			function_graph_rect.size.y > bezier_graph_rect.size.y,
+			"Hidden Function toolbar did not give its vertical space to the graph",
 		)
 	else:
 		_expect(toolbar_panel.visible, "Point-selection toolbar panel was hidden with Function-mode hiding disabled")
 		_expect(
-			is_equal_approx(function_minimum_size.y, bezier_minimum_size.y),
-			"Function mode reclaimed toolbar spacing with Function-mode hiding disabled",
+			is_equal_approx(function_graph_rect.size.y, bezier_graph_rect.size.y),
+			"Function graph height changed while the toolbar remained visible",
 		)
 	_expect(is_equal_approx(toolbar.custom_minimum_size.y, toolbar_height), "Function mode changed the toolbar's internal row height")
 	var order_before_function_request: Array[EasingCurvePoint] = curve.points.duplicate()
