@@ -16,6 +16,7 @@ func _init() -> void:
 	_test_legacy_resources_and_nested_changes()
 	_test_bezier_point_operations()
 	_test_monotonic_bezier_solver_equivalence()
+	_test_compiled_bezier_segment_lookup()
 	_test_resource_free_point_snapshots()
 	_test_parameter_drag_transactions()
 	_test_preset_parameter_notification_counts()
@@ -197,6 +198,134 @@ func _test_monotonic_bezier_solver_equivalence() -> void:
 				absf(fast_y - diagnostic_y) <= 0.000001,
 				"Allocation-free segment sampling changed Bézier output at x=%f" % x,
 			)
+
+
+func _test_compiled_bezier_segment_lookup() -> void:
+	var ordered_curve := EasingCurve.new()
+	ordered_curve.points = [
+		EasingCurvePoint.new(Vector2(0.0, 0.0)),
+		EasingCurvePoint.new(Vector2(0.2, 0.75)),
+		EasingCurvePoint.new(Vector2(0.55, 0.15)),
+		EasingCurvePoint.new(Vector2(0.8, 0.9)),
+		EasingCurvePoint.new(Vector2(1.0, 1.0)),
+	]
+	for i in range(ordered_curve.points.size() - 1):
+		var a := ordered_curve.points[i]
+		var b := ordered_curve.points[i + 1]
+		var width := b.position.x - a.position.x
+		a.right_control_point = a.position + Vector2(width * 0.7, 0.1)
+		b.left_control_point = b.position - Vector2(width * 0.6, 0.08)
+
+	var ordered_points: Array[EasingCurvePoint] = ordered_curve.points
+	for step in range(65):
+		var x := float(step) / 64.0
+		var expected := EasingCurve.sample_bezier_points(ordered_points, x)
+		_expect(
+			is_equal_approx(ordered_curve.sample(x), expected),
+			"Compiled segment lookup changed ordered output at x=%f" % x,
+		)
+	for x: float in [0.93, 0.04, 0.71, 0.21, 0.82, 0.39, 0.99, 0.01]:
+		_expect(
+			is_equal_approx(
+				ordered_curve.sample(x),
+				EasingCurve.sample_bezier_points(ordered_points, x),
+			),
+			"Compiled binary lookup changed non-sequential output at x=%f" % x,
+		)
+	_expect(
+		ordered_curve._compiled_segments_binary_search_safe,
+		"Strictly ordered segments did not enable compiled binary lookup",
+	)
+
+	ordered_curve.sample(0.8)
+	_expect(
+		ordered_curve.get_last_solved_t() >= 1.0 - 0.000001,
+		"Compiled lookup changed first-segment-wins behavior at a shared boundary",
+	)
+	var compiled_revision := ordered_curve._compiled_segment_revision
+	var before_control_edit := ordered_curve.sample(0.1)
+	ordered_curve.points[0].right_control_point = Vector2(0.02, 0.95)
+	var after_control_edit := ordered_curve.sample(0.1)
+	_expect(
+		ordered_curve._compiled_segment_revision > compiled_revision
+		and not is_equal_approx(after_control_edit, before_control_edit),
+		"Point geometry edits did not invalidate the compiled segment cache",
+	)
+	var preview_snapshot := ordered_curve.get_point_snapshot()
+	var preview_positions: PackedVector2Array = preview_snapshot.positions
+	var preview_position := preview_positions[1]
+	preview_position.y = 0.05
+	preview_positions[1] = preview_position
+	preview_snapshot.positions = preview_positions
+	preview_snapshot.changing = true
+	compiled_revision = ordered_curve._compiled_segment_revision
+	ordered_curve.set_point_snapshot(preview_snapshot)
+	var preview_expected := EasingCurve.sample_bezier_points(ordered_points, 0.18)
+	_expect(
+		is_equal_approx(ordered_curve.sample(0.18), preview_expected)
+		and ordered_curve._compiled_segment_revision > compiled_revision,
+		"Notification-suppressed preview geometry reused stale compiled segments",
+	)
+
+	var duplicate_a := EasingCurvePoint.new(Vector2(0.5, 0.2))
+	var duplicate_b := EasingCurvePoint.new(Vector2(0.5, 0.8))
+	var duplicate_curve := EasingCurve.new()
+	duplicate_curve.points = [
+		EasingCurvePoint.new(Vector2.ZERO),
+		duplicate_a,
+		duplicate_b,
+		EasingCurvePoint.new(Vector2.ONE),
+	]
+	var duplicate_expected := EasingCurve.sample_bezier_points(duplicate_curve.points, 0.5)
+	_expect(
+		is_equal_approx(duplicate_curve.sample(0.5), duplicate_expected)
+		and not duplicate_curve._compiled_segments_binary_search_safe,
+		"Duplicate-X segments did not retain linear first-match sampling",
+	)
+
+	var leading_vertical_curve := EasingCurve.new()
+	leading_vertical_curve.points = [
+		duplicate_a,
+		duplicate_b,
+		EasingCurvePoint.new(Vector2.ONE),
+	]
+	_expect(
+		is_equal_approx(leading_vertical_curve.sample(0.5), duplicate_b.position.y),
+		"Leading vertical segment no longer returns the following point's Y value",
+	)
+
+	var overlapping_curve := EasingCurve.new()
+	var overlapping_points: Array[EasingCurvePoint] = [
+		EasingCurvePoint.new(Vector2(0.0, 0.0)),
+		EasingCurvePoint.new(Vector2(0.8, 0.25)),
+		EasingCurvePoint.new(Vector2(0.2, 0.85)),
+		EasingCurvePoint.new(Vector2(1.0, 1.0)),
+	]
+	overlapping_curve.points = overlapping_points
+	for x: float in [0.2, 0.35, 0.6, 0.8]:
+		_expect(
+			is_equal_approx(
+				overlapping_curve.sample(x),
+				EasingCurve.sample_bezier_points(overlapping_points, x),
+			),
+			"Overlapping segments changed first-match output at x=%f" % x,
+		)
+	_expect(
+		not overlapping_curve._compiled_segments_binary_search_safe,
+		"Overlapping or reversed segments incorrectly enabled binary lookup",
+	)
+
+	var externally_mutated_points: Array[EasingCurvePoint] = ordered_curve.points
+	externally_mutated_points.reverse()
+	var externally_mutated_expected := EasingCurve.sample_bezier_points(
+		externally_mutated_points,
+		0.4,
+	)
+	_expect(
+		is_equal_approx(ordered_curve.sample(0.4), externally_mutated_expected)
+		and not ordered_curve._compiled_segments_binary_search_safe,
+		"In-place topology mutation reused stale compiled segments",
+	)
 
 
 func _test_resource_free_point_snapshots() -> void:
