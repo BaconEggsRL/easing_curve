@@ -379,6 +379,17 @@ func _test_batching_state_transitions() -> void:
 	# Draft point snapshots mutate authoring geometry immediately while batching
 	# both point-data and property-list publication until the final snapshot.
 	var point_curve := EasingCurve.new()
+	var point_session := point_curve._edit_session_state
+	var other_curve := EasingCurve.new()
+	var duplicate_curve := point_curve.duplicate() as EasingCurve
+	_expect(
+		point_session != other_curve._edit_session_state,
+		"Edit-session state was shared between EasingCurve resources",
+	)
+	_expect(
+		point_session != duplicate_curve._edit_session_state,
+		"Duplicated EasingCurve shared transient edit-session state with its source",
+	)
 	var point_counts := _signal_counts(point_curve)
 	var draft_snapshot := point_curve.get_point_snapshot()
 	var draft_positions: PackedVector2Array = draft_snapshot.positions
@@ -389,15 +400,15 @@ func _test_batching_state_transitions() -> void:
 	draft_snapshot.right_control_points = draft_right_handles
 	draft_snapshot.changing = true
 	point_curve.set_point_snapshot(draft_snapshot)
-	_expect(point_curve._suppress_point_notifications == 0, "Point snapshot suppression depth did not unwind after a draft update")
-	_expect(point_curve._point_snapshot_change_pending, "Draft point data did not mark change publication pending")
-	_expect(point_curve._point_snapshot_property_list_pending, "Draft point data did not mark property-list publication pending")
+	_expect(point_session.point_notification_suppression_depth == 0, "Point snapshot suppression depth did not unwind after a draft update")
+	_expect(point_session.point_snapshot_change_pending, "Draft point data did not mark change publication pending")
+	_expect(point_session.point_snapshot_property_list_pending, "Draft point data did not mark property-list publication pending")
 	_expect(point_counts.changed == 0 and point_counts.points == 0, "Draft point snapshot published before its final boundary")
 
 	point_curve.set_point_snapshot(point_curve.get_point_snapshot())
 	_expect(point_counts.changed == 1 and point_counts.points == 1, "Final point snapshot did not flush exactly one pending publication")
-	_expect(not point_curve._point_snapshot_change_pending and not point_curve._point_snapshot_property_list_pending, "Final point snapshot did not clear pending publication state")
-	_expect(point_curve._suppress_point_notifications == 0, "Point snapshot suppression depth leaked after final publication")
+	_expect(not point_session.point_snapshot_change_pending and not point_session.point_snapshot_property_list_pending, "Final point snapshot did not clear pending publication state")
+	_expect(point_session.point_notification_suppression_depth == 0, "Point snapshot suppression depth leaked after final publication")
 
 	# A no-op draft/final pair must leave the pending state clean and publish nothing.
 	point_counts.changed = 0
@@ -405,7 +416,7 @@ func _test_batching_state_transitions() -> void:
 	var no_op_snapshot := point_curve.get_point_snapshot()
 	no_op_snapshot.changing = true
 	point_curve.set_point_snapshot(no_op_snapshot)
-	_expect(not point_curve._point_snapshot_change_pending and not point_curve._point_snapshot_property_list_pending, "No-op draft created pending point publication")
+	_expect(not point_session.point_snapshot_change_pending and not point_session.point_snapshot_property_list_pending, "No-op draft created pending point publication")
 	point_curve.set_point_snapshot(point_curve.get_point_snapshot())
 	_expect(point_counts.changed == 0 and point_counts.points == 0, "No-op draft/final pair published a curve change")
 
@@ -413,22 +424,23 @@ func _test_batching_state_transitions() -> void:
 	# their draft publication pending through inner finishes and flush only when
 	# the outermost edit finishes.
 	var back_curve := EasingCurve.new()
+	var back_session := back_curve._edit_session_state
 	back_curve.trans_type = EasingCurve.TRANS.BACK
 	var back_counts := _signal_counts(back_curve)
 	back_curve._begin_editor_parameter_edit()
 	back_curve._begin_editor_parameter_edit()
 	back_curve.overshoot = 2.5
-	_expect(back_curve._parameter_edit_depth == 2, "Nested parameter edits did not retain both active edit levels")
-	_expect(back_curve._point_snapshot_change_pending and back_curve._point_snapshot_property_list_pending, "Deferred Back geometry did not enter pending point-publication state")
+	_expect(back_session.parameter_edit_depth == 2, "Nested parameter edits did not retain both active edit levels")
+	_expect(back_session.point_snapshot_change_pending and back_session.point_snapshot_property_list_pending, "Deferred Back geometry did not enter pending point-publication state")
 	_expect(back_counts.changed == 0 and back_counts.points == 0, "Nested parameter preview published before an edit finished")
 	back_curve._finish_editor_parameter_edit()
-	_expect(back_curve._parameter_edit_depth == 1, "Inner parameter finish did not preserve the outer edit")
-	_expect(back_curve._point_snapshot_change_pending and back_curve._point_snapshot_property_list_pending, "Inner parameter finish cleared pending point publication too early")
+	_expect(back_session.parameter_edit_depth == 1, "Inner parameter finish did not preserve the outer edit")
+	_expect(back_session.point_snapshot_change_pending and back_session.point_snapshot_property_list_pending, "Inner parameter finish cleared pending point publication too early")
 	_expect(back_counts.changed == 0 and back_counts.points == 0, "Inner parameter finish published while an outer edit remained active")
 	back_curve._finish_editor_parameter_edit()
-	_expect(back_curve._parameter_edit_depth == 0, "Outermost parameter finish did not unwind edit depth")
+	_expect(back_session.parameter_edit_depth == 0, "Outermost parameter finish did not unwind edit depth")
 	_expect(back_counts.changed == 1 and back_counts.points == 1, "Outermost parameter finish did not flush one deferred Back publication")
-	_expect(not back_curve._point_snapshot_change_pending and not back_curve._point_snapshot_property_list_pending, "Outermost parameter finish left point publication pending")
+	_expect(not back_session.point_snapshot_change_pending and not back_session.point_snapshot_property_list_pending, "Outermost parameter finish left point publication pending")
 
 	# Cancel is also depth-aware. A net-zero edit can leave draft flags pending;
 	# only the outermost cancel clears them, and cancellation publishes nothing.
@@ -439,26 +451,27 @@ func _test_batching_state_transitions() -> void:
 	back_curve._begin_editor_parameter_edit()
 	back_curve.overshoot = 3.5
 	back_curve.overshoot = original_overshoot
-	_expect(back_curve._point_snapshot_change_pending and back_curve._point_snapshot_property_list_pending, "Net-zero nested edit did not preserve its draft pending state before cancellation")
+	_expect(back_session.point_snapshot_change_pending and back_session.point_snapshot_property_list_pending, "Net-zero nested edit did not preserve its draft pending state before cancellation")
 	back_curve._cancel_editor_parameter_edit()
-	_expect(back_curve._parameter_edit_depth == 1, "Inner parameter cancel did not preserve the outer edit")
-	_expect(back_curve._point_snapshot_change_pending and back_curve._point_snapshot_property_list_pending, "Inner parameter cancel cleared pending state owned by the outer edit")
+	_expect(back_session.parameter_edit_depth == 1, "Inner parameter cancel did not preserve the outer edit")
+	_expect(back_session.point_snapshot_change_pending and back_session.point_snapshot_property_list_pending, "Inner parameter cancel cleared pending state owned by the outer edit")
 	back_curve._cancel_editor_parameter_edit()
-	_expect(back_curve._parameter_edit_depth == 0, "Outermost parameter cancel did not unwind edit depth")
-	_expect(not back_curve._point_snapshot_change_pending and not back_curve._point_snapshot_property_list_pending, "Outermost parameter cancel did not clear pending point publication")
+	_expect(back_session.parameter_edit_depth == 0, "Outermost parameter cancel did not unwind edit depth")
+	_expect(not back_session.point_snapshot_change_pending and not back_session.point_snapshot_property_list_pending, "Outermost parameter cancel did not clear pending point publication")
 	_expect(back_counts.changed == 0 and back_counts.points == 0, "Canceled nested parameter edit published a curve change")
 
 	# Function snapshot application temporarily nests inside parameter-edit depth.
 	# Its internal setters must not escape an already-active outer edit.
 	var function_curve := EasingCurve.new()
+	var function_session := function_curve._edit_session_state
 	function_curve.trans_type = EasingCurve.TRANS.STEP
 	var function_counts := _signal_counts(function_curve)
 	var function_snapshot := function_curve.get_function_snapshot()
 	function_snapshot[&"steps"] = function_curve.steps + 3
 	function_curve._begin_editor_parameter_edit()
 	function_curve.set_function_snapshot(function_snapshot)
-	_expect(function_curve._parameter_edit_depth == 1, "Function snapshot did not restore the caller's parameter-edit depth")
-	_expect(not function_curve._applying_function_snapshot, "Function snapshot guard remained active after application")
+	_expect(function_session.parameter_edit_depth == 1, "Function snapshot did not restore the caller's parameter-edit depth")
+	_expect(not function_session.applying_function_snapshot, "Function snapshot guard remained active after application")
 	_expect(function_counts.changed == 0 and function_counts.points == 0, "Nested function snapshot escaped the outer parameter edit")
 	function_curve._finish_editor_parameter_edit()
 	_expect(function_counts.changed == 1 and function_counts.points == 0, "Outermost function-parameter finish did not publish exactly once")
@@ -467,18 +480,19 @@ func _test_batching_state_transitions() -> void:
 	# internal parameter notifications into one. When nested in an editor edit,
 	# that single update is itself deferred to the editor-edit boundary.
 	var generated_curve := EasingCurve.new()
+	var generated_session := generated_curve._edit_session_state
 	generated_curve.trans_type = EasingCurve.TRANS.IRREGULAR
 	var generated_counts := _signal_counts(generated_curve)
 	generated_curve.generate_irregular()
-	_expect(generated_curve._parameter_update_depth == 0 and not generated_curve._parameter_update_change_pending, "Generated update batching did not return to a clean state")
+	_expect(generated_session.parameter_update_depth == 0 and not generated_session.parameter_update_change_pending, "Generated update batching did not return to a clean state")
 	_expect(generated_counts.changed == 1 and generated_counts.points == 0, "Generated update batching did not coalesce to one parameter publication")
 
 	generated_counts.changed = 0
 	generated_counts.points = 0
 	generated_curve._begin_editor_parameter_edit()
 	generated_curve.generate_irregular()
-	_expect(generated_curve._parameter_edit_depth == 1, "Generated update changed the enclosing editor-edit depth")
-	_expect(generated_curve._parameter_update_depth == 0 and not generated_curve._parameter_update_change_pending, "Generated update left its inner batching state pending")
+	_expect(generated_session.parameter_edit_depth == 1, "Generated update changed the enclosing editor-edit depth")
+	_expect(generated_session.parameter_update_depth == 0 and not generated_session.parameter_update_change_pending, "Generated update left its inner batching state pending")
 	_expect(generated_counts.changed == 0 and generated_counts.points == 0, "Generated update escaped an active editor edit")
 	generated_curve._finish_editor_parameter_edit()
 	_expect(generated_counts.changed == 1 and generated_counts.points == 0, "Generated update did not publish once at the outer editor boundary")
@@ -487,6 +501,7 @@ func _test_batching_state_transitions() -> void:
 	# guarded scalar/function/point restoration happens silently, then the facade
 	# emits the aggregate curve publication and leaves every batching guard clean.
 	var snapshot_curve := EasingCurve.new()
+	var snapshot_session := snapshot_curve._edit_session_state
 	var target_curve := EasingCurve.new()
 	target_curve.ease_type = EasingCurve.EASE.OUT
 	target_curve.trans_type = EasingCurve.TRANS.BACK
@@ -496,10 +511,10 @@ func _test_batching_state_transitions() -> void:
 	snapshot_curve.set_editor_state_snapshot(target_curve.get_editor_state_snapshot())
 	_expect(snapshot_counts.changed == 1 and snapshot_counts.points == 1, "Editor-state snapshot did not publish one aggregate curve update")
 	_expect(snapshot_curve._change_revision == revision_before + 1, "Editor-state snapshot did not advance the aggregate change revision exactly once")
-	_expect(not snapshot_curve._applying_editor_state_snapshot and not snapshot_curve._applying_function_snapshot, "Editor-state snapshot left a snapshot-application guard active")
-	_expect(snapshot_curve._suppress_point_notifications == 0, "Editor-state snapshot leaked point-notification suppression depth")
-	_expect(snapshot_curve._parameter_edit_depth == 0 and snapshot_curve._parameter_update_depth == 0, "Editor-state snapshot leaked a batching depth")
-	_expect(not snapshot_curve._point_snapshot_change_pending and not snapshot_curve._point_snapshot_property_list_pending and not snapshot_curve._parameter_update_change_pending, "Editor-state snapshot left pending batching state behind")
+	_expect(not snapshot_session.applying_editor_state_snapshot and not snapshot_session.applying_function_snapshot, "Editor-state snapshot left a snapshot-application guard active")
+	_expect(snapshot_session.point_notification_suppression_depth == 0, "Editor-state snapshot leaked point-notification suppression depth")
+	_expect(snapshot_session.parameter_edit_depth == 0 and snapshot_session.parameter_update_depth == 0, "Editor-state snapshot leaked a batching depth")
+	_expect(not snapshot_session.point_snapshot_change_pending and not snapshot_session.point_snapshot_property_list_pending and not snapshot_session.parameter_update_change_pending, "Editor-state snapshot left pending batching state behind")
 
 
 func _test_parameter_drag_transactions() -> void:
