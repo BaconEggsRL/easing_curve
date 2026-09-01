@@ -14,6 +14,8 @@ func _init() -> void:
 func _run() -> void:
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
+	_test_view_state_update_ownership()
+	_test_view_state_restore_and_rebuild_order()
 	await _test_autofit_request_lifecycle()
 	await _test_autofit_waits_for_function_toolbar_layout()
 	await _test_automatic_autofit_suppresses_intermediate_render()
@@ -185,6 +187,128 @@ func _test_loaded_resource_initial_autofit_gate() -> void:
 		)
 		loaded_editor.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
+
+
+func _test_view_state_update_ownership() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
+	var content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
+	get_root().add_child(content)
+	var editor := EDITOR_DRIVER.curve_editor(inspector)
+	editor.size = Vector2(600.0, 300.0)
+	editor.update_view_transform()
+
+	var zoom_step_before := editor._zoom_step
+	var zoom_anchor := Vector2(220.0, 140.0)
+	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, zoom_anchor, true))
+	var expected_step := mini(zoom_step_before + 1, EasingCurve.ZOOM_STEPS)
+	var expected_zoom := editor.step_to_zoom(expected_step)
+	_expect(
+		int(curve._last_slider_value) == expected_step,
+		"Wheel zoom did not update the owning EasingCurve slider view state",
+	)
+	_expect(
+		curve._last_zoom.is_equal_approx(Vector2(expected_zoom, expected_zoom)),
+		"Wheel zoom did not update the owning EasingCurve zoom view state",
+	)
+	_expect(
+		curve._last_pan.is_equal_approx(editor.pan_offset),
+		"Pointer-anchored wheel zoom did not publish its pan adjustment to the owning EasingCurve",
+	)
+
+	var pan_before := editor.pan_offset
+	var pan_start := Vector2(100.0, 100.0)
+	var pan_end := Vector2(132.0, 119.0)
+	editor._gui_input(_button(MOUSE_BUTTON_MIDDLE, pan_start, true))
+	editor._gui_input(_motion(pan_end, MOUSE_BUTTON_MASK_MIDDLE))
+	editor._gui_input(_button(MOUSE_BUTTON_MIDDLE, pan_end, false))
+	_expect(
+		curve._last_pan.is_equal_approx(pan_before + (pan_end - pan_start))
+		and curve._last_pan.is_equal_approx(editor.pan_offset),
+		"Middle-mouse pan did not update the owning EasingCurve pan view state",
+	)
+
+	var other_curve := EasingCurve.new()
+	_expect(
+		is_equal_approx(other_curve._last_slider_value, EasingCurve.DEFAULT_SLIDER_VALUE)
+		and other_curve._last_zoom == Vector2.ONE
+		and other_curve._last_pan == Vector2.ZERO,
+		"Graph navigation state leaked from one EasingCurve resource to another",
+	)
+
+	get_root().remove_child(content)
+	content.free()
+
+
+func _test_view_state_restore_and_rebuild_order() -> void:
+	var curve := EasingCurve.new()
+	curve.trans_type = EasingCurve.TRANS.CUSTOM
+	var saved_step := mini(
+		int(EasingCurve.DEFAULT_SLIDER_VALUE) + 3,
+		EasingCurve.ZOOM_STEPS,
+	)
+	var pre_slider_zoom := Vector2(3.0, 2.0)
+	var saved_pan := Vector2(37.0, -21.0)
+	curve._last_slider_value = saved_step
+	curve._last_zoom = pre_slider_zoom
+	curve._last_pan = saved_pan
+
+	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
+	var content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
+	get_root().add_child(content)
+	var editor := EDITOR_DRIVER.curve_editor(inspector)
+	var expected_zoom_value := editor.step_to_zoom(saved_step)
+	var expected_zoom := Vector2(expected_zoom_value, expected_zoom_value)
+
+	_expect(
+		editor._zoom_step == saved_step
+		and is_equal_approx(editor._zoom_x, expected_zoom_value)
+		and is_equal_approx(editor._zoom_y, expected_zoom_value),
+		"Inspector rebuild no longer restores zoom from the saved slider step after passive zoom restore",
+	)
+	_expect(
+		curve._last_zoom.is_equal_approx(expected_zoom)
+		and not curve._last_zoom.is_equal_approx(pre_slider_zoom),
+		"Inspector slider initialization no longer re-publishes the canonical slider-derived zoom",
+	)
+	_expect(
+		editor.pan_offset.is_equal_approx(saved_pan)
+		and curve._last_pan.is_equal_approx(saved_pan),
+		"Inspector rebuild no longer restores pan without changing the stored pan value",
+	)
+
+	var next_step := mini(saved_step + 1, EasingCurve.ZOOM_STEPS)
+	editor.set_slider_value(next_step)
+	var pan_start := Vector2(140.0, 120.0)
+	var pan_end := Vector2(161.0, 107.0)
+	editor._gui_input(_button(MOUSE_BUTTON_MIDDLE, pan_start, true))
+	editor._gui_input(_motion(pan_end, MOUSE_BUTTON_MASK_MIDDLE))
+	editor._gui_input(_button(MOUSE_BUTTON_MIDDLE, pan_end, false))
+	var persisted_slider := curve._last_slider_value
+	var persisted_zoom := curve._last_zoom
+	var persisted_pan := curve._last_pan
+
+	get_root().remove_child(content)
+	content.free()
+	var replacement_content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
+	get_root().add_child(replacement_content)
+	var replacement_editor := EDITOR_DRIVER.curve_editor(inspector)
+
+	_expect(
+		is_equal_approx(replacement_editor._zoom_step, persisted_slider)
+		and Vector2(replacement_editor._zoom_x, replacement_editor._zoom_y).is_equal_approx(
+			persisted_zoom
+		),
+		"Inspector rebuild did not restore the same resource's in-session slider/zoom state",
+	)
+	_expect(
+		replacement_editor.pan_offset.is_equal_approx(persisted_pan),
+		"Inspector rebuild did not restore the same resource's in-session pan state",
+	)
+
+	get_root().remove_child(replacement_content)
+	replacement_content.free()
 
 
 func _test_autofit_waits_for_function_toolbar_layout() -> void:

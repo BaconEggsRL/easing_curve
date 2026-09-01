@@ -17,6 +17,7 @@ func _run() -> void:
 	_test_property_selection_survives_reparse()
 	_test_topology_and_resource_switch_selection()
 	_test_resource_view_state_persistence()
+	_test_resource_view_state_is_transient()
 	_finish("selection and refresh characterization")
 
 
@@ -243,3 +244,48 @@ func _test_resource_view_state_persistence() -> void:
 	_expect(editor_a.pan_offset == pan_a, "Returning to Curve A restored the wrong pan offset")
 	_expect(curve_b._last_slider_value == step_b and curve_b._last_zoom.is_equal_approx(zoom_b) and curve_b._last_pan == pan_b, "Returning to Curve A mutated Curve B's stored view state")
 	returned_a.free()
+
+
+func _test_resource_view_state_is_transient() -> void:
+	var curve := _curve()
+	var editor_snapshot_before := curve.get_editor_state_snapshot()
+	var changed_counter := {"count": 0}
+	curve.changed.connect(func() -> void: changed_counter["count"] += 1)
+
+	var context := EDITOR_HOST.create_inspector_context(curve)
+	var inspector: Object = context.inspector
+	context.editor.free()
+	var section := EDITOR_DRIVER.create_curve_editor(inspector, curve)
+	get_root().add_child(section)
+	var editor := EDITOR_DRIVER.curve_editor(inspector)
+	var step := mini(int(EasingCurve.DEFAULT_SLIDER_VALUE) + 2, EasingCurve.ZOOM_STEPS)
+	var pan := Vector2(18.0, -11.0)
+	editor.set_slider_value(step)
+	editor.pan_offset = pan
+	editor.pan_changed.emit(pan)
+	var zoom := Vector2(editor.step_to_zoom(step), editor.step_to_zoom(step))
+
+	_expect(curve._last_slider_value == step, "Transient view-state characterization did not store the slider step")
+	_expect(curve._last_zoom.is_equal_approx(zoom), "Transient view-state characterization did not store zoom")
+	_expect(curve._last_pan == pan, "Transient view-state characterization did not store pan")
+	_expect(int(changed_counter["count"]) == 0, "Editor view-state updates unexpectedly emitted Resource.changed")
+	_expect(curve.get_editor_state_snapshot() == editor_snapshot_before, "Editor view state leaked into the Undo/editor-state snapshot")
+	section.free()
+
+	var temp_path := "user://resource_view_state_transient.tres"
+	var save_error := ResourceSaver.save(curve, temp_path)
+	_expect(save_error == OK, "Could not save transient view-state characterization resource")
+	var loaded := ResourceLoader.load(
+		temp_path,
+		"",
+		ResourceLoader.CACHE_MODE_IGNORE,
+	) as EasingCurve
+	_expect(loaded != null, "Could not reload transient view-state characterization resource")
+	if loaded != null:
+		_expect(
+			loaded._last_slider_value == EasingCurve.DEFAULT_SLIDER_VALUE,
+			"Slider view state unexpectedly persisted across resource reload",
+		)
+		_expect(loaded._last_zoom == Vector2.ONE, "Zoom view state unexpectedly persisted across resource reload")
+		_expect(loaded._last_pan == Vector2.ZERO, "Pan view state unexpectedly persisted across resource reload")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
