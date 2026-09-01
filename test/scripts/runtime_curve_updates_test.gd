@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EASING_LIBRARY = preload("res://addons/easing_curve/scripts/runtime/easing.gd")
 const BEZIER_SOLVER = preload("res://addons/easing_curve/scripts/runtime/bezier_solver.gd")
@@ -9,10 +9,6 @@ const ROUND_TRIP_PATH := "res://test/_runtime_curve_round_trip.tres"
 const GENERATED_ROUND_TRIP_PATH := "res://test/_generated_curve_round_trip.tres"
 const BACK_ROUND_TRIP_PATH := "res://test/_back_overshoot_round_trip.tres"
 const CSS_CUBIC_ROUND_TRIP_PATH := "res://test/_css_cubic_bezier_round_trip.tres"
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	seed(123456)
@@ -34,19 +30,7 @@ func _init() -> void:
 	_test_function_parameters()
 	_test_every_transition_and_runtime_switching()
 
-	if _failures == 0:
-		print("PASS: %d runtime curve update checks" % _checks)
-	else:
-		push_error("FAIL: %d of %d runtime curve update checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if condition:
-		return
-	_failures += 1
-	push_error(message)
+	_finish("runtime curve update")
 
 
 func _is_finite(value: float) -> bool:

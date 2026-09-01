@@ -1,11 +1,8 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
+const EDITOR_DRIVER = preload("res://test/scripts/easing_curve_editor_test_driver.gd")
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	if not EDITOR_HOST.require_inspector_host("easing_curve_editor_position_x_drag_test.gd"):
@@ -18,19 +15,7 @@ func _init() -> void:
 	_test_position_x_endpoint_takeover_is_previewed_until_commit()
 	_test_position_x_endpoint_takeover_commits_at_both_endpoints()
 
-	if _failures == 0:
-		print("PASS: %d EasingCurveEditor Position X drag checks" % _checks)
-		quit()
-	else:
-		push_error("FAIL: %d of %d EasingCurveEditor Position X drag checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("EasingCurveEditor Position X drag")
 
 
 func _make_fixture(left_x: float = 0.2, right_x: float = 0.6) -> Dictionary:
@@ -149,15 +134,15 @@ func _test_position_x_reorder_undo_redo_follows_the_selected_resource() -> void:
 	var selected := points[1]
 	var property_header := PanelContainer.new()
 	var history := UndoRedo.new()
-	inspector.call("_select_point_property", property_header, 1, &"position")
+	EDITOR_DRIVER.select_point_property(inspector, property_header, 1, &"position")
 
 	var before := EDITOR_UNDO.capture_state(curve)
-	var selection_before: Dictionary = inspector.call("_capture_point_selection_state")
+	var selection_before := EDITOR_DRIVER.capture_point_selection(inspector)
 	var point_resource_ids_before := curve._get_editor_point_resource_ids()
 	_drag_position_x(inspector, curve, selected, 0.8)
 	_finish_position_x(inspector, curve, selected, 0.8)
 	var after := EDITOR_UNDO.capture_state(curve)
-	var selection_after: Dictionary = inspector.call("_capture_point_selection_state")
+	var selection_after := EDITOR_DRIVER.capture_point_selection(inspector)
 	var point_resource_ids_after := curve._get_editor_point_resource_ids()
 	_expect(
 		EDITOR_UNDO.commit_applied_action(
@@ -174,12 +159,12 @@ func _test_position_x_reorder_undo_redo_follows_the_selected_resource() -> void:
 	_expect(editor.selected_index == 2, "Position-X reorder did not update the graph selection index")
 	history.undo()
 	_expect(curve.points[1] == selected, "Position-X Undo did not return the selected Resource to P2")
-	_expect(editor.selected_index == 1 and inspector.get("_selected_point_index") == 1, "Position-X Undo did not synchronize graph and Inspector selection")
-	_expect(inspector.get("_selected_point_resource_id") == selected.get_instance_id(), "Position-X Undo changed the selected Resource")
-	_expect(inspector.get("_selected_point_property_name") == &"position", "Position-X Undo lost the selected property")
+	_expect(editor.selected_index == 1 and EDITOR_DRIVER.selected_point_index(inspector) == 1, "Position-X Undo did not synchronize graph and Inspector selection")
+	_expect(EDITOR_DRIVER.selected_point_resource_id(inspector) == selected.get_instance_id(), "Position-X Undo changed the selected Resource")
+	_expect(EDITOR_DRIVER.selected_point_property_name(inspector) == &"position", "Position-X Undo lost the selected property")
 	history.redo()
 	_expect(curve.points[2] == selected, "Position-X Redo did not return the selected Resource to P3")
-	_expect(editor.selected_index == 2 and inspector.get("_selected_point_index") == 2, "Position-X Redo did not synchronize graph and Inspector selection")
+	_expect(editor.selected_index == 2 and EDITOR_DRIVER.selected_point_index(inspector) == 2, "Position-X Redo did not synchronize graph and Inspector selection")
 
 	history.clear_history(false)
 	history.free()
@@ -223,7 +208,7 @@ func _test_position_x_drag_crosses_multiple_points() -> void:
 		"Position X drag did not preview the final multi-cross ordering",
 	)
 	_expect(curve.points == points, "Multi-cross Position X drag reordered the Points list before commit")
-	inspector.call("_commit_point_edit")
+	EDITOR_DRIVER.commit_point_edit(inspector)
 	_expect(
 		curve.points == [points[0], points[2], points[3], moved, points[4]],
 		"Position X commit did not settle the final multi-cross order",
@@ -292,7 +277,7 @@ func _test_position_x_endpoint_takeover_is_previewed_until_commit() -> void:
 		editor._get_display_points() == [left, moved, old_right_endpoint],
 		"Moving back from endpoint did not restore the graph preview",
 	)
-	inspector.call("_commit_point_edit")
+	EDITOR_DRIVER.commit_point_edit(inspector)
 	_expect(curve.points == [left, moved, old_right_endpoint], "Position X commit changed endpoint takeover after moving back inward")
 	editor.free()
 
@@ -309,7 +294,7 @@ func _test_position_x_endpoint_takeover_is_previewed_until_commit() -> void:
 	_drag_position_x(left_inspector, left_curve, left_moved, 0.2)
 	_expect(left_curve.points.size() == 3 and left_curve.points.has(old_left_endpoint), "Moving back from the left endpoint changed source ordering during drag")
 	_expect(left_editor._get_display_points() == [old_left_endpoint, left_moved, left_points[2]], "Moving back from the left endpoint did not restore the graph preview")
-	left_inspector.call("_commit_point_edit")
+	EDITOR_DRIVER.commit_point_edit(left_inspector)
 	_expect(left_curve.points == [old_left_endpoint, left_moved, left_points[2]], "Left endpoint commit changed takeover after moving back inward")
 	left_editor.free()
 
@@ -322,7 +307,7 @@ func _test_position_x_endpoint_takeover_commits_at_both_endpoints() -> void:
 	var right_points: Array = right_fixture.points
 	var right_moved: EasingCurvePoint = right_points[1]
 	_drag_position_x(right_inspector, right_curve, right_moved, 1.0)
-	right_inspector.call("_commit_point_edit")
+	EDITOR_DRIVER.commit_point_edit(right_inspector)
 	_expect(
 		right_curve.points == [right_points[0], right_moved],
 		"Position X commit did not replace the occupied right endpoint",
@@ -337,7 +322,7 @@ func _test_position_x_endpoint_takeover_commits_at_both_endpoints() -> void:
 	var left_points: Array = left_fixture.points
 	var left_moved: EasingCurvePoint = left_points[1]
 	_drag_position_x(left_inspector, left_curve, left_moved, 0.0)
-	left_inspector.call("_commit_point_edit")
+	EDITOR_DRIVER.commit_point_edit(left_inspector)
 	_expect(
 		left_curve.points == [left_moved, left_points[2]],
 		"Position X commit did not replace the occupied left endpoint",

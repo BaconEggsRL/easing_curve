@@ -1,8 +1,4 @@
-extends SceneTree
-
-var _failures := 0
-var _checks := 0
-
+extends "res://test/scripts/test_case.gd"
 
 func _init() -> void:
 	_test_click_release_does_not_delete_next_point()
@@ -12,19 +8,7 @@ func _init() -> void:
 	_test_press_move_release_does_not_delete_next_point()
 	_test_motion_without_rmb_mask_clears_stale_delete_state()
 
-	if _failures == 0:
-		print("PASS: %d EasingCurveEditor RMB delete checks" % _checks)
-		quit()
-	else:
-		push_error("FAIL: %d of %d EasingCurveEditor RMB delete checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("EasingCurveEditor RMB delete")
 
 
 func _make_editor() -> Dictionary:

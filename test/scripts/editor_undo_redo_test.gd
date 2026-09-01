@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
@@ -6,10 +6,7 @@ const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
-
-var _failures := 0
-var _checks := 0
-
+const EDITOR_DRIVER = preload("res://test/scripts/easing_curve_editor_test_driver.gd")
 
 func _init() -> void:
 	if not EDITOR_HOST.require_inspector_host("editor_undo_redo_test.gd"):
@@ -49,19 +46,7 @@ func _init() -> void:
 	_test_parameter_reset()
 	_test_generate_action()
 
-	if _failures == 0:
-		print("PASS: %d editor Undo / Redo checks" % _checks)
-	else:
-		push_error("FAIL: %d of %d editor Undo / Redo checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if condition:
-		return
-	_failures += 1
-	push_error(message)
+	_finish("editor Undo / Redo")
 
 
 func _contains_resource(value: Variant) -> bool:
@@ -255,7 +240,7 @@ func _test_topology_selection_undo_redo() -> void:
 	var editor: EasingCurveEditor = editor_context.editor
 	var inspector: Object = editor_context.inspector
 	var history := UndoRedo.new()
-	inspector.call("_clear_point_property_selection")
+	EDITOR_DRIVER.clear_point_selection(inspector)
 	editor.selected_index = -1
 
 	var add_a_before := EDITOR_UNDO.capture_state(curve)
@@ -267,7 +252,7 @@ func _test_topology_selection_undo_redo() -> void:
 	add_a_points.append(point_a)
 	var point_a_index := add_a_points.find(point_a)
 	curve.set_point_snapshot(curve.make_point_snapshot(add_a_points))
-	inspector.call("_select_reordered_point", curve.points[point_a_index])
+	EDITOR_DRIVER.select_point(inspector, curve.points[point_a_index])
 	var add_a_after_selection: Dictionary = inspector.call(
 		"_capture_point_selection_state"
 	)
@@ -287,11 +272,11 @@ func _test_topology_selection_undo_redo() -> void:
 	_expect(editor.selected_index == point_a_index, "Add A did not select its point")
 	history.undo()
 	_expect(editor.selected_index == -1, "Undo Add A did not restore no graph selection")
-	_expect(inspector.get("_selected_point_index") == -1, "Undo Add A did not restore no list selection")
+	_expect(EDITOR_DRIVER.selected_point_index(inspector) == -1, "Undo Add A did not restore no list selection")
 	history.redo()
 	point_a_index = int(add_a_after_selection.point_index)
 	_expect(editor.selected_index == point_a_index, "Redo Add A did not restore graph selection")
-	_expect(inspector.get("_selected_point_index") == point_a_index, "Redo Add A did not restore list selection")
+	_expect(EDITOR_DRIVER.selected_point_index(inspector) == point_a_index, "Redo Add A did not restore list selection")
 
 	var add_b_before := EDITOR_UNDO.capture_state(curve)
 	var add_b_before_selection: Dictionary = inspector.call(
@@ -302,7 +287,7 @@ func _test_topology_selection_undo_redo() -> void:
 	add_b_points.append(point_b)
 	var point_b_index := add_b_points.find(point_b)
 	curve.set_point_snapshot(curve.make_point_snapshot(add_b_points))
-	inspector.call("_select_reordered_point", curve.points[point_b_index])
+	EDITOR_DRIVER.select_point(inspector, curve.points[point_b_index])
 	var add_b_after_selection: Dictionary = inspector.call(
 		"_capture_point_selection_state"
 	)
@@ -328,7 +313,7 @@ func _test_topology_selection_undo_redo() -> void:
 	history.undo()
 	history.undo()
 	_expect(editor.selected_index == -1, "Undoing both adds did not restore no graph selection")
-	_expect(inspector.get("_selected_point_index") == -1, "Undoing both adds did not restore no list selection")
+	_expect(EDITOR_DRIVER.selected_point_index(inspector) == -1, "Undoing both adds did not restore no list selection")
 	history.redo()
 	_expect(editor.selected_index == point_a_index, "Redo Add A after no selection did not restore A")
 	history.redo()

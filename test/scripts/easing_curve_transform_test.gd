@@ -1,13 +1,9 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_UNDO := preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const CUSTOM_SAVE_PATH := "res://test/_transform_custom_round_trip.tres"
 const PRESET_SAVE_PATH := "res://test/_transform_preset_round_trip.tres"
 const SNAPSHOT_GEOMETRY_TOLERANCE := EasingCurve.PRESET_GEOMETRY_TOLERANCE
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	_test_bezier_reverse()
@@ -21,18 +17,7 @@ func _init() -> void:
 	_test_runtime_sampling()
 	_cleanup_saved_files()
 
-	if _failures == 0:
-		print("PASS: %d EasingCurve global transform checks" % _checks)
-	else:
-		push_error("FAIL: %d of %d EasingCurve global transform checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("EasingCurve global transform")
 
 
 func _expect_snapshot(actual: Dictionary, expected: Dictionary, label: String) -> void:

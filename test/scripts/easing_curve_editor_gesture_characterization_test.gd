@@ -1,11 +1,8 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
+const EDITOR_DRIVER = preload("res://test/scripts/easing_curve_editor_test_driver.gd")
 const ZOOM_SLIDER = preload("res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.tscn")
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	if not EDITOR_HOST.require_inspector_host("easing_curve_editor_gesture_characterization_test.gd"):
@@ -32,19 +29,7 @@ func _run() -> void:
 	_test_axis_constraint_request_and_input_boundaries()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
-	if _failures == 0:
-		print("PASS: %d graph gesture characterization checks" % _checks)
-		quit()
-	else:
-		push_error("FAIL: %d of %d graph gesture characterization checks failed" % [_failures, _checks])
-		quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("graph gesture characterization")
 
 
 func _fixture() -> Dictionary:
@@ -60,16 +45,7 @@ func _fixture() -> Dictionary:
 	var context := EDITOR_HOST.create_inspector_context(curve)
 	var editor: EasingCurveEditor = context.editor
 	var inspector: Object = context.inspector
-	editor.point_property_change_requested.connect(
-		func(index: int, property_name: StringName, value: Variant, changing: bool) -> void:
-			inspector.call("_on_curve_editor_point_property_change_requested", index, property_name, value, changing),
-	)
-	editor.point_edit_finished.connect(
-		func(point_order: Array[EasingCurvePoint]) -> void:
-			inspector.call("_on_curve_editor_point_edit_finished", point_order),
-	)
-	editor.point_add_requested.connect(func(point: EasingCurvePoint) -> void: inspector.call("_on_curve_editor_point_add_requested", point))
-	editor.point_remove_requested.connect(func(point: EasingCurvePoint) -> void: inspector.call("_remove_point", point))
+	EDITOR_DRIVER.connect_curve_editor(editor, inspector)
 	editor._slider = ZOOM_SLIDER.instantiate()
 	editor.update_view_transform()
 	return {"curve": curve, "editor": editor, "inspector": inspector}
@@ -215,9 +191,9 @@ func _test_autofit_waits_for_function_toolbar_layout() -> void:
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.CUSTOM
 	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
-	var content: Control = inspector.call("handle_easing_curve_editor", curve)
+	var content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
 	get_root().add_child(content)
-	var editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+	var editor := EDITOR_DRIVER.curve_editor(inspector)
 	editor.size = Vector2(600.0, 300.0)
 	await process_frame
 	_expect(editor.is_autofit_ready(), "Inspector curve editor was not ready for Autofit after setup")
@@ -311,9 +287,9 @@ func _test_automatic_autofit_suppresses_intermediate_render() -> void:
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.LINEAR
 	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
-	var initial_content: Control = inspector.call("handle_easing_curve_editor", curve)
+	var initial_content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
 	get_root().add_child(initial_content)
-	var initial_editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+	var initial_editor := EDITOR_DRIVER.curve_editor(inspector)
 
 	inspector.call("_queue_autofit_curve_editor")
 	_expect(
@@ -325,9 +301,9 @@ func _test_automatic_autofit_suppresses_intermediate_render() -> void:
 	curve.trans_type = EasingCurve.TRANS.ELASTIC
 	get_root().remove_child(initial_content)
 	initial_content.free()
-	var replacement_content: Control = inspector.call("handle_easing_curve_editor", curve)
+	var replacement_content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
 	get_root().add_child(replacement_content)
-	var replacement_editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+	var replacement_editor := EDITOR_DRIVER.curve_editor(inspector)
 	_expect(
 		replacement_editor.is_graph_render_suppressed(),
 		"Inspector rebuild did not inherit pending Autofit render suppression",
@@ -374,10 +350,10 @@ func _test_folded_curve_editor_defers_autofit_until_expand() -> void:
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.LINEAR
 	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
-	var initial_content: Control = inspector.call("handle_easing_curve_editor", curve)
+	var initial_content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
 	get_root().add_child(initial_content)
 	var initial_section: Control = inspector.get("_curve_editor_section")
-	var initial_editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+	var initial_editor := EDITOR_DRIVER.curve_editor(inspector)
 
 	initial_section.call("fold")
 	await process_frame
@@ -394,10 +370,10 @@ func _test_folded_curve_editor_defers_autofit_until_expand() -> void:
 	# Curve Editor section remains folded.
 	get_root().remove_child(initial_content)
 	initial_content.free()
-	var replacement_content: Control = inspector.call("handle_easing_curve_editor", curve)
+	var replacement_content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
 	get_root().add_child(replacement_content)
 	var replacement_section: Control = inspector.get("_curve_editor_section")
-	var replacement_editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+	var replacement_editor := EDITOR_DRIVER.curve_editor(inspector)
 
 	await process_frame
 	await process_frame

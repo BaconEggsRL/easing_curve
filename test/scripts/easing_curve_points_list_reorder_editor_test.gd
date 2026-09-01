@@ -1,10 +1,8 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
+const EDITOR_DRIVER = preload("res://test/scripts/easing_curve_editor_test_driver.gd")
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
-
-var _failures := 0
-var _checks := 0
 
 var _completed_fixtures := 0
 
@@ -29,18 +27,7 @@ func _run() -> void:
 		push_error(
 			"Only %d of 7 Points-list submitted reorder fixtures completed" % _completed_fixtures
 		)
-	if _failures == 0:
-		print("PASS: %d Points-list submitted reorder checks" % _checks)
-	else:
-		push_error("FAIL: %d of %d Points-list submitted reorder checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("Points-list submitted reorder")
 
 
 func _make_fixture() -> Dictionary:
@@ -196,17 +183,17 @@ func _test_repeated_arrow_moves_keep_the_logical_point_selected() -> void:
 	moved.set_locked("position", true)
 	editor.selected_index = 1
 
-	inspector.call("_move_point_down", editor.selected_index)
+	EDITOR_DRIVER.move_point_down(inspector, editor.selected_index)
 	_expect(curve.points == [points[0], points[2], moved, points[3]], "Move Down did not use X-slot swap order")
 	_expect(editor.selected_index == 2 and curve.points[editor.selected_index] == moved, "Move Down did not select the moved logical point")
 	_expect(moved.position.is_equal_approx(Vector2(0.5, 0.7)), "Move Down did not preserve the moved point Y")
 	_expect(moved.handle_mode == EasingCurvePoint.HandleMode.FREE and moved.right_force_linear, "Move Down lost moved point handle state")
 
-	inspector.call("_move_point_down", editor.selected_index)
+	EDITOR_DRIVER.move_point_down(inspector, editor.selected_index)
 	_expect(curve.points == [points[0], points[2], points[3], moved], "Repeated Move Down did not continue moving the selected logical point")
 	_expect(editor.selected_index == 3 and curve.points[editor.selected_index] == moved, "Repeated Move Down selected the X-slot inheritor")
 
-	inspector.call("_move_point_up", editor.selected_index)
+	EDITOR_DRIVER.move_point_up(inspector, editor.selected_index)
 	_expect(curve.points == [points[0], points[2], moved, points[3]], "Move Up did not reverse the X-slot swap")
 	_expect(editor.selected_index == 2 and curve.points[editor.selected_index] == moved, "Move Up did not keep the moved logical point selected")
 	_completed_fixtures += 1
@@ -227,9 +214,9 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	# Keep expected point ordering independent from the curve's mutable Array.
 	curve.points = points.duplicate()
 	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
-	var content: Control = inspector.call("handle_easing_curve_editor", curve)
+	var content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
 	get_root().add_child(content)
-	var editor: EasingCurveEditor = inspector.get("easing_curve_editor")
+	var editor := EDITOR_DRIVER.curve_editor(inspector)
 	var move_left: Button = editor.get("_point_move_left_button")
 	var move_right: Button = editor.get("_point_move_right_button")
 	var toolbar: GridContainer = editor.get("_point_toolbar")
@@ -371,13 +358,13 @@ func _test_committed_drag_reorder_selects_the_dragged_point() -> void:
 	editor.selected_index = 0
 
 	# PointsListContainer emits this handler only on drop submission, never while hovering.
-	inspector.call("_move_point", 0, 2)
+	EDITOR_DRIVER.move_point(inspector, 0, 2)
 	_expect(curve.points == [points[2], points[1], moved, points[3]], "Committed drag reorder did not use X-slot swap order")
 	_expect(editor.selected_index == 2 and curve.points[editor.selected_index] == moved, "Committed drag reorder did not select the dragged logical point")
 	_expect(moved.handle_mode == EasingCurvePoint.HandleMode.MIRRORED, "Committed drag reorder lost the dragged point mode")
 	_expect(moved.position.is_equal_approx(Vector2(0.5, 0.1)), "Committed drag reorder did not translate the dragged point to the destination X slot")
 
-	inspector.call("_move_point", 2, 2)
+	EDITOR_DRIVER.move_point(inspector, 2, 2)
 	_expect(editor.selected_index == 2 and curve.points[2] == moved, "No-op drag reorder changed normal selection")
 	_completed_fixtures += 1
 	editor.free()
@@ -392,14 +379,14 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 	var selected := points[1]
 	var property_header := PanelContainer.new()
 	var history := UndoRedo.new()
-	inspector.call("_select_point_property", property_header, 1, &"position")
+	EDITOR_DRIVER.select_point_property(inspector, property_header, 1, &"position")
 
 	var move_down_before := EDITOR_UNDO.capture_state(curve)
-	var move_down_selection_before: Dictionary = inspector.call("_capture_point_selection_state")
+	var move_down_selection_before := EDITOR_DRIVER.capture_point_selection(inspector)
 	var move_down_point_resource_ids_before := curve._get_editor_point_resource_ids()
-	inspector.call("_move_point_down", 1)
+	EDITOR_DRIVER.move_point_down(inspector, 1)
 	var move_down_after := EDITOR_UNDO.capture_state(curve)
-	var move_down_selection_after: Dictionary = inspector.call("_capture_point_selection_state")
+	var move_down_selection_after := EDITOR_DRIVER.capture_point_selection(inspector)
 	var move_down_point_resource_ids_after := curve._get_editor_point_resource_ids()
 	_expect(
 		EDITOR_UNDO.commit_applied_action(
@@ -417,20 +404,20 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 	history.undo()
 	_expect(curve.points[1] == selected, "Move Down Undo did not return the selected Resource to P2")
 	_expect(editor.selected_index == 1, "Move Down Undo did not resolve the graph index from the selected Resource")
-	_expect(inspector.get("_selected_point_index") == 1, "Move Down Undo retained a stale Inspector index")
-	_expect(inspector.get("_selected_point_resource_id") == selected.get_instance_id(), "Move Down Undo changed the selected Resource")
-	_expect(inspector.get("_selected_point_property_name") == &"position", "Move Down Undo lost the selected property")
+	_expect(EDITOR_DRIVER.selected_point_index(inspector) == 1, "Move Down Undo retained a stale Inspector index")
+	_expect(EDITOR_DRIVER.selected_point_resource_id(inspector) == selected.get_instance_id(), "Move Down Undo changed the selected Resource")
+	_expect(EDITOR_DRIVER.selected_point_property_name(inspector) == &"position", "Move Down Undo lost the selected property")
 	history.redo()
 	_expect(curve.points[2] == selected, "Move Down Redo did not return the selected Resource to P3")
 	_expect(editor.selected_index == 2, "Move Down Redo did not resolve the graph index from the selected Resource")
-	_expect(inspector.get("_selected_point_index") == 2, "Move Down Redo retained a stale Inspector index")
+	_expect(EDITOR_DRIVER.selected_point_index(inspector) == 2, "Move Down Redo retained a stale Inspector index")
 
 	var drag_before := EDITOR_UNDO.capture_state(curve)
-	var drag_selection_before: Dictionary = inspector.call("_capture_point_selection_state")
+	var drag_selection_before := EDITOR_DRIVER.capture_point_selection(inspector)
 	var drag_point_resource_ids_before := curve._get_editor_point_resource_ids()
-	inspector.call("_move_point", 2, 0)
+	EDITOR_DRIVER.move_point(inspector, 2, 0)
 	var drag_after := EDITOR_UNDO.capture_state(curve)
-	var drag_selection_after: Dictionary = inspector.call("_capture_point_selection_state")
+	var drag_selection_after := EDITOR_DRIVER.capture_point_selection(inspector)
 	var drag_point_resource_ids_after := curve._get_editor_point_resource_ids()
 	_expect(
 		EDITOR_UNDO.commit_applied_action(
@@ -446,10 +433,10 @@ func _test_reorder_undo_redo_follows_the_selected_resource() -> void:
 	_expect(curve.points[0] == selected, "Drag reorder did not move the selected Resource")
 	history.undo()
 	_expect(curve.points[2] == selected, "Drag reorder Undo did not restore the selected Resource identity")
-	_expect(editor.selected_index == 2 and inspector.get("_selected_point_index") == 2, "Drag reorder Undo did not synchronize graph and Inspector selection")
+	_expect(editor.selected_index == 2 and EDITOR_DRIVER.selected_point_index(inspector) == 2, "Drag reorder Undo did not synchronize graph and Inspector selection")
 	history.redo()
 	_expect(curve.points[0] == selected, "Drag reorder Redo did not restore the selected Resource identity")
-	_expect(editor.selected_index == 0 and inspector.get("_selected_point_index") == 0, "Drag reorder Redo did not synchronize graph and Inspector selection")
+	_expect(editor.selected_index == 0 and EDITOR_DRIVER.selected_point_index(inspector) == 0, "Drag reorder Redo did not synchronize graph and Inspector selection")
 
 	history.clear_history(false)
 	history.free()
@@ -546,10 +533,10 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	left_click.button_index = MOUSE_BUTTON_LEFT
 	left_click.pressed = true
 	handle_header.emit_signal(&"gui_input", left_click)
-	_expect(inspector.get("_selected_point_property_header") == handle_header, "Clicking Handle Mode did not select its property cell")
-	_expect(inspector.get("_selected_point_property_name") == &"handle_mode", "Handle Mode selection did not record its property name")
+	_expect(EDITOR_DRIVER.selected_point_property_header(inspector) == handle_header, "Clicking Handle Mode did not select its property cell")
+	_expect(EDITOR_DRIVER.selected_point_property_name(inspector) == &"handle_mode", "Handle Mode selection did not record its property name")
 	target_handle_header.emit_signal(&"gui_input", left_click)
-	_expect(inspector.get("_selected_point_property_header") == target_handle_header, "Selecting another Handle Mode cell did not replace the property selection")
+	_expect(EDITOR_DRIVER.selected_point_property_header(inspector) == target_handle_header, "Selecting another Handle Mode cell did not replace the property selection")
 
 	for mode in [
 		EasingCurvePoint.HandleMode.LINEAR,
@@ -559,11 +546,11 @@ func _test_handle_mode_property_cell_layout_selection_and_copy_paste() -> void:
 	]:
 		source.handle_mode = mode
 		target.handle_mode = EasingCurvePoint.HandleMode.FREE
-		_expect(inspector.call("_is_point_property_value_compatible", &"handle_mode", mode), "Handle Mode copy value was not accepted for %s" % EasingCurvePoint.HandleMode.keys()[mode])
-		inspector.call("_apply_pasted_point_property_value", 2, &"handle_mode", mode)
+		_expect(EDITOR_DRIVER.is_point_property_value_compatible(inspector, &"handle_mode", mode), "Handle Mode copy value was not accepted for %s" % EasingCurvePoint.HandleMode.keys()[mode])
+		EDITOR_DRIVER.paste_point_property_value(inspector, 2, &"handle_mode", mode)
 		_expect(target.handle_mode == mode, "Handle Mode paste did not apply %s" % EasingCurvePoint.HandleMode.keys()[mode])
-	_expect(inspector.call("_is_point_property_value_compatible", &"position", Vector2(0.25, 0.75)), "Position paste no longer accepts Vector2 values")
-	_expect(not inspector.call("_is_point_property_value_compatible", &"handle_mode", 99), "Handle Mode paste accepted an out-of-range integer")
+	_expect(EDITOR_DRIVER.is_point_property_value_compatible(inspector, &"position", Vector2(0.25, 0.75)), "Position paste no longer accepts Vector2 values")
+	_expect(not EDITOR_DRIVER.is_point_property_value_compatible(inspector, &"handle_mode", 99), "Handle Mode paste accepted an out-of-range integer")
 
 	var before := EDITOR_UNDO.capture_state(curve)
 	source.handle_mode = EasingCurvePoint.HandleMode.LINEAR

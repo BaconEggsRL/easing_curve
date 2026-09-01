@@ -1,11 +1,8 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
+const EDITOR_DRIVER = preload("res://test/scripts/easing_curve_editor_test_driver.gd")
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	if not EDITOR_HOST.require_inspector_host("easing_curve_points_list_add_editor_test.gd"):
@@ -14,18 +11,7 @@ func _init() -> void:
 	_test_points_list_add_preserves_endpoints()
 	_test_points_list_remove_button_undo_redo()
 
-	if _failures == 0:
-		print("PASS: %d Points-list Add checks" % _checks)
-	else:
-		push_error("FAIL: %d of %d Points-list Add checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("Points-list Add")
 
 
 func _test_points_list_add_preserves_endpoints() -> void:
@@ -123,7 +109,7 @@ func _test_missing_endpoint_defaults() -> void:
 			func() -> void: notifications.property_list += 1,
 		)
 
-		inspector.call("_on_add_point_btn_pressed")
+		EDITOR_DRIVER.add_point_from_toolbar(inspector)
 
 		var expected_positions: Array = test_case["expected"]
 		_expect(curve.points.size() == expected_positions.size(), "%s produced the wrong point count" % test_case["name"])
@@ -131,7 +117,7 @@ func _test_missing_endpoint_defaults() -> void:
 			_expect(curve.points[i].position == expected_positions[i], "%s produced the wrong point at index %d" % [test_case["name"], i])
 		var added_index := int(test_case["added_index"])
 		_expect_selected_point(inspector, editor, curve, added_index, test_case["name"])
-		inspector.call("_parse_begin", curve)
+		EDITOR_DRIVER.rebuild_for_curve(inspector, curve)
 		_expect_selected_point(inspector, editor, curve, added_index, "%s refresh" % test_case["name"])
 		_expect(_is_ordered_by_x(curve.points), "%s did not keep point order" % test_case["name"])
 		_expect(notifications.changed == 1 and notifications.points == 1 and notifications.property_list == 1, "%s did not refresh the inspector and graph" % test_case["name"])
@@ -159,18 +145,18 @@ func _test_interior_point_adds() -> void:
 	var before := EDITOR_UNDO.capture_state(curve)
 	var first_y := curve.sample(0.5)
 
-	inspector.call("_on_add_point_btn_pressed")
+	EDITOR_DRIVER.add_point_from_toolbar(inspector)
 
 	_expect(curve.points.size() == 3, "First interior Add did not increase the point count")
 	_expect(curve.points[0].position == Vector2.ZERO and curve.points[2].position == Vector2.ONE, "First interior Add changed an endpoint")
 	_expect(curve.points[1].position.x == 0.5 and is_equal_approx(curve.points[1].position.y, first_y), "First interior Add did not sample the midpoint")
 	_expect(curve.points[1].handle_mode == EasingCurvePoint.HandleMode.LINEAR, "First interior Add did not use Linear handle mode")
 	_expect_selected_point(inspector, editor, curve, 1, "First interior Add")
-	inspector.call("_parse_begin", curve)
+	EDITOR_DRIVER.rebuild_for_curve(inspector, curve)
 	_expect_selected_point(inspector, editor, curve, 1, "First interior Add refresh")
 
 	var second_y := curve.sample(0.25)
-	inspector.call("_on_add_point_btn_pressed")
+	EDITOR_DRIVER.add_point_from_toolbar(inspector)
 
 	_expect(curve.points.size() == 4, "Second interior Add did not increase the point count")
 	_expect(curve.points[1].position.x == 0.25 and is_equal_approx(curve.points[1].position.y, second_y), "Second interior Add did not choose the leftmost largest gap")
@@ -178,7 +164,7 @@ func _test_interior_point_adds() -> void:
 	_expect_selected_point(inspector, editor, curve, 1, "Second interior Add")
 
 	var third_y := curve.sample(0.75)
-	inspector.call("_on_add_point_btn_pressed")
+	EDITOR_DRIVER.add_point_from_toolbar(inspector)
 
 	var after := EDITOR_UNDO.capture_state(curve)
 	_expect(curve.points.size() == 5, "Repeated interior Add did not increase the point count")
@@ -215,7 +201,7 @@ func _test_graph_point_adds() -> void:
 	graph_point.right_control_point = Vector2(0.35, 0.75)
 	graph_editor.selected_index = 0
 
-	graph_inspector.call("_on_curve_editor_point_add_requested", graph_point)
+	EDITOR_DRIVER.add_point_from_graph(graph_inspector, graph_point)
 
 	_expect(graph_curve.points.size() == 3, "Graph Add did not add exactly one point")
 	_expect(graph_curve.points[0].position == Vector2.ZERO and graph_curve.points[2].position == Vector2.ONE, "Graph Add changed an endpoint")
@@ -259,5 +245,5 @@ func _expect_selected_point(
 	label: String,
 ) -> void:
 	_expect(editor.selected_index == point_index, "%s did not select the added point in the curve editor" % label)
-	_expect(inspector.get("_selected_point_index") == point_index, "%s did not store the added point index" % label)
-	_expect(inspector.get("_selected_point_resource_id") == curve.points[point_index].get_instance_id(), "%s did not store the added point resource" % label)
+	_expect(EDITOR_DRIVER.selected_point_index(inspector) == point_index, "%s did not store the added point index" % label)
+	_expect(EDITOR_DRIVER.selected_point_resource_id(inspector) == curve.points[point_index].get_instance_id(), "%s did not store the added point resource" % label)

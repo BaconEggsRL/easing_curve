@@ -1,10 +1,6 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const ROUND_TRIP_PATH := "res://test/_v105_state_round_trip.tres"
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	_test_handle_modes_and_control_states()
@@ -13,18 +9,7 @@ func _init() -> void:
 	_test_fallbacks_and_snapshot_round_trip()
 	_cleanup()
 
-	if _failures == 0:
-		print("PASS: %d EasingCurve v1.0.5 regression checks" % _checks)
-	else:
-		push_error("FAIL: %d of %d EasingCurve v1.0.5 regression checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("EasingCurve v1.0.5 regression")
 
 
 func _expect_finite_samples(curve: EasingCurve, label: String) -> void:

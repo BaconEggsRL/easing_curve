@@ -1,11 +1,7 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EASING_LIBRARY = preload("res://addons/easing_curve/scripts/runtime/easing.gd")
 const ROUND_TRIP_PATH := "res://test/_css_linear_round_trip.tres"
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	_test_parsing()
@@ -13,20 +9,7 @@ func _init() -> void:
 	_test_sampling()
 	_test_resource_behavior()
 
-	if _failures == 0:
-		print("PASS: %d CSS Linear checks" % _checks)
-		quit()
-	else:
-		push_error("FAIL: %d of %d CSS Linear checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if condition:
-		return
-	_failures += 1
-	push_error(message)
+	_finish("CSS Linear")
 
 
 func _expect_approx(actual: float, expected: float, message: String) -> void:

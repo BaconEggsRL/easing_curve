@@ -1,11 +1,8 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
+const EDITOR_DRIVER = preload("res://test/scripts/easing_curve_editor_test_driver.gd")
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	if not EDITOR_HOST.require_inspector_host("easing_curve_selection_refresh_characterization_test.gd"):
@@ -20,19 +17,7 @@ func _run() -> void:
 	_test_property_selection_survives_reparse()
 	_test_topology_and_resource_switch_selection()
 	_test_resource_view_state_persistence()
-	if _failures == 0:
-		print("PASS: %d selection and refresh characterization checks" % _checks)
-		quit()
-	else:
-		push_error("FAIL: %d of %d selection and refresh characterization checks failed" % [_failures, _checks])
-		quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("selection and refresh characterization")
 
 
 func _curve() -> EasingCurve:
@@ -54,14 +39,14 @@ func _commit_add(
 		point: EasingCurvePoint,
 ) -> void:
 	var before := EDITOR_UNDO.capture_state(curve)
-	var selection_before: Dictionary = inspector.call("_capture_point_selection_state")
+	var selection_before := EDITOR_DRIVER.capture_point_selection(inspector)
 	var points: Array[EasingCurvePoint] = curve.points.duplicate()
 	points.append(point)
 	points.sort_custom(func(a: EasingCurvePoint, b: EasingCurvePoint) -> bool: return a.position.x < b.position.x)
 	var added_index := points.find(point)
 	curve.set_point_snapshot(curve.make_point_snapshot(points))
-	inspector.call("_select_reordered_point", curve.points[added_index])
-	var selection_after: Dictionary = inspector.call("_capture_point_selection_state")
+	EDITOR_DRIVER.select_point(inspector, curve.points[added_index])
+	var selection_after := EDITOR_DRIVER.capture_point_selection(inspector)
 	_expect(
 		EDITOR_UNDO.commit_applied_action(
 			history,
@@ -85,14 +70,14 @@ func _test_add_undo_redo_selection_symmetry() -> void:
 	var editor: EasingCurveEditor = context.editor
 	var inspector: Object = context.inspector
 	var history := UndoRedo.new()
-	inspector.call("_clear_point_property_selection")
+	EDITOR_DRIVER.clear_point_selection(inspector)
 	editor.selected_index = -1
 
 	var point_a := EasingCurvePoint.new(Vector2(0.33, 0.25))
 	_commit_add(history, curve, inspector, point_a)
 	_expect(editor.selected_index == 1, "First add did not select point A")
 	history.undo()
-	_expect(editor.selected_index == -1 and inspector.get("_selected_point_index") == -1, "Undo first add did not restore no selection")
+	_expect(editor.selected_index == -1 and EDITOR_DRIVER.selected_point_index(inspector) == -1, "Undo first add did not restore no selection")
 	history.redo()
 	_expect(editor.selected_index == 1, "Redo first add did not restore point A selection")
 
@@ -161,19 +146,19 @@ func _test_property_selection_survives_reparse() -> void:
 		var first := _create_property_header(inspector, selected_point, 2, property_name)
 		var first_header: PanelContainer = first.header
 		_expect(first_header != null, "%s did not create a selectable property header" % property_name)
-		inspector.call("_select_point_property", first_header, 2, property_name)
+		EDITOR_DRIVER.select_point_property(inspector, first_header, 2, property_name)
 		editor.selected_index = 2
-		inspector.call("_apply_point_property_change", 2, property_name, selected_point.get(property_name))
-		inspector.call("_parse_begin", curve)
+		EDITOR_DRIVER.change_point_property(inspector, 2, property_name, selected_point.get(property_name))
+		EDITOR_DRIVER.rebuild_for_curve(inspector, curve)
 		var recreated := _create_property_header(inspector, selected_point, 2, property_name)
 		var recreated_header: PanelContainer = recreated.header
-		_expect(inspector.get("_selected_point_index") == 2, "%s reparse changed the logical point" % property_name)
-		_expect(inspector.get("_selected_point_property_name") == property_name, "%s reparse lost the property name" % property_name)
-		_expect(inspector.get("_selected_point_property_header") == recreated_header, "%s reparse did not attach the recreated header" % property_name)
+		_expect(EDITOR_DRIVER.selected_point_index(inspector) == 2, "%s reparse changed the logical point" % property_name)
+		_expect(EDITOR_DRIVER.selected_point_property_name(inspector) == property_name, "%s reparse lost the property name" % property_name)
+		_expect(EDITOR_DRIVER.selected_point_property_header(inspector) == recreated_header, "%s reparse did not attach the recreated header" % property_name)
 		_expect(editor.selected_index == 2, "%s reparse lost graph selection synchronization" % property_name)
 		first.grid.free()
 		recreated.grid.free()
-	inspector.call("_clear_point_property_selection")
+	EDITOR_DRIVER.clear_point_selection(inspector)
 	editor.free()
 
 
@@ -184,13 +169,13 @@ func _test_topology_and_resource_switch_selection() -> void:
 	var inspector: Object = context.inspector
 	var points: Array[EasingCurvePoint] = curve.points.duplicate()
 	editor.selected_index = 2
-	inspector.call("_select_reordered_point", points[2])
-	inspector.call("_move_point", 2, 1)
+	EDITOR_DRIVER.select_point(inspector, points[2])
+	EDITOR_DRIVER.move_point(inspector, 2, 1)
 	_expect(curve.points[1] == points[2] and editor.selected_index == 1, "Manual list reorder did not retain the logical point selection")
 
-	inspector.call("_apply_point_property_change", 1, &"position", Vector2(1.0, points[2].position.y), true, points[2])
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"position", Vector2(1.0, points[2].position.y), true, points[2])
 	_expect(editor._get_display_points() == [points[0], points[1], points[2]], "Endpoint takeover preview did not retain the selected point")
-	inspector.call("_commit_point_edit")
+	EDITOR_DRIVER.commit_point_edit(inspector)
 	_expect(curve.points.back() == points[2] and editor.selected_index == curve.points.size() - 1, "Endpoint takeover commit did not retain selection")
 
 	var other := _curve()
@@ -210,9 +195,9 @@ func _test_resource_view_state_persistence() -> void:
 
 	var step_a := int(EasingCurve.DEFAULT_SLIDER_VALUE) + 3
 	var pan_a := Vector2(31.0, -19.0)
-	var section_a: Control = inspector.call("handle_easing_curve_editor", curve_a)
+	var section_a := EDITOR_DRIVER.create_curve_editor(inspector, curve_a)
 	get_root().add_child(section_a)
-	var editor_a: EasingCurveEditor = inspector.get("easing_curve_editor")
+	var editor_a := EDITOR_DRIVER.curve_editor(inspector)
 	editor_a.set_slider_value(step_a)
 	editor_a.pan_offset = pan_a
 	editor_a.pan_changed.emit(pan_a)
@@ -222,18 +207,18 @@ func _test_resource_view_state_persistence() -> void:
 	_expect(curve_a._last_pan == pan_a, "Curve A did not store its pan offset")
 	section_a.free()
 
-	var refreshed_a: Control = inspector.call("handle_easing_curve_editor", curve_a)
+	var refreshed_a := EDITOR_DRIVER.create_curve_editor(inspector, curve_a)
 	get_root().add_child(refreshed_a)
-	editor_a = inspector.get("easing_curve_editor")
+	editor_a = EDITOR_DRIVER.curve_editor(inspector)
 	_expect(editor_a._zoom_step == step_a, "Refreshing Curve A did not restore its zoom step")
 	_expect(editor_a._slider.slider.value == step_a, "Refreshing Curve A did not restore its slider value")
 	_expect(Vector2(editor_a._zoom_x, editor_a._zoom_y).is_equal_approx(zoom_a), "Refreshing Curve A did not restore its zoom vector")
 	_expect(editor_a.pan_offset == pan_a, "Refreshing Curve A did not restore its pan offset")
 	refreshed_a.free()
 
-	var section_b: Control = inspector.call("handle_easing_curve_editor", curve_b)
+	var section_b := EDITOR_DRIVER.create_curve_editor(inspector, curve_b)
 	get_root().add_child(section_b)
-	var editor_b: EasingCurveEditor = inspector.get("easing_curve_editor")
+	var editor_b := EDITOR_DRIVER.curve_editor(inspector)
 	var default_step := int(EasingCurve.DEFAULT_SLIDER_VALUE)
 	_expect(editor_b._zoom_step == default_step, "Curve B inherited Curve A's zoom step")
 	_expect(editor_b.pan_offset == Vector2.ZERO, "Curve B inherited Curve A's pan offset")
@@ -249,9 +234,9 @@ func _test_resource_view_state_persistence() -> void:
 	_expect(curve_b._last_pan == pan_b, "Curve B did not store its independent pan offset")
 	section_b.free()
 
-	var returned_a: Control = inspector.call("handle_easing_curve_editor", curve_a)
+	var returned_a := EDITOR_DRIVER.create_curve_editor(inspector, curve_a)
 	get_root().add_child(returned_a)
-	editor_a = inspector.get("easing_curve_editor")
+	editor_a = EDITOR_DRIVER.curve_editor(inspector)
 	_expect(editor_a._zoom_step == step_a, "Returning to Curve A restored Curve B's zoom step")
 	_expect(editor_a._slider.slider.value == step_a, "Returning to Curve A restored the wrong slider value")
 	_expect(Vector2(editor_a._zoom_x, editor_a._zoom_y).is_equal_approx(zoom_a), "Returning to Curve A restored the wrong zoom vector")

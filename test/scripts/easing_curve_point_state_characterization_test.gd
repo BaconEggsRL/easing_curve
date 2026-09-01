@@ -1,6 +1,7 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
+const EDITOR_DRIVER = preload("res://test/scripts/easing_curve_editor_test_driver.gd")
 const POINT_STATE = preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_point_state.gd"
 )
@@ -10,10 +11,6 @@ const SNAPSHOT_MUTATOR = preload(
 const POINT_STATE_TRANSITION = preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_point_state_transition.gd"
 )
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	if not EDITOR_HOST.require_inspector_host("easing_curve_point_state_characterization_test.gd"):
@@ -34,19 +31,7 @@ func _init() -> void:
 	_test_point_signal_contract()
 	_test_inspector_snapshot_state_precedence_and_reset()
 
-	if _failures == 0:
-		print("PASS: %d point-state characterization checks" % _checks)
-		quit()
-	else:
-		push_error("FAIL: %d of %d point-state characterization checks failed" % [_failures, _checks])
-		quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("point-state characterization")
 
 
 func _point() -> EasingCurvePoint:
@@ -934,59 +919,59 @@ func _test_inspector_snapshot_state_precedence_and_reset() -> void:
 		var force_property := &"left_force_linear" if property_name == &"left_control_point" else &"right_force_linear"
 		var locks: Dictionary[String, bool] = curve.points[1].locked.duplicate(true)
 		locks[property_name] = true
-		inspector.call("_apply_point_property_change", 1, &"locked", locks)
-		inspector.call("_apply_point_property_change", 1, force_property, true)
+		EDITOR_DRIVER.change_point_property(inspector, 1, &"locked", locks)
+		EDITOR_DRIVER.change_point_property(inspector, 1, force_property, true)
 		_expect(not curve.points[1].locked[property_name], "Inspector Force Linear did not win over a pre-existing %s lock" % property_name)
 		_expect(bool(curve.points[1].get(force_property)), "Inspector Force Linear did not remain enabled for %s" % property_name)
 		_expect(curve.points[1].get(property_name) == curve.points[1].position, "Inspector Force Linear did not collapse %s" % property_name)
 
 		locks = curve.points[1].locked.duplicate(true)
 		locks[property_name] = true
-		inspector.call("_apply_point_property_change", 1, &"locked", locks)
+		EDITOR_DRIVER.change_point_property(inspector, 1, &"locked", locks)
 		var offset := Vector2.LEFT if property_name == &"left_control_point" else Vector2.RIGHT
 		_expect(not bool(curve.points[1].get(force_property)), "Inspector Lock did not win over active %s Force Linear" % property_name)
 		_expect(curve.points[1].get(property_name).is_equal_approx(curve.points[1].position + offset * EasingCurvePoint.DEFAULT_HANDLE_LENGTH), "Inspector Lock did not restore %s default geometry" % property_name)
 
-	inspector.call("_apply_point_property_change", 1, &"left_force_linear", true)
-	inspector.call("_apply_point_property_change", 1, &"left_control_lock", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"left_force_linear", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"left_control_lock", true)
 	_expect(curve.points[1].locked["left_control_point"], "Synthetic Free control lock did not lock the left control")
 	_expect(not curve.points[1].left_force_linear, "Synthetic Free control lock did not win over Force Linear")
 	_expect(curve.points[1].left_control_point.is_equal_approx(curve.points[1].position + Vector2.LEFT * EasingCurvePoint.DEFAULT_HANDLE_LENGTH), "Synthetic Free control lock did not restore the left default handle")
 
-	inspector.call("_apply_point_property_change", 1, &"position_lock", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"position_lock", true)
 	_expect(curve.points[1].locked["position"], "Synthetic position lock did not lock the position")
-	inspector.call("_apply_point_property_change", 1, &"position_lock", false)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"position_lock", false)
 	_expect(not curve.points[1].locked["position"], "Synthetic position lock did not unlock the position")
 
-	inspector.call("_apply_point_property_change", 1, &"toolbar_options_reset", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"toolbar_options_reset", true)
 	_expect(curve.points[1].handle_mode == EasingCurvePoint.HandleMode.FREE, "Toolbar reset did not prepare Free mode for the asymmetric lock merge")
-	inspector.call("_apply_point_property_change", 1, &"left_control_lock", true)
-	inspector.call("_apply_point_property_change", 1, &"handle_mode", EasingCurvePoint.HandleMode.LINKED)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"left_control_lock", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"handle_mode", EasingCurvePoint.HandleMode.LINKED)
 	_expect(curve.points[1].locked["left_control_point"] and curve.points[1].locked["right_control_point"], "Linked mode did not merge an asymmetric Free control lock")
 
-	inspector.call("_apply_point_property_change", 1, &"toolbar_options_reset", true)
-	inspector.call("_apply_point_property_change", 1, &"right_force_linear", true)
-	inspector.call("_apply_point_property_change", 1, &"handle_mode", EasingCurvePoint.HandleMode.LINKED)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"toolbar_options_reset", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"right_force_linear", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"handle_mode", EasingCurvePoint.HandleMode.LINKED)
 	_expect(curve.points[1].left_force_linear and curve.points[1].right_force_linear, "Linked mode did not merge an asymmetric Free Force Linear state")
 	_expect(curve.points[1].left_control_point == curve.points[1].position and curve.points[1].right_control_point == curve.points[1].position, "Linked mode did not collapse controls for a merged Force Linear state")
 
-	inspector.call("_apply_point_property_change", 1, &"toolbar_options_reset", true)
-	inspector.call("_apply_point_property_change", 1, &"handle_mode", EasingCurvePoint.HandleMode.LINKED)
-	inspector.call("_apply_point_property_change", 1, &"left_control_lock", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"toolbar_options_reset", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"handle_mode", EasingCurvePoint.HandleMode.LINKED)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"left_control_lock", true)
 	_expect(curve.points[1].locked["left_control_point"] and curve.points[1].locked["right_control_point"], "Synthetic Linked control lock did not apply to both controls")
-	inspector.call("_apply_point_property_change", 1, &"right_force_linear", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"right_force_linear", true)
 	_expect(
 		curve.points[1].is_control_forced_linear(EasingCurvePoint.ControlSide.LEFT)
 		and curve.points[1].is_control_forced_linear(EasingCurvePoint.ControlSide.RIGHT),
 		"Inspector Linked Force Linear did not apply to both controls",
 	)
 	_expect(curve.points[1].left_control_point == curve.points[1].position and curve.points[1].right_control_point == curve.points[1].position, "Inspector Linked Force Linear did not collapse both controls")
-	inspector.call("_apply_point_property_change", 1, &"right_control_lock", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"right_control_lock", true)
 	_expect(not curve.points[1].left_force_linear and not curve.points[1].right_force_linear, "Synthetic Linked lock did not clear shared Force Linear")
 	_expect(curve.points[1].locked["left_control_point"] and curve.points[1].locked["right_control_point"], "Synthetic Linked lock did not keep both controls locked")
-	inspector.call("_apply_point_property_change", 1, &"left_control_lock", false)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"left_control_lock", false)
 	_expect(not curve.points[1].locked["left_control_point"] and not curve.points[1].locked["right_control_point"], "Unlocking a synthetic Linked control lock did not unlock both controls")
-	inspector.call("_apply_point_property_change", 1, &"toolbar_options_reset", true)
+	EDITOR_DRIVER.change_point_property(inspector, 1, &"toolbar_options_reset", true)
 	_expect(curve.points[1].handle_mode == EasingCurvePoint.HandleMode.FREE, "Toolbar reset did not restore Free handle mode")
 	_expect(not curve.points[1].left_force_linear and not curve.points[1].right_force_linear, "Toolbar reset did not clear Force Linear state")
 	_expect(not curve.points[1].locked["left_control_point"] and not curve.points[1].locked["right_control_point"], "Toolbar reset did not clear control locks")

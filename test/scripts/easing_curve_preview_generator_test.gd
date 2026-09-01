@@ -1,13 +1,9 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
 const PREVIEW_GENERATOR = preload(
 	"res://addons/easing_curve/scripts/editor/easing_curve_preview_generator.gd"
 )
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	call_deferred("_run")
@@ -69,18 +65,7 @@ func _run() -> void:
 			"Back OUT preview clipped its overshoot above one",
 		)
 
-	if _failures == 0:
-		print("PASS: %d EasingCurve preview generator checks" % _checks)
-	else:
-		push_error("FAIL: %d of %d EasingCurve preview generator checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("EasingCurve preview generator")
 
 
 func _count_visible_pixels(image: Image) -> int:

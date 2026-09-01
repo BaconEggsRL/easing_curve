@@ -1,11 +1,7 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const CURVE_EDITOR = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor.gd")
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	_test_basic_timeline_slot_swap()
@@ -16,18 +12,7 @@ func _init() -> void:
 	_test_reorder_ignores_each_lock_combination()
 	_test_reorder_preserves_handle_modes_and_states()
 
-	if _failures == 0:
-		print("PASS: %d EasingCurve manual reorder checks" % _checks)
-	else:
-		push_error("FAIL: %d of %d EasingCurve manual reorder checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("EasingCurve manual reorder")
 
 
 func _expect_vector(actual: Vector2, expected: Vector2, message: String) -> void:

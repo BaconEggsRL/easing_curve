@@ -1,12 +1,8 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	if not EDITOR_HOST.require_editor_host("easing_curve_control_editability_test.gd"):
@@ -16,19 +12,7 @@ func _init() -> void:
 	_test_handle_mode_undo_redo_refreshes_inputs()
 	_test_snapshot_refreshes_bindings_without_input_signals()
 
-	if _failures == 0:
-		print("PASS: %d EasingCurve control editability checks" % _checks)
-		quit()
-	else:
-		push_error("FAIL: %d of %d EasingCurve control editability checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("EasingCurve control editability")
 
 
 func _register_control_inputs(point: EasingCurvePoint, inspector: Object) -> Dictionary:

@@ -1,11 +1,8 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EDITOR_HOST = preload("res://test/scripts/editor_host_test_harness.gd")
+const EDITOR_DRIVER = preload("res://test/scripts/easing_curve_editor_test_driver.gd")
 const DRAGGING_META := &"_easing_curve_dragging"
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	if not EDITOR_HOST.require_inspector_host("easing_curve_linear_control_alias_test.gd"):
@@ -17,19 +14,7 @@ func _init() -> void:
 	_test_linear_control_endpoint_takeover()
 	_test_force_linear_control_is_not_aliased()
 
-	if _failures == 0:
-		print("PASS: %d EasingCurve Linear control alias checks" % _checks)
-		quit()
-	else:
-		push_error("FAIL: %d of %d EasingCurve Linear control alias checks failed" % [_failures, _checks])
-	quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("EasingCurve Linear control alias")
 
 
 func _make_fixture(right_x: float = 0.6) -> Dictionary:
@@ -121,7 +106,7 @@ func _test_linear_control_x_uses_position_reorder() -> void:
 	_expect(inspector.get("_point_edit_before_state") == before_state, "Linear control drag opened more than one edit transaction")
 
 	input.remove_meta(DRAGGING_META)
-	inspector.call("_commit_point_edit")
+	EDITOR_DRIVER.commit_point_edit(inspector)
 	_expect(curve.points == [a, b, c], "Linear control drag commit changed the final sorted order")
 	_expect(inspector.get("_point_edit_before_state").is_empty(), "Linear control drag did not close its edit transaction")
 	input.free()
@@ -174,7 +159,7 @@ func _test_linear_control_x_drag_crosses_multiple_points() -> void:
 		_expect(editor._get_display_points() == expected_orders[step], "Linear control X drag did not preserve the live graph preview at step %d" % step)
 		_expect(editor.selected_index == 1, "Linear control X drag changed selection before commit")
 	input.remove_meta(DRAGGING_META)
-	inspector.call("_commit_point_edit")
+	EDITOR_DRIVER.commit_point_edit(inspector)
 	_expect(curve.points == expected_orders.back(), "Linear control X drag did not commit the final order")
 	_expect(curve.points[1] == moved and editor.selected_index == 1, "Linear control X drag lost the logical selected point after commit")
 	input.free()
@@ -217,7 +202,7 @@ func _test_linear_control_endpoint_takeover() -> void:
 	_send_x_edit(inspector, b, input, reset_btn, 1.0, "left_control_point")
 	_expect(editor._get_display_points() == [a, b], "Linear control endpoint edit did not preview takeover")
 	input.remove_meta(DRAGGING_META)
-	inspector.call("_commit_point_edit")
+	EDITOR_DRIVER.commit_point_edit(inspector)
 	_expect(curve.points == [a, b], "Linear control endpoint edit did not commit takeover")
 	_expect_linear_point(b, Vector2(1.0, 0.5), "Linear control endpoint edit")
 	input.free()

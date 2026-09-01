@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const EASING_LIBRARY := preload("res://addons/easing_curve/scripts/runtime/easing.gd")
 const ROUND_TRIP_PATH := "res://test/_tween_bezier_round_trip.tres"
@@ -81,7 +81,6 @@ const EXPECTED_POINT_COUNTS := {
 	EasingCurve.TRANS.BACK: [2, 2, 3, 3],
 }
 
-var _failures := 0
 var _bezier_checks := 0
 var _analytic_checks := 0
 var _sample_offsets := PackedFloat64Array(EDGE_OFFSETS)
@@ -98,14 +97,11 @@ func _init() -> void:
 	if FileAccess.file_exists(ROUND_TRIP_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(ROUND_TRIP_PATH))
 
-	if _failures == 0:
-		print(
-			"PASS: %d Bézier approximation checks and %d analytic reference checks"
-			% [_bezier_checks, _analytic_checks],
-		)
-	else:
-		push_error("FAIL: %d Tween comparison checks exceeded their error limits" % _failures)
-	quit(_failures)
+	_finish_with_messages(
+		"%d Bézier approximation checks and %d analytic reference checks"
+		% [_bezier_checks, _analytic_checks],
+		"%d Tween comparison checks exceeded their error limits" % _failures,
+	)
 
 
 func _compare_bezier_transition(
@@ -254,13 +250,6 @@ func _point_geometry_matches(a: EasingCurve, b: EasingCurve) -> bool:
 		if not a.points[index].right_control_point.is_equal_approx(b.points[index].right_control_point):
 			return false
 	return true
-
-
-func _expect(condition: bool, message: String) -> void:
-	if condition:
-		return
-	_failures += 1
-	push_error(message)
 
 
 func _compare_analytic_transition(tween_transition: Tween.TransitionType) -> void:

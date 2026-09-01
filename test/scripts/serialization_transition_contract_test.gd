@@ -1,13 +1,9 @@
-extends SceneTree
+extends "res://test/scripts/test_case.gd"
 
 const LEGACY_PRE_FLAT_PATH := "res://test/presets/legacy_pre_flat_triangle.tres"
 const LEGACY_MISSING_FORCE_PATH := "res://test/presets/legacy_flat_without_force_linear.tres"
 const ROUND_TRIP_DIRECTORY := "user://_serialization_transition_contract"
 const SAMPLE_INPUTS := [0.0, 0.25, 0.5, 0.75, 1.0]
-
-var _failures := 0
-var _checks := 0
-
 
 func _init() -> void:
 	_test_legacy_resource_fixtures()
@@ -21,19 +17,7 @@ func _init() -> void:
 	_test_bool_snapshot_value_support()
 	_cleanup()
 
-	if _failures == 0:
-		print("PASS: %d serialization and transition contract checks" % _checks)
-		quit(0)
-	else:
-		push_error("FAIL: %d of %d serialization and transition contract checks failed" % [_failures, _checks])
-		quit(_failures)
-
-
-func _expect(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures += 1
-		push_error(message)
+	_finish("serialization and transition contract")
 
 
 func _expect_approx(actual: float, expected: float, message: String) -> void:
