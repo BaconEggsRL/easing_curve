@@ -2,15 +2,28 @@
 extends Control
 ## Test Scene
 ##
-## Test scene showcasing the EasingCurve plugin.
-## Add a new EasingCurve resource to the exported properties and run the scene.
-## Compare the interpolation of Godot's Tween system with the EasingCurve plugin.
+## Test scene showcasing the native and GDScript EasingCurve implementations.
+## Choose the active curve backend in the Inspector and run the scene.
+## Compare the interpolation of Godot's Tween system with the selected curve.
 ## Curve point changes and exported Tween settings restart the comparison automatically.
 ## Curve edits preview live; confirmed changes restart using a fresh runtime copy.
 
 const PLUGIN_CONFIG_PATH := "res://addons/easing_curve/plugin.cfg"
 const MARKER_DOT_RADIUS := 8.0
 const DROPDOWN_MAX_WIDTH := 120.0
+const NATIVE_TRANSITIONS := [
+	["Linear", NativeEasingCurve.TRANS_LINEAR],
+	["Sine", NativeEasingCurve.TRANS_SINE],
+	["Cubic", NativeEasingCurve.TRANS_CUBIC],
+	["Elastic", NativeEasingCurve.TRANS_ELASTIC],
+	["Custom", NativeEasingCurve.TRANS_CUSTOM],
+]
+const NATIVE_EASES := [
+	["In", NativeEasingCurve.EASE_IN],
+	["Out", NativeEasingCurve.EASE_OUT],
+	["In Out", NativeEasingCurve.EASE_IN_OUT],
+	["Out In", NativeEasingCurve.EASE_OUT_IN],
+]
 
 @export var tween_ease: Tween.EaseType = 0:
 	set(value):
@@ -28,9 +41,17 @@ const DROPDOWN_MAX_WIDTH := 120.0
 		_restart_running_tweens()
 
 
+@export_group("Curve Backend")
+@export var use_native_curve := true:
+	set = set_use_native_curve
+
+@export var native_curve: NativeEasingCurve = NativeEasingCurve.new():
+	set = set_native_curve
+
 @export var easing_curve: EasingCurve = EasingCurve.new():
 	set = set_easing_curve
 
+@export_group("Debug")
 @export var debug_curve: Curve = Curve.new()
 
 
@@ -39,6 +60,7 @@ var points: Array[EasingCurvePoint] = []:
 var curve_tween: Tween
 var tween_tween: Tween
 var _runtime_easing_curve: EasingCurve
+var _runtime_native_curve: NativeEasingCurve
 var _debug_prev_curve_pos: Vector2
 var _debug_prev_tween_pos: Vector2
 var _debug_curve_speed: float = 0.0
@@ -50,6 +72,8 @@ var _debug_last_t: float = 0.0
 func _init() -> void:
 	if easing_curve != null and not easing_curve.changed.is_connected(_on_easing_curve_changed):
 		easing_curve.changed.connect(_on_easing_curve_changed)
+	if native_curve != null and not native_curve.changed.is_connected(_on_native_curve_changed):
+		native_curve.changed.connect(_on_native_curve_changed)
 
 # Nodes for Tween interpolation
 @onready var tween_start_marker: Marker2D = %TweenStartMarker
@@ -151,21 +175,50 @@ func _sync_dropdowns() -> void:
 	if not is_node_ready():
 		return
 
-	# EasingCurve
-	if easing_curve:
-		curve_trans_dropdown.select(easing_curve.trans_type)
-		curve_ease_dropdown.select(easing_curve.ease_type)
+	if use_native_curve and native_curve:
+		_select_dropdown_value(curve_trans_dropdown, native_curve.transition)
+		_select_dropdown_value(curve_ease_dropdown, native_curve.ease_type)
+	elif easing_curve:
+		_select_dropdown_value(curve_trans_dropdown, easing_curve.trans_type)
+		_select_dropdown_value(curve_ease_dropdown, easing_curve.ease_type)
 
 	# Tween
-	for i in tween_trans_dropdown.item_count:
-		if tween_trans_dropdown.get_item_metadata(i) == tween_trans:
-			tween_trans_dropdown.select(i)
-			break
+	_select_dropdown_value(tween_trans_dropdown, tween_trans)
+	_select_dropdown_value(tween_ease_dropdown, tween_ease)
 
-	for i in tween_ease_dropdown.item_count:
-		if tween_ease_dropdown.get_item_metadata(i) == tween_ease:
-			tween_ease_dropdown.select(i)
-			break
+
+func _select_dropdown_value(dropdown: OptionButton, value: int) -> void:
+	for index in dropdown.item_count:
+		if int(dropdown.get_item_metadata(index)) == value:
+			dropdown.select(index)
+			return
+
+
+func _populate_curve_dropdowns() -> void:
+	curve_trans_dropdown.clear()
+	curve_ease_dropdown.clear()
+	if use_native_curve:
+		_add_dropdown_options(curve_trans_dropdown, NATIVE_TRANSITIONS)
+		_add_dropdown_options(curve_ease_dropdown, NATIVE_EASES)
+	else:
+		for transition_name in EasingCurve.TRANS.keys():
+			curve_trans_dropdown.add_item(transition_name.capitalize())
+			curve_trans_dropdown.set_item_metadata(
+				curve_trans_dropdown.item_count - 1,
+				EasingCurve.TRANS[transition_name],
+			)
+		for ease_name in EasingCurve.EASE.keys():
+			curve_ease_dropdown.add_item(ease_name.capitalize())
+			curve_ease_dropdown.set_item_metadata(
+				curve_ease_dropdown.item_count - 1,
+				EasingCurve.EASE[ease_name],
+			)
+
+
+func _add_dropdown_options(dropdown: OptionButton, options: Array) -> void:
+	for option in options:
+		dropdown.add_item(option[0])
+		dropdown.set_item_metadata(dropdown.item_count - 1, option[1])
 
 
 func _setup_dropdowns() -> void:
@@ -174,16 +227,7 @@ func _setup_dropdowns() -> void:
 	_configure_dropdown(curve_ease_dropdown)
 	_configure_dropdown(curve_trans_dropdown)
 
-	# EasingCurve
-	for trans_name in EasingCurve.TRANS.keys():
-		curve_trans_dropdown.add_item(trans_name.capitalize())
-
-	for ease_name in EasingCurve.EASE.keys():
-		curve_ease_dropdown.add_item(ease_name.capitalize())
-
-	if easing_curve:
-		curve_trans_dropdown.select(easing_curve.trans_type)
-		curve_ease_dropdown.select(easing_curve.ease_type)
+	_populate_curve_dropdowns()
 
 	# Built-in Tween
 	var tween_transitions := [
@@ -222,17 +266,6 @@ func _setup_dropdowns() -> void:
 			item[1]
 		)
 
-	# Select current values.
-	for i in tween_trans_dropdown.item_count:
-		if tween_trans_dropdown.get_item_metadata(i) == tween_trans:
-			tween_trans_dropdown.select(i)
-			break
-
-	for i in tween_ease_dropdown.item_count:
-		if tween_ease_dropdown.get_item_metadata(i) == tween_ease:
-			tween_ease_dropdown.select(i)
-			break
-
 	curve_trans_dropdown.item_selected.connect(_on_curve_trans_selected)
 	curve_ease_dropdown.item_selected.connect(_on_curve_ease_selected)
 	tween_trans_dropdown.item_selected.connect(_on_tween_trans_selected)
@@ -242,16 +275,28 @@ func _setup_dropdowns() -> void:
 
 
 func _on_curve_ease_selected(index: int) -> void:
-	if not _runtime_easing_curve:
-		return
-	_runtime_easing_curve.ease_type = index
+	var ease_type := int(curve_ease_dropdown.get_item_metadata(index))
+	if use_native_curve:
+		if not _runtime_native_curve:
+			return
+		_runtime_native_curve.ease_type = ease_type
+	else:
+		if not _runtime_easing_curve:
+			return
+		_runtime_easing_curve.ease_type = ease_type
 	restart_runtime()
 
 
 func _on_curve_trans_selected(index: int) -> void:
-	if not _runtime_easing_curve:
-		return
-	_runtime_easing_curve.trans_type = index
+	var transition := int(curve_trans_dropdown.get_item_metadata(index))
+	if use_native_curve:
+		if not _runtime_native_curve:
+			return
+		_runtime_native_curve.transition = transition
+	else:
+		if not _runtime_easing_curve:
+			return
+		_runtime_easing_curve.trans_type = transition
 	restart_runtime()
 
 
@@ -322,9 +367,10 @@ func _draw() -> void:
 	)
 
 	# Debug text
-	var font = ThemeDB.fallback_font
-	var font_size = 14
+	var font: Font = ThemeDB.fallback_font
+	var font_size := 14
 	var y := 20
+	var solver_t_text := "not exposed (native)" if use_native_curve else "%.4f" % _debug_last_t
 
 	draw_string(
 		font,
@@ -339,7 +385,7 @@ func _draw() -> void:
 	draw_string(
 		font,
 		Vector2(10, y),
-		"t (Newton): %.4f" % _debug_last_t,
+		"solver t: %s" % solver_t_text,
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		font_size,
@@ -415,6 +461,28 @@ func restart_runtime() -> void:
 	start_tween(tween_tween, tween_end_marker, tween_node, false)
 
 
+func set_use_native_curve(value: bool) -> void:
+	if use_native_curve == value:
+		return
+	use_native_curve = value
+	if is_node_ready():
+		_populate_curve_dropdowns()
+		_sync_dropdowns()
+	reset_and_start.call_deferred()
+
+
+func set_native_curve(value: NativeEasingCurve) -> void:
+	if native_curve == value:
+		return
+	if native_curve != null and native_curve.changed.is_connected(_on_native_curve_changed):
+		native_curve.changed.disconnect(_on_native_curve_changed)
+	native_curve = value
+	if native_curve != null and not native_curve.changed.is_connected(_on_native_curve_changed):
+		native_curve.changed.connect(_on_native_curve_changed)
+	_sync_dropdowns()
+	reset_and_start.call_deferred()
+
+
 func set_easing_curve(value: EasingCurve) -> void:
 	if easing_curve == value:
 		return
@@ -428,7 +496,20 @@ func set_easing_curve(value: EasingCurve) -> void:
 
 
 func _capture_runtime_curves() -> void:
-	_runtime_easing_curve = easing_curve.duplicate() as EasingCurve if easing_curve != null else null
+	_runtime_native_curve = null
+	_runtime_easing_curve = null
+	if use_native_curve:
+		_runtime_native_curve = (
+			native_curve.duplicate() as NativeEasingCurve
+			if native_curve != null
+			else null
+		)
+	else:
+		_runtime_easing_curve = (
+			easing_curve.duplicate() as EasingCurve
+			if easing_curve != null
+			else null
+		)
 
 
 func set_points(value) -> void:
@@ -444,19 +525,21 @@ func print_points() -> void:
 	else:
 		for p in points:
 			print(p.position)
-	print("print_points easing_curve.points = ")
-	if not easing_curve:
-		print("[]")
-	elif easing_curve.points.size() == 0:
+	print("print_points active curve points = ")
+	var active_points: Array = []
+	if use_native_curve and native_curve:
+		active_points = native_curve.points
+	elif easing_curve:
+		active_points = easing_curve.points
+	if active_points.is_empty():
 		print("[]")
 	else:
-		for p in easing_curve.points:
+		for p in active_points:
 			print(p.position)
 
 
 func start_tween(tween_ref: Tween, end: Marker2D, node: Node2D, use_curve: bool) -> void:
-	var runtime_curve := _runtime_easing_curve
-	if use_curve and runtime_curve == null:
+	if use_curve and _runtime_native_curve == null and _runtime_easing_curve == null:
 		return
 
 	var target := end.global_position
@@ -484,16 +567,29 @@ func start_tween(tween_ref: Tween, end: Marker2D, node: Node2D, use_curve: bool)
 	var position_tweener = new_tween.tween_property(node, "global_position", target, duration)
 
 	if use_curve:
-		position_tweener.set_custom_interpolator(tween_easing_curve.bind(runtime_curve))
+		if use_native_curve:
+			position_tweener.set_custom_interpolator(tween_native_curve)
+		else:
+			position_tweener.set_custom_interpolator(tween_easing_curve)
 	else:
 		position_tweener.set_ease(tween_ease)
 		position_tweener.set_trans(tween_trans)
 
 
-func tween_easing_curve(offset: float, _curve: EasingCurve) -> float:
+func tween_native_curve(offset: float) -> float:
+	if _runtime_native_curve == null:
+		return 0.0
 	_debug_offset = offset
-	_debug_curve_value = _curve.sample(offset)
-	_debug_last_t = _curve.get_last_solved_t()
+	_debug_curve_value = _runtime_native_curve.sample(offset)
+	return _debug_curve_value
+
+
+func tween_easing_curve(offset: float) -> float:
+	if _runtime_easing_curve == null:
+		return 0.0
+	_debug_offset = offset
+	_debug_curve_value = _runtime_easing_curve.sample(offset)
+	_debug_last_t = _runtime_easing_curve.get_last_solved_t()
 
 	return _debug_curve_value
 
@@ -503,6 +599,15 @@ func tween_curve(_offset: float, _curve: Curve) -> float:
 
 
 func _on_easing_curve_changed() -> void:
+	if use_native_curve:
+		return
+	_sync_dropdowns()
+	reset_and_start.call_deferred()
+
+
+func _on_native_curve_changed() -> void:
+	if not use_native_curve:
+		return
 	_sync_dropdowns()
 	reset_and_start.call_deferred()
 
@@ -526,17 +631,35 @@ func _on_match_tween_toggled(enabled: bool) -> void:
 
 
 func _match_curve_to_tween() -> void:
-	if not _runtime_easing_curve:
-		return
-
-	_runtime_easing_curve.trans_type = _get_matching_curve_trans()
-	_runtime_easing_curve.ease_type = _get_matching_curve_ease()
-
-	curve_trans_dropdown.select(_runtime_easing_curve.trans_type)
-	curve_ease_dropdown.select(_runtime_easing_curve.ease_type)
+	var transition := _get_matching_curve_trans()
+	var ease_type := _get_matching_curve_ease()
+	if use_native_curve:
+		if not _runtime_native_curve:
+			return
+		_runtime_native_curve.transition = transition
+		_runtime_native_curve.ease_type = ease_type
+	else:
+		if not _runtime_easing_curve:
+			return
+		_runtime_easing_curve.trans_type = transition
+		_runtime_easing_curve.ease_type = ease_type
+	_select_dropdown_value(curve_trans_dropdown, transition)
+	_select_dropdown_value(curve_ease_dropdown, ease_type)
 
 
 func _get_matching_curve_trans() -> int:
+	if use_native_curve:
+		match tween_trans:
+			Tween.TRANS_LINEAR:
+				return NativeEasingCurve.TRANS_LINEAR
+			Tween.TRANS_SINE:
+				return NativeEasingCurve.TRANS_SINE
+			Tween.TRANS_ELASTIC:
+				return NativeEasingCurve.TRANS_ELASTIC
+			Tween.TRANS_CUBIC:
+				return NativeEasingCurve.TRANS_CUBIC
+		return NativeEasingCurve.TRANS_LINEAR
+
 	match tween_trans:
 		Tween.TRANS_LINEAR:
 			return EasingCurve.TRANS.LINEAR
@@ -567,6 +690,18 @@ func _get_matching_curve_trans() -> int:
 
 
 func _get_matching_curve_ease() -> int:
+	if use_native_curve:
+		match tween_ease:
+			Tween.EASE_IN:
+				return NativeEasingCurve.EASE_IN
+			Tween.EASE_OUT:
+				return NativeEasingCurve.EASE_OUT
+			Tween.EASE_IN_OUT:
+				return NativeEasingCurve.EASE_IN_OUT
+			Tween.EASE_OUT_IN:
+				return NativeEasingCurve.EASE_OUT_IN
+		return NativeEasingCurve.EASE_IN
+
 	match tween_ease:
 		Tween.EASE_IN:
 			return EasingCurve.EASE.IN
