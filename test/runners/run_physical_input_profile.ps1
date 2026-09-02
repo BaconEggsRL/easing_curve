@@ -5,6 +5,8 @@ param(
     [string]$GodotPath = "",
     [ValidateSet("Auto", "None", "WPR")]
     [string]$Profiler = "Auto",
+    [ValidateRange(3, 65)]
+    [int]$PointCount = 17,
     [switch]$PrepareOnly,
     [switch]$SmokeTest,
     [switch]$KeepProjects
