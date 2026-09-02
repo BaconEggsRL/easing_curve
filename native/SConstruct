@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+
+if "build_profile" not in ARGUMENTS:
+    ARGUMENTS["build_profile"] = "build_profile.json"
+
+env = SConscript("godot-cpp/SConstruct", {"api_version": "4.7"})
+
+env.Append(CPPPATH=["src"])
+sources = Glob("src/*.cpp")
+
+library = env.SharedLibrary(
+    "../addons/easing_curve/bin/libeasing_curve_native{}{}".format(
+        env["suffix"], env["SHLIBSUFFIX"]
+    ),
+    source=sources,
+)
+
+env.NoCache(library)
+Default(library)

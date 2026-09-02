@@ -1,12 +1,6 @@
 [gd_scene format=3 uid="uid://bd0qh78msruov"]
 
 [ext_resource type="Script" uid="uid://dmx3tetijwh22" path="res://test/user/export_array_test.gd" id="1_s53tr"]
-[ext_resource type="Script" uid="uid://0cphkvwtfwop" path="res://test/user/export_array_resource.gd" id="2_mgu0x"]
-
-[sub_resource type="Resource" id="Resource_abxj8"]
-script = ExtResource("2_mgu0x")
-point_count = 3
-metadata/_custom_type_script = "uid://0cphkvwtfwop"
 
 [sub_resource type="Animation" id="Animation_s53tr"]
 resource_name = "new_animation"
@@ -25,7 +19,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_s53tr")
-export_array_resource = SubResource("Resource_abxj8")
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=2070723595]
 libraries/ = SubResource("AnimationLibrary_abdqr")

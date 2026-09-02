@@ -11,3 +11,14 @@ test/_temp/*
 .env.*
 !.env.example
 addons/godot_ai_tunnel/tunnel_config.json
+
+# Native v2 spike build products
+/native/.sconsign.dblite
+/native/src/*.obj
+/native/src/*.os
+/addons/easing_curve/bin/*.dll
+/addons/easing_curve/bin/*.exp
+/addons/easing_curve/bin/*.lib
+/addons/easing_curve/bin/*.pdb
+/addons/easing_curve/bin/*.so
+/addons/easing_curve/bin/*.dylib

@@ -1,0 +1,10 @@
+{
+	"enabled_classes": [
+		"InputEvent",
+		"Logger",
+		"Node",
+		"OS",
+		"Resource",
+		"ScriptBacktrace"
+	]
+}
