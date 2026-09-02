@@ -25,6 +25,15 @@ const POINT_LOCKS := &"locks"
 const POINT_LEFT_FORCE_LINEAR := &"left_force_linear"
 const POINT_RIGHT_FORCE_LINEAR := &"right_force_linear"
 const POINT_CHANGING := &"changing"
+const CORE_POINT_SNAPSHOT_KEYS: Array[StringName] = [
+	POINT_POSITIONS,
+	POINT_LEFT_CONTROL_POINTS,
+	POINT_RIGHT_CONTROL_POINTS,
+	POINT_HANDLE_MODES,
+	POINT_LOCKS,
+	POINT_LEFT_FORCE_LINEAR,
+	POINT_RIGHT_FORCE_LINEAR,
+]
 
 # Function snapshot keys that are not transition parameter names.
 const FUNCTION_GENERATED_POINTS_X := &"generated_points_x"
@@ -173,15 +182,55 @@ static func reverse_point_snapshot_values(
 
 
 static func encode_point_snapshot(
-		point_values: Array,
-		property_definitions: Array[Dictionary],
+		point_values: Array[EasingCurvePoint],
+		additional_property_definitions: Array[Dictionary],
 ) -> Dictionary:
-	var snapshot := {}
-	for definition in property_definitions:
+	var positions := PackedVector2Array()
+	var left_control_points := PackedVector2Array()
+	var right_control_points := PackedVector2Array()
+	var handle_modes := PackedInt32Array()
+	var locks: Array[Dictionary] = []
+	var left_force_linear := PackedByteArray()
+	var right_force_linear := PackedByteArray()
+
+	for point in point_values:
+		if point == null:
+			positions.append(Vector2.ZERO)
+			left_control_points.append(Vector2.ZERO)
+			right_control_points.append(Vector2.ZERO)
+			handle_modes.append(EasingCurvePoint.HandleMode.FREE)
+			locks.append({})
+			left_force_linear.append(0)
+			right_force_linear.append(0)
+			continue
+
+		positions.append(point.position)
+		left_control_points.append(point.left_control_point)
+		right_control_points.append(point.right_control_point)
+		handle_modes.append(point.handle_mode)
+		locks.append(point.locked.duplicate())
+		left_force_linear.append(int(point.left_force_linear))
+		right_force_linear.append(int(point.right_force_linear))
+
+	var snapshot := {
+		POINT_POSITIONS: positions,
+		POINT_LEFT_CONTROL_POINTS: left_control_points,
+		POINT_RIGHT_CONTROL_POINTS: right_control_points,
+		POINT_HANDLE_MODES: handle_modes,
+		POINT_LOCKS: locks,
+		POINT_LEFT_FORCE_LINEAR: left_force_linear,
+		POINT_RIGHT_FORCE_LINEAR: right_force_linear,
+	}
+
+	for definition in additional_property_definitions:
 		var property_name: StringName = definition.get("name", StringName())
 		var snapshot_key: StringName = definition.get("snapshot_key", StringName())
 		var property_type := int(definition.get("type", TYPE_NIL))
-		if property_name.is_empty() or snapshot_key.is_empty():
+		if (
+			property_name.is_empty()
+			or snapshot_key.is_empty()
+			or snapshot_key in CORE_POINT_SNAPSHOT_KEYS
+		):
 			continue
 		var values := create_point_snapshot_values(property_type)
 		if values == null:

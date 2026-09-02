@@ -403,6 +403,11 @@ static func _get_ordinary_point_property_definitions() -> Array[Dictionary]:
 	return definitions
 
 
+static var ORDINARY_POINT_PROPERTY_DEFINITIONS: Array[Dictionary] = (
+	_get_ordinary_point_property_definitions()
+)
+
+
 static func get_point_snapshot_property_value(
 		snapshot: Dictionary,
 		property_name: StringName,
@@ -467,7 +472,15 @@ var _point_topology: Array[EasingCurvePoint] = []
 var _point_topology_revision := 0
 var _synchronized_point_topology_revision := -1
 var _points_array_exposed := false
-var _compiled_segments := COMPILED_BEZIER_SEGMENTS.new()
+var _point_geometry_revision := 0
+var _compiled_segment_revision := -1
+var _compiled_segment_x_bounds := PackedVector2Array()
+var _compiled_segment_control_xs := PackedVector2Array()
+var _compiled_segment_y_bounds := PackedVector2Array()
+var _compiled_segment_control_ys := PackedVector2Array()
+var _compiled_segment_count := 0
+var _compiled_segments_binary_search_safe := false
+var _last_compiled_segment_index := -1
 var _change_revision := 0
 var _edit_session_state := EDIT_SESSION_STATE.new()
 
@@ -1437,7 +1450,7 @@ func get_point_snapshot() -> Dictionary:
 func make_point_snapshot(point_values: Array[EasingCurvePoint]) -> Dictionary:
 	return SNAPSHOT_CODEC.encode_point_snapshot(
 		point_values,
-		POINT_PROPERTY_DEFINITIONS,
+		ORDINARY_POINT_PROPERTY_DEFINITIONS,
 	)
 
 
@@ -1976,7 +1989,8 @@ func _mark_point_topology_dirty() -> void:
 
 
 func _mark_point_geometry_dirty() -> void:
-	_compiled_segments.invalidate()
+	_point_geometry_revision += 1
+	_last_compiled_segment_index = -1
 
 
 func _ensure_point_connections_current() -> bool:
@@ -2129,7 +2143,8 @@ func _get_function_arguments(offset: float) -> Array:
 
 
 func _sample_raw(offset: float) -> float:
-	_synchronize_exposed_points_before_sampling()
+	if _ensure_point_connections_current():
+		_notify_curve_changed(true, true)
 
 	if curve_mode == CurveMode.FUNCTION:
 		if not function_callable.is_valid():
@@ -2145,11 +2160,6 @@ func _sample_raw(offset: float) -> float:
 	if sample_result.x >= 0.0:
 		_last_solved_t = sample_result.x
 	return sample_result.y
-
-
-func _synchronize_exposed_points_before_sampling() -> void:
-	if _ensure_point_connections_current():
-		_notify_curve_changed(true, true)
 
 
 func get_last_solved_t() -> float:
@@ -2194,14 +2204,112 @@ static func _sample_bezier_points_with_t(
 
 
 func _sample_compiled_bezier_points_with_t(offset: float) -> Vector2:
-	if not _compiled_segments.supports_binary_search(_points):
+	_ensure_compiled_bezier_segments()
+	if not _compiled_segments_binary_search_safe:
 		return _sample_bezier_points_with_t(_points, offset)
 
-	return _compiled_segments.sample(
-		_points,
-		offset,
-		get_bezier_fallback_value(offset),
+	var segment_index := _last_compiled_segment_index
+	if segment_index >= 0 and segment_index < _compiled_segment_count:
+		var last_bounds := _compiled_segment_x_bounds[segment_index]
+		if (
+			offset >= last_bounds.x
+			and offset <= last_bounds.y
+			and (segment_index == 0 or offset > last_bounds.x)
+		):
+			return _sample_compiled_bezier_segment_with_t(segment_index, offset)
+
+		if segment_index + 1 < _compiled_segment_count:
+			var next_bounds := _compiled_segment_x_bounds[segment_index + 1]
+			if offset > next_bounds.x and offset <= next_bounds.y:
+				segment_index += 1
+				_last_compiled_segment_index = segment_index
+				return _sample_compiled_bezier_segment_with_t(segment_index, offset)
+
+		if segment_index > 0:
+			var previous_index := segment_index - 1
+			var previous_bounds := _compiled_segment_x_bounds[previous_index]
+			if (
+				offset >= previous_bounds.x
+				and offset <= previous_bounds.y
+				and (previous_index == 0 or offset > previous_bounds.x)
+			):
+				_last_compiled_segment_index = previous_index
+				return _sample_compiled_bezier_segment_with_t(previous_index, offset)
+
+	segment_index = _find_compiled_segment_index(offset)
+	if segment_index < 0:
+		_last_compiled_segment_index = -1
+		return Vector2(-1.0, get_bezier_fallback_value(offset))
+
+	_last_compiled_segment_index = segment_index
+	return _sample_compiled_bezier_segment_with_t(segment_index, offset)
+
+
+func _ensure_compiled_bezier_segments() -> void:
+	if _compiled_segment_revision == _point_geometry_revision:
+		return
+
+	var compiled := COMPILED_BEZIER_SEGMENTS.compile(_points)
+	_compiled_segments_binary_search_safe = bool(
+		compiled[COMPILED_BEZIER_SEGMENTS.BINARY_SEARCH_SAFE]
 	)
+	_compiled_segment_x_bounds = compiled[
+		COMPILED_BEZIER_SEGMENTS.SEGMENT_X_BOUNDS
+	]
+	_compiled_segment_control_xs = compiled[
+		COMPILED_BEZIER_SEGMENTS.SEGMENT_CONTROL_XS
+	]
+	_compiled_segment_y_bounds = compiled[
+		COMPILED_BEZIER_SEGMENTS.SEGMENT_Y_BOUNDS
+	]
+	_compiled_segment_control_ys = compiled[
+		COMPILED_BEZIER_SEGMENTS.SEGMENT_CONTROL_YS
+	]
+	_compiled_segment_count = _compiled_segment_x_bounds.size()
+	_last_compiled_segment_index = -1
+	_compiled_segment_revision = _point_geometry_revision
+
+
+func _find_compiled_segment_index(offset: float) -> int:
+	var low := 0
+	var high := _compiled_segment_x_bounds.size()
+	while low < high:
+		var middle := (low + high) / 2
+		if offset <= _compiled_segment_x_bounds[middle].y:
+			high = middle
+		else:
+			low = middle + 1
+
+	if low >= _compiled_segment_x_bounds.size():
+		return -1
+	if offset < _compiled_segment_x_bounds[low].x:
+		return -1
+	return low
+
+
+func _sample_compiled_bezier_segment_with_t(
+		segment_index: int,
+		offset: float,
+) -> Vector2:
+	var x_bounds := _compiled_segment_x_bounds[segment_index]
+	var control_xs := _compiled_segment_control_xs[segment_index]
+	var y_bounds := _compiled_segment_y_bounds[segment_index]
+	var control_ys := _compiled_segment_control_ys[segment_index]
+	var t := BEZIER_SOLVER.solve_monotonic_t(
+		offset,
+		x_bounds.x,
+		control_xs.x,
+		control_xs.y,
+		x_bounds.y,
+	)
+	var value := BEZIER_SOLVER.bezier_interpolate(
+		y_bounds.x,
+		control_ys.x,
+		control_ys.y,
+		y_bounds.y,
+		t,
+	)
+	return Vector2(t, value)
 
 
 static func sample_bezier_segment(
