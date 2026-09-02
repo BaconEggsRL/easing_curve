@@ -17,6 +17,9 @@ const BUILD_TRIAL_COUNT := 7
 const DRAG_WARMUP_STEPS := 8
 const DRAG_STEPS_PER_TRIAL := 40
 const DRAG_TRIAL_COUNT := 7
+const HORIZONTAL_CROSSING_STEPS := 64
+const HORIZONTAL_LEFT_X := 0.04
+const HORIZONTAL_RIGHT_X := 0.96
 const MAX_DRAW_WAIT_FRAMES := 8
 const EDITOR_SIZE := Vector2(800.0, 420.0)
 
@@ -66,6 +69,7 @@ func _run() -> void:
 	for point_count in POINT_COUNTS:
 		await _benchmark_inspector_build(version, point_count)
 		await _benchmark_drag(version, point_count)
+		await _benchmark_horizontal_crossing(version, point_count)
 
 	for _frame in range(3):
 		await process_frame
@@ -151,33 +155,114 @@ func _benchmark_drag(version: String, point_count: int) -> void:
 				draw_samples.append(sample[&"draw_usec"])
 				to_draw_samples.append(sample[&"to_draw_usec"])
 
-		var draw_count_before_commit := editor.draw_count
-		var commit_started := Time.get_ticks_usec()
-		editor._gui_input(_mouse_button(
-			MOUSE_BUTTON_LEFT,
-			editor.get_view_pos(curve.points[point_index].position),
-			false,
-		))
-		commit_cpu_samples.append(
-			float(Time.get_ticks_usec() - commit_started)
-		)
-		var commit_drew := await _wait_for_draw(
+		var commit_sample := await _finish_drag(
 			editor,
-			draw_count_before_commit,
+			editor.get_view_pos(curve.points[point_index].position),
 		)
-		if not commit_drew:
-			push_error("Timed out waiting for the committed drag to redraw")
-			quit(1)
-			return
-		commit_to_draw_samples.append(
-			float(editor.last_draw_finished_usec - commit_started)
-		)
+		commit_cpu_samples.append(commit_sample[&"cpu_usec"])
+		commit_to_draw_samples.append(commit_sample[&"to_draw_usec"])
 
 	_report(version, "drag_update_cpu", point_count, cpu_samples)
 	_report(version, "graph_draw_cpu", point_count, draw_samples)
 	_report(version, "drag_update_to_draw", point_count, to_draw_samples)
 	_report(version, "drag_commit_cpu", point_count, commit_cpu_samples)
 	_report(version, "drag_commit_to_draw", point_count, commit_to_draw_samples)
+	host.free()
+	await process_frame
+
+
+func _benchmark_horizontal_crossing(
+	version: String,
+	point_count: int,
+) -> void:
+	var fixture := await _create_drag_fixture(point_count)
+	var curve: EasingCurve = fixture[&"curve"]
+	var editor: MeasuredCurveEditor = fixture[&"editor"]
+	var host: Control = fixture[&"host"]
+	var dragged_point := curve.points[1]
+	var cpu_samples: Array[float] = []
+	var draw_samples: Array[float] = []
+	var to_draw_samples: Array[float] = []
+	var commit_cpu_samples: Array[float] = []
+	var commit_to_draw_samples: Array[float] = []
+
+	for _trial in range(DRAG_TRIAL_COUNT):
+		var start_index := curve.points.find(dragged_point)
+		var start_world := dragged_point.position
+		editor.update_view_transform()
+		editor._gui_input(_mouse_button(
+			MOUSE_BUTTON_LEFT,
+			editor.get_view_pos(start_world),
+			true,
+		))
+		if editor.dragging_point != start_index:
+			push_error("Benchmark could not begin the expected horizontal point drag")
+			host.free()
+			quit(1)
+			return
+
+		for warmup_step in range(DRAG_WARMUP_STEPS):
+			var warmup_direction := -1.0 if warmup_step % 2 == 0 else 1.0
+			var warmup_world := Vector2(
+				clampf(start_world.x + warmup_direction * 0.002, 0.01, 0.99),
+				start_world.y,
+			)
+			await _drag_step(editor, editor.get_view_pos(warmup_world))
+
+		var crossing_start := dragged_point.position
+		var target_x := (
+			HORIZONTAL_LEFT_X
+			if crossing_start.x > 0.5
+			else HORIZONTAL_RIGHT_X
+		)
+		for step in range(HORIZONTAL_CROSSING_STEPS):
+			var progress := float(step + 1) / float(HORIZONTAL_CROSSING_STEPS)
+			var target_world := Vector2(
+				lerpf(crossing_start.x, target_x, progress),
+				crossing_start.y,
+			)
+			var sample := await _drag_step(
+				editor,
+				editor.get_view_pos(target_world),
+			)
+			cpu_samples.append(sample[&"cpu_usec"])
+			draw_samples.append(sample[&"draw_usec"])
+			to_draw_samples.append(sample[&"to_draw_usec"])
+
+		var commit_sample := await _finish_drag(
+			editor,
+			editor.get_view_pos(dragged_point.position),
+		)
+		commit_cpu_samples.append(commit_sample[&"cpu_usec"])
+		commit_to_draw_samples.append(commit_sample[&"to_draw_usec"])
+
+		var end_index := curve.points.find(dragged_point)
+		if absi(end_index - start_index) < point_count / 2:
+			push_error("Horizontal benchmark did not cross enough curve points")
+			host.free()
+			quit(1)
+			return
+
+	_report(version, "horizontal_crossing_update_cpu", point_count, cpu_samples)
+	_report(
+		version,
+		"horizontal_crossing_graph_draw_cpu",
+		point_count,
+		draw_samples,
+	)
+	_report(
+		version,
+		"horizontal_crossing_update_to_draw",
+		point_count,
+		to_draw_samples,
+	)
+	_report(version, "horizontal_crossing_commit_cpu", point_count, commit_cpu_samples)
+	_report(
+		version,
+		"horizontal_crossing_commit_to_draw",
+		point_count,
+		commit_to_draw_samples,
+	)
 	host.free()
 	await process_frame
 
@@ -236,6 +321,28 @@ func _drag_step(editor: MeasuredCurveEditor, view_position: Vector2) -> Dictiona
 	return {
 		&"cpu_usec": cpu_elapsed,
 		&"draw_usec": editor.last_draw_usec,
+		&"to_draw_usec": float(editor.last_draw_finished_usec - started),
+	}
+
+
+func _finish_drag(
+	editor: MeasuredCurveEditor,
+	view_position: Vector2,
+) -> Dictionary:
+	var draw_count_before := editor.draw_count
+	var started := Time.get_ticks_usec()
+	editor._gui_input(_mouse_button(
+		MOUSE_BUTTON_LEFT,
+		view_position,
+		false,
+	))
+	var cpu_elapsed := float(Time.get_ticks_usec() - started)
+	var drew := await _wait_for_draw(editor, draw_count_before)
+	if not drew:
+		push_error("Timed out waiting for the committed drag to redraw")
+		quit(1)
+	return {
+		&"cpu_usec": cpu_elapsed,
 		&"to_draw_usec": float(editor.last_draw_finished_usec - started),
 	}
 
