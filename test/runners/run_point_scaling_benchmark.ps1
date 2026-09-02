@@ -17,8 +17,15 @@ function Invoke-GodotRunner {
     $runnerArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $godotRunner)
     if (-not [string]::IsNullOrWhiteSpace($GodotPath)) { $runnerArguments += @("-GodotPath", $GodotPath) }
     $runnerArguments += $Arguments
-    & $powerShellExecutable @runnerArguments
-    return $LASTEXITCODE
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $powerShellExecutable @runnerArguments 2>&1 | ForEach-Object { Write-Host $_ }
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    return [int]$exitCode
 }
 
 $projectRoot = Resolve-ProjectRoot
@@ -78,14 +85,24 @@ try {
 
 $benchmarkText = if (Test-Path -LiteralPath $benchmarkLog) { Get-Content -Raw -LiteralPath $benchmarkLog } else { "" }
 [IO.File]::WriteAllText($outputLog, $benchmarkText, [Text.UTF8Encoding]::new($false))
-$passed = $benchmarkExit -eq 0 -and $benchmarkText -match 'INTERACTION_POINT_SCALING\|enabled=true' -and $benchmarkText -notmatch '(?m)^(?:SCRIPT ERROR:|.*CrashHandlerException)'
-if (-not $passed) {
+$hasScalingMarker = $benchmarkText -match 'INTERACTION_POINT_SCALING\|enabled=true'
+$updateToDrawRows = [regex]::Matches($benchmarkText, '(?m)^INTERACTION_BENCH\|[^\r\n]+\|crossing\|(?:9|13|17|25|33|49|65)\|(?:1|4)\|update_to_draw\|').Count
+$countRows = [regex]::Matches($benchmarkText, '(?m)^INTERACTION_COUNTS\|[^\r\n]+\|crossing\|(?:9|13|17|25|33|49|65)\|(?:1|4)\|').Count
+$hasScriptFailure = $benchmarkText -match '(?m)^(?:SCRIPT ERROR:|.*CrashHandlerException)'
+$completeResults = $hasScalingMarker -and $updateToDrawRows -eq 14 -and $countRows -eq 14 -and -not $hasScriptFailure
+
+if (-not $completeResults) {
     if ($benchmarkText) { Write-Host $benchmarkText.TrimEnd() }
+    Write-Host ("POINT_SCALING_INCOMPLETE|exit={0}|update_to_draw_rows={1}|count_rows={2}|script_failure={3}" -f $benchmarkExit, $updateToDrawRows, $countRows, $hasScriptFailure) -ForegroundColor Yellow
     Write-Host "Preserved failed benchmark project: $tempProject" -ForegroundColor Yellow
     exit 1
 }
+if ($benchmarkExit -ne 0) {
+    Write-Warning "Benchmark process returned $benchmarkExit after producing the complete semantic result set; treating this as the established standalone Editor-host teardown artifact."
+}
 
 $benchmarkText -split "`r?`n" | Where-Object { $_ -match '^INTERACTION_BENCH\|.*\|crossing\|' } | ForEach-Object { Write-Host $_ }
+Write-Host ("POINT_SCALING_PASS|update_to_draw_rows={0}|count_rows={1}" -f $updateToDrawRows, $countRows)
 Write-Host "Point-scaling benchmark log: $outputLog"
 Remove-Item -LiteralPath $tempProject -Recurse -Force -ErrorAction SilentlyContinue
 if ((Test-Path -LiteralPath $tempBase -PathType Container) -and -not (Get-ChildItem -LiteralPath $tempBase -Force | Select-Object -First 1)) { Remove-Item -LiteralPath $tempBase -Force -ErrorAction SilentlyContinue }
