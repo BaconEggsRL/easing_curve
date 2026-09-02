@@ -160,6 +160,11 @@ function Prepare-ProfileProject {
         "",
         [Text.UTF8Encoding]::new($false)
     )
+    [IO.File]::WriteAllText(
+        (Join-Path $temp "point_count.txt"),
+        [string]$PointCount,
+        [Text.UTF8Encoding]::new($false)
+    )
 
     $projectConfig = Join-Path $projectPath "project.godot"
     Write-ProjectConfig -Path $projectConfig -Label $Label -EnableProbe $false
@@ -356,17 +361,28 @@ function Invoke-SingleCapture {
     )
 
     $editorLog = Join-Path $ProjectPath "test\_temp\editor.log"
+    $syncDir = Join-Path $ProjectPath "test\_temp"
+    $controlPath = Join-Path $syncDir "profiler_control.txt"
+    $startRequest = Join-Path $syncDir "wpr_start.request"
+    $startAck = Join-Path $syncDir "wpr_start.ack"
+    $stopRequest = Join-Path $syncDir "wpr_stop.request"
+    $stopAck = Join-Path $syncDir "wpr_stop.ack"
+    foreach ($marker in @($startRequest, $startAck, $stopRequest, $stopAck)) {
+        Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+    }
+    [IO.File]::WriteAllText(
+        $controlPath,
+        $(if ($ProfilerName -eq "WPR") { "external" } else { "none" }),
+        [Text.UTF8Encoding]::new($false)
+    )
+
     $started = Get-Date
     $wprStarted = $false
+    $wprCompleted = $false
     $tracePath = ""
     $process = $null
 
     try {
-        if ($ProfilerName -eq "WPR") {
-            Start-WprCpuCapture -Label $Label
-            $wprStarted = $true
-        }
-
         $process = Start-Process `
             -FilePath $godot.Gui `
             -ArgumentList @(
@@ -377,11 +393,39 @@ function Invoke-SingleCapture {
             ) `
             -PassThru
         Write-Host ("PROFILE_EDITOR|label={0}|version={1}|pid={2}|project={3}" -f $Label, (Get-PluginVersion $ProjectPath), $process.Id, $ProjectPath)
-        $process.WaitForExit()
+
+        if ($ProfilerName -eq "WPR") {
+            while (-not $process.HasExited) {
+                if (-not $wprStarted -and -not $wprCompleted -and (Test-Path -LiteralPath $startRequest -PathType Leaf)) {
+                    Start-WprCpuCapture -Label $Label
+                    $wprStarted = $true
+                    [IO.File]::WriteAllText($startAck, "started", [Text.UTF8Encoding]::new($false))
+                    Write-Host "WPR_CPU_SYNCED_START|label=$Label|pid=$($process.Id)"
+                }
+
+                if ($wprStarted -and (Test-Path -LiteralPath $stopRequest -PathType Leaf)) {
+                    $tracePath = Stop-WprCpuCapture -Label $Label
+                    $wprStarted = $false
+                    $wprCompleted = $true
+                    [IO.File]::WriteAllText($stopAck, "stopped", [Text.UTF8Encoding]::new($false))
+                    Write-Host "WPR_CPU_SYNCED_STOP|label=$Label|pid=$($process.Id)|trace=$tracePath"
+                }
+
+                Start-Sleep -Milliseconds 10
+                $process.Refresh()
+            }
+        } else {
+            $process.WaitForExit()
+        }
     } finally {
         if ($wprStarted) {
             $tracePath = Stop-WprCpuCapture -Label $Label
+            $wprStarted = $false
         }
+    }
+
+    if ($ProfilerName -eq "WPR" -and -not $wprCompleted) {
+        Write-Warning "The editor exited before the synchronized WPR stop handshake completed for '$Label'."
     }
 
     $ended = Get-Date
@@ -416,6 +460,12 @@ function Write-AbComparisonIfAvailable {
 
     $current = Read-KeyValueSummary $currentPath
     $v109 = Read-KeyValueSummary $v109Path
+    $currentPointCount = if ($current.ContainsKey("point_count")) { [int]$current["point_count"] } else { 0 }
+    $v109PointCount = if ($v109.ContainsKey("point_count")) { [int]$v109["point_count"] } else { 0 }
+    if ($currentPointCount -le 0 -or $v109PointCount -le 0 -or $currentPointCount -ne $v109PointCount) {
+        Write-Warning "Skipping A/B comparison because the two physical summaries have different or missing point counts (current=$currentPointCount, v1.0.9=$v109PointCount)."
+        return
+    }
     $keys = @(
         "drag_motion_events",
         "frames_with_drag_motion",
@@ -488,7 +538,7 @@ if ($Mode -in @("V109", "Both", "SequentialAB")) {
 Write-Host ""
 Write-Host "Prepared physical-input profile hosts:" -ForegroundColor Cyan
 foreach ($entry in $projects.GetEnumerator()) {
-    Write-Host ("  {0}: version={1} path={2}" -f $entry.Key, (Get-PluginVersion $entry.Value), $entry.Value)
+    Write-Host ("  {0}: version={1} points={2} path={3}" -f $entry.Key, (Get-PluginVersion $entry.Value), $PointCount, $entry.Value)
 }
 
 if ($PrepareOnly) {
@@ -541,9 +591,9 @@ if ($SmokeTest) {
 }
 
 Write-Host ""
-Write-Host "Capture protocol:" -ForegroundColor Cyan
+Write-Host "Capture protocol: $PointCount points" -ForegroundColor Cyan
 Write-Host "  1. Warm up P2 with two full left/right crossing cycles."
-Write-Host "  2. Click 'Start / Reset Capture' in the Easing Curve Input Probe panel."
+Write-Host "  2. Click 'Start Capture' and wait for the panel to say Capturing (WPR starts first)."
 Write-Host "  3. Perform exactly 10 full left -> right -> left crossing cycles at a comfortable, repeatable pace."
 Write-Host "  4. Click 'Save & Close'. Do not change mouse polling-rate/DPI settings between versions."
 Write-Host ""
@@ -556,7 +606,7 @@ if ($Mode -eq "Both") {
         Write-Host "A separate WPR CPU-sampling ETL will be recorded for each version."
     }
 } elseif ($resolvedProfiler -eq "WPR") {
-    Write-Host "WPR CPU sampling will start immediately before the editor and stop when Save & Close exits it."
+    Write-Host "WPR CPU sampling will start only after Start Capture requests it, and stop before Save & Close exits the editor."
     Write-Host "The ETL is system-wide; filter CPU Usage (Sampled) by the PROFILE_EDITOR PID printed below."
 }
 Write-Host ""

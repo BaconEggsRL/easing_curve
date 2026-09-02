@@ -19,6 +19,15 @@ const CROSSING_CASES := [
 	[9, 1], [9, 4],
 	[17, 4], [65, 4],
 ]
+const POINT_SCALING_CASES := [
+	[9, 1], [9, 4],
+	[13, 1], [13, 4],
+	[17, 1], [17, 4],
+	[25, 1], [25, 4],
+	[33, 1], [33, 4],
+	[49, 1], [49, 4],
+	[65, 1], [65, 4],
+]
 const ORDINARY_EVENTS_PER_TRIAL := 48
 const CROSSING_EVENTS_PER_DIRECTION := 48
 const WARMUP_TRIALS := 1
@@ -112,6 +121,19 @@ func _run() -> void:
 		RenderingServer.get_video_adapter_name(),
 	])
 	print("INTERACTION_FIDELITY|level=2|real_editor_controls=true|native_inspector_dock=false")
+
+	if OS.get_environment("EASING_CURVE_POINT_SCALING_ONLY") == "1":
+		print("INTERACTION_POINT_SCALING|enabled=true|frame_budget_us=16667")
+		for case_value in POINT_SCALING_CASES:
+			await _benchmark_crossing(
+				version,
+				int(case_value[0]),
+				int(case_value[1]),
+			)
+		for _frame in range(3):
+			await process_frame
+		quit()
+		return
 
 	await _viewport_dispatch_smoke(version)
 

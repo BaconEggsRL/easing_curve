@@ -7,16 +7,25 @@ extends EditorPlugin
 ## gui_input signal, groups delivered mouse-motion events by rendered frame, and
 ## writes a CSV + summary when the user clicks Save & Close.
 
-const POINT_COUNT := 9
+const DEFAULT_POINT_COUNT := 9
+const POINT_COUNT_PATH := "res://test/_temp/point_count.txt"
 const CSV_PATH := "res://test/_temp/physical_input_profile.csv"
 const SUMMARY_PATH := "res://test/_temp/physical_input_summary.txt"
 const GRAPH_WAIT_MESSAGE := "Waiting for EasingCurveEditor in the native Inspector..."
+const PROFILER_CONTROL_PATH := "res://test/_temp/profiler_control.txt"
+const WPR_START_REQUEST_PATH := "res://test/_temp/wpr_start.request"
+const WPR_START_ACK_PATH := "res://test/_temp/wpr_start.ack"
+const WPR_STOP_REQUEST_PATH := "res://test/_temp/wpr_stop.request"
+const WPR_STOP_ACK_PATH := "res://test/_temp/wpr_stop.ack"
 
 var _version := "unknown"
+var _point_count := DEFAULT_POINT_COUNT
 var _curve: EasingCurve
 var _graph: EasingCurveEditor
 var _panel: HBoxContainer
 var _status_label: Label
+var _start_button: Button
+var _close_button: Button
 var _rows: Array[String] = []
 var _event_id := 0
 var _left_pressed := false
@@ -29,22 +38,33 @@ var _total_motion_events := 0
 var _total_drag_motion_events := 0
 var _graph_rebuilds := 0
 var _capturing := false
+var _external_profiler := false
+var _start_pending := false
+var _stop_pending := false
+var _capture_started_usec := 0
+var _capture_ended_usec := 0
 var _finalized := false
 
 
 func _enter_tree() -> void:
 	_version = _plugin_version()
+	var configured_point_count := _read_text(POINT_COUNT_PATH).strip_edges().to_int()
+	if configured_point_count >= 3:
+		_point_count = clampi(configured_point_count, 3, 65)
+	_external_profiler = _read_text(PROFILER_CONTROL_PATH).strip_edges() == "external"
+	_clear_profiler_markers()
 	_curve = _make_curve()
 	_create_probe_panel()
 	RenderingServer.frame_post_draw.connect(_on_frame_post_draw)
 	set_process(true)
 	EditorInterface.edit_resource(_curve)
 	DisplayServer.window_move_to_foreground()
-	print("PHYSICAL_INPUT_PROBE_START|version=%s|pid=%d" % [
+	print("PHYSICAL_INPUT_PROBE_START|version=%s|pid=%d|points=%d" % [
 		_version,
 		OS.get_process_id(),
+		_point_count,
 	])
-	print("Warm up with P2 first. Then click 'Start / Reset Capture', perform the measured drag cycles, and click 'Save & Close'.")
+	print("Warm up with P2 first. Then click 'Start Capture'; synchronized WPR capture begins only after profiler acknowledgment. Perform the measured drag cycles, then click 'Save & Close'.")
 
 
 func _exit_tree() -> void:
@@ -58,6 +78,7 @@ func _exit_tree() -> void:
 
 
 func _process(_delta: float) -> void:
+	_poll_profiler_handshake()
 	var next_graph := _find_graph(EditorInterface.get_inspector())
 	if next_graph == _graph:
 		return
@@ -65,11 +86,13 @@ func _process(_delta: float) -> void:
 	_graph = next_graph
 	if _graph == null or _graph.get_curve() != _curve:
 		_graph = null
+		_update_buttons()
 		_set_status(GRAPH_WAIT_MESSAGE)
 		return
 	_graph_rebuilds += 1
 	_graph.gui_input.connect(_on_graph_gui_input)
 	_graph.point_changed.connect(_on_graph_point_changed)
+	_update_buttons()
 	_set_status(
 		(
 			"Capturing — drag P2 horizontally across points and back. Events: %d | frames: %d"
@@ -93,39 +116,51 @@ func _create_probe_panel() -> void:
 	_status_label.text = GRAPH_WAIT_MESSAGE
 	_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_panel.add_child(_status_label)
-	var start_button := Button.new()
-	start_button.text = "Start / Reset Capture"
-	start_button.tooltip_text = "Discard warm-up data and begin a fresh measured physical-input capture."
-	start_button.pressed.connect(_on_start_capture_pressed)
-	_panel.add_child(start_button)
-	var close_button := Button.new()
-	close_button.text = "Save & Close"
-	close_button.tooltip_text = "Write physical-input CSV/summary and close this isolated editor."
-	close_button.pressed.connect(_on_save_and_close_pressed)
-	_panel.add_child(close_button)
+	_start_button = Button.new()
+	_start_button.text = "Start Capture"
+	_start_button.tooltip_text = "Start the synchronized measured physical-input capture after warm-up."
+	_start_button.disabled = true
+	_start_button.pressed.connect(_on_start_capture_pressed)
+	_panel.add_child(_start_button)
+	_close_button = Button.new()
+	_close_button.text = "Save & Close"
+	_close_button.tooltip_text = "Stop the synchronized capture, write results, and close this isolated editor."
+	_close_button.disabled = true
+	_close_button.pressed.connect(_on_save_and_close_pressed)
+	_panel.add_child(_close_button)
 	add_control_to_bottom_panel(_panel, "Easing Curve Input Probe")
 
 
 func _on_start_capture_pressed() -> void:
-	_rows.clear()
-	_event_id = 0
-	_left_pressed = false
-	_pending_drag_event_ids.clear()
-	_pending_drag_event_times.clear()
-	_frame_burst_sizes.clear()
-	_oldest_to_draw_usec.clear()
-	_newest_to_draw_usec.clear()
-	_total_motion_events = 0
-	_total_drag_motion_events = 0
-	_graph_rebuilds = 1 if is_instance_valid(_graph) else 0
-	_capturing = true
-	_set_status("Capturing — perform 10 left/right crossing cycles with P2, then Save & Close.")
-	print("PHYSICAL_INPUT_CAPTURE_STARTED|version=%s|pid=%d" % [_version, OS.get_process_id()])
+	if _capturing or _start_pending or _stop_pending or not is_instance_valid(_graph):
+		return
+	_reset_capture_data()
+	if _external_profiler:
+		_start_pending = true
+		_update_buttons()
+		_set_status("Starting WPR CPU sampling — capture will begin after profiler acknowledgment...")
+		_write_marker(WPR_START_REQUEST_PATH)
+		print("PHYSICAL_INPUT_WPR_START_REQUEST|version=%s|pid=%d" % [_version, OS.get_process_id()])
+	else:
+		_begin_capture()
 
 
 func _on_save_and_close_pressed() -> void:
-	_finalize_capture()
-	get_tree().quit()
+	if not _capturing or _start_pending or _stop_pending:
+		return
+	_capturing = false
+	_capture_ended_usec = Time.get_ticks_usec()
+	if not _pending_drag_event_times.is_empty():
+		_on_frame_post_draw()
+	if _external_profiler:
+		_stop_pending = true
+		_update_buttons()
+		_set_status("Stopping WPR CPU sampling and saving capture...")
+		_write_marker(WPR_STOP_REQUEST_PATH)
+		print("PHYSICAL_INPUT_WPR_STOP_REQUEST|version=%s|pid=%d" % [_version, OS.get_process_id()])
+	else:
+		_finalize_capture()
+		get_tree().quit()
 
 
 func _on_graph_gui_input(event: InputEvent) -> void:
@@ -254,6 +289,9 @@ func _finalize_capture() -> void:
 	if _finalized:
 		return
 	_finalized = true
+	_capturing = false
+	if _capture_ended_usec == 0:
+		_capture_ended_usec = Time.get_ticks_usec()
 	if not _pending_drag_event_times.is_empty():
 		_on_frame_post_draw()
 	var csv := FileAccess.open(CSV_PATH, FileAccess.WRITE)
@@ -268,7 +306,10 @@ func _finalize_capture() -> void:
 	var summary := FileAccess.open(SUMMARY_PATH, FileAccess.WRITE)
 	if summary != null:
 		summary.store_line("version=%s" % _version)
+		summary.store_line("point_count=%d" % _point_count)
 		summary.store_line("pid=%d" % OS.get_process_id())
+		summary.store_line("profiler_synchronized=%s" % str(_external_profiler))
+		summary.store_line("capture_duration_us=%d" % maxi(0, _capture_ended_usec - _capture_started_usec))
 		summary.store_line("total_motion_events=%d" % _total_motion_events)
 		summary.store_line("drag_motion_events=%d" % _total_drag_motion_events)
 		summary.store_line("frames_with_drag_motion=%d" % _frame_burst_sizes.size())
@@ -285,6 +326,80 @@ func _finalize_capture() -> void:
 		_frame_burst_sizes.size(),
 		_max_int(_frame_burst_sizes),
 	])
+
+
+func _poll_profiler_handshake() -> void:
+	if _start_pending and FileAccess.file_exists(WPR_START_ACK_PATH):
+		_start_pending = false
+		_capturing = true
+		_capture_started_usec = Time.get_ticks_usec()
+		_update_buttons()
+		_set_status("Capturing — perform 10 left/right crossing cycles with P2, then Save & Close.")
+		print("PHYSICAL_INPUT_CAPTURE_STARTED|version=%s|pid=%d|profiler_synced=true" % [_version, OS.get_process_id()])
+	if _stop_pending and FileAccess.file_exists(WPR_STOP_ACK_PATH):
+		_stop_pending = false
+		_finalize_capture()
+		get_tree().quit()
+
+
+func _begin_capture() -> void:
+	_capturing = true
+	_capture_started_usec = Time.get_ticks_usec()
+	_update_buttons()
+	_set_status("Capturing — perform 10 left/right crossing cycles with P2, then Save & Close.")
+	print("PHYSICAL_INPUT_CAPTURE_STARTED|version=%s|pid=%d|profiler_synced=false" % [_version, OS.get_process_id()])
+
+
+func _reset_capture_data() -> void:
+	_rows.clear()
+	_event_id = 0
+	_left_pressed = false
+	_pending_drag_event_ids.clear()
+	_pending_drag_event_times.clear()
+	_frame_burst_sizes.clear()
+	_oldest_to_draw_usec.clear()
+	_newest_to_draw_usec.clear()
+	_total_motion_events = 0
+	_total_drag_motion_events = 0
+	_graph_rebuilds = 1 if is_instance_valid(_graph) else 0
+	_capture_started_usec = 0
+	_capture_ended_usec = 0
+	_finalized = false
+
+
+func _update_buttons() -> void:
+	if is_instance_valid(_start_button):
+		_start_button.disabled = not is_instance_valid(_graph) or _capturing or _start_pending or _stop_pending
+		_start_button.text = "Capturing..." if _capturing else "Start Capture"
+	if is_instance_valid(_close_button):
+		_close_button.disabled = not _capturing or _start_pending or _stop_pending
+
+
+func _write_marker(path: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_line(str(Time.get_ticks_usec()))
+		file.flush()
+
+
+func _read_text(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	return file.get_as_text()
+
+
+func _clear_profiler_markers() -> void:
+	for path in [
+		WPR_START_REQUEST_PATH,
+		WPR_START_ACK_PATH,
+		WPR_STOP_REQUEST_PATH,
+		WPR_STOP_ACK_PATH,
+	]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _write_percentiles(file: FileAccess, label: String, values: Array[float]) -> void:
@@ -320,8 +435,8 @@ func _make_curve() -> EasingCurve:
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.CUSTOM
 	var points: Array[EasingCurvePoint] = []
-	for index in range(POINT_COUNT):
-		var x := float(index) / float(POINT_COUNT - 1)
+	for index in range(_point_count):
+		var x := float(index) / float(_point_count - 1)
 		var y := 0.15 + 0.70 * x
 		var point := EasingCurvePoint.new(Vector2(x, y))
 		point.left_control_point = Vector2(x - 0.02, y - 0.35)
