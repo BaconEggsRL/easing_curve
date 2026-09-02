@@ -28,6 +28,7 @@ var _newest_to_draw_usec: Array[float] = []
 var _total_motion_events := 0
 var _total_drag_motion_events := 0
 var _graph_rebuilds := 0
+var _capturing := false
 var _finalized := false
 
 
@@ -43,7 +44,7 @@ func _enter_tree() -> void:
 		_version,
 		OS.get_process_id(),
 	])
-	print("Drag P2 horizontally across several neighbors, backtrack, and repeat. Then click 'Save & Close'.")
+	print("Warm up with P2 first. Then click 'Start / Reset Capture', perform the measured drag cycles, and click 'Save & Close'.")
 
 
 func _exit_tree() -> void:
@@ -70,8 +71,12 @@ func _process(_delta: float) -> void:
 	_graph.gui_input.connect(_on_graph_gui_input)
 	_graph.point_changed.connect(_on_graph_point_changed)
 	_set_status(
-		"Ready — drag P2 horizontally across points and back. Events: %d | frames: %d"
-		% [_total_drag_motion_events, _frame_burst_sizes.size()]
+		(
+			"Capturing — drag P2 horizontally across points and back. Events: %d | frames: %d"
+			% [_total_drag_motion_events, _frame_burst_sizes.size()]
+		)
+		if _capturing
+		else "Warm up P2, then click Start / Reset Capture."
 	)
 	print("PHYSICAL_INPUT_GRAPH_READY|version=%s|pid=%d|graph_id=%d|rebuild=%d" % [
 		_version,
@@ -88,6 +93,11 @@ func _create_probe_panel() -> void:
 	_status_label.text = GRAPH_WAIT_MESSAGE
 	_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_panel.add_child(_status_label)
+	var start_button := Button.new()
+	start_button.text = "Start / Reset Capture"
+	start_button.tooltip_text = "Discard warm-up data and begin a fresh measured physical-input capture."
+	start_button.pressed.connect(_on_start_capture_pressed)
+	_panel.add_child(start_button)
 	var close_button := Button.new()
 	close_button.text = "Save & Close"
 	close_button.tooltip_text = "Write physical-input CSV/summary and close this isolated editor."
@@ -96,12 +106,31 @@ func _create_probe_panel() -> void:
 	add_control_to_bottom_panel(_panel, "Easing Curve Input Probe")
 
 
+func _on_start_capture_pressed() -> void:
+	_rows.clear()
+	_event_id = 0
+	_left_pressed = false
+	_pending_drag_event_ids.clear()
+	_pending_drag_event_times.clear()
+	_frame_burst_sizes.clear()
+	_oldest_to_draw_usec.clear()
+	_newest_to_draw_usec.clear()
+	_total_motion_events = 0
+	_total_drag_motion_events = 0
+	_graph_rebuilds = 1 if is_instance_valid(_graph) else 0
+	_capturing = true
+	_set_status("Capturing — perform 10 left/right crossing cycles with P2, then Save & Close.")
+	print("PHYSICAL_INPUT_CAPTURE_STARTED|version=%s|pid=%d" % [_version, OS.get_process_id()])
+
+
 func _on_save_and_close_pressed() -> void:
 	_finalize_capture()
 	get_tree().quit()
 
 
 func _on_graph_gui_input(event: InputEvent) -> void:
+	if not _capturing:
+		return
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
 		if button.button_index == MOUSE_BUTTON_LEFT:
@@ -156,6 +185,8 @@ func _on_graph_gui_input(event: InputEvent) -> void:
 
 
 func _on_graph_point_changed(point_index: int, _point: EasingCurvePoint) -> void:
+	if not _capturing:
+		return
 	_append_row([
 		"POINT_CHANGED",
 		_version,
@@ -199,7 +230,7 @@ func _on_frame_post_draw() -> void:
 	_pending_drag_event_ids.clear()
 	_pending_drag_event_times.clear()
 	_set_status(
-		"Ready — drag P2 horizontally across points and back. Events: %d | frames: %d | max burst: %d"
+		"Capturing — drag P2 horizontally across points and back. Events: %d | frames: %d | max burst: %d"
 		% [
 			_total_drag_motion_events,
 			_frame_burst_sizes.size(),
