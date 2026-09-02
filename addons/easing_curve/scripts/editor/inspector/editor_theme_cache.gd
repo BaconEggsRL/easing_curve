@@ -26,11 +26,28 @@ static var _icons: Dictionary[StringName, Texture2D] = {}
 
 
 static func get_theme() -> Theme:
-	if DisplayServer.get_name() == "headless":
+	if (
+		DisplayServer.get_name() == "headless"
+		or _is_standalone_editor_script()
+	):
 		return null
 	if _editor_theme == null:
 		_editor_theme = EditorInterface.get_editor_theme()
 	return _editor_theme
+
+
+static func _is_standalone_editor_script() -> bool:
+	# `godot --editor --script ...` sets the editor hint without constructing
+	# the full editor UI host. In Godot 4.7.1, asking EditorInterface for the
+	# editor Theme in that state can crash natively instead of returning null.
+	for argument in OS.get_cmdline_args():
+		if (
+			argument == "--script"
+			or argument == "-s"
+			or argument.begins_with("--script=")
+		):
+			return true
+	return false
 
 
 static func get_color(
