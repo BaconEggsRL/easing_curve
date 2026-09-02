@@ -290,7 +290,7 @@ function Write-CaptureManifest {
     param(
         [string]$Label,
         [string]$ProjectPath,
-        [int]$Pid,
+        [int]$ProcessId,
         [string]$ProfilerName,
         [datetime]$Started,
         [datetime]$Ended,
@@ -301,7 +301,7 @@ function Write-CaptureManifest {
     @(
         "label=$Label",
         "plugin_version=$(Get-PluginVersion $ProjectPath)",
-        "pid=$Pid",
+        "pid=$ProcessId",
         "profiler=$ProfilerName",
         "started_utc=$($Started.ToUniversalTime().ToString('o'))",
         "ended_utc=$($Ended.ToUniversalTime().ToString('o'))",
@@ -389,7 +389,7 @@ function Invoke-SingleCapture {
     Write-CaptureManifest `
         -Label $Label `
         -ProjectPath $ProjectPath `
-        -Pid $(if ($null -ne $process) { $process.Id } else { -1 }) `
+        -ProcessId $(if ($null -ne $process) { $process.Id } else { -1 }) `
         -ProfilerName $ProfilerName `
         -Started $started `
         -Ended $ended `
@@ -582,7 +582,7 @@ if ($Mode -eq "Both") {
         Write-CaptureManifest `
             -Label $entry.Key `
             -ProjectPath $projects[$entry.Key] `
-            -Pid $entry.Value.Id `
+            -ProcessId $entry.Value.Id `
             -ProfilerName "None-side-by-side" `
             -Started (Get-Date) `
             -Ended (Get-Date) `
