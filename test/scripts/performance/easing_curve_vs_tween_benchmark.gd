@@ -25,7 +25,14 @@ var _viewport_size := Vector2(
 )
 var _target_position := _viewport_size / 2.0
 var _sample_offsets := PackedFloat64Array()
-var _sample_curve: Resource
+var _cubic_curve: Resource
+var _sine_curve: Resource
+var _custom_bezier_curve: Resource
+var _function_curve: Resource
+var _function_callable: Callable
+var _function_amplitude := 1.0
+var _function_period := 0.3
+var _exposed_points_curve: Resource
 var _sink := 0.0
 
 
@@ -36,20 +43,59 @@ func _init() -> void:
 func _run() -> void:
 	for index in range(SAMPLE_ITERATIONS):
 		_sample_offsets.append(float(index & 1023) / 1023.0)
-	_sample_curve = _new_curve()
+	_cubic_curve = _new_curve(EasingCurve.TRANS.CUBIC, EasingCurve.EASE.OUT)
+	_sine_curve = _new_curve(EasingCurve.TRANS.SINE, EasingCurve.EASE.OUT)
+	_custom_bezier_curve = _new_custom_bezier_curve()
+	_function_curve = _new_curve(EasingCurve.TRANS.ELASTIC, EasingCurve.EASE.OUT)
+	_function_callable = _function_curve.get(&"function_callable")
+	_function_amplitude = float(_function_curve.get(&"amplitude"))
+	_function_period = float(_function_curve.get(&"period"))
+	_exposed_points_curve = _new_curve(EasingCurve.TRANS.CUBIC, EasingCurve.EASE.OUT)
+	_sink += float(_exposed_points_curve.points.size())
 
 	print("EASING_CURVE_VS_TWEEN|godot=%s|trials=%d" % [
 		Engine.get_version_info()["string"],
 		TRIAL_COUNT,
 	])
 	print(
-		"WORKLOAD_MODEL|transition=cubic_out|manual_custom_step=true"
-		+ "|easing_curve_shared_sample_per_step=true"
+		"WORKLOAD_MODEL|samples=%d|manual_custom_step=true|easing_curve_shared_sample_per_step=true"
+		% SAMPLE_ITERATIONS
 	)
 	_benchmark_pair(
 		"interpolate_cubic_out_%d" % SAMPLE_ITERATIONS,
-		_sample_easing_curve,
-		_sample_tween,
+		_sample_easing_curve.bind(_cubic_curve),
+		_sample_tween.bind(Tween.TRANS_CUBIC, Tween.EASE_OUT),
+	)
+	_benchmark_pair(
+		"interpolate_sine_out_%d" % SAMPLE_ITERATIONS,
+		_sample_easing_curve.bind(_sine_curve),
+		_sample_tween.bind(Tween.TRANS_SINE, Tween.EASE_OUT),
+	)
+	_benchmark_variant_pair(
+		"interpolate_custom_bezier_%d" % SAMPLE_ITERATIONS,
+		"cubic_out",
+		_sample_easing_curve.bind(_cubic_curve),
+		"custom_bezier_0.42_0_0.58_1",
+		_sample_easing_curve.bind(_custom_bezier_curve),
+	)
+	_benchmark_pair(
+		"interpolate_function_elastic_out_%d" % SAMPLE_ITERATIONS,
+		_sample_easing_curve.bind(_function_curve),
+		_sample_tween.bind(Tween.TRANS_ELASTIC, Tween.EASE_OUT),
+	)
+	_benchmark_variant_pair(
+		"interpolate_function_mode_dispatch_elastic_out_%d" % SAMPLE_ITERATIONS,
+		"direct_callable",
+		_sample_function_callable,
+		"easing_curve_sample",
+		_sample_easing_curve.bind(_function_curve),
+	)
+	_benchmark_variant_pair(
+		"interpolate_exposed_points_cubic_out_%d" % SAMPLE_ITERATIONS,
+		"cubic_out_unexposed",
+		_sample_easing_curve.bind(_cubic_curve),
+		"cubic_out_exposed_points",
+		_sample_easing_curve.bind(_exposed_points_curve),
 	)
 	_benchmark_setup_pair(
 		"setup_properties_%d" % PROPERTY_COUNT,
@@ -117,6 +163,34 @@ func _benchmark_setup_pair(
 			tween_samples.append(_measure_preparation(prepare_tween))
 			easing_samples.append(_measure_preparation(prepare_easing))
 	_report_comparison(label, easing_samples, tween_samples)
+
+
+func _benchmark_variant_pair(
+		label: String,
+		baseline_name: String,
+		baseline_workload: Callable,
+		variant_name: String,
+		variant_workload: Callable,
+) -> void:
+	baseline_workload.call()
+	variant_workload.call()
+
+	var baseline_samples: Array[float] = []
+	var variant_samples: Array[float] = []
+	for trial in range(TRIAL_COUNT):
+		if trial % 2 == 0:
+			baseline_samples.append(_measure_workload(baseline_workload))
+			variant_samples.append(_measure_workload(variant_workload))
+		else:
+			variant_samples.append(_measure_workload(variant_workload))
+			baseline_samples.append(_measure_workload(baseline_workload))
+	_report_variant(
+		label,
+		baseline_name,
+		baseline_samples,
+		variant_name,
+		variant_samples,
+	)
 
 
 func _benchmark_step_pair(
@@ -188,21 +262,61 @@ func _report_comparison(
 	])
 
 
-func _new_curve() -> Resource:
+func _report_variant(
+		label: String,
+		baseline_name: String,
+		baseline_samples: Array[float],
+		variant_name: String,
+		variant_samples: Array[float],
+) -> void:
+	baseline_samples.sort()
+	variant_samples.sort()
+	var baseline_median := baseline_samples[TRIAL_COUNT / 2]
+	var variant_median := variant_samples[TRIAL_COUNT / 2]
+	print(
+		(
+			"VARIANT|%s|baseline=%s|baseline_usec=%.1f|variant=%s"
+			+ "|variant_usec=%.1f|variant_over_baseline=%.3f"
+		)
+		% [
+			label,
+			baseline_name,
+			baseline_median,
+			variant_name,
+			variant_median,
+			variant_median / baseline_median,
+		]
+	)
+	print("TRIALS|%s|%s=%s|%s=%s" % [
+		label,
+		baseline_name,
+		baseline_samples,
+		variant_name,
+		variant_samples,
+	])
+
+
+func _new_curve(transition: EasingCurve.TRANS, ease: EasingCurve.EASE) -> Resource:
 	var curve := CURVE_SCRIPT.new()
-	curve.set(&"trans_type", EasingCurve.TRANS.CUBIC)
-	curve.set(&"ease_type", EasingCurve.EASE.OUT)
+	curve.set(&"trans_type", transition)
+	curve.set(&"ease_type", ease)
 	return curve
 
 
-func _sample_easing_curve() -> void:
+func _new_custom_bezier_curve() -> Resource:
+	var curve := _new_curve(EasingCurve.TRANS.CUSTOM, EasingCurve.EASE.IN)
+	curve.cubic_bezier(0.42, 0.0, 0.58, 1.0)
+	return curve
+
+
+func _sample_easing_curve(curve: Resource) -> void:
 	var total := 0.0
 	for offset in _sample_offsets:
-		total += _sample_curve.sample(offset)
+		total += curve.sample(offset)
 	_sink += total
 
 
-func _sample_tween() -> void:
+func _sample_tween(transition: int, ease: int) -> void:
 	var total := 0.0
 	for offset in _sample_offsets:
 		total += Tween.interpolate_value(
@@ -210,8 +324,22 @@ func _sample_tween() -> void:
 			1.0,
 			offset,
 			1.0,
-			Tween.TRANS_CUBIC,
-			Tween.EASE_OUT,
+			transition,
+			ease,
+		)
+	_sink += total
+
+
+func _sample_function_callable() -> void:
+	var total := 0.0
+	for offset in _sample_offsets:
+		total += _function_callable.call(
+			offset,
+			0.0,
+			1.0,
+			1.0,
+			_function_amplitude,
+			_function_period,
 		)
 	_sink += total
 
@@ -230,7 +358,7 @@ func _prepare_easing_properties() -> Dictionary:
 		start_positions.append(start_position)
 	return {
 		&"host": host,
-		&"curve": _new_curve(),
+		&"curve": _new_curve(EasingCurve.TRANS.CUBIC, EasingCurve.EASE.OUT),
 		&"nodes": nodes,
 		&"start_positions": start_positions,
 	}
@@ -283,7 +411,11 @@ func _prepare_easing_methods() -> Dictionary:
 		node.position = _initial_position(index)
 		host.add_child(node)
 		nodes.append(node)
-	return {&"host": host, &"curve": _new_curve(), &"nodes": nodes}
+	return {
+		&"host": host,
+		&"curve": _new_curve(EasingCurve.TRANS.CUBIC, EasingCurve.EASE.OUT),
+		&"nodes": nodes,
+	}
 
 
 func _prepare_tween_methods() -> Dictionary:
