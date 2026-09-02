@@ -3,6 +3,31 @@
 Release entries are ordered newest to oldest. Add future releases above the
 current top entry.
 
+## v1.1.0
+
+### Improved
+
+* Refactored the `EasingCurve` runtime internals into focused preset-geometry, snapshot/serialization, transient editor-view-state, and edit-session boundaries while preserving the public API, enum values, serialized keys, notifications, resource identity, and curve sampling behavior.
+* Refactored Inspector responsibilities into focused clipboard, point-list/selection/binding, and point-edit transaction controllers while keeping `EasingCurveEditor` as the graph owner and `EasingCurveEditorUndo` as the central Undo/Redo adapter.
+* Reduced direct coupling between the Inspector, graph editor, runtime resource, and point-state logic without introducing a second graph controller, duplicate point-state authority, or new serialized domain model.
+
+### Performance
+
+* Added repeatable runtime, Editor-host, native Inspector, physical-input, and Windows Performance Recorder benchmark/profile tooling for curve sampling and graph interaction.
+* Final synchronized 17-point physical A/B testing found no measurable v1.1.0 responsiveness regression versus v1.0.9: input-to-draw p99 was 7.972 ms on v1.1.0 versus 7.955 ms on v1.0.9, with exactly one delivered drag event per rendered frame on both versions.
+* Characterized large-curve editor scaling separately from the regression investigation. Single-event crossing input remained within a 16.667 ms / 60 Hz frame budget through 49 points in the validated environment (15.562 ms p99, 15.976 ms max), while 65 points exceeded the budget consistently (20.845 ms p99). Graph drawing itself remained a smaller part of the cost; point-resource/Inspector synchronization is the primary future optimization target for very large curves.
+
+### Fixed
+
+* Hardened editor-theme access for standalone `--editor --script` validation so test/benchmark hosts that do not have a full Editor UI do not request unavailable editor theme state.
+* Hardened the point-scaling benchmark runner so known Godot 4.7.1 standalone Editor-host teardown diagnostics do not turn a complete semantic benchmark result set into a false failure.
+
+### Testing
+
+* Expanded performance and interaction validation with isolated current/v1.0.9 hosts, configurable point-count scaling, real Inspector crossing benchmarks, physical mouse delivery capture, synchronized WPR CPU traces, and semantic benchmark completeness checks.
+* Final release validation passed all 18 registered automated suites, representative external `.tres` and embedded `.tscn` round-trip checks, visible Inspector/graph smoke, tracked-addon package validation, and Windows Desktop/Web exports.
+* Verified plugin load/runtime compatibility on stable Godot 4.4.0, 4.5.0, 4.6.0, and 4.7.1.
+
 ## v1.0.9
 
 ### Added
