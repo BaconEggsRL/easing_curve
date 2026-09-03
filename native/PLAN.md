@@ -64,7 +64,7 @@ Architecture:
 | Editor boundary performance | Three repeated 65-point runs show preview dispatch adds about 12–15 microseconds per 121-sample draw, bulk point reads and snapshots are near direct cost, and optimized Native atomic mutation adds about 6–7 microseconds per mutation |
 | Native Web export | Non-threaded debug (339,080 bytes) and release (334,967 bytes) WASM libraries export and run in isolated headless-browser projects; built-in/custom resources load, sample, and deep-copy correctly |
 | Build automation | Pinned Windows/Web build script, manifest preflight, and GitHub Actions build-plus-browser workflow are present; Windows release and local Web paths are verified |
-| Manual smoke test | 2026-09-03: the first shared-editor slice passed startup, standard/custom rendering, selection, point options, Undo/Redo, persistence, and legacy regression checks. Native Inspector preview routing passed; the FileSystem class-icon fix awaits one editor-restart rerun. The timing probe was deferred |
+| Manual smoke test | 2026-09-03: the first shared-editor slice passed startup, standard/custom rendering, selection, point options, Undo/Redo, persistence, Native Inspector previews, the Native FileSystem class icon, and legacy regression checks. The timing probe was deferred |
 | Legacy status | Existing `EasingCurve` remains functional and comprehensively tested |
 
 ### Partially complete
@@ -703,7 +703,7 @@ Record results here rather than relying on memory:
 
 | Date | Godot | Startup/Inspector | Standard graph | Custom selection | Point options | Undo/Redo | Persistence | Previews | Legacy regression | Timing probe | Notes/evidence |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 2026-09-03 | 4.7.1 | Pass | Pass | Pass | Pass with note | Pass | Pass | Inspector preview pass; FileSystem icon fix awaiting rerun | Pass | Deferred | Force Linear is editable through the shared point toolbar and persisted correctly. Its C++ property is storage-only, so absence from the raw point Inspector is intentional. Adding `NativeEasingCurve` to `_handles()` enabled generated Inspector previews. The FileSystem tree remained a white resource page because it uses the GDExtension class icon; the manifest now maps `NativeEasingCurve` to the existing `Curve.svg`. |
+| 2026-09-03 | 4.7.1 | Pass | Pass | Pass | Pass with note | Pass | Pass | Pass | Pass | Deferred | Force Linear is editable through the shared point toolbar and persisted correctly. Its C++ property is storage-only, so absence from the raw point Inspector is intentional. Generated Native Inspector previews and the Native `Curve.svg` FileSystem class icon both passed manual verification. |
 
 Any crash, data loss, stale result after mutation, missing class, serialization mismatch, or exported-runtime failure blocks the next release qualification step. Visual differences should be recorded with the transition/ease/parameters and a screenshot or short capture.
 
