@@ -106,16 +106,29 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_godot.ps1 --headless --path . --script test/scripts/unit/native_v2_smoke_test.gd
 ./test/runners/run_godot.ps1 --headless --path . --script test/scripts/unit/native_public_contract_test.gd
 ./test/runners/run_native_runtime_benchmark.ps1
+./test/runners/run_curve_editor_backend_benchmark.ps1
 ./test/runners/run_native_release_export_test.ps1
 ./native/validate_native_manifest.ps1 -Platform all
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
-The benchmark reports median, median absolute deviation, and raw values for all
-12 standard transitions; 2-, 9-, and 65-point custom curves in sequential,
-reverse, and random sampling order; mutation; and deep runtime duplication.
+The runtime benchmark reports median, median absolute deviation, and raw values
+for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
+custom curves in sequential, reverse, and random sampling order; mutation; and
+deep runtime duplication. The editor-backend benchmark compares adapter and
+direct costs for preview sampling, 65-point reads, snapshots, and
+mutation-plus-recompile.
 Tween is used only as a benchmark and numerical oracle. No Native sampling path
 calls Tween, GDScript, or a Callable.
+
+## Shared editor status
+
+The production Inspector and Curve Editor now choose either the legacy or Native
+backend through the shared adapter boundary. The first Native slice renders
+standard and custom curves, supports point selection, exposes force-linear and
+lock options, generates previews, and records toolbar changes atomically for
+Undo/Redo. Native graph geometry remains read-only until the next gesture and
+topology tranche; legacy editing behavior is unchanged.
 
 ## Manual smoke-test status — 2026-09-03
 
@@ -137,7 +150,7 @@ is used for serialized Native resources.
   retain their artifacts.
 - Finish generated, CSS, and extended Bounce representations.
 - Complete the remaining Native point-state edge cases and curve-level snapshots.
-- Retarget the existing editor to the backend foundation and add Native Inspector/graph support.
+- Finish write-side graph gestures and point-list integration through the shared editor backend.
 - Add optional, non-destructive bidirectional conversion.
 - Build the exact dual-API release archive.
 - Add remaining platforms before any legacy deprecation proposal.

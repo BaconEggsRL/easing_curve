@@ -12,19 +12,25 @@ const MUTATION_ITERATIONS := 4000
 const COPY_ITERATIONS := 500
 const TRIAL_COUNT := 9
 const CUSTOM_POINT_COUNTS := [2, 9, 65]
-const BUILTIN_CASES := [
-	["linear_out", NativeEasingCurve.TRANS_LINEAR, Tween.TRANS_LINEAR],
-	["sine_out", NativeEasingCurve.TRANS_SINE, Tween.TRANS_SINE],
-	["quint_out", NativeEasingCurve.TRANS_QUINT, Tween.TRANS_QUINT],
-	["quart_out", NativeEasingCurve.TRANS_QUART, Tween.TRANS_QUART],
-	["quad_out", NativeEasingCurve.TRANS_QUAD, Tween.TRANS_QUAD],
-	["expo_out", NativeEasingCurve.TRANS_EXPO, Tween.TRANS_EXPO],
-	["elastic_out", NativeEasingCurve.TRANS_ELASTIC, Tween.TRANS_ELASTIC],
-	["cubic_out", NativeEasingCurve.TRANS_CUBIC, Tween.TRANS_CUBIC],
-	["circ_out", NativeEasingCurve.TRANS_CIRC, Tween.TRANS_CIRC],
-	["bounce_out", NativeEasingCurve.TRANS_BOUNCE, Tween.TRANS_BOUNCE],
-	["back_out", NativeEasingCurve.TRANS_BACK, Tween.TRANS_BACK],
-	["spring_out", NativeEasingCurve.TRANS_SPRING, Tween.TRANS_SPRING],
+const BUILTIN_TRANSITIONS := [
+	["linear", NativeEasingCurve.TRANS_LINEAR, Tween.TRANS_LINEAR],
+	["sine", NativeEasingCurve.TRANS_SINE, Tween.TRANS_SINE],
+	["quint", NativeEasingCurve.TRANS_QUINT, Tween.TRANS_QUINT],
+	["quart", NativeEasingCurve.TRANS_QUART, Tween.TRANS_QUART],
+	["quad", NativeEasingCurve.TRANS_QUAD, Tween.TRANS_QUAD],
+	["expo", NativeEasingCurve.TRANS_EXPO, Tween.TRANS_EXPO],
+	["elastic", NativeEasingCurve.TRANS_ELASTIC, Tween.TRANS_ELASTIC],
+	["cubic", NativeEasingCurve.TRANS_CUBIC, Tween.TRANS_CUBIC],
+	["circ", NativeEasingCurve.TRANS_CIRC, Tween.TRANS_CIRC],
+	["bounce", NativeEasingCurve.TRANS_BOUNCE, Tween.TRANS_BOUNCE],
+	["back", NativeEasingCurve.TRANS_BACK, Tween.TRANS_BACK],
+	["spring", NativeEasingCurve.TRANS_SPRING, Tween.TRANS_SPRING],
+]
+const EASE_CASES := [
+	["in", NativeEasingCurve.EASE_IN, Tween.EASE_IN],
+	["out", NativeEasingCurve.EASE_OUT, Tween.EASE_OUT],
+	["in_out", NativeEasingCurve.EASE_IN_OUT, Tween.EASE_IN_OUT],
+	["out_in", NativeEasingCurve.EASE_OUT_IN, Tween.EASE_OUT_IN],
 ]
 const FUNCTION_CASES := [
 	["constant", NativeEasingCurve.TRANS_CONSTANT, EasingCurve.TRANS.CONSTANT, {&"constant_value": 0.37}],
@@ -56,15 +62,27 @@ func _run() -> void:
 		CUSTOM_SAMPLE_ITERATIONS,
 		TRIAL_COUNT,
 	])
-	for benchmark_case in BUILTIN_CASES:
-		_benchmark_builtin(benchmark_case[0], benchmark_case[1], benchmark_case[2])
+	for transition_case in BUILTIN_TRANSITIONS:
+		for ease_case in EASE_CASES:
+			_benchmark_builtin(
+				"%s_%s" % [transition_case[0], ease_case[0]],
+				transition_case[1],
+				transition_case[2],
+				ease_case[1],
+				ease_case[2],
+			)
 	for benchmark_case in FUNCTION_CASES:
 		_benchmark_function(benchmark_case)
 	for point_count in CUSTOM_POINT_COUNTS:
 		_benchmark_custom_curve(point_count)
 	_benchmark_mutation_and_copy()
 	print("SINK|%.9f" % _sink)
-	print("BENCHMARK_COMPLETE|cases=%d" % (BUILTIN_CASES.size() + FUNCTION_CASES.size() + CUSTOM_POINT_COUNTS.size() * 3 + 2))
+	print("BENCHMARK_COMPLETE|cases=%d" % (
+		BUILTIN_TRANSITIONS.size() * EASE_CASES.size()
+		+ FUNCTION_CASES.size()
+		+ CUSTOM_POINT_COUNTS.size() * 3
+		+ 2
+	))
 	quit()
 
 
@@ -79,12 +97,19 @@ func _build_offsets() -> void:
 		_random_offsets.append(random.randf())
 
 
-func _benchmark_builtin(label: String, native_transition: int, tween_transition: int) -> void:
+func _benchmark_builtin(
+	label: String,
+	native_transition: int,
+	tween_transition: int,
+	native_ease: int,
+	tween_ease: int,
+) -> void:
 	var curve := _new_native_curve(native_transition)
+	curve.ease_type = native_ease
 	_benchmark_pair(
 		label,
 		_sample_native_curve.bind(curve, _sequential_offsets),
-		_sample_tween.bind(tween_transition),
+		_sample_tween.bind(tween_transition, tween_ease),
 		"native",
 		"tween",
 	)
@@ -217,10 +242,10 @@ func _sample_legacy_curve(curve: EasingCurve, offsets: PackedFloat64Array) -> vo
 	_sink += total
 
 
-func _sample_tween(transition: int) -> void:
+func _sample_tween(transition: int, ease: int) -> void:
 	var total := 0.0
 	for offset in _sequential_offsets:
-		total += Tween.interpolate_value(0.0, 1.0, offset, 1.0, transition, Tween.EASE_OUT)
+		total += Tween.interpolate_value(0.0, 1.0, offset, 1.0, transition, ease)
 	_sink += total
 
 

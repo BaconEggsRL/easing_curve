@@ -35,6 +35,19 @@ func _run() -> void:
 			"Preview did not sample the curve's right endpoint",
 		)
 
+	if ClassDB.class_exists(&"NativeEasingCurve"):
+		var native_curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+		var native_texture := generator._generate(native_curve, Vector2i(64, 64), {})
+		_expect(native_texture != null, "Preview generator returned no texture for NativeEasingCurve")
+		if native_texture != null:
+			var native_image := native_texture.get_image()
+			_expect(native_image.get_size() == Vector2i(64, 64), "Native preview used the wrong dimensions")
+			_expect(_count_visible_pixels(native_image) >= 64, "Native preview did not contain a plotted curve")
+			_expect(
+				native_image.get_pixel(native_image.get_width() - 1, 0).a > 0.0,
+				"Native preview did not sample the right endpoint",
+			)
+
 	var back_in := EasingCurve.new()
 	back_in.set_trans(EasingCurve.TRANS.BACK)
 	var back_in_texture := generator._generate(back_in, Vector2i(64, 64), {})

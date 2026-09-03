@@ -125,6 +125,7 @@ function Clear-TestTempArtifacts {
 $suites = @(
 	@{ Name = "css_linear_test.gd"; Editor = $false },
 	@{ Name = "curve_editor_backend_contract_test.gd"; Editor = $false },
+	@{ Name = "curve_editor_vertical_slice_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_editor_rmb_delete_test.gd"; Editor = $false },
 	@{ Name = "easing_curve_manual_reorder_test.gd"; Editor = $false },
 	@{ Name = "easing_curve_transform_test.gd"; Editor = $false },

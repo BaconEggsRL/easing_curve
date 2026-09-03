@@ -33,6 +33,9 @@ const PointPropertyClipboardController = preload(
 const PointListController = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/point_list_controller.gd"
 )
+const BackendFactory := preload(
+	"res://addons/easing_curve/scripts/editor/backend/curve_editor_backend_factory.gd"
+)
 # Compatibility/test seam; construction ownership lives in PointListController.
 const PointsListContainer = PointListController.PointsListContainer
 ## Vector2 slider step
@@ -126,6 +129,13 @@ func _init() -> void:
 
 func _parse_begin(object: Object) -> void:
 	_point_list_controller.clear_input_bindings()
+
+	var resource := object as Resource
+	var backend := BackendFactory.create(resource)
+	if backend != null and backend.get_backend_id() == &"native":
+		curve = null
+		add_custom_control(handle_easing_curve_editor(resource))
+		return
 
 	if not object is EasingCurve:
 		return
@@ -455,9 +465,12 @@ func _create_normal_point_property_rows(
 	)
 
 
-func handle_easing_curve_editor(object) -> Control:
+func handle_easing_curve_editor(object: Resource) -> Control:
 	if object == null:
-		return
+		return null
+	var backend := BackendFactory.create(object)
+	if backend != null and backend.get_backend_id() == &"native":
+		return _handle_native_curve_editor(object)
 	if object is EasingCurve:
 		var curve_section := VBoxContainer.new()
 		curve_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -617,11 +630,48 @@ func handle_easing_curve_editor(object) -> Control:
 	return null
 
 
-func _can_handle(object):
-	if object is EasingCurve and not _instantiating_default_property:
-		return true
-	else:
-		return false
+func _handle_native_curve_editor(object: Resource) -> Control:
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", _compact_separation())
+
+	easing_curve_editor = EasingCurveEditor.new()
+	easing_curve_editor.editor_undo_redo = editor_undo_redo
+	easing_curve_editor.set_curve(object)
+	content.add_child(easing_curve_editor)
+	easing_curve_editor.resized.connect(easing_curve_editor.update_minimum_size)
+
+	var zoom_row := HBoxContainer.new()
+	zoom_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_child(zoom_row)
+	var zoom_spacer := Control.new()
+	zoom_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	zoom_spacer.size_flags_stretch_ratio = 0.6
+	zoom_row.add_child(zoom_spacer)
+	var zoom_slider_container := ZOOM_SLIDER_CONTAINER.instantiate()
+	zoom_slider_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	zoom_slider_container.size_flags_stretch_ratio = 0.4
+	zoom_row.add_child(zoom_slider_container)
+	easing_curve_editor.set_slider_container(zoom_slider_container)
+	easing_curve_editor.set_slider_value(EasingCurve.DEFAULT_SLIDER_VALUE)
+
+	_curve_editor_section = _create_foldable_section(
+		"Curve Editor",
+		content,
+		object,
+	) as PointsFoldableSection
+	_curve_editor_section.folding_changed.connect(
+		_on_curve_editor_section_folding_changed
+	)
+	_queue_autofit_curve_editor()
+	return _curve_editor_section
+
+
+func _can_handle(object: Object) -> bool:
+	return (
+		not _instantiating_default_property
+		and BackendFactory.create(object as Resource) != null
+	)
 
 
 func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wide):
@@ -1558,10 +1608,10 @@ func _add_points_list_point(point: EasingCurvePoint) -> void:
 func _create_foldable_section(
 	title: String,
 	content: Control,
-	curve: EasingCurve,
+	curve_resource: Resource,
 ) -> Control:
 	var section := PointsFoldableSection.new()
-	section.setup(title, content, curve)
+	section.setup(title, content, curve_resource)
 	return section
 
 

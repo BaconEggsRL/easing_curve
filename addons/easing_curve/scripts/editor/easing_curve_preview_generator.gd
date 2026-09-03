@@ -1,6 +1,9 @@
 @tool
 extends EditorResourcePreviewGenerator
 
+const BackendFactory := preload(
+	"res://addons/easing_curve/scripts/editor/backend/curve_editor_backend_factory.gd"
+)
 const NATIVE_RESOURCE_TYPE := "Resource"
 const SCRIPT_RESOURCE_TYPE := "EasingCurve"
 
@@ -17,13 +20,13 @@ func _generate(
 		size: Vector2i,
 		_metadata: Dictionary,
 ) -> Texture2D:
-	var source_curve := resource as EasingCurve
-	if source_curve == null or size.x <= 0 or size.y <= 0:
+	var source_backend := BackendFactory.create(resource)
+	if source_backend == null or size.x <= 0 or size.y <= 0:
 		return null
 
-	# Sampling may lazily initialize function-backed curves, so use a thread-local copy.
-	var curve := source_curve.duplicate(true) as EasingCurve
-	if curve == null:
+	# Sampling may compile or lazily initialize state, so use an isolated copy.
+	var backend: RefCounted = source_backend.create_preview_backend()
+	if backend == null:
 		return null
 
 	var sampled_values := PackedFloat64Array()
@@ -31,7 +34,7 @@ func _generate(
 	var max_value := 1.0
 	for x in range(size.x):
 		var offset := float(x) / float(maxi(size.x - 1, 1))
-		var value := curve.sample(offset)
+		var value: float = backend.sample(offset)
 		sampled_values.append(value)
 		min_value = minf(min_value, value)
 		max_value = maxf(max_value, value)

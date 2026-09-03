@@ -99,7 +99,7 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-func setup(section_title: String, content: Control, object: EasingCurve) -> void:
+func setup(section_title: String, content: Control, object: Resource) -> void:
 	resource_id = object.get_instance_id()
 	title = section_title
 	fold_state_key = "%d:%s" % [

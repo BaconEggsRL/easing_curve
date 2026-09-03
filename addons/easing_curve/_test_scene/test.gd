@@ -63,6 +63,7 @@ const NATIVE_EASES := [
 
 @export_group("Debug")
 @export var debug_curve: Curve = Curve.new()
+@export var enable_match_timing_probe := true
 
 
 var points: Array[EasingCurvePoint] = []:
@@ -77,7 +78,16 @@ var _debug_curve_speed: float = 0.0
 var _debug_tween_speed: float = 0.0
 var _debug_offset: float = 0.0
 var _debug_curve_value: float = 0.0
+var _debug_tween_value: float = 0.0
 var _debug_last_t: float = 0.0
+var _debug_curve_callback_usec := 0
+var _debug_tween_callback_usec := 0
+var _debug_curve_callback_frame := -1
+var _debug_tween_callback_frame := -1
+var _debug_callback_delta_usec := 0
+var _debug_value_delta := 0.0
+var _debug_max_callback_delta_usec := 0
+var _debug_max_value_delta := 0.0
 
 func _init() -> void:
 	if native_curve == null and ClassDB.class_exists(&"NativeEasingCurve"):
@@ -434,6 +444,31 @@ func _draw() -> void:
 		-1,
 		font_size,
 	)
+	if enable_match_timing_probe and match_tween_check_button.button_pressed:
+		y += 18
+		draw_string(
+			font,
+			Vector2(10, y),
+			"callback delta: %d us (max %d)" % [
+				_debug_callback_delta_usec,
+				_debug_max_callback_delta_usec,
+			],
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			font_size,
+		)
+		y += 18
+		draw_string(
+			font,
+			Vector2(10, y),
+			"value delta: %.7f (max %.7f)" % [
+				_debug_value_delta,
+				_debug_max_value_delta,
+			],
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			font_size,
+		)
 
 
 func kill_tweens() -> void:
@@ -458,6 +493,7 @@ func reset_and_start() -> void:
 
 	kill_tweens()
 	reset_positions()
+	_reset_timing_probe()
 	_capture_runtime_curves()
 
 	start_tween(curve_tween, curve_end_marker, curve_node, true)
@@ -470,6 +506,7 @@ func restart_runtime() -> void:
 
 	kill_tweens()
 	reset_positions()
+	_reset_timing_probe()
 
 	start_tween(curve_tween, curve_end_marker, curve_node, true)
 	start_tween(tween_tween, tween_end_marker, tween_node, false)
@@ -592,6 +629,15 @@ func start_tween(tween_ref: Tween, end: Marker2D, node: Node2D, use_curve: bool)
 	else:
 		position_tweener.set_ease(tween_ease)
 		position_tweener.set_trans(tween_trans)
+		if enable_match_timing_probe and match_tween_check_button.button_pressed:
+			var timing_probe := new_tween.parallel().tween_method(
+				_record_tween_probe,
+				0.0,
+				1.0,
+				duration,
+			)
+			timing_probe.set_ease(tween_ease)
+			timing_probe.set_trans(tween_trans)
 
 
 func tween_native_curve(offset: float) -> float:
@@ -599,6 +645,9 @@ func tween_native_curve(offset: float) -> float:
 		return 0.0
 	_debug_offset = offset
 	_debug_curve_value = float(_runtime_native_curve.call(&"sample", offset))
+	_debug_curve_callback_usec = Time.get_ticks_usec()
+	_debug_curve_callback_frame = Engine.get_process_frames()
+	_update_timing_probe()
 	return _debug_curve_value
 
 
@@ -608,8 +657,46 @@ func tween_easing_curve(offset: float) -> float:
 	_debug_offset = offset
 	_debug_curve_value = _runtime_easing_curve.sample(offset)
 	_debug_last_t = _runtime_easing_curve.get_last_solved_t()
+	_debug_curve_callback_usec = Time.get_ticks_usec()
+	_debug_curve_callback_frame = Engine.get_process_frames()
+	_update_timing_probe()
 
 	return _debug_curve_value
+
+
+func _record_tween_probe(value: float) -> void:
+	_debug_tween_value = value
+	_debug_tween_callback_usec = Time.get_ticks_usec()
+	_debug_tween_callback_frame = Engine.get_process_frames()
+	_update_timing_probe()
+
+
+func _update_timing_probe() -> void:
+	if (
+		_debug_curve_callback_usec == 0
+		or _debug_tween_callback_usec == 0
+		or _debug_curve_callback_frame != _debug_tween_callback_frame
+	):
+		return
+	_debug_callback_delta_usec = _debug_curve_callback_usec - _debug_tween_callback_usec
+	_debug_value_delta = _debug_curve_value - _debug_tween_value
+	_debug_max_callback_delta_usec = maxi(
+		_debug_max_callback_delta_usec,
+		absi(_debug_callback_delta_usec),
+	)
+	_debug_max_value_delta = maxf(_debug_max_value_delta, absf(_debug_value_delta))
+
+
+func _reset_timing_probe() -> void:
+	_debug_tween_value = 0.0
+	_debug_curve_callback_usec = 0
+	_debug_tween_callback_usec = 0
+	_debug_curve_callback_frame = -1
+	_debug_tween_callback_frame = -1
+	_debug_callback_delta_usec = 0
+	_debug_value_delta = 0.0
+	_debug_max_callback_delta_usec = 0
+	_debug_max_value_delta = 0.0
 
 
 func tween_curve(_offset: float, _curve: Curve) -> float:
