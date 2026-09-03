@@ -26,6 +26,10 @@ release variants from the repository root:
 Web builds require Emscripten on `PATH`. The Web preset is non-threaded and has
 Extension Support enabled.
 
+Web library entries are intentionally absent from the extension manifest until
+both WASM variants have been built and runtime-tested. Web exports currently use
+the independent legacy implementation instead of failing on missing binaries.
+
 Until the Windows debug artifact passes local security validation, editor
 sessions use the verified release DLL through the generic `windows.x86_64`
 manifest entry. Release exports use the explicit release entry. This keeps the

@@ -1,0 +1,13 @@
+[gd_resource type="NativeEasingCurve" format=3 uid="uid://bt0q1y84n4vwv"]
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_5p28q"]
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_i6rtu"]
+position = Vector2(0.45, 0.53)
+left_control_point = Vector2(0.45, 0.53)
+right_control_point = Vector2(0.45, 0.53)
+
+[resource]
+transition = 100
+ease_type = 2
+points = Array[NativeEasingCurvePoint]([SubResource("NativeEasingCurvePoint_5p28q"), SubResource("NativeEasingCurvePoint_i6rtu")])

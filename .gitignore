@@ -24,3 +24,4 @@ addons/godot_ai_tunnel/tunnel_config.json
 /addons/easing_curve/bin/*.so
 /addons/easing_curve/bin/*.dylib
 /addons/easing_curve/bin/*.wasm
+/addons/easing_curve/bin/~*.TMP

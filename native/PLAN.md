@@ -58,7 +58,7 @@ Architecture:
 | Custom performance | Native custom Bézier is approximately 43–136× faster than legacy across 2-, 9-, and 65-point workloads |
 | Performance regression gate | All 27 baseline cases pass the median/MAD noise-aware comparison |
 | Editor boundary | Narrow legacy/native backend foundation and capability discovery are implemented and covered by 16 contract checks |
-| Build automation | Pinned Windows/Web build script and GitHub Actions workflow are present; Windows release path is locally verified |
+| Build automation | Pinned Windows/Web build script and GitHub Actions workflow are present; Windows release path is locally verified; unverified Web libraries are not advertised in the manifest |
 | Legacy status | Existing `EasingCurve` remains functional and comprehensively tested |
 
 ### Partially complete
@@ -66,7 +66,7 @@ Architecture:
 - Native format version 2 and frozen IDs exist, but production migration behavior still needs explicit old/future-version policy and fixtures.
 - Point parity covers the core state matrix, but remaining graph edge cases and full legacy differential coverage are incomplete.
 - Windows release binaries build locally, but debug builds are blocked on the reference machine by Windows Security error 225.
-- Web build entries and CI exist, but Emscripten is unavailable locally and neither Web build nor browser runtime has been verified.
+- Web build configuration and CI exist, but Emscripten is unavailable locally and neither Web build nor browser runtime has been verified. Manifest entries remain withheld until both artifacts pass validation.
 - Native benchmarks cover 27 runtime cases but not every mode, signal/compilation path, or editor workload.
 - The test scene can switch resource types, but the production editor cannot.
 - The editor adapter is a foundation only; the production editor still uses concrete legacy types.
