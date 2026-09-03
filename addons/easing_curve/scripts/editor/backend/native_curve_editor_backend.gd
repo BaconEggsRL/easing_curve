@@ -25,6 +25,8 @@ func get_capabilities() -> Dictionary[StringName, bool]:
 		CAP_CALLABLE_BAKING: true,
 		CAP_HANDLE_MODES: true,
 		CAP_POINT_OPTIONS: true,
+		CAP_POINT_GEOMETRY: true,
+		CAP_POINT_TOPOLOGY: false,
 		CAP_CONVERSION: false,
 	}
 
@@ -92,7 +94,17 @@ func is_point_control_force_linear(index: int, side: int) -> bool:
 	return bool(point.get(_force_linear_property(side)))
 
 
-func apply_point_property(index: int, property_name: StringName, value: Variant) -> bool:
+func is_point_property_locked(index: int, property_name: StringName) -> bool:
+	var point := get_point(index)
+	return point != null and bool(point.call(&"is_lock_active", property_name))
+
+
+func apply_point_property(
+	index: int,
+	property_name: StringName,
+	value: Variant,
+	_changing: bool = false,
+) -> bool:
 	if index < 0 or index >= get_point_count():
 		return false
 	var current_point := get_point(index)

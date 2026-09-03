@@ -67,7 +67,7 @@ const BEZIER_DRAW_MAX_DEPTH := 12
 const AUTOFIT_PADDING_RATIO := 0.10
 const FUNCTION_DRAW_STEPS := 120
 
-var editor_undo_redo: EditorUndoRedoManager
+var editor_undo_redo: Object
 var pan_offset := Vector2.ZERO
 var is_panning := false
 var last_mouse_pos := Vector2.ZERO
@@ -135,6 +135,9 @@ var _point_right_state: OptionButton
 var _point_reset_button: Button
 var _updating_point_toolbar := false
 var _graph_render_suppressed := false
+var _backend_point_edit_active := false
+var _backend_point_edit_before: Variant
+var _backend_point_edit_action_name := "Edit Easing Curve Point"
 
 
 func _ready() -> void:
@@ -204,7 +207,7 @@ func _handle_pan_motion(event: InputEventMouseMotion) -> void:
 func _handle_mouse_motion(event: InputEventMouseMotion) -> void:
 	if not _is_point_graph():
 		return
-	if _curve == null:
+	if not _supports_point_geometry():
 		_update_hover_from_mouse(event.position)
 		return
 
@@ -239,17 +242,17 @@ func _handle_pending_add_motion(event: InputEventMouseMotion) -> void:
 
 func _begin_axis_drag(
 	event: InputEventMouseButton,
-	point: EasingCurvePoint,
+	point: Resource,
 	control: ControlIndex,
 ) -> void:
 	_axis_drag_origin_view = event.position
 	match control:
 		ControlIndex.LEFT:
-			_axis_drag_origin_world = point.left_control_point
+			_axis_drag_origin_world = point.get(&"left_control_point")
 		ControlIndex.RIGHT:
-			_axis_drag_origin_world = point.right_control_point
+			_axis_drag_origin_world = point.get(&"right_control_point")
 		ControlIndex.NONE:
-			_axis_drag_origin_world = point.position
+			_axis_drag_origin_world = point.get(&"position")
 	_axis_drag_shift_blocked = event.shift_pressed
 
 
@@ -279,17 +282,19 @@ func _apply_axis_drag_constraint(
 
 
 func _handle_drag_motion(event: InputEventMouseMotion) -> void:
-	var p = _curve.points[dragging_point]
+	var p := _point(dragging_point)
+	if p == null:
+		return
 	if dragging_control != ControlIndex.NONE:
-		p.set_handle_display_scale(get_world_to_view_scale())
+		_backend.prepare_point_control_drag(dragging_point, get_world_to_view_scale())
 	var world_pos = get_world_pos(event.position)
 	if not world_pos.is_finite():
 		return
-	if dragging_control == ControlIndex.NONE and p.is_lock_active(&"position"):
+	if dragging_control == ControlIndex.NONE and _backend.is_point_property_locked(dragging_point, &"position"):
 		return
-	if dragging_control == ControlIndex.LEFT and p.is_lock_active(&"left_control_point"):
+	if dragging_control == ControlIndex.LEFT and _backend.is_point_property_locked(dragging_point, &"left_control_point"):
 		return
-	if dragging_control == ControlIndex.RIGHT and p.is_lock_active(&"right_control_point"):
+	if dragging_control == ControlIndex.RIGHT and _backend.is_point_property_locked(dragging_point, &"right_control_point"):
 		return
 
 	world_pos = _apply_axis_drag_constraint(event, world_pos)
@@ -299,17 +304,19 @@ func _handle_drag_motion(event: InputEventMouseMotion) -> void:
 			if dragging_point != 0:
 				_request_point_property_change(dragging_point, &"left_control_point", world_pos, true)
 		ControlIndex.RIGHT:
-			if dragging_point != _curve.points.size() - 1:
+			if dragging_point != _point_count() - 1:
 				_request_point_property_change(dragging_point, &"right_control_point", world_pos, true)
 		ControlIndex.NONE:
-			var clamped_pos = world_pos.clamp(Vector2(0, _curve.min_value), Vector2(1.0, _curve.max_value))
-			var delta = clamped_pos - p.position
-			var left_control: Vector2 = p.left_control_point
-			var right_control: Vector2 = p.right_control_point
+			var value_range := _value_range()
+			var clamped_pos = world_pos.clamp(Vector2(0, value_range.x), Vector2(1.0, value_range.y))
+			var point_position := p.get(&"position") as Vector2
+			var delta = clamped_pos - point_position
+			var left_control := p.get(&"left_control_point") as Vector2
+			var right_control := p.get(&"right_control_point") as Vector2
 			_request_point_property_change(dragging_point, &"position", clamped_pos, true)
-			if not p.is_lock_active(&"left_control_point"):
+			if not _backend.is_point_property_locked(dragging_point, &"left_control_point"):
 				_request_point_property_change(dragging_point, &"left_control_point", left_control + delta, true)
-			if not p.is_lock_active(&"right_control_point"):
+			if not _backend.is_point_property_locked(dragging_point, &"right_control_point"):
 				_request_point_property_change(dragging_point, &"right_control_point", right_control + delta, true)
 
 	point_changed.emit(dragging_point, p)
@@ -338,7 +345,7 @@ func _handle_mouse_button(event: InputEventMouseButton) -> void:
 		return
 	if not _is_point_graph():
 		return
-	if _curve == null:
+	if not _supports_point_geometry():
 		_handle_read_only_point_button(event)
 		return
 	if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -375,35 +382,53 @@ func _handle_wheel(event: InputEventMouseButton) -> bool:
 func _handle_left_pressed(event: InputEventMouseButton) -> void:
 	var control = get_control_at(event.position)
 	var point_idx = get_point_at(event.position)
-	if control[0] != -1 and _curve.points[control[0]].handle_mode == EasingCurvePoint.HandleMode.LINEAR:
+	if (
+		control[0] != -1
+		and int(_point(control[0]).get(&"handle_mode"))
+		== EasingCurvePoint.HandleMode.LINEAR
+	):
 		point_idx = control[0]
 		control = [-1, ControlIndex.NONE]
 	if control[0] != -1:
-		var p = _curve.points[control[0]]
+		var p := _point(control[0])
 		var can_drag_control := false
 		match control[1]:
 			ControlIndex.LEFT:
-				can_drag_control = not p.is_lock_active(&"left_control_point")
+				can_drag_control = not _backend.is_point_property_locked(
+					control[0],
+					&"left_control_point",
+				)
 			ControlIndex.RIGHT:
-				can_drag_control = not p.is_lock_active(&"right_control_point")
+				can_drag_control = not _backend.is_point_property_locked(
+					control[0],
+					&"right_control_point",
+				)
 		selected_index = control[0]
 		if can_drag_control:
 			dragging_point = control[0]
 			dragging_control = control[1]
 			_begin_axis_drag(event, p, dragging_control)
-		elif point_idx != -1 and not _curve.points[point_idx].is_lock_active(&"position"):
+		elif (
+			point_idx != -1
+			and not _backend.is_point_property_locked(point_idx, &"position")
+		):
 			dragging_point = point_idx
 			dragging_control = ControlIndex.NONE
-			_begin_axis_drag(event, _curve.points[point_idx], dragging_control)
+			_begin_axis_drag(event, _point(point_idx), dragging_control)
 		queue_redraw()
 		return
 	if point_idx != -1:
-		var p = _curve.points[point_idx]
-		if not p.is_lock_active(&"position"):
+		var p := _point(point_idx)
+		if not _backend.is_point_property_locked(point_idx, &"position"):
 			dragging_point = point_idx
 			dragging_control = ControlIndex.NONE
 			_begin_axis_drag(event, p, dragging_control)
 		selected_index = point_idx
+		queue_redraw()
+		return
+	if not _supports_point_topology():
+		selected_index = -1
+		selected_control_index = ControlIndex.NONE
 		queue_redraw()
 		return
 
@@ -440,6 +465,11 @@ func _handle_right_pressed(event: InputEventMouseButton) -> void:
 		_cancel_pending_add()
 		accept_event()
 		return
+	if not _supports_point_topology():
+		selected_index = -1
+		selected_control_index = ControlIndex.NONE
+		queue_redraw()
+		return
 	_right_delete_requires_exit = false
 	_set_right_delete_dragging(true)
 	if _try_remove_point_at(event.position):
@@ -467,7 +497,7 @@ func _handle_left_released() -> void:
 		return
 	var finish_point_edit := dragging_point != -1
 	var point_order: Array[EasingCurvePoint] = []
-	if finish_point_edit and dragging_control == ControlIndex.NONE:
+	if finish_point_edit and dragging_control == ControlIndex.NONE and _curve != null:
 		var dragged_point := _curve.points[dragging_point]
 		point_order = _get_display_points()
 		selected_index = point_order.find(dragged_point)
@@ -475,7 +505,10 @@ func _handle_left_released() -> void:
 	dragging_control = ControlIndex.NONE
 	_clear_axis_drag()
 	if finish_point_edit:
-		point_edit_finished.emit(point_order)
+		if point_edit_finished.has_connections():
+			point_edit_finished.emit(point_order)
+		else:
+			_finish_backend_point_edit()
 	queue_redraw()
 
 
@@ -485,18 +518,87 @@ func _request_point_property_change(index: int, property_name: StringName, value
 		return
 	if _backend == null:
 		return
-	var before: Variant = _backend.capture_snapshot()
-	if not _backend.apply_point_property(index, property_name, value):
+	if changing and not _backend_point_edit_active:
+		_backend_point_edit_before = _duplicate_snapshot(_backend.capture_snapshot())
+		_backend_point_edit_action_name = _point_edit_action_name(property_name)
+		_backend_point_edit_active = true
+		_backend.begin_point_edit()
+
+	var before: Variant
+	if not changing and not _backend_point_edit_active:
+		before = _duplicate_snapshot(_backend.capture_snapshot())
+	if not _backend.apply_point_property(index, property_name, value, changing):
 		return
-	if editor_undo_redo == null or _curve != null:
+	if changing:
 		return
-	var after: Variant = _backend.capture_snapshot()
+	if _backend_point_edit_active:
+		_finish_backend_point_edit()
+		return
+	var after: Variant = _duplicate_snapshot(_backend.capture_snapshot())
 	if before == after:
 		return
-	editor_undo_redo.create_action("Change Native Easing Curve Point")
-	editor_undo_redo.add_do_method(_backend, &"apply_snapshot", after)
-	editor_undo_redo.add_undo_method(_backend, &"apply_snapshot", before)
+	_commit_backend_snapshot_action(
+		_point_edit_action_name(property_name),
+		before,
+		after,
+	)
+
+
+func _finish_backend_point_edit() -> void:
+	if not _backend_point_edit_active:
+		return
+	var before := _backend_point_edit_before
+	var action_name := _backend_point_edit_action_name
+	_backend_point_edit_active = false
+	_backend_point_edit_before = null
+	_backend_point_edit_action_name = "Edit Easing Curve Point"
+	_backend.finish_point_edit()
+	var after: Variant = _duplicate_snapshot(_backend.capture_snapshot())
+	if before == after:
+		return
+	_commit_backend_snapshot_action(action_name, before, after)
+
+
+func _commit_backend_snapshot_action(
+	action_name: String,
+	before: Variant,
+	after: Variant,
+) -> void:
+	if editor_undo_redo == null:
+		return
+	editor_undo_redo.create_action(action_name)
+	if editor_undo_redo is EditorUndoRedoManager:
+		editor_undo_redo.add_do_method(_backend, &"apply_snapshot", after)
+		editor_undo_redo.add_undo_method(_backend, &"apply_snapshot", before)
+	else:
+		editor_undo_redo.add_do_method(
+			Callable(_backend, &"apply_snapshot").bind(after),
+		)
+		editor_undo_redo.add_undo_method(
+			Callable(_backend, &"apply_snapshot").bind(before),
+		)
 	editor_undo_redo.commit_action(false)
+
+
+func _duplicate_snapshot(snapshot: Variant) -> Variant:
+	if snapshot is Dictionary or snapshot is Array:
+		return snapshot.duplicate(true)
+	return snapshot
+
+
+func _point_edit_action_name(property_name: StringName) -> String:
+	match property_name:
+		&"position":
+			return "Move Easing Curve Point"
+		&"left_control_point", &"right_control_point":
+			return "Move Easing Curve Handle"
+		&"left_control_state", &"right_control_state":
+			return "Change Easing Curve Handle State"
+		&"toolbar_options_reset":
+			return "Reset Easing Curve Point Options"
+		&"handle_mode":
+			return "Change Easing Curve Handle Mode"
+	return "Edit Easing Curve Point"
 
 
 func _request_point_add(point: EasingCurvePoint) -> void:
@@ -798,6 +900,11 @@ func set_zoom(zoom: Vector2) -> void:
 func set_curve(resource: Resource) -> void:
 	if get_curve() == resource:
 		return
+	if _backend != null and _backend_point_edit_active:
+		_backend.finish_point_edit()
+	_backend_point_edit_active = false
+	_backend_point_edit_before = null
+	_backend_point_edit_action_name = "Edit Easing Curve Point"
 	var previous := get_curve()
 	if previous != null and previous.changed.is_connected(_on_curve_changed):
 		previous.changed.disconnect(_on_curve_changed)
@@ -840,6 +947,20 @@ func _points() -> Array[Resource]:
 
 func _is_point_graph() -> bool:
 	return _backend != null and _backend.is_point_graph()
+
+
+func _supports_point_geometry() -> bool:
+	return (
+		_backend != null
+		and bool(_backend.get_capabilities().get(&"point_geometry", false))
+	)
+
+
+func _supports_point_topology() -> bool:
+	return (
+		_backend != null
+		and bool(_backend.get_capabilities().get(&"point_topology", false))
+	)
 
 
 func _value_range() -> Vector2:

@@ -9,6 +9,8 @@ const PREVIEW_ITERATIONS := 1000
 const POINT_READ_ITERATIONS := 2000
 const SNAPSHOT_ITERATIONS := 300
 const MUTATION_ITERATIONS := 1000
+const GESTURE_ITERATIONS := 200
+const GESTURE_MOTIONS := 12
 const TRIAL_COUNT := 9
 
 var _sink := 0.0
@@ -31,7 +33,7 @@ func _run() -> void:
 	_benchmark_curve("legacy", _make_legacy_curve())
 	_benchmark_curve("native", _make_native_curve())
 	print("SINK|%.9f" % _sink)
-	print("BACKEND_BENCHMARK_COMPLETE|cases=8")
+	print("BACKEND_BENCHMARK_COMPLETE|cases=10|signal_cases=2")
 	quit()
 
 
@@ -57,6 +59,12 @@ func _benchmark_curve(label: String, curve: Resource) -> void:
 		_mutate_backend.bind(backend),
 		_mutate_direct.bind(curve),
 	)
+	_benchmark_pair(
+		"%s_gesture_transaction" % label,
+		_gesture_backend.bind(backend),
+		_gesture_direct.bind(curve),
+	)
+	_measure_gesture_signal_count(label, curve, backend)
 
 
 func _benchmark_pair(label: String, adapter_workload: Callable, direct_workload: Callable) -> void:
@@ -178,6 +186,90 @@ func _mutate_direct(curve: Resource) -> void:
 		)
 		total += float(curve.call(&"sample", 0.51))
 	_sink += total
+
+
+func _gesture_backend(backend: RefCounted) -> void:
+	var point := backend.get_point(POINT_COUNT / 2) as Resource
+	var total := 0.0
+	for iteration in range(GESTURE_ITERATIONS):
+		var before: Variant = backend.capture_snapshot()
+		var origin := point.get(&"right_control_point") as Vector2
+		backend.begin_point_edit()
+		for motion in range(GESTURE_MOTIONS):
+			var phase := float(motion + 1) / GESTURE_MOTIONS
+			var direction := -1.0 if iteration % 2 == 0 else 1.0
+			backend.apply_point_property(
+				POINT_COUNT / 2,
+				&"right_control_point",
+				origin + Vector2(0.002, 0.003) * phase * direction,
+				true,
+			)
+		backend.finish_point_edit()
+		var after: Variant = backend.capture_snapshot()
+		total += after.size()
+		backend.apply_snapshot(before)
+	_sink += total
+
+
+func _gesture_direct(curve: Resource) -> void:
+	var point := (curve.get(&"points") as Array)[POINT_COUNT / 2] as Resource
+	var total := 0.0
+	for iteration in range(GESTURE_ITERATIONS):
+		var before: Variant = _capture_direct_snapshot(curve)
+		var origin := point.get(&"right_control_point") as Vector2
+		for motion in range(GESTURE_MOTIONS):
+			var phase := float(motion + 1) / GESTURE_MOTIONS
+			var direction := -1.0 if iteration % 2 == 0 else 1.0
+			point.set(
+				&"right_control_point",
+				origin + Vector2(0.002, 0.003) * phase * direction,
+			)
+		var after: Variant = _capture_direct_snapshot(curve)
+		total += after.size()
+		_apply_direct_snapshot(curve, before)
+	_sink += total
+
+
+func _measure_gesture_signal_count(label: String, curve: Resource, backend: RefCounted) -> void:
+	var before: Variant = backend.capture_snapshot()
+	var point := backend.get_point(POINT_COUNT / 2) as Resource
+	var origin := point.get(&"right_control_point") as Vector2
+	var changes := [0]
+	var on_changed := func() -> void: changes[0] += 1
+	curve.changed.connect(on_changed)
+	backend.begin_point_edit()
+	for motion in range(GESTURE_MOTIONS):
+		var phase := float(motion + 1) / GESTURE_MOTIONS
+		backend.apply_point_property(
+			POINT_COUNT / 2,
+			&"right_control_point",
+			origin + Vector2(0.002, 0.003) * phase,
+			true,
+		)
+	backend.finish_point_edit()
+	curve.changed.disconnect(on_changed)
+	print("BACKEND_SIGNAL|%s_gesture|motions=%d|curve_changes=%d|changes_per_motion=%.3f" % [
+		label,
+		GESTURE_MOTIONS,
+		changes[0],
+		float(changes[0]) / GESTURE_MOTIONS,
+	])
+	backend.apply_snapshot(before)
+
+
+func _capture_direct_snapshot(curve: Resource) -> Variant:
+	return (
+		curve.call(&"capture_point_states")
+		if curve.get_class() == &"NativeEasingCurve"
+		else curve.call(&"get_point_snapshot")
+	)
+
+
+func _apply_direct_snapshot(curve: Resource, snapshot: Variant) -> void:
+	if curve.get_class() == &"NativeEasingCurve":
+		curve.call(&"apply_point_states", snapshot)
+	else:
+		curve.call(&"set_point_snapshot", snapshot)
 
 
 func _make_legacy_curve() -> EasingCurve:

@@ -5,6 +5,8 @@ const CAP_RUNTIME_CALLABLE := &"runtime_callable"
 const CAP_CALLABLE_BAKING := &"callable_baking"
 const CAP_HANDLE_MODES := &"handle_modes"
 const CAP_POINT_OPTIONS := &"point_options"
+const CAP_POINT_GEOMETRY := &"point_geometry"
+const CAP_POINT_TOPOLOGY := &"point_topology"
 const CAP_CONVERSION := &"conversion"
 
 const CONTROL_SIDE_LEFT := 0
@@ -80,7 +82,28 @@ func is_point_control_force_linear(_index: int, _side: int) -> bool:
 	return false
 
 
-func apply_point_property(_index: int, _property_name: StringName, _value: Variant) -> bool:
+func is_point_property_locked(_index: int, _property_name: StringName) -> bool:
+	return false
+
+
+func prepare_point_control_drag(_index: int, _display_scale: Vector2) -> void:
+	pass
+
+
+func begin_point_edit() -> void:
+	pass
+
+
+func finish_point_edit() -> void:
+	pass
+
+
+func apply_point_property(
+	_index: int,
+	_property_name: StringName,
+	_value: Variant,
+	_changing: bool = false,
+) -> bool:
 	return false
 
 

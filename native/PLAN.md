@@ -37,7 +37,7 @@ Architecture:
 
 | Area | Current state |
 |---|---|
-| Branch | `native-v2-spike` at `1d6afe1` plus the current shared-editor tranche |
+| Branch | `native-v2-spike` at `cab8a51` plus the current shared-editor tranche |
 | Plan tracking | This file is the mutable source of truth for migration status and manual evidence |
 | Automated tests | All 23 suites pass under Godot 4.7.1 |
 | Native smoke tests | 476 checks pass |
@@ -60,8 +60,8 @@ Architecture:
 | Function performance | Native deterministic function modes are approximately 63–103× faster than legacy |
 | Custom performance | Native custom Bézier is approximately 43–136× faster than legacy across 2-, 9-, and 65-point workloads |
 | Performance regression gate | The prior 27-case reference is retained. The expanded 63-case run completed, but a broad host slowdown failed the old absolute gate, so it has not been promoted to the new baseline |
-| Editor boundary | The first production vertical slice is active for both APIs: backend selection, sampled graph/preview rendering, bulk point reads, selection, Native force-linear/lock controls, and atomic Native Undo/Redo. It is covered by 41 contract and 16 vertical-slice checks |
-| Editor boundary performance | Three repeated 65-point runs show preview dispatch adds about 12–15 microseconds per 121-sample draw, bulk point reads and snapshots are near direct cost, and optimized Native atomic mutation adds about 6–7 microseconds per mutation |
+| Editor boundary | The shared boundary now covers backend selection, sampled graph/preview rendering, bulk point reads, selection, point options, and existing-point geometry gestures. Native point and handle drags honor locks and commit one Undo/Redo action per gesture. It is covered by 47 contract and 34 vertical-slice checks |
+| Editor boundary performance | Three transaction benchmark runs cover 12-motion gestures and signal publication. Legacy backend gesture cost is 1.002–1.009× direct with one curve change at commit; Native is 1.191–1.205× direct and emits one curve change per applied motion, without extra adapter amplification |
 | Native Web export | Non-threaded debug (339,080 bytes) and release (334,967 bytes) WASM libraries export and run in isolated headless-browser projects; built-in/custom resources load, sample, and deep-copy correctly |
 | Build automation | Pinned Windows/Web build script, manifest preflight, and GitHub Actions build-plus-browser workflow are present; Windows release and local Web paths are verified |
 | Manual smoke test | 2026-09-03: the first shared-editor slice passed startup, standard/custom rendering, selection, point options, Undo/Redo, persistence, Native Inspector previews, the Native FileSystem class icon, and legacy regression checks. The timing probe was deferred |
@@ -73,8 +73,8 @@ Architecture:
 - Windows release binaries build locally, but debug builds are blocked on the reference machine by Windows Security error 225.
 - Web build and browser runtime are locally verified; the updated GitHub Actions job and its retained artifacts still need an actual hosted run.
 - Native runtime benchmarks cover 63 cases, including every standard transition/ease pair, but the expanded absolute baseline still needs repeatable quiet-host runs.
-- Editor benchmarks cover the first adapter slice, snapshots, and mutation-plus-recompile; complete gesture, signal-amplification, preset, and save-normalization workloads remain.
-- The production Inspector and Curve Editor can display/select both resource types and edit Native point options, but Native graph geometry is intentionally read-only in this first slice.
+- Editor benchmarks cover adapter reads, snapshots, mutation-plus-recompile, transaction-shaped gestures, and signal publication; preset, save-normalization, topology, and point-list workloads remain.
+- The production Inspector and Curve Editor can display/select both resource types and edit Native point options and existing point/handle geometry. Native add/delete/reorder and point-list integration remain intentionally disabled until the topology tranche.
 
 ### Missing
 
@@ -367,7 +367,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-03 — Expand performance baselines
 
-**Status:** **In progress.** Runtime coverage is expanded from 27 to 63 cases: all 12 standard transitions now exercise In, Out, In-Out, and Out-In, alongside deterministic functions, 2/9/65-point access patterns, mutation, and duplication. A targeted eight-case editor-backend benchmark measures preview sampling, bulk point reads, snapshots, and mutation-plus-recompile for both APIs. Three repeated editor runs were stable. The 63-case runtime report completed and every standard Native pair beat Tween, but the old absolute gate failed broadly during a host slowdown; a new baseline is intentionally deferred. Full gesture timing and a dedicated signal-amplification workload remain.
+**Status:** **In progress.** Runtime coverage is expanded from 27 to 63 cases: all 12 standard transitions now exercise In, Out, In-Out, and Out-In, alongside deterministic functions, 2/9/65-point access patterns, mutation, and duplication. The editor-backend benchmark now has ten timing cases plus two signal cases, including 12-motion transaction-shaped gestures. Three runs measured legacy gesture dispatch at 1.002–1.009× direct and Native at 1.191–1.205× direct. Legacy publishes one curve change at commit; Native publishes one per applied motion, with no extra adapter amplification. The 63-case runtime report completed and every standard Native pair beat Tween, but the old absolute gate failed broadly during a host slowdown; a new baseline is intentionally deferred.
 
 **Goal:** Establish regression gates for both implementations.
 
@@ -446,7 +446,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-07 — Extract the shared editor boundary
 
-**Status:** **In progress.** The first production vertical slice is complete. The shared Curve Editor and preview generator select a backend once, then use it for sampling, value ranges, point reads, selection, and point-option state. The Inspector accepts both public resources. Native custom curves render and expose force-linear/lock controls through atomic point state; standard Native transitions use the shared sampled graph and hide point controls. Legacy mutation behavior remains unchanged. Remaining write-side graph gestures, point-list integration, presets, and save normalization still use legacy-specific paths.
+**Status:** **In progress.** The read path and first write-side geometry slice are complete. The shared Curve Editor and preview generator select a backend once, then use it for sampling, value ranges, point reads, selection, point-option state, lock checks, and point/control mutations. Legacy graph and Inspector point mutations now delegate to the legacy backend while preserving the characterization suites. Native custom curves support point/control dragging with one snapshot per gesture and one Undo/Redo action at commit. Remaining topology, point-list integration, presets, and save normalization still use legacy-specific paths or remain disabled for Native.
 
 **Goal:** Decouple the existing editor from concrete legacy types without changing its behavior.
 
@@ -466,7 +466,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-08 — Add full Native editor support
 
-**Status:** **In progress.** The first Native Inspector/graph slice supports sampled rendering, point/control visualization, point selection, force-linear, locks, preview generation, and atomic toolbar Undo/Redo. Geometry dragging, topology edits, point-list synchronization, presets, save hooks, and full gesture Undo/Redo remain.
+**Status:** **In progress.** Native Inspector/graph support includes sampled rendering, point/control visualization, selection, force-linear, locks, preview generation, existing-point and handle dragging, and one-action Undo/Redo for both toolbar and geometry gestures. Position/control locks block graph dragging. Topology edits, crossing/reorder semantics, point-list synchronization, presets, and save hooks remain.
 
 **Goal:** Make Native resources first-class in the shared editor.
 
@@ -710,32 +710,32 @@ Any crash, data loss, stale result after mutation, missing class, serialization 
 Interpretation:
 
 - The shared start jitter in A does not currently implicate the Native equations. Keep it as a diagnostic item and capture per-frame elapsed time/offset before changing either solver.
-- The shared editor now exposes force-linear and lock operations, and the vertical-slice smoke test confirms their toolbar, Undo/Redo, and persistence behavior. Final NATIVE-04 manual acceptance still waits for Native geometry and topology editing.
+- The shared editor now exposes force-linear and lock operations, and automated coverage confirms existing Native point/control geometry, lock enforcement, and one-action gesture Undo/Redo. Final NATIVE-04 manual acceptance still waits for a visible geometry smoke test and the later topology slice.
 - The original E failure was correctly treated as a Native Web blocker. The non-threaded wasm32 implementation now resolves that technical blocker in isolated debug and release browser fixtures without substituting the legacy API. Final visible-scene acceptance remains manual.
 
 ## 9. Recommended next execution tranche
 
-### Priority 1 — Complete the write-side NATIVE-07 boundary
+### Priority 1 — Complete Native topology through the NATIVE-07 boundary
 
-1. Add backend commands for point position/control gestures and indexed add/remove/reorder without exposing either concrete point class to shared editor code.
-2. Move legacy graph mutations through those commands one gesture family at a time, preserving the existing pending-add, crossing, and right-drag-delete behavior.
-3. Capture one snapshot at gesture start and one at commit. Do not capture or restore a whole curve on every mouse-motion event.
-4. Retarget preset application and save normalization after graph mutation is stable.
+1. Add backend commands for indexed add/remove/reorder without exposing either concrete point class to shared editor code.
+2. Move legacy pending-add, crossing/reorder, and right-drag-delete behavior through those commands before enabling the matching Native capability.
+3. Preserve Native point identity and selection when a drag crosses adjacent points.
+4. Add one-action Undo/Redo coverage for add, delete, reorder, and canceled pending-add gestures.
 5. Keep each legacy characterization suite passing after every migrated workflow.
 
-The point mutation probe initially found a redundant whole-curve Native restore. Applying the already-atomic Native point state directly reduced the 65-point mutation workload from roughly 243–279 microseconds to 14–15 microseconds per edit batch iteration. The remaining adapter cost is small enough for toolbar edits; transaction-shaped gesture benchmarks should guide further work.
+The geometry slice now captures one snapshot at gesture start and one at commit. Across three 12-motion benchmark runs, the legacy backend transaction is 1.002–1.009× direct and publishes one curve-level change at commit. Native is 1.191–1.205× direct and publishes exactly one curve-level change per applied motion. Native-side edit batching could reduce publication further, but it is not required before topology unless visible-editor profiling shows a problem.
 
-### Priority 2 — Extend the Native editor from options to geometry
+### Priority 2 — Integrate the Native point list
 
-1. Enable Native point/control dragging through the shared commands.
-2. Add indexed Native point creation, deletion, and reorder to the graph and point list.
-3. Synchronize graph and Inspector point-list selection.
-4. Commit one Undo/Redo action per user gesture and verify point identity plus one curve-level change per atomic operation.
-5. Rerun manual smoke items C and D once Native geometry and topology are writable.
+1. Retarget the existing point-list editor to the shared backend.
+2. Add indexed Native point creation, deletion, and reorder after graph topology is stable.
+3. Synchronize graph and Inspector point-list selection in both directions.
+4. Keep force-linear as a toolbar/storage concern unless a dedicated raw Inspector property materially improves the workflow.
+5. Rerun manual smoke items C and D after Native topology and point-list editing are writable.
 
 ### Priority 3 — Finish NATIVE-03 regression evidence
 
-1. Add transaction-scale gesture and explicit signal-amplification workloads.
+1. Add topology, point-list, preset, and save-normalization workloads as those paths move behind the backend.
 2. Rerun the 63-case runtime benchmark on a quiet reference host. The current report proves relative Native-versus-Tween performance, but its broad absolute slowdown is unsuitable as a baseline.
 3. Archive the expanded runtime and editor baselines only after repeated runs pass the noise-aware gate.
 4. Use the Match Tween timing probe to classify the shared start jitter before changing either solver.
@@ -758,7 +758,7 @@ The point mutation probe initially found a redundant whole-curve Native restore.
 
 Proceed to NATIVE-08 through NATIVE-11 only after the shared legacy editor path is stable. Add Native editor support capability by capability, then non-destructive conversion, exact-ZIP staging, checksums, and clean-project installation/export tests.
 
-The next recommended implementation session is therefore the **write-side NATIVE-07 gesture boundary**, followed immediately by Native geometry editing through the same commands. Keep snapshot capture at gesture boundaries so safety and Undo/Redo do not become per-frame costs.
+The next recommended implementation session is therefore **Native topology through the shared NATIVE-07 commands**, followed by point-list synchronization. Existing-point geometry is now writable; add/delete/crossing behavior remains deliberately gated until its identity, selection, and Undo/Redo contracts are explicit.
 
 ## 10. Definition of Done
 

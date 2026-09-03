@@ -13,6 +13,7 @@ func _init() -> void:
 	_expect(legacy_backend.get_capabilities()[&"runtime_callable"], "legacy Callable capability is missing")
 	_expect(not legacy_backend.get_capabilities()[&"callable_baking"], "legacy advertises unimplemented Callable baking")
 	_expect(legacy_backend.get_capabilities()[&"point_options"], "legacy point options are missing")
+	_expect(legacy_backend.get_capabilities()[&"point_geometry"], "legacy point geometry is missing")
 	_expect(legacy_backend.is_point_graph(), "legacy custom curve did not expose its point graph")
 	_expect(legacy_backend.get_point_count() == legacy.points.size(), "legacy backend point count changed")
 	_expect(legacy_backend.get_points().size() == legacy.points.size(), "legacy backend point list changed")
@@ -51,6 +52,7 @@ func _init() -> void:
 		_expect(not native_backend.get_capabilities()[&"runtime_callable"], "Native advertises per-sample Callables")
 		_expect(native_backend.get_capabilities()[&"callable_baking"], "Native Callable-baking capability is missing")
 		_expect(native_backend.get_capabilities()[&"point_options"], "Native point options are missing")
+		_expect(native_backend.get_capabilities()[&"point_geometry"], "Native point geometry is missing")
 		_expect(native_backend.is_point_graph(), "Native custom curve did not expose its point graph")
 		_expect(native_backend.get_transition_ids().has(100), "Native custom transition is missing")
 		_expect(not native_backend.get_transition_ids().has(102), "Native advertises unimplemented Jitter")
@@ -83,6 +85,22 @@ func _init() -> void:
 		_expect(not native_point.get(&"right_force_linear"), "Native backend snapshot did not restore Force Linear")
 		native_locks = native_point.get(&"locked") as Dictionary
 		_expect(not native_locks[&"right_control_point"], "Native backend snapshot did not restore locks")
+		var original_position := native_point.get(&"position") as Vector2
+		var original_left := native_point.get(&"left_control_point") as Vector2
+		var original_right := native_point.get(&"right_control_point") as Vector2
+		var moved_position := original_position + Vector2(0.15, 0.2)
+		_expect(
+			native_backend.apply_point_property(0, &"position", moved_position, true),
+			"Native backend rejected a live position gesture",
+		)
+		_expect(native_point.get(&"position").is_equal_approx(moved_position), "Native backend did not move the point")
+		_expect(
+			native_point.get(&"left_control_point").is_equal_approx(original_left + moved_position - original_position)
+			and native_point.get(&"right_control_point").is_equal_approx(original_right + moved_position - original_position),
+			"Native backend did not translate unlocked controls with the point",
+		)
+		native_point.call(&"set_locked", &"position", true)
+		_expect(native_backend.is_point_property_locked(0, &"position"), "Native backend did not report the position lock")
 		native.set(&"transition", 0)
 		_expect(not native_backend.is_point_graph(), "Native standard transition exposed point editing")
 

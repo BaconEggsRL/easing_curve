@@ -483,6 +483,8 @@ var _compiled_segments_binary_search_safe := false
 var _last_compiled_segment_index := -1
 var _change_revision := 0
 var _edit_session_state := EDIT_SESSION_STATE.new()
+var _editor_point_edit_depth := 0
+var _editor_point_edit_changed := false
 
 # ------------------
 # EXPORTED OPTIONS
@@ -2069,6 +2071,24 @@ func _begin_editor_parameter_edit() -> void:
 	_edit_session_state.begin_parameter_edit()
 
 
+func _begin_editor_point_edit() -> void:
+	if _editor_point_edit_depth == 0:
+		_editor_point_edit_changed = false
+	_editor_point_edit_depth += 1
+	_edit_session_state.begin_point_notification_suppression()
+
+
+func _finish_editor_point_edit() -> void:
+	if _editor_point_edit_depth <= 0:
+		return
+	_editor_point_edit_depth -= 1
+	_edit_session_state.end_point_notification_suppression()
+	if _editor_point_edit_depth > 0 or not _editor_point_edit_changed:
+		return
+	_editor_point_edit_changed = false
+	_notify_curve_changed(true, true)
+
+
 func _cancel_editor_parameter_edit() -> void:
 	_edit_session_state.cancel_parameter_edit()
 
@@ -2564,6 +2584,8 @@ func _update_preset() -> void:
 func _on_point_changed() -> void:
 	_mark_point_geometry_dirty()
 	if _edit_session_state.is_point_notification_suppressed():
+		if _editor_point_edit_depth > 0:
+			_editor_point_edit_changed = true
 		return
 	_notify_curve_changed(true, false)
 

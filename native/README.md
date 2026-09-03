@@ -116,19 +116,20 @@ The runtime benchmark reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
 custom curves in sequential, reverse, and random sampling order; mutation; and
 deep runtime duplication. The editor-backend benchmark compares adapter and
-direct costs for preview sampling, 65-point reads, snapshots, and
-mutation-plus-recompile.
+direct costs for preview sampling, 65-point reads, snapshots,
+mutation-plus-recompile, and transaction-shaped gestures, then reports curve
+change signals for each backend.
 Tween is used only as a benchmark and numerical oracle. No Native sampling path
 calls Tween, GDScript, or a Callable.
 
 ## Shared editor status
 
 The production Inspector and Curve Editor now choose either the legacy or Native
-backend through the shared adapter boundary. The first Native slice renders
-standard and custom curves, supports point selection, exposes force-linear and
-lock options, generates previews, and records toolbar changes atomically for
-Undo/Redo. Native graph geometry remains read-only until the next gesture and
-topology tranche; legacy editing behavior is unchanged.
+backend through the shared adapter boundary. Native custom curves render,
+support point selection and existing point/handle dragging, expose force-linear
+and lock options, generate previews, and record one Undo/Redo action per
+gesture. Native add/delete/reorder and point-list editing remain gated for the
+topology tranche; legacy editing behavior is preserved through the adapter.
 
 ## Manual smoke-test status — 2026-09-03
 
@@ -136,7 +137,7 @@ topology tranche; legacy editing behavior is unchanged.
 |---|---|---|
 | Standard transition parity | Pass with observation | Circ, Cubic, Elastic, Expo, Quart, and Quint showed slight start jitter relative to Tween. Legacy showed the same behavior, so this is recorded as a harness/timing investigation rather than a Native release blocker. |
 | Deterministic modes and transforms | Pass | No follow-up from this run. |
-| Custom editing and ownership | First editor slice passed | Native selection, handle modes, force-linear, and locks passed through the shared toolbar. Geometry/topology editing remains intentionally read-only until the next tranche. Force-linear fields are storage-only and therefore do not appear in the raw point Inspector. |
+| Custom editing and ownership | Geometry slice automated; manual check pending | Native selection, handle modes, force-linear, locks, existing-point dragging, handle dragging, and one-action gesture Undo/Redo are covered. Add/delete/reorder and point-list editing remain intentionally disabled until the topology tranche. Force-linear fields are storage-only and therefore do not appear in the raw point Inspector. |
 | Save, reload, and coexistence | Pass for the shared-editor slice | Native point options, Undo/Redo, and persistence passed; both public APIs continue to work independently. |
 | Native resource preview/icon | Pass | Generated Native Inspector previews and the `Curve.svg` FileSystem class icon both passed manual verification. |
 | Match Tween timing probe | Deferred | The probe remains available for a later jitter investigation. |
@@ -152,7 +153,7 @@ is used for serialized Native resources.
   retain their artifacts.
 - Finish generated, CSS, and extended Bounce representations.
 - Complete the remaining Native point-state edge cases and curve-level snapshots.
-- Finish write-side graph gestures and point-list integration through the shared editor backend.
+- Finish add/delete/reorder graph topology and point-list integration through the shared editor backend.
 - Add optional, non-destructive bidirectional conversion.
 - Build the exact dual-API release archive.
 - Add remaining platforms before any legacy deprecation proposal.
