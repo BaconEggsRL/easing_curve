@@ -1,0 +1,47 @@
+name: Native builds
+
+on:
+  push:
+    branches: [native-v2-spike]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install scons
+      - name: Build Windows debug and release
+        shell: pwsh
+        run: ./native/build_native.ps1 -Platform windows -Target all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: easing-curve-native-windows-x86_64
+          path: addons/easing_curve/bin/*.dll
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install scons
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.62
+      - name: Build Web debug and release
+        shell: pwsh
+        run: ./native/build_native.ps1 -Platform web -Target all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: easing-curve-native-web-wasm32
+          path: addons/easing_curve/bin/*.wasm

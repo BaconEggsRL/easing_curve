@@ -1,0 +1,31 @@
+# Reference system: local Windows x86_64, Godot 4.7.1, 4.4.1 ABI release library.
+# Each value is the median of nine alternating trials; MAD is median absolute deviation.
+NATIVE_V2_VS_TWEEN|godot=4.7.1-stable (official)|samples=200000|custom_samples=50000|trials=9
+COMPARE|linear_out|native_usec=5185.0|native_mad=11.0|
+COMPARE|sine_out|native_usec=5471.0|native_mad=20.0|
+COMPARE|quint_out|native_usec=5173.0|native_mad=7.0|
+COMPARE|quart_out|native_usec=5182.0|native_mad=8.0|
+COMPARE|quad_out|native_usec=5174.0|native_mad=10.0|
+COMPARE|expo_out|native_usec=6822.0|native_mad=17.0|
+COMPARE|elastic_out|native_usec=8238.0|native_mad=23.0|
+COMPARE|cubic_out|native_usec=5172.0|native_mad=17.0|
+COMPARE|circ_out|native_usec=5206.0|native_mad=15.0|
+COMPARE|bounce_out|native_usec=5230.0|native_mad=14.0|
+COMPARE|back_out|native_usec=5202.0|native_mad=16.0|
+COMPARE|spring_out|native_usec=7570.0|native_mad=26.0|
+COMPARE|function_constant|native_usec=1268.0|native_mad=32.0|
+COMPARE|function_step|native_usec=1322.0|native_mad=9.0|
+COMPARE|function_power|native_usec=1717.0|native_mad=5.0|
+COMPARE|function_physics_spring|native_usec=2319.0|native_mad=4.0|
+COMPARE|custom_2_sequential|native_usec=1644.0|native_mad=16.0|
+COMPARE|custom_2_reverse|native_usec=1648.0|native_mad=12.0|
+COMPARE|custom_2_random|native_usec=1975.0|native_mad=8.0|
+COMPARE|custom_9_sequential|native_usec=1541.0|native_mad=11.0|
+COMPARE|custom_9_reverse|native_usec=1536.0|native_mad=11.0|
+COMPARE|custom_9_random|native_usec=2104.0|native_mad=16.0|
+COMPARE|custom_65_sequential|native_usec=1628.0|native_mad=1.0|
+COMPARE|custom_65_reverse|native_usec=1628.0|native_mad=9.0|
+COMPARE|custom_65_random|native_usec=2740.0|native_mad=12.0|
+COMPARE|mutate_control_and_sample_65|native_usec=30359.0|native_mad=201.0|
+COMPARE|deep_runtime_copy_65|native_usec=116918.0|native_mad=4816.0|
+BENCHMARK_COMPLETE|cases=27

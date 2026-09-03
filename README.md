@@ -3,6 +3,15 @@ GDScript curve editor for easing functions.
 
 Designed for parity with Godot's Tween system and easing equations.
 
+The `native-v2-spike` branch also contains the experimental
+`NativeEasingCurve` and `NativeEasingCurvePoint` GDExtension APIs. They are
+independent from `EasingCurve` and `EasingCurvePoint`, and both API families can
+coexist in one project. The GDScript API remains the supported legacy/fallback
+API and is **not deprecated**. Deprecation can be considered only after the
+Native implementation meets or exceeds the legacy runtime, editor,
+serialization, compatibility, platform, reliability, and performance gates;
+removal would require a separate future plan.
+
 * [Robert Pennner's easing functions](https://easings.net) (GDScript port: [godot-easing](https://github.com/impmja/godot-easing))
 * [Godot 4.6 easing equations](https://github.com/godotengine/godot/blob/4.6/scene/animation/easing_equations.h)
 * Includes some unique [CSS](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/easing-function/cubic-bezier) and [JS](https://animejs.com/documentation/easings/built-in-eases/) easing functions.

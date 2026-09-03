@@ -16,6 +16,9 @@ const EasingCurvePreviewGenerator = preload(
 const EasingCurveUpdateChecker = preload(
 	"res://addons/easing_curve/scripts/editor/update_checker.gd"
 )
+const CurveEditorBackendFactory = preload(
+	"res://addons/easing_curve/scripts/editor/backend/curve_editor_backend_factory.gd"
+)
 
 const PLUGIN_CONFIG_PATH := "res://addons/easing_curve/plugin.cfg"
 const UPDATE_CHECKS_ENABLE_MENU := "Easing Curve: Enable Update Checks"
@@ -119,6 +122,10 @@ func _on_resource_saved(resource: Resource) -> void:
 		and resource.trans_type != EasingCurve.TRANS.CUSTOM
 	):
 		resource.trans_type = EasingCurve.TRANS.CUSTOM
+
+
+func create_curve_editor_backend(resource: Resource) -> RefCounted:
+	return CurveEditorBackendFactory.create(resource)
 
 
 func _on_update_available(

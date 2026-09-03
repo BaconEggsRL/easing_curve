@@ -3,6 +3,9 @@ extends "res://test/scripts/support/test_case.gd"
 const LEGACY_CURVE_SCRIPT := preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve.gd"
 )
+const LEGACY_POINT_SCRIPT := preload(
+	"res://addons/easing_curve/scripts/runtime/point.gd"
+)
 const SAMPLE_COUNT := 256
 const TRANS_CUSTOM := 100
 
@@ -23,11 +26,15 @@ func _run() -> void:
 	_test_resource_version_contract()
 	_test_invalid_property_contract()
 	_test_builtin_equivalence()
+	_test_extended_transition_parity()
+	_test_callable_baking()
 	_test_custom_bezier_equivalence()
 	_test_point_ordering_contract()
 	_test_point_change_invalidates_compiled_segments()
 	_test_points_array_assignment()
 	_test_point_ownership_and_change_propagation()
+	_test_point_editor_state_contract()
+	_test_point_mode_differential()
 	_test_deep_runtime_copy()
 	_test_resource_round_trip()
 	_finish("native v2 smoke")
@@ -68,6 +75,14 @@ func _test_stable_enum_contract() -> void:
 			"native transition ID %d does not match Tween ID %d" % transition_pair,
 		)
 	_expect(NativeEasingCurve.TRANS_CUSTOM == TRANS_CUSTOM, "custom transition ID changed")
+	_expect(NativeEasingCurve.TRANS_CONSTANT == 101, "constant transition ID changed")
+	_expect(NativeEasingCurve.TRANS_JITTER == 102, "jitter transition ID changed")
+	_expect(NativeEasingCurve.TRANS_IRREGULAR == 103, "irregular transition ID changed")
+	_expect(NativeEasingCurve.TRANS_STEP == 104, "step transition ID changed")
+	_expect(NativeEasingCurve.TRANS_POWER == 105, "power transition ID changed")
+	_expect(NativeEasingCurve.TRANS_PHYSICS_SPRING == 106, "physics spring transition ID changed")
+	_expect(NativeEasingCurve.TRANS_CSS_LINEAR == 107, "CSS linear transition ID changed")
+	_expect(NativeEasingCurve.TRANS_CSS_CUBIC_BEZIER == 108, "CSS cubic Bezier transition ID changed")
 	_expect(NativeEasingCurve.EASE_IN == Tween.EASE_IN, "EASE_IN ID does not match Tween")
 	_expect(NativeEasingCurve.EASE_OUT == Tween.EASE_OUT, "EASE_OUT ID does not match Tween")
 	_expect(NativeEasingCurve.EASE_IN_OUT == Tween.EASE_IN_OUT, "EASE_IN_OUT ID does not match Tween")
@@ -76,7 +91,7 @@ func _test_stable_enum_contract() -> void:
 
 func _test_resource_version_contract() -> void:
 	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
-	_expect(NativeEasingCurve.FORMAT_VERSION == 1, "native format version changed unexpectedly")
+	_expect(NativeEasingCurve.FORMAT_VERSION == 2, "native production format version changed unexpectedly")
 	_expect(curve.get(&"format_version") == NativeEasingCurve.FORMAT_VERSION, "new native curve has the wrong format version")
 
 	var version_property := {}
@@ -151,6 +166,65 @@ func _test_builtin_equivalence() -> void:
 			)
 
 
+func _test_extended_transition_parity() -> void:
+	var cases := [
+		[NativeEasingCurve.TRANS_CONSTANT, EasingCurve.TRANS.CONSTANT, {&"constant_value": 0.37}],
+		[NativeEasingCurve.TRANS_STEP, EasingCurve.TRANS.STEP, {&"steps": 7, &"from_start": true, &"y_offset": 0.08}],
+		[NativeEasingCurve.TRANS_POWER, EasingCurve.TRANS.POWER, {&"power": 3.25}],
+		[NativeEasingCurve.TRANS_BACK, EasingCurve.TRANS.BACK, {&"overshoot": 2.4}],
+		[NativeEasingCurve.TRANS_ELASTIC, EasingCurve.TRANS.ELASTIC, {&"amplitude": 1.7, &"period": 0.42}],
+		[NativeEasingCurve.TRANS_SPRING, EasingCurve.TRANS.SPRING, {&"frequency": 3.4, &"decay": 3.1}],
+		[NativeEasingCurve.TRANS_PHYSICS_SPRING, EasingCurve.TRANS.PHYSICS_SPRING, {&"stiffness": 180.0, &"damping": 14.0, &"mass": 1.8, &"velocity": -0.75}],
+	]
+	for transition_case in cases:
+		for ease in range(NativeEasingCurve.EASE_OUT_IN + 1):
+			var native_curve := _new_native_curve(transition_case[0], ease)
+			var legacy_curve := LEGACY_CURVE_SCRIPT.new() as EasingCurve
+			legacy_curve.trans_type = transition_case[1]
+			legacy_curve.ease_type = ease
+			for property_name: StringName in transition_case[2]:
+				native_curve.set(property_name, transition_case[2][property_name])
+				legacy_curve.set(property_name, transition_case[2][property_name])
+			var max_error := 0.0
+			for index in range(SAMPLE_COUNT + 1):
+				var offset := float(index) / SAMPLE_COUNT
+				max_error = maxf(max_error, absf(native_curve.call(&"sample", offset) - legacy_curve.sample(offset)))
+			_expect(
+				max_error <= 0.00001,
+				"extended native transition %d ease %d differs from legacy by %.9f" % [transition_case[0], ease, max_error],
+			)
+
+	var transformed := _new_native_curve(NativeEasingCurve.TRANS_POWER, NativeEasingCurve.EASE_IN)
+	transformed.set(&"power", 2.5)
+	transformed.set(&"reverse", true)
+	transformed.set(&"invert", true)
+	_expect(
+		is_equal_approx(transformed.call(&"sample", 0.25), 1.0 - pow(0.75, 2.5)),
+		"native reverse/invert transform changed",
+	)
+
+
+func _test_callable_baking() -> void:
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
+	var calls := {&"count": 0}
+	var source := func(offset: float) -> float:
+		calls[&"count"] += 1
+		return offset * offset
+	_expect(curve.call(&"bake_callable", source, 64), "Native rejected a valid Callable bake")
+	_expect(calls[&"count"] == 65, "Callable bake used the wrong sample count")
+	_expect(curve.get(&"transition") == NativeEasingCurve.TRANS_CUSTOM, "Callable bake did not produce a custom curve")
+	_expect(curve.call(&"get_point_count") == 65, "Callable bake produced the wrong point count")
+	var calls_after_bake: int = calls[&"count"]
+	var max_error := 0.0
+	for index in range(SAMPLE_COUNT + 1):
+		var offset := float(index) / SAMPLE_COUNT
+		max_error = maxf(max_error, absf(curve.call(&"sample", offset) - offset * offset))
+	_expect(max_error <= 0.0001, "Callable bake approximation error is %.9f" % max_error)
+	_expect(calls[&"count"] == calls_after_bake, "Native invoked the Callable during sampling")
+	_expect(not curve.call(&"bake_callable", Callable(), 64), "Native accepted an invalid Callable")
+	_expect(not curve.call(&"bake_callable", source, 0), "Native accepted an invalid bake resolution")
+
+
 func _test_custom_bezier_equivalence() -> void:
 	var native_curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
 	native_curve.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
@@ -219,6 +293,16 @@ func _test_points_array_assignment() -> void:
 	)
 	curve.call(&"remove_point", 1)
 	_expect(curve.get(&"points").size() == 2, "remove_point did not update topology")
+	_expect(curve.call(&"get_point_count") == 2, "get_point_count did not report topology")
+	_expect(curve.call(&"get_point", 0) != null, "get_point did not return a valid point")
+	_expect(curve.call(&"get_point", -1) == null, "get_point accepted an invalid index")
+	_expect(not curve.call(&"insert_point", -1, midpoint), "insert_point accepted an invalid index")
+	_expect(curve.call(&"insert_point", 1, midpoint), "insert_point rejected a valid point")
+	_expect(curve.call(&"get_point_count") == 3, "insert_point did not update topology")
+	_expect(curve.call(&"set_point", 1, midpoint), "set_point rejected a valid no-op replacement")
+	_expect(not curve.call(&"set_point", 3, midpoint), "set_point accepted an invalid index")
+	curve.call(&"clear_points")
+	_expect(curve.call(&"get_point_count") == 0, "clear_points did not clear topology")
 
 
 func _test_point_ownership_and_change_propagation() -> void:
@@ -248,19 +332,133 @@ func _test_point_ownership_and_change_propagation() -> void:
 	_expect(notifications[&"points_changed"] == 2, "removed point still propagated points_changed")
 
 
+func _test_point_editor_state_contract() -> void:
+	_expect(NativeEasingCurvePoint.HANDLE_FREE == 0, "native free handle ID changed")
+	_expect(NativeEasingCurvePoint.HANDLE_LINEAR == 1, "native linear handle ID changed")
+	_expect(NativeEasingCurvePoint.HANDLE_BALANCED == 2, "native balanced handle ID changed")
+	_expect(NativeEasingCurvePoint.HANDLE_MIRRORED == 3, "native mirrored handle ID changed")
+	_expect(NativeEasingCurvePoint.HANDLE_LINKED == 4, "native linked handle ID changed")
+
+	var point := _new_native_point(Vector2(0.5, 0.5))
+	point.set(&"left_control_point", Vector2(0.25, 0.25))
+	point.set(&"right_control_point", Vector2(0.75, 0.75))
+	point.call(&"set_locked", &"left_control_point", true)
+	point.set(&"position", Vector2(0.6, 0.6))
+	_expect(point.get(&"left_control_point") == Vector2(0.25, 0.25), "locked control moved with the point")
+	_expect(point.get(&"right_control_point") == Vector2(0.85, 0.85), "free control did not move with the point")
+
+	point.call(&"set_locked", &"left_control_point", false)
+	point.set(&"handle_mode", NativeEasingCurvePoint.HANDLE_MIRRORED)
+	point.set(&"right_control_point", Vector2(0.8, 0.7))
+	_expect(
+		point.get(&"left_control_point").is_equal_approx(Vector2(0.4, 0.5)),
+		"mirrored mode did not reflect the opposite handle",
+	)
+	point.set(&"handle_mode", NativeEasingCurvePoint.HANDLE_FREE)
+	point.set(&"left_force_linear", true)
+	_expect(point.get(&"left_control_point") == point.get(&"position"), "force-linear did not collapse the handle")
+
+	var state: Dictionary = point.call(&"capture_state")
+	state[&"position"] = Vector2(0.3, 0.4)
+	state[&"handle_mode"] = NativeEasingCurvePoint.HANDLE_LINKED
+	state[&"left_control_point"] = Vector2(0.2, 0.4)
+	state[&"right_control_point"] = Vector2(0.2, 0.4)
+	var changes := {&"count": 0}
+	point.changed.connect(func() -> void: changes[&"count"] += 1)
+	_expect(point.call(&"apply_state", state), "valid atomic point state was rejected")
+	_expect(changes[&"count"] == 1, "atomic point state did not emit exactly one change")
+	_expect(point.get(&"position") == Vector2(0.3, 0.4), "atomic point state lost position")
+	_expect(point.get(&"handle_mode") == NativeEasingCurvePoint.HANDLE_LINKED, "atomic point state lost handle mode")
+	state[&"position"] = Vector2(NAN, 0.0)
+	_expect(not point.call(&"apply_state", state), "non-finite atomic point state was accepted")
+
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUSTOM, NativeEasingCurve.EASE_OUT)
+	var end := _new_native_point(Vector2.ONE)
+	curve.set(&"points", [point, end])
+	var original_identity := curve.call(&"get_point", 0) as Resource
+	var states: Array = curve.call(&"capture_point_states")
+	states[0][&"position"] = Vector2(0.2, 0.3)
+	states[1][&"position"] = Vector2(0.9, 1.0)
+	var curve_changes := {&"count": 0}
+	curve.connect(&"points_changed", func(_points: Array) -> void: curve_changes[&"count"] += 1)
+	_expect(curve.call(&"apply_point_states", states), "valid curve point snapshot was rejected")
+	_expect(curve.call(&"get_point", 0) == original_identity, "curve point snapshot replaced point identity")
+	_expect(curve_changes[&"count"] == 1, "curve point snapshot amplified change propagation")
+	states[0][&"position"] = Vector2(NAN, 0.0)
+	var before_rejected_state: Vector2 = (curve.call(&"get_point", 1) as Resource).get(&"position")
+	_expect(not curve.call(&"apply_point_states", states), "invalid curve point snapshot was accepted")
+	_expect(
+		(curve.call(&"get_point", 1) as Resource).get(&"position") == before_rejected_state,
+		"rejected curve point snapshot partially mutated points",
+	)
+
+
+func _test_point_mode_differential() -> void:
+	for mode in range(EasingCurvePoint.HandleMode.LINKED + 1):
+		var native := _new_native_point(Vector2(0.5, 0.5))
+		var legacy := LEGACY_POINT_SCRIPT.new(Vector2(0.5, 0.5)) as EasingCurvePoint
+		for candidate in [native, legacy]:
+			candidate.set(&"left_control_point", Vector2(0.2, 0.4))
+			candidate.set(&"right_control_point", Vector2(0.85, 0.7))
+			candidate.set(&"handle_mode", mode)
+		_expect_native_point_matches_legacy(native, legacy, "mode %d selection" % mode)
+		native.set(&"right_control_point", Vector2(0.75, 0.2))
+		legacy.right_control_point = Vector2(0.75, 0.2)
+		_expect_native_point_matches_legacy(native, legacy, "mode %d control move" % mode)
+
+	for mode in [EasingCurvePoint.HandleMode.FREE, EasingCurvePoint.HandleMode.LINKED]:
+		var native := _new_native_point(Vector2(0.5, 0.5))
+		var legacy := LEGACY_POINT_SCRIPT.new(Vector2(0.5, 0.5)) as EasingCurvePoint
+		native.set(&"handle_mode", mode)
+		legacy.handle_mode = mode
+		native.set(&"left_force_linear", true)
+		legacy.left_force_linear = true
+		_expect_native_point_matches_legacy(native, legacy, "mode %d force linear" % mode)
+
+	var native_locked := _new_native_point(Vector2(0.5, 0.5))
+	var legacy_locked := LEGACY_POINT_SCRIPT.new(Vector2(0.5, 0.5)) as EasingCurvePoint
+	for candidate in [native_locked, legacy_locked]:
+		candidate.set(&"left_control_point", Vector2(0.2, 0.4))
+		candidate.call(&"set_locked", "left_control_point", true)
+		candidate.set(&"position", Vector2(0.6, 0.7))
+	_expect_native_point_matches_legacy(native_locked, legacy_locked, "locked position move")
+
+
+func _expect_native_point_matches_legacy(
+		native: Resource,
+		legacy: EasingCurvePoint,
+		context: String,
+) -> void:
+	_expect(
+		(native.get(&"left_control_point") as Vector2).is_equal_approx(legacy.left_control_point),
+		"%s left control differs" % context,
+	)
+	_expect(
+		(native.get(&"right_control_point") as Vector2).is_equal_approx(legacy.right_control_point),
+		"%s right control differs" % context,
+	)
+
+
 func _test_deep_runtime_copy() -> void:
 	var source := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
 	source.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
+	var source_points: Array = source.get(&"points")
+	(source_points[0] as Resource).set(&"handle_mode", NativeEasingCurvePoint.HANDLE_LINKED)
+	(source_points[0] as Resource).set(&"left_force_linear", true)
+	(source_points[0] as Resource).call(&"set_locked", &"position", true)
 	var source_before: float = source.call(&"sample", 0.25)
 	var runtime := source.call(&"create_runtime_copy") as Resource
 	_expect(runtime != null, "create_runtime_copy did not return a NativeEasingCurve")
 	if runtime == null:
 		return
 
-	var source_points: Array = source.get(&"points")
 	var runtime_points: Array = runtime.get(&"points")
 	_expect(runtime_points.size() == source_points.size(), "runtime copy changed point topology")
 	_expect(runtime_points[0] != source_points[0], "runtime copy shares point Resources with its source")
+	_expect(
+		(runtime_points[0] as Resource).get(&"handle_mode") == NativeEasingCurvePoint.HANDLE_LINKED,
+		"runtime copy lost point handle mode",
+	)
 	_expect(
 		is_equal_approx(runtime.call(&"sample", 0.25), source_before),
 		"runtime copy changed the sampled curve",
@@ -272,7 +470,11 @@ func _test_deep_runtime_copy() -> void:
 
 	var runtime_notifications := {&"count": 0}
 	runtime.connect(&"points_changed", func(_points: Array) -> void: runtime_notifications[&"count"] += 1)
-	(source_points[0] as Resource).set(&"right_control_point", Vector2(0.1, 0.95))
+	var changed_source_state: Dictionary = (source_points[0] as Resource).call(&"capture_state")
+	changed_source_state[&"handle_mode"] = NativeEasingCurvePoint.HANDLE_FREE
+	changed_source_state[&"left_force_linear"] = false
+	changed_source_state[&"right_control_point"] = Vector2(0.1, 0.95)
+	(source_points[0] as Resource).call(&"apply_state", changed_source_state)
 	_expect(not is_equal_approx(source.call(&"sample", 0.25), source_before), "source edit did not change source sampling")
 	_expect(is_equal_approx(runtime.call(&"sample", 0.25), source_before), "source edit changed the runtime copy")
 	_expect(runtime_notifications[&"count"] == 0, "source edit signaled the independent runtime copy")
@@ -281,6 +483,9 @@ func _test_deep_runtime_copy() -> void:
 func _test_resource_round_trip() -> void:
 	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
 	curve.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
+	var authored_point := curve.call(&"get_point", 0) as Resource
+	authored_point.set(&"handle_mode", NativeEasingCurvePoint.HANDLE_LINKED)
+	authored_point.call(&"set_locked", &"position", true)
 	var expected: float = curve.call(&"sample", 0.37)
 	const EXPLICIT_SAVED_VERSION := 7
 	curve.set(&"format_version", EXPLICIT_SAVED_VERSION)
@@ -302,6 +507,15 @@ func _test_resource_round_trip() -> void:
 		_expect(
 			is_equal_approx(expected, loaded.call(&"sample", 0.37)),
 			"native curve changed after save/load",
+		)
+		var loaded_point := loaded.call(&"get_point", 0) as Resource
+		_expect(
+			loaded_point.get(&"handle_mode") == NativeEasingCurvePoint.HANDLE_LINKED,
+			"native point handle mode changed after save/load",
+		)
+		_expect(
+			loaded_point.call(&"is_lock_active", &"position"),
+			"native point lock changed after save/load",
 		)
 
 

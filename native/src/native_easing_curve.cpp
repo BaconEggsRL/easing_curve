@@ -12,12 +12,14 @@ namespace {
 constexpr double PI = 3.14159265358979323846;
 constexpr double SOLVE_EPSILON = 0.00000001;
 constexpr double SEGMENT_X_EPSILON = 0.000001;
-constexpr double BACK_OVERSHOOT = 1.70158;
 constexpr int NEWTON_ITERATIONS = 8;
 constexpr int BINARY_ITERATIONS = 32;
 
 bool is_valid_transition(NativeEasingCurve::Transition p_transition) {
-	return (p_transition >= NativeEasingCurve::TRANS_LINEAR && p_transition <= NativeEasingCurve::TRANS_SPRING) || p_transition == NativeEasingCurve::TRANS_CUSTOM;
+	return (p_transition >= NativeEasingCurve::TRANS_LINEAR && p_transition <= NativeEasingCurve::TRANS_SPRING) ||
+			p_transition == NativeEasingCurve::TRANS_CUSTOM || p_transition == NativeEasingCurve::TRANS_CONSTANT ||
+			p_transition == NativeEasingCurve::TRANS_STEP || p_transition == NativeEasingCurve::TRANS_POWER ||
+			p_transition == NativeEasingCurve::TRANS_PHYSICS_SPRING;
 }
 
 bool is_valid_ease_type(NativeEasingCurve::EaseType p_ease_type) {
@@ -34,20 +36,70 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_amplitude"), &NativeEasingCurve::get_amplitude);
 	ClassDB::bind_method(D_METHOD("set_period", "period"), &NativeEasingCurve::set_period);
 	ClassDB::bind_method(D_METHOD("get_period"), &NativeEasingCurve::get_period);
+	ClassDB::bind_method(D_METHOD("set_constant_value", "value"), &NativeEasingCurve::set_constant_value);
+	ClassDB::bind_method(D_METHOD("get_constant_value"), &NativeEasingCurve::get_constant_value);
+	ClassDB::bind_method(D_METHOD("set_overshoot", "overshoot"), &NativeEasingCurve::set_overshoot);
+	ClassDB::bind_method(D_METHOD("get_overshoot"), &NativeEasingCurve::get_overshoot);
+	ClassDB::bind_method(D_METHOD("set_steps", "steps"), &NativeEasingCurve::set_steps);
+	ClassDB::bind_method(D_METHOD("get_steps"), &NativeEasingCurve::get_steps);
+	ClassDB::bind_method(D_METHOD("set_from_start", "from_start"), &NativeEasingCurve::set_from_start);
+	ClassDB::bind_method(D_METHOD("is_from_start"), &NativeEasingCurve::is_from_start);
+	ClassDB::bind_method(D_METHOD("set_y_offset", "y_offset"), &NativeEasingCurve::set_y_offset);
+	ClassDB::bind_method(D_METHOD("get_y_offset"), &NativeEasingCurve::get_y_offset);
+	ClassDB::bind_method(D_METHOD("set_power", "power"), &NativeEasingCurve::set_power);
+	ClassDB::bind_method(D_METHOD("get_power"), &NativeEasingCurve::get_power);
+	ClassDB::bind_method(D_METHOD("set_frequency", "frequency"), &NativeEasingCurve::set_frequency);
+	ClassDB::bind_method(D_METHOD("get_frequency"), &NativeEasingCurve::get_frequency);
+	ClassDB::bind_method(D_METHOD("set_decay", "decay"), &NativeEasingCurve::set_decay);
+	ClassDB::bind_method(D_METHOD("get_decay"), &NativeEasingCurve::get_decay);
+	ClassDB::bind_method(D_METHOD("set_stiffness", "stiffness"), &NativeEasingCurve::set_stiffness);
+	ClassDB::bind_method(D_METHOD("get_stiffness"), &NativeEasingCurve::get_stiffness);
+	ClassDB::bind_method(D_METHOD("set_damping", "damping"), &NativeEasingCurve::set_damping);
+	ClassDB::bind_method(D_METHOD("get_damping"), &NativeEasingCurve::get_damping);
+	ClassDB::bind_method(D_METHOD("set_mass", "mass"), &NativeEasingCurve::set_mass);
+	ClassDB::bind_method(D_METHOD("get_mass"), &NativeEasingCurve::get_mass);
+	ClassDB::bind_method(D_METHOD("set_velocity", "velocity"), &NativeEasingCurve::set_velocity);
+	ClassDB::bind_method(D_METHOD("get_velocity"), &NativeEasingCurve::get_velocity);
+	ClassDB::bind_method(D_METHOD("set_reverse", "reverse"), &NativeEasingCurve::set_reverse);
+	ClassDB::bind_method(D_METHOD("is_reverse"), &NativeEasingCurve::is_reverse);
+	ClassDB::bind_method(D_METHOD("set_invert", "invert"), &NativeEasingCurve::set_invert);
+	ClassDB::bind_method(D_METHOD("is_invert"), &NativeEasingCurve::is_invert);
 	ClassDB::bind_method(D_METHOD("set_format_version", "format_version"), &NativeEasingCurve::set_format_version);
 	ClassDB::bind_method(D_METHOD("get_format_version"), &NativeEasingCurve::get_format_version);
 	ClassDB::bind_method(D_METHOD("set_points", "points"), &NativeEasingCurve::set_points);
 	ClassDB::bind_method(D_METHOD("get_points"), &NativeEasingCurve::get_points);
+	ClassDB::bind_method(D_METHOD("get_point_count"), &NativeEasingCurve::get_point_count);
+	ClassDB::bind_method(D_METHOD("get_point", "index"), &NativeEasingCurve::get_point);
+	ClassDB::bind_method(D_METHOD("set_point", "index", "point"), &NativeEasingCurve::set_point);
+	ClassDB::bind_method(D_METHOD("insert_point", "index", "point"), &NativeEasingCurve::insert_point);
 	ClassDB::bind_method(D_METHOD("add_point", "point"), &NativeEasingCurve::add_point);
 	ClassDB::bind_method(D_METHOD("remove_point", "index"), &NativeEasingCurve::remove_point);
+	ClassDB::bind_method(D_METHOD("clear_points"), &NativeEasingCurve::clear_points);
+	ClassDB::bind_method(D_METHOD("capture_point_states"), &NativeEasingCurve::capture_point_states);
+	ClassDB::bind_method(D_METHOD("apply_point_states", "states"), &NativeEasingCurve::apply_point_states);
 	ClassDB::bind_method(D_METHOD("create_runtime_copy"), &NativeEasingCurve::create_runtime_copy);
 	ClassDB::bind_method(D_METHOD("cubic_bezier", "x1", "y1", "x2", "y2"), &NativeEasingCurve::cubic_bezier);
+	ClassDB::bind_method(D_METHOD("bake_callable", "callable", "resolution"), &NativeEasingCurve::bake_callable, DEFVAL(40));
 	ClassDB::bind_method(D_METHOD("sample", "offset"), &NativeEasingCurve::sample);
 
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100"), "set_transition", "get_transition");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100,Constant:101,Step:104,Power:105,Physics Spring:106"), "set_transition", "get_transition");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "ease_type", PROPERTY_HINT_ENUM, "In,Out,In Out,Out In"), "set_ease_type", "get_ease_type");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "amplitude", PROPERTY_HINT_RANGE, "1.0,10.0,0.001,or_greater"), "set_amplitude", "get_amplitude");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "period", PROPERTY_HINT_RANGE, "0.01,2.0,0.001,or_greater"), "set_period", "get_period");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "constant_value", PROPERTY_HINT_RANGE, "0.0,1.0,0.001"), "set_constant_value", "get_constant_value");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "overshoot", PROPERTY_HINT_RANGE, "0.0,5.0,0.001"), "set_overshoot", "get_overshoot");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "steps", PROPERTY_HINT_RANGE, "0,100,1"), "set_steps", "get_steps");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "from_start"), "set_from_start", "is_from_start");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "y_offset", PROPERTY_HINT_RANGE, "0.0,1.0,0.001"), "set_y_offset", "get_y_offset");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "power", PROPERTY_HINT_RANGE, "0.001,1000.0,0.001,exp"), "set_power", "get_power");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "frequency", PROPERTY_HINT_RANGE, "0.0,10.0,0.001"), "set_frequency", "get_frequency");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "decay", PROPERTY_HINT_RANGE, "0.1,10.0,0.001"), "set_decay", "get_decay");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "stiffness", PROPERTY_HINT_RANGE, "0.000001,1000.0,0.1"), "set_stiffness", "get_stiffness");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "damping", PROPERTY_HINT_RANGE, "0.0,100.0,0.1"), "set_damping", "get_damping");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mass", PROPERTY_HINT_RANGE, "0.000001,10.0,0.1"), "set_mass", "get_mass");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "velocity", PROPERTY_HINT_RANGE, "-30.0,30.0,0.1,or_less,or_greater"), "set_velocity", "get_velocity");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "reverse"), "set_reverse", "is_reverse");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "invert"), "set_invert", "is_invert");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "format_version", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_format_version", "get_format_version");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "points", PROPERTY_HINT_ARRAY_TYPE, "NativeEasingCurvePoint"), "set_points", "get_points");
 	ADD_SIGNAL(MethodInfo("points_changed", PropertyInfo(Variant::ARRAY, "points", PROPERTY_HINT_ARRAY_TYPE, "NativeEasingCurvePoint")));
@@ -66,6 +118,14 @@ void NativeEasingCurve::_bind_methods() {
 	BIND_ENUM_CONSTANT(TRANS_BACK);
 	BIND_ENUM_CONSTANT(TRANS_SPRING);
 	BIND_ENUM_CONSTANT(TRANS_CUSTOM);
+	BIND_ENUM_CONSTANT(TRANS_CONSTANT);
+	BIND_ENUM_CONSTANT(TRANS_JITTER);
+	BIND_ENUM_CONSTANT(TRANS_IRREGULAR);
+	BIND_ENUM_CONSTANT(TRANS_STEP);
+	BIND_ENUM_CONSTANT(TRANS_POWER);
+	BIND_ENUM_CONSTANT(TRANS_PHYSICS_SPRING);
+	BIND_ENUM_CONSTANT(TRANS_CSS_LINEAR);
+	BIND_ENUM_CONSTANT(TRANS_CSS_CUBIC_BEZIER);
 	BIND_ENUM_CONSTANT(EASE_IN);
 	BIND_ENUM_CONSTANT(EASE_OUT);
 	BIND_ENUM_CONSTANT(EASE_IN_OUT);
@@ -137,6 +197,183 @@ double NativeEasingCurve::get_period() const {
 	return period;
 }
 
+void NativeEasingCurve::set_constant_value(double p_value) {
+	if (!std::isfinite(p_value)) {
+		return;
+	}
+	const double value = std::clamp(p_value, 0.0, 1.0);
+	if (constant_value == value) {
+		return;
+	}
+	constant_value = value;
+	emit_changed();
+}
+
+double NativeEasingCurve::get_constant_value() const { return constant_value; }
+
+void NativeEasingCurve::set_overshoot(double p_overshoot) {
+	if (!std::isfinite(p_overshoot)) {
+		return;
+	}
+	const double value = std::clamp(p_overshoot, 0.0, 5.0);
+	if (overshoot == value) {
+		return;
+	}
+	overshoot = value;
+	emit_changed();
+}
+
+double NativeEasingCurve::get_overshoot() const { return overshoot; }
+
+void NativeEasingCurve::set_steps(int64_t p_steps) {
+	const int64_t value = std::clamp<int64_t>(p_steps, 0, 100);
+	if (steps == value) {
+		return;
+	}
+	steps = value;
+	emit_changed();
+}
+
+int64_t NativeEasingCurve::get_steps() const { return steps; }
+
+void NativeEasingCurve::set_from_start(bool p_from_start) {
+	if (from_start == p_from_start) {
+		return;
+	}
+	from_start = p_from_start;
+	emit_changed();
+}
+
+bool NativeEasingCurve::is_from_start() const { return from_start; }
+
+void NativeEasingCurve::set_y_offset(double p_y_offset) {
+	if (!std::isfinite(p_y_offset)) {
+		return;
+	}
+	const double value = std::clamp(p_y_offset, 0.0, 1.0);
+	if (y_offset == value) {
+		return;
+	}
+	y_offset = value;
+	emit_changed();
+}
+
+double NativeEasingCurve::get_y_offset() const { return y_offset; }
+
+void NativeEasingCurve::set_power(double p_power) {
+	if (!std::isfinite(p_power)) {
+		return;
+	}
+	const double value = std::max(p_power, 0.001);
+	if (power == value) {
+		return;
+	}
+	power = value;
+	emit_changed();
+}
+
+double NativeEasingCurve::get_power() const { return power; }
+
+void NativeEasingCurve::set_frequency(double p_frequency) {
+	if (!std::isfinite(p_frequency)) {
+		return;
+	}
+	const double value = std::clamp(p_frequency, 0.0, 10.0);
+	if (frequency == value) {
+		return;
+	}
+	frequency = value;
+	emit_changed();
+}
+
+double NativeEasingCurve::get_frequency() const { return frequency; }
+
+void NativeEasingCurve::set_decay(double p_decay) {
+	if (!std::isfinite(p_decay)) {
+		return;
+	}
+	const double value = std::max(p_decay, 0.1);
+	if (decay == value) {
+		return;
+	}
+	decay = value;
+	emit_changed();
+}
+
+double NativeEasingCurve::get_decay() const { return decay; }
+
+void NativeEasingCurve::set_stiffness(double p_stiffness) {
+	if (!std::isfinite(p_stiffness)) {
+		return;
+	}
+	const double value = std::max(p_stiffness, 0.000001);
+	if (stiffness == value) {
+		return;
+	}
+	stiffness = value;
+	emit_changed();
+}
+
+double NativeEasingCurve::get_stiffness() const { return stiffness; }
+
+void NativeEasingCurve::set_damping(double p_damping) {
+	if (!std::isfinite(p_damping)) {
+		return;
+	}
+	const double value = std::max(p_damping, 0.0);
+	if (damping == value) {
+		return;
+	}
+	damping = value;
+	emit_changed();
+}
+
+double NativeEasingCurve::get_damping() const { return damping; }
+
+void NativeEasingCurve::set_mass(double p_mass) {
+	if (!std::isfinite(p_mass)) {
+		return;
+	}
+	const double value = std::max(p_mass, 0.000001);
+	if (mass == value) {
+		return;
+	}
+	mass = value;
+	emit_changed();
+}
+
+double NativeEasingCurve::get_mass() const { return mass; }
+
+void NativeEasingCurve::set_velocity(double p_velocity) {
+	if (!std::isfinite(p_velocity) || velocity == p_velocity) {
+		return;
+	}
+	velocity = p_velocity;
+	emit_changed();
+}
+
+double NativeEasingCurve::get_velocity() const { return velocity; }
+
+void NativeEasingCurve::set_reverse(bool p_reverse) {
+	if (reverse == p_reverse) {
+		return;
+	}
+	reverse = p_reverse;
+	emit_changed();
+}
+
+bool NativeEasingCurve::is_reverse() const { return reverse; }
+
+void NativeEasingCurve::set_invert(bool p_invert) {
+	if (invert == p_invert) {
+		return;
+	}
+	invert = p_invert;
+	emit_changed();
+}
+
+bool NativeEasingCurve::is_invert() const { return invert; }
+
 void NativeEasingCurve::set_format_version(int64_t p_format_version) {
 	if (p_format_version <= 0 || format_version == p_format_version) {
 		return;
@@ -161,32 +398,129 @@ TypedArray<NativeEasingCurvePoint> NativeEasingCurve::get_points() const {
 	return TypedArray<NativeEasingCurvePoint>(points.duplicate());
 }
 
-void NativeEasingCurve::add_point(const Ref<NativeEasingCurvePoint> &p_point) {
+int64_t NativeEasingCurve::get_point_count() const {
+	return points.size();
+}
+
+Ref<NativeEasingCurvePoint> NativeEasingCurve::get_point(int64_t p_index) const {
+	if (p_index < 0 || p_index >= points.size()) {
+		return Ref<NativeEasingCurvePoint>();
+	}
+	return points[p_index];
+}
+
+bool NativeEasingCurve::set_point(int64_t p_index, const Ref<NativeEasingCurvePoint> &p_point) {
+	if (p_index < 0 || p_index >= points.size() || p_point.is_null()) {
+		return false;
+	}
+	if (Ref<NativeEasingCurvePoint>(points[p_index]) == p_point) {
+		return true;
+	}
+	TypedArray<NativeEasingCurvePoint> updated(points.duplicate());
+	updated[p_index] = p_point;
+	set_points(updated);
+	return true;
+}
+
+bool NativeEasingCurve::insert_point(int64_t p_index, const Ref<NativeEasingCurvePoint> &p_point) {
+	if (p_index < 0 || p_index > points.size() || p_point.is_null()) {
+		return false;
+	}
+	TypedArray<NativeEasingCurvePoint> updated(points.duplicate());
+	updated.insert(p_index, p_point);
+	set_points(updated);
+	return true;
+}
+
+bool NativeEasingCurve::add_point(const Ref<NativeEasingCurvePoint> &p_point) {
 	if (p_point.is_null()) {
-		return;
+		return false;
 	}
 	TypedArray<NativeEasingCurvePoint> updated(points.duplicate());
 	updated.append(p_point);
 	set_points(updated);
+	return true;
 }
 
-void NativeEasingCurve::remove_point(int64_t p_index) {
+bool NativeEasingCurve::remove_point(int64_t p_index) {
 	if (p_index < 0 || p_index >= points.size()) {
-		return;
+		return false;
 	}
 	TypedArray<NativeEasingCurvePoint> updated(points.duplicate());
 	updated.remove_at(p_index);
 	set_points(updated);
+	return true;
+}
+
+void NativeEasingCurve::clear_points() {
+	if (points.is_empty()) {
+		return;
+	}
+	set_points(TypedArray<NativeEasingCurvePoint>());
+}
+
+Array NativeEasingCurve::capture_point_states() const {
+	Array states;
+	states.resize(points.size());
+	for (int64_t index = 0; index < points.size(); ++index) {
+		Ref<NativeEasingCurvePoint> point = points[index];
+		states[index] = point.is_valid() ? point->capture_state() : Dictionary();
+	}
+	return states;
+}
+
+bool NativeEasingCurve::apply_point_states(const Array &p_states) {
+	if (p_states.size() != points.size()) {
+		return false;
+	}
+	for (int64_t index = 0; index < points.size(); ++index) {
+		Ref<NativeEasingCurvePoint> point = points[index];
+		if (point.is_null() || p_states[index].get_type() != Variant::DICTIONARY) {
+			return false;
+		}
+		Ref<NativeEasingCurvePoint> validator;
+		validator.instantiate();
+		if (!validator->apply_state(p_states[index])) {
+			return false;
+		}
+	}
+
+	applying_point_states = true;
+	point_state_changed_while_applying = false;
+	for (int64_t index = 0; index < points.size(); ++index) {
+		Ref<NativeEasingCurvePoint> point = points[index];
+		point->apply_state(p_states[index]);
+	}
+	applying_point_states = false;
+	if (point_state_changed_while_applying) {
+		compile_segments();
+		emit_points_changed();
+	}
+	return true;
 }
 
 Ref<NativeEasingCurve> NativeEasingCurve::create_runtime_copy() const {
 	Ref<NativeEasingCurve> runtime_copy;
 	runtime_copy.instantiate();
-	runtime_copy->set_format_version(format_version);
+	runtime_copy->set_format_version(get_format_version());
 	runtime_copy->set_transition(transition);
 	runtime_copy->set_ease_type(ease_type);
 	runtime_copy->set_amplitude(amplitude);
 	runtime_copy->set_period(period);
+	runtime_copy->set_constant_value(constant_value);
+	runtime_copy->set_overshoot(overshoot);
+	runtime_copy->set_steps(steps);
+	runtime_copy->set_from_start(from_start);
+	runtime_copy->set_y_offset(y_offset);
+	runtime_copy->set_power(power);
+	runtime_copy->set_frequency(frequency);
+	runtime_copy->set_decay(decay);
+	runtime_copy->set_stiffness(stiffness);
+	runtime_copy->set_damping(damping);
+	runtime_copy->set_mass(mass);
+	runtime_copy->set_velocity(velocity);
+	runtime_copy->set_reverse(reverse);
+	runtime_copy->set_invert(invert);
 	runtime_copy->set_points(duplicate_points());
 	return runtime_copy;
 }
@@ -208,12 +542,62 @@ void NativeEasingCurve::cubic_bezier(double p_x1, double p_y1, double p_x2, doub
 	set_transition(TRANS_CUSTOM);
 }
 
+bool NativeEasingCurve::bake_callable(const Callable &p_callable, int64_t p_resolution) {
+	if (!p_callable.is_valid() || p_resolution < 1 || p_resolution > 4096) {
+		return false;
+	}
+
+	std::vector<Vector2> samples;
+	samples.reserve(p_resolution + 1);
+	for (int64_t index = 0; index <= p_resolution; ++index) {
+		const double x = static_cast<double>(index) / p_resolution;
+		const Variant result = p_callable.call(x);
+		if (result.get_type() != Variant::FLOAT && result.get_type() != Variant::INT) {
+			return false;
+		}
+		const double y = result;
+		if (!std::isfinite(y)) {
+			return false;
+		}
+		samples.emplace_back(static_cast<real_t>(x), static_cast<real_t>(y));
+	}
+
+	std::vector<Ref<NativeEasingCurvePoint>> baked_points;
+	baked_points.reserve(samples.size());
+	for (const Vector2 &sample_position : samples) {
+		Ref<NativeEasingCurvePoint> point;
+		point.instantiate();
+		point->set_position(sample_position);
+		baked_points.push_back(point);
+	}
+	for (size_t index = 0; index + 1 < baked_points.size(); ++index) {
+		const Vector2 delta = samples[index + 1] - samples[index];
+		baked_points[index]->set_right_control_point(samples[index] + delta / 3.0);
+		baked_points[index + 1]->set_left_control_point(samples[index] + delta * (2.0 / 3.0));
+	}
+
+	TypedArray<NativeEasingCurvePoint> baked_array;
+	for (const Ref<NativeEasingCurvePoint> &point : baked_points) {
+		baked_array.append(point);
+	}
+	set_points(baked_array);
+	set_transition(TRANS_CUSTOM);
+	return true;
+}
+
 double NativeEasingCurve::sample(double p_offset) {
 	if (!std::isfinite(p_offset)) {
 		return 0.0;
 	}
-	const double offset = std::clamp(p_offset, 0.0, 1.0);
-	return transition == TRANS_CUSTOM ? sample_custom(offset) : sample_builtin(offset);
+	double offset = std::clamp(p_offset, 0.0, 1.0);
+	if (reverse) {
+		offset = 1.0 - offset;
+	}
+	double result = transition == TRANS_CUSTOM ? sample_custom(offset) : sample_builtin(offset);
+	if (invert) {
+		result = 1.0 - result;
+	}
+	return result;
 }
 
 void NativeEasingCurve::reconnect_points() {
@@ -246,6 +630,10 @@ void NativeEasingCurve::emit_points_changed() {
 }
 
 void NativeEasingCurve::on_point_changed() {
+	if (applying_point_states) {
+		point_state_changed_while_applying = true;
+		return;
+	}
 	compile_segments();
 	emit_points_changed();
 }
@@ -261,9 +649,7 @@ TypedArray<NativeEasingCurvePoint> NativeEasingCurve::duplicate_points() const {
 
 		Ref<NativeEasingCurvePoint> copy;
 		copy.instantiate();
-		copy->set_position(source->get_position());
-		copy->set_left_control_point(source->get_left_control_point());
-		copy->set_right_control_point(source->get_right_control_point());
+		copy->apply_state(source->capture_state());
 		duplicated.append(copy);
 	}
 	return duplicated;
@@ -326,6 +712,12 @@ void NativeEasingCurve::compile_segments() {
 }
 
 double NativeEasingCurve::sample_builtin(double p_offset) const {
+	if (transition == TRANS_CONSTANT) {
+		return constant_value;
+	}
+	if (transition == TRANS_STEP) {
+		return sample_step(p_offset);
+	}
 	switch (ease_type) {
 		case EASE_IN:
 			return sample_transition_in(p_offset);
@@ -373,11 +765,17 @@ double NativeEasingCurve::sample_transition_in(double p_offset) const {
 		case TRANS_BOUNCE:
 			return 1.0 - sample_bounce_out(1.0 - p_offset);
 		case TRANS_BACK:
-			return p_offset * p_offset * ((BACK_OVERSHOOT + 1.0) * p_offset - BACK_OVERSHOOT);
+			return p_offset * p_offset * ((overshoot + 1.0) * p_offset - overshoot);
 		case TRANS_SPRING:
 			return 1.0 - sample_spring_out(1.0 - p_offset);
+		case TRANS_POWER:
+			return std::pow(p_offset, power);
+		case TRANS_PHYSICS_SPRING:
+			return 1.0 - sample_physics_spring_out(1.0 - p_offset);
 		case TRANS_LINEAR:
 		case TRANS_CUSTOM:
+		case TRANS_CONSTANT:
+		case TRANS_STEP:
 			return p_offset;
 	}
 	return p_offset;
@@ -415,12 +813,18 @@ double NativeEasingCurve::sample_transition_out(double p_offset) const {
 			return sample_bounce_out(p_offset);
 		case TRANS_BACK: {
 			const double shifted = p_offset - 1.0;
-			return shifted * shifted * ((BACK_OVERSHOOT + 1.0) * shifted + BACK_OVERSHOOT) + 1.0;
+			return shifted * shifted * ((overshoot + 1.0) * shifted + overshoot) + 1.0;
 		}
 		case TRANS_SPRING:
 			return sample_spring_out(p_offset);
+		case TRANS_POWER:
+			return 1.0 - std::pow(1.0 - p_offset, power);
+		case TRANS_PHYSICS_SPRING:
+			return sample_physics_spring_out(p_offset);
 		case TRANS_LINEAR:
 		case TRANS_CUSTOM:
+		case TRANS_CONSTANT:
+		case TRANS_STEP:
 			return p_offset;
 	}
 	return p_offset;
@@ -472,14 +876,14 @@ double NativeEasingCurve::sample_elastic_in_out(double p_offset) const {
 	return amplitude * std::pow(2.0, -10.0 * normalized) * std::sin((normalized - phase) * (2.0 * PI) / in_out_period) * 0.5 + 1.0;
 }
 
-double NativeEasingCurve::sample_back_in_out(double p_offset) {
-	const double overshoot = BACK_OVERSHOOT * 1.525;
+double NativeEasingCurve::sample_back_in_out(double p_offset) const {
+	const double in_out_overshoot = overshoot * 1.525;
 	double normalized = p_offset * 2.0;
 	if (normalized < 1.0) {
-		return 0.5 * normalized * normalized * ((overshoot + 1.0) * normalized - overshoot);
+		return 0.5 * normalized * normalized * ((in_out_overshoot + 1.0) * normalized - in_out_overshoot);
 	}
 	normalized -= 2.0;
-	return 0.5 * (normalized * normalized * ((overshoot + 1.0) * normalized + overshoot) + 2.0);
+	return 0.5 * (normalized * normalized * ((in_out_overshoot + 1.0) * normalized + in_out_overshoot) + 2.0);
 }
 
 double NativeEasingCurve::sample_expo_in_out(double p_offset) {
@@ -510,10 +914,45 @@ double NativeEasingCurve::sample_bounce_out(double p_offset) {
 	return 7.5625 * shifted * shifted + 0.984375;
 }
 
-double NativeEasingCurve::sample_spring_out(double p_offset) {
+double NativeEasingCurve::sample_spring_out(double p_offset) const {
 	const double inverse = 1.0 - p_offset;
-	const double oscillation = std::sin(p_offset * PI * (0.2 + 2.5 * p_offset * p_offset * p_offset));
-	return (oscillation * std::pow(inverse, 2.2) + p_offset) * (1.0 + 1.2 * inverse);
+	const double oscillation = std::sin(p_offset * PI * (0.2 + frequency * p_offset * p_offset * p_offset));
+	return (oscillation * std::pow(inverse, decay) + p_offset) * (1.0 + 1.2 * inverse);
+}
+
+double NativeEasingCurve::sample_physics_spring_out(double p_offset) const {
+	if (p_offset <= 0.0 || p_offset >= 1.0) {
+		return p_offset;
+	}
+	const double natural_frequency = std::sqrt(stiffness / mass);
+	const double damping_ratio = damping / (2.0 * std::sqrt(stiffness * mass));
+	constexpr double initial_displacement = -1.0;
+	double displacement;
+	if (damping_ratio < 1.0 - 0.000001) {
+		const double damped_frequency = natural_frequency * std::sqrt(1.0 - damping_ratio * damping_ratio);
+		const double coefficient = (velocity + damping_ratio * natural_frequency * initial_displacement) / damped_frequency;
+		displacement = std::exp(-damping_ratio * natural_frequency * p_offset) *
+				(initial_displacement * std::cos(damped_frequency * p_offset) + coefficient * std::sin(damped_frequency * p_offset));
+	} else if (damping_ratio > 1.0 + 0.000001) {
+		const double root = std::sqrt(damping_ratio * damping_ratio - 1.0);
+		const double r1 = -natural_frequency * (damping_ratio - root);
+		const double r2 = -natural_frequency * (damping_ratio + root);
+		const double c1 = (velocity - r2 * initial_displacement) / (r1 - r2);
+		const double c2 = initial_displacement - c1;
+		displacement = c1 * std::exp(r1 * p_offset) + c2 * std::exp(r2 * p_offset);
+	} else {
+		const double coefficient = velocity + natural_frequency * initial_displacement;
+		displacement = (initial_displacement + coefficient * p_offset) * std::exp(-natural_frequency * p_offset);
+	}
+	return 1.0 + displacement;
+}
+
+double NativeEasingCurve::sample_step(double p_offset) const {
+	if (steps <= 0) {
+		return y_offset;
+	}
+	const double stepped = (from_start ? std::ceil(p_offset * steps) : std::floor(p_offset * steps)) / steps;
+	return std::clamp(stepped + y_offset, 0.0, 1.0);
 }
 
 double NativeEasingCurve::sample_custom(double p_offset) {

@@ -3,7 +3,7 @@
 if "build_profile" not in ARGUMENTS:
     ARGUMENTS["build_profile"] = "build_profile.json"
 
-env = SConscript("godot-cpp/SConstruct", {"api_version": "4.7"})
+env = SConscript("godot-cpp/SConstruct")
 
 env.Append(CPPPATH=["src"])
 sources = Glob("src/*.cpp")
