@@ -1,0 +1,18 @@
+[gd_scene load_steps=5 format=3]
+
+[sub_resource type="NativeEasingCurve" id="NativeEasingCurve_absent"]
+
+[sub_resource type="NativeEasingCurve" id="NativeEasingCurve_old"]
+format_version = 1
+
+[sub_resource type="NativeEasingCurve" id="NativeEasingCurve_current"]
+format_version = 2
+
+[sub_resource type="NativeEasingCurve" id="NativeEasingCurve_future"]
+format_version = 3
+
+[node name="NativeFormatVersionFixture" type="Node"]
+metadata/absent = SubResource("NativeEasingCurve_absent")
+metadata/old = SubResource("NativeEasingCurve_old")
+metadata/current = SubResource("NativeEasingCurve_current")
+metadata/future = SubResource("NativeEasingCurve_future")

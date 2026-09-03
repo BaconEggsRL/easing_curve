@@ -57,9 +57,18 @@ with no GDExtension manifest or binary:
 
 Native production resources use `format_version = 2`. Godot omits stored
 properties equal to their class defaults, so an absent marker means the current
-v2 default; explicit non-default values are retained for migration testing.
-The experimental v1 Native format was never released and is not automatically
-migrated.
+v2 default. Explicit malformed (`<= 0`), older (`1`), and future (`> 2`)
+versions are retained through load, save, and runtime duplication so tools can
+diagnose them. Only current-v2 resources can sample; unsupported versions return
+`NAN` instead of being silently interpreted with the current solver. Call
+`get_format_status()` or `is_format_supported()` before migration tooling uses
+the resource. The experimental v1 Native format was never released and is not
+automatically migrated.
+
+Future bidirectional converters share the validated dictionary schema in
+`curve_conversion_result.gd`. Every converted field must be classified as
+`exact`, `approximated`, `baked`, or `unsupported`; the schema carries the
+source/target backend IDs, optional output resource, warnings, and errors.
 
 Standard transition IDs `0`–`11` intentionally match Godot Tween. Native-only
 IDs are frozen independently:
@@ -95,6 +104,7 @@ Run the Native correctness suite and the expanded runtime benchmark:
 
 ```powershell
 ./test/runners/run_godot.ps1 --headless --path . --script test/scripts/unit/native_v2_smoke_test.gd
+./test/runners/run_godot.ps1 --headless --path . --script test/scripts/unit/native_public_contract_test.gd
 ./test/runners/run_native_runtime_benchmark.ps1
 ./test/runners/run_native_release_export_test.ps1
 ./native/validate_native_manifest.ps1 -Platform all

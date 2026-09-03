@@ -51,6 +51,13 @@ public:
 		EASE_OUT_IN = 3,
 	};
 
+	enum FormatStatus {
+		FORMAT_STATUS_INVALID = 0,
+		FORMAT_STATUS_OLDER = 1,
+		FORMAT_STATUS_CURRENT = 2,
+		FORMAT_STATUS_NEWER = 3,
+	};
+
 private:
 	struct Segment {
 		double x0;
@@ -162,6 +169,8 @@ public:
 	bool is_invert() const;
 	void set_format_version(int64_t p_format_version);
 	int64_t get_format_version() const;
+	FormatStatus get_format_status() const;
+	bool is_format_supported() const;
 
 	void set_points(const TypedArray<NativeEasingCurvePoint> &p_points);
 	TypedArray<NativeEasingCurvePoint> get_points() const;
@@ -185,5 +194,6 @@ public:
 
 VARIANT_ENUM_CAST(godot::NativeEasingCurve::Transition);
 VARIANT_ENUM_CAST(godot::NativeEasingCurve::EaseType);
+VARIANT_ENUM_CAST(godot::NativeEasingCurve::FormatStatus);
 
 #endif // EASING_CURVE_NATIVE_EASING_CURVE_H

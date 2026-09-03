@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace godot {
 
@@ -66,6 +67,8 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_invert"), &NativeEasingCurve::is_invert);
 	ClassDB::bind_method(D_METHOD("set_format_version", "format_version"), &NativeEasingCurve::set_format_version);
 	ClassDB::bind_method(D_METHOD("get_format_version"), &NativeEasingCurve::get_format_version);
+	ClassDB::bind_method(D_METHOD("get_format_status"), &NativeEasingCurve::get_format_status);
+	ClassDB::bind_method(D_METHOD("is_format_supported"), &NativeEasingCurve::is_format_supported);
 	ClassDB::bind_method(D_METHOD("set_points", "points"), &NativeEasingCurve::set_points);
 	ClassDB::bind_method(D_METHOD("get_points"), &NativeEasingCurve::get_points);
 	ClassDB::bind_method(D_METHOD("get_point_count"), &NativeEasingCurve::get_point_count);
@@ -130,6 +133,10 @@ void NativeEasingCurve::_bind_methods() {
 	BIND_ENUM_CONSTANT(EASE_OUT);
 	BIND_ENUM_CONSTANT(EASE_IN_OUT);
 	BIND_ENUM_CONSTANT(EASE_OUT_IN);
+	BIND_ENUM_CONSTANT(FORMAT_STATUS_INVALID);
+	BIND_ENUM_CONSTANT(FORMAT_STATUS_OLDER);
+	BIND_ENUM_CONSTANT(FORMAT_STATUS_CURRENT);
+	BIND_ENUM_CONSTANT(FORMAT_STATUS_NEWER);
 }
 
 NativeEasingCurve::NativeEasingCurve() {
@@ -375,7 +382,7 @@ void NativeEasingCurve::set_invert(bool p_invert) {
 bool NativeEasingCurve::is_invert() const { return invert; }
 
 void NativeEasingCurve::set_format_version(int64_t p_format_version) {
-	if (p_format_version <= 0 || format_version == p_format_version) {
+	if (format_version == p_format_version) {
 		return;
 	}
 	format_version = p_format_version;
@@ -384,6 +391,23 @@ void NativeEasingCurve::set_format_version(int64_t p_format_version) {
 
 int64_t NativeEasingCurve::get_format_version() const {
 	return format_version;
+}
+
+NativeEasingCurve::FormatStatus NativeEasingCurve::get_format_status() const {
+	if (format_version <= 0) {
+		return FORMAT_STATUS_INVALID;
+	}
+	if (format_version < FORMAT_VERSION) {
+		return FORMAT_STATUS_OLDER;
+	}
+	if (format_version > FORMAT_VERSION) {
+		return FORMAT_STATUS_NEWER;
+	}
+	return FORMAT_STATUS_CURRENT;
+}
+
+bool NativeEasingCurve::is_format_supported() const {
+	return get_format_status() == FORMAT_STATUS_CURRENT;
 }
 
 void NativeEasingCurve::set_points(const TypedArray<NativeEasingCurvePoint> &p_points) {
@@ -586,6 +610,9 @@ bool NativeEasingCurve::bake_callable(const Callable &p_callable, int64_t p_reso
 }
 
 double NativeEasingCurve::sample(double p_offset) {
+	if (!is_format_supported()) {
+		return std::numeric_limits<double>::quiet_NaN();
+	}
 	if (!std::isfinite(p_offset)) {
 		return 0.0;
 	}

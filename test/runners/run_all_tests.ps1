@@ -130,6 +130,7 @@ $suites = @(
 	@{ Name = "easing_curve_transform_test.gd"; Editor = $false },
 	@{ Name = "easing_curve_v105_regression_test.gd"; Editor = $false },
 	@{ Name = "native_v2_smoke_test.gd"; Editor = $false },
+	@{ Name = "native_public_contract_test.gd"; Editor = $false },
 	@{ Name = "runtime_curve_updates_test.gd"; Editor = $false },
 	@{ Name = "serialization_transition_contract_test.gd"; Editor = $false },
 	@{ Name = "test_scene_curve_backend_test.gd"; Editor = $false },

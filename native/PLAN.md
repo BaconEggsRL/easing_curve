@@ -39,11 +39,12 @@ Architecture:
 |---|---|
 | Branch | `native-v2-spike` at `94288c9` plus the current Native Web closeout tranche |
 | Plan tracking | This file is the mutable source of truth for migration status and manual evidence |
-| Automated tests | All 21 suites pass under Godot 4.7.1 |
-| Native smoke tests | 473 checks pass |
+| Automated tests | All 22 suites pass under Godot 4.7.1 |
+| Native smoke tests | 476 checks pass |
+| Dual public API contract | Reflection fixtures freeze intended methods, properties, signals, enum/constant IDs, and Native format status across both resource APIs; 143 checks pass |
 | Legacy runtime tests | 1,380 checks pass |
 | Serialization tests | 902 checks pass |
-| Windows export | 471,040-byte release DLL loads built-in and custom Native resources in an isolated exported project |
+| Windows export | 472,064-byte release DLL loads built-in and custom Native resources in an isolated exported project |
 | Native ABI | `godot-cpp` is pinned to `godot-4.4.1-stable`; one release DLL loads under Godot 4.4.1, 4.5.1, 4.6.1, and 4.7.1 |
 | Legacy fallback | Complete legacy addon loads, samples, and serializes in an isolated project with no Native manifest or binary |
 | Native standard set | All 12 Godot Tween transitions implemented directly in C++ |
@@ -53,19 +54,20 @@ Architecture:
 | Ownership | Isolated point-array containers, indexed topology mutation, point identity preservation, and deep runtime duplication are implemented |
 | Point state | Five handle modes, locks, force-linear flags, and atomic point/curve snapshots are implemented |
 | Change propagation | Point changes invalidate Native compiled state; removed points disconnect; atomic restore emits one curve-level change |
+| Native resource versioning | Absent markers resolve to current v2; malformed, older, and future values are retained but fail closed for sampling; standalone, embedded, runtime-copy, and round-trip fixtures pass |
+| Conversion result contract | Versioned result schema records source/target backends, output resource, messages, and per-field exact/approximated/baked/unsupported outcomes |
 | Native performance | Standard transitions are approximately 1.8–4.1× faster than Tween |
 | Function performance | Native deterministic function modes are approximately 63–103× faster than legacy |
 | Custom performance | Native custom Bézier is approximately 43–136× faster than legacy across 2-, 9-, and 65-point workloads |
 | Performance regression gate | All 27 baseline cases pass the median/MAD noise-aware comparison |
 | Editor boundary | Narrow legacy/native backend foundation and capability discovery are implemented and covered by 16 contract checks |
-| Native Web export | Non-threaded debug (335,876 bytes) and release (331,905 bytes) WASM libraries export and run in isolated headless-browser projects; built-in/custom resources load, sample, and deep-copy correctly |
+| Native Web export | Non-threaded debug (339,080 bytes) and release (334,967 bytes) WASM libraries export and run in isolated headless-browser projects; built-in/custom resources load, sample, and deep-copy correctly |
 | Build automation | Pinned Windows/Web build script, manifest preflight, and GitHub Actions build-plus-browser workflow are present; Windows release and local Web paths are verified |
 | Manual smoke test | 2026-09-03: deterministic modes passed; standard transitions passed with a shared legacy/native start-jitter observation; point-state UI is incomplete; the reported Native Web failure is resolved by automated debug/release browser validation, with a user-facing rerun still pending |
 | Legacy status | Existing `EasingCurve` remains functional and comprehensively tested |
 
 ### Partially complete
 
-- Native format version 2 and frozen IDs exist, but production migration behavior still needs explicit old/future-version policy and fixtures.
 - Point parity covers the core state matrix, but remaining graph edge cases and full legacy differential coverage are incomplete.
 - Windows release binaries build locally, but debug builds are blocked on the reference machine by Windows Security error 225.
 - Web build and browser runtime are locally verified; the updated GitHub Actions job and its retained artifacts still need an actual hosted run.
@@ -213,7 +215,7 @@ Legacy must not depend on Native classes or binaries.
 | Web | Complete | Non-threaded debug/release build and isolated browser runtime verified on Godot 4.7.1 | Hosted CI run and user-facing export rerun | Yes |
 | Linux/macOS/Android | Legacy available | Missing | Deferred initially | Required or explicitly excepted |
 | Packaging/CI | Legacy scripts exist | Build workflow present | Execute builds and add exact-ZIP pipeline | Full supported matrix |
-| Stable field use | Established | Unproven | Initial release evidence | One stable release cycle |
+| Stable field use | Established | v2 public/serialization contract frozen and fixture-tested | Initial release evidence | One stable release cycle |
 
 ## 6. Architecture decisions
 
@@ -344,7 +346,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-02 — Freeze independent public contracts
 
-**Status:** **In progress.** Native IDs, format version 2, indexed point APIs, atomic snapshots, and the initial adapter contract are implemented. Legacy reflection fixtures, conversion-result contracts, and production migration behavior remain.
+**Status:** **Verified.** Reflection fixtures freeze both intended public APIs. Native IDs, format version 2, indexed point APIs, atomic snapshots, adapter contracts, and the conversion-result schema are fixed. Absent, malformed, old, current, and future version behavior is covered by standalone, embedded, runtime-copy, and save/load fixtures. The isolated Native-only export and legacy-without-Native fixtures prove neither runtime depends on the other.
 
 **Goal:** Stabilize both APIs and Native format version 2.
 
@@ -706,47 +708,37 @@ Interpretation:
 
 ## 9. Recommended next execution tranche
 
-### Priority 1 — Close NATIVE-02 public and serialization contracts
-
-1. Add reflection fixtures for the complete legacy and current Native public contracts.
-2. Define explicit behavior for absent, old, current, and future Native format versions.
-3. Define the conversion-result data contract before implementing conversion.
-4. Add standalone and embedded resource fixtures for each supported version case.
-5. Lock the contracts with save/load/duplicate/coexistence tests that run with both APIs present.
-
-This is the next implementation tranche because editor and conversion work should not build on a moving serialized or reflected API.
-
-### Priority 2 — Retarget one shared editor vertical slice
+### Priority 1 — Retarget one shared editor vertical slice
 
 Move one complete workflow—resource selection, sampling preview, and point-list read access—through `LegacyCurveEditorBackend`. Keep the concrete legacy implementation available behind the adapter until behavior and timing tests pass. Add the corresponding Native path next, including point selection plus force-linear and lock controls, so C/D can be completed without creating a second temporary editor. Then migrate mutation, snapshots, presets, and save normalization one workflow at a time.
 
 This incremental adapter approach is preferred over a broad editor rewrite. It tests the boundary against real behavior and avoids growing an interface from speculative Native requirements.
 
-### Priority 3 — Expand NATIVE-03 evidence around the migrated boundary
+### Priority 2 — Expand NATIVE-03 evidence around the migrated boundary
 
 1. Add benchmark cases for all ease modes, compile invalidation, signal amplification, snapshots, and backend calls used by the first editor migration.
 2. Add a small timing probe to the Match Tween harness so the shared start jitter can be classified as scheduling/render noise or a sampled-value difference.
 3. Archive a new baseline only after repeated runs pass the noise-aware gate.
 
-### Priority 4 — Finish NATIVE-01 release evidence
+### Priority 3 — Finish NATIVE-01 release evidence
 
 1. Run the updated Web job in GitHub Actions and retain both exact `.nothreads.wasm` artifacts.
 2. Rerun the user-facing Web test scene and record the visible result under smoke-test item E.
 3. Diagnose the Windows debug DLL security rejection without weakening machine security, then verify debug editor loading and hot reload separately from release export.
 4. Add a Windows debug-specific manifest entry only after that artifact is proven loadable; until then the verified release DLL remains the generic editor fallback.
 
-### Priority 5 — Finish core Native runtime parity
+### Priority 4 — Finish core Native runtime parity
 
 1. Close remaining point-state edge cases and full legacy differential coverage (NATIVE-04).
 2. Complete extended Bounce and transition metadata/validation (NATIVE-05).
 3. Implement persisted Jitter/Irregular data and CSS Linear/Cubic Bézier parsing and sampling (NATIVE-06).
 4. Run correctness and performance gates after each mode family, not after the whole group.
 
-### Priority 6 — Native editor, conversion, and packaging
+### Priority 5 — Native editor, conversion, and packaging
 
 Proceed to NATIVE-08 through NATIVE-11 only after the shared legacy editor path is stable. Add Native editor support capability by capability, then non-destructive conversion, exact-ZIP staging, checksums, and clean-project installation/export tests.
 
-The next recommended implementation session is therefore **NATIVE-02 contract closeout**, immediately followed by the first shared editor vertical slice. Do not add a separate test-scene implementation of locks or force-linear; expose them through the editor boundary that will become the production workflow.
+The next recommended implementation session is therefore the **first NATIVE-07 shared editor vertical slice**, paired with targeted NATIVE-03 measurements. Do not add a separate test-scene implementation of locks or force-linear; expose them through the editor boundary that will become the production workflow.
 
 ## 10. Definition of Done
 

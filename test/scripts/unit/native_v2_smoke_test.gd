@@ -116,7 +116,9 @@ func _test_resource_version_contract() -> void:
 		"format_version should not be editable in the Inspector",
 	)
 	curve.set(&"format_version", 0)
-	_expect(curve.get(&"format_version") == NativeEasingCurve.FORMAT_VERSION, "invalid format version was accepted")
+	_expect(curve.get(&"format_version") == 0, "invalid format version was not retained for diagnosis")
+	_expect(not curve.call(&"is_format_supported"), "invalid format version was accepted")
+	_expect(not is_finite(curve.call(&"sample", 0.5)), "invalid format version sampled silently")
 
 
 func _test_invalid_property_contract() -> void:
@@ -493,7 +495,6 @@ func _test_resource_round_trip() -> void:
 	var authored_point := curve.call(&"get_point", 0) as Resource
 	authored_point.set(&"handle_mode", NativeEasingCurvePoint.HANDLE_LINKED)
 	authored_point.call(&"set_locked", &"position", true)
-	var expected: float = curve.call(&"sample", 0.37)
 	const EXPLICIT_SAVED_VERSION := 7
 	curve.set(&"format_version", EXPLICIT_SAVED_VERSION)
 	var path := "res://test/_temp/native_v2_curve.tres"
@@ -511,10 +512,8 @@ func _test_resource_round_trip() -> void:
 			loaded.get(&"format_version") == EXPLICIT_SAVED_VERSION,
 			"native curve format version changed after save/load",
 		)
-		_expect(
-			is_equal_approx(expected, loaded.call(&"sample", 0.37)),
-			"native curve changed after save/load",
-		)
+		_expect(not loaded.call(&"is_format_supported"), "future native format version was accepted")
+		_expect(not is_finite(loaded.call(&"sample", 0.37)), "future native format sampled silently")
 		var loaded_point := loaded.call(&"get_point", 0) as Resource
 		_expect(
 			loaded_point.get(&"handle_mode") == NativeEasingCurvePoint.HANDLE_LINKED,
