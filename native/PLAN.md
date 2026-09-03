@@ -37,7 +37,7 @@ Architecture:
 
 | Area | Current state |
 |---|---|
-| Branch | `native-v2-spike` at `fd68f0d` plus the current Linear default change |
+| Branch | `native-v2-spike` at `63df692` plus current smoke-test review and plan revisions |
 | Plan tracking | This file is the mutable source of truth for migration status and manual evidence |
 | Automated tests | All 21 suites pass under Godot 4.7.1 |
 | Native smoke tests | 473 checks pass |
@@ -59,6 +59,7 @@ Architecture:
 | Performance regression gate | All 27 baseline cases pass the median/MAD noise-aware comparison |
 | Editor boundary | Narrow legacy/native backend foundation and capability discovery are implemented and covered by 16 contract checks |
 | Build automation | Pinned Windows/Web build script and GitHub Actions workflow are present; Windows release path is locally verified; unverified Web libraries are not advertised in the manifest |
+| Manual smoke test | 2026-09-03: deterministic modes passed; standard transitions passed with a shared legacy/native start-jitter observation; point-state UI is incomplete; Native Web export is blocked |
 | Legacy status | Existing `EasingCurve` remains functional and comprehensively tested |
 
 ### Partially complete
@@ -66,7 +67,7 @@ Architecture:
 - Native format version 2 and frozen IDs exist, but production migration behavior still needs explicit old/future-version policy and fixtures.
 - Point parity covers the core state matrix, but remaining graph edge cases and full legacy differential coverage are incomplete.
 - Windows release binaries build locally, but debug builds are blocked on the reference machine by Windows Security error 225.
-- Web build configuration and CI exist, but Emscripten is unavailable locally and neither Web build nor browser runtime has been verified. Manifest entries remain withheld until both artifacts pass validation.
+- Web build configuration and CI exist, but Emscripten is unavailable locally and neither Web build nor browser runtime has been verified. The current build command also defaults to threaded Web output while the export preset targets non-threaded Web, so the artifact contract must be corrected before manifest entries return.
 - Native benchmarks cover 27 runtime cases but not every mode, signal/compilation path, or editor workload.
 - The test scene can switch resource types, but the production editor cannot.
 - The editor adapter is a foundation only; the production editor still uses concrete legacy types.
@@ -202,14 +203,14 @@ Legacy must not depend on Native classes or binaries.
 | Arbitrary Callable | Live runtime support | Explicit point baking implemented | Bake UI and user acceptance | Approved replacement |
 | Point geometry | Complete | Complete | Extended mutation | Yes |
 | Handle modes | Complete | Five modes implemented | Complete edge-case differential tests | Yes |
-| Locks/force-linear | Complete | Persisted and enforced | Complete editor verification | Yes |
+| Locks/force-linear | Complete | Persisted and enforced; current UI does not expose them | Add shared editor controls and complete manual verification | Yes |
 | Deep runtime copy | Complete | Complete for current fields | Extend with each new field | Yes |
 | Inspector | Complete | Not integrated | Shared adapter | Yes |
 | Graph editing | Complete | Not integrated | Shared adapter | Yes |
 | Presets/preview/save | Complete | Not integrated | Shared adapter | Yes |
 | Undo/Redo | Complete | Not integrated | Native snapshots | Yes |
 | Windows | Complete | Release runtime/export proof; release DLL is the editor fallback | Debug proof and reproducible package | Yes |
-| Web | Complete | Build configuration only | wasm32 build and browser export proof | Yes |
+| Web | Complete | Build configuration only; Native-resource export fails without the extension | Correct non-threaded build contract, then wasm32 build and browser export proof | Yes |
 | Linux/macOS/Android | Legacy available | Missing | Deferred initially | Required or explicitly excepted |
 | Packaging/CI | Legacy scripts exist | Build workflow present | Execute builds and add exact-ZIP pipeline | Full supported matrix |
 | Stable field use | Established | Unproven | Initial release evidence | One stable release cycle |
@@ -303,7 +304,8 @@ This allows future Native-only features without requiring legacy implementations
 - Native editor scripts load conditionally.
 - The plugin checks `ClassDB.class_exists("NativeEasingCurve")`.
 - Legacy-only resources remain loadable and editable when Native is absent.
-- Native resources report a clear missing-backend error.
+- A project containing serialized Native resources requires the platform extension; Godot cannot deserialize those resources early enough for a runtime fallback.
+- Missing Native support must therefore be prevented at packaging/export validation rather than handled as an in-scene fallback.
 - Native platform support is not overstated.
 
 ### Initial platforms
@@ -323,7 +325,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-01 — Toolchain, platforms, and fallback feasibility
 
-**Status:** **In progress.** Windows release, Godot 4.4–4.7 ABI loading, and legacy-only fallback are verified. Windows debug is blocked by Windows Security error 225. Web build/runtime remains unverified.
+**Status:** **In progress.** Windows release, Godot 4.4–4.7 ABI loading, and legacy-only fallback are verified. Windows debug is blocked by Windows Security error 225. The 2026-09-03 smoke test confirmed that Native Web export is blocked until a matching non-threaded wasm32 extension is packaged.
 
 **Goal:** Prove Godot 4.4 compatibility, Windows/Web builds, and legacy-only fallback.
 
@@ -691,21 +693,29 @@ Record results here rather than relying on memory:
 
 | Date | Godot | Build/artifact | A | B | C | D | E | Notes/evidence |
 |---|---|---|---|---|---|---|---|---|
-| Pending | 4.7.1 | Windows x86_64 release editor fallback + release export | — | — | — | — | — | Manual run required |
+| 2026-09-03 | 4.7.1 | Windows x86_64 release editor fallback; Web export without wasm32 extension | Pass with observation | Pass | Partial | Partial | Blocked on Native Web | A: Circ, Cubic, Elastic, Expo, Quart, and Quint showed slight start jitter relative to Tween; legacy showed the same behavior. C/D: force-linear and lock state exist in Native but have no current UI controls, so they were not manually verified. E: Web reported no wasm32 library, then failed to deserialize `NativeEasingCurvePoint` from the exported test scene. |
 
 Any crash, data loss, stale result after mutation, missing class, serialization mismatch, or exported-runtime failure blocks the next release qualification step. Visual differences should be recorded with the transition/ease/parameters and a screenshot or short capture.
+
+Interpretation:
+
+- The shared start jitter in A does not currently implicate the Native equations. Keep it as a diagnostic item and capture per-frame elapsed time/offset before changing either solver.
+- C and D do not overturn the automated point-state results. They demonstrate that NATIVE-04 cannot receive final manual acceptance until the shared editor exposes force-linear and lock operations.
+- E is a Native Web release blocker. A serialized GDExtension resource cannot be replaced with legacy logic after class resolution has already failed.
 
 ## 9. Recommended next execution tranche
 
 ### Priority 1 — Close NATIVE-01 platform/toolchain evidence
 
-1. Diagnose the Windows debug DLL security rejection without weakening machine security.
-2. Produce and load a genuine debug DLL in the editor; verify hot reload separately from release export.
-3. Run the Web CI build, retain the wasm artifacts, and test a non-threaded browser export.
-4. Add a Windows debug-specific manifest entry only after that artifact is proven loadable; until then the verified release DLL remains the generic editor fallback.
-5. Keep Web manifest entries only after the referenced debug and release artifacts are proven loadable.
+1. Make the Web build contract explicitly non-threaded (`threads=no`) and validate the resulting `.nothreads.wasm` filenames instead of assuming the threaded default output names.
+2. Add a packaging preflight that rejects every manifest entry whose file is absent and verifies that its feature tags match the build configuration.
+3. Run the Web CI build and retain both debug and release wasm32 artifacts.
+4. Add the non-threaded Web manifest entries only after the artifacts exist, then export and launch clean built-in and custom Native-resource fixtures in a browser.
+5. Verify scene/resource deserialization, sampling, save-independent runtime copies, and console output in both debug and release Web exports.
+6. Diagnose the Windows debug DLL security rejection without weakening machine security, then verify debug editor loading and hot reload separately from release export.
+7. Add a Windows debug-specific manifest entry only after that artifact is proven loadable; until then the verified release DLL remains the generic editor fallback.
 
-This is first because an editor-native plugin cannot be considered feasible while its development artifact is blocked, and an unexecuted Web workflow is configuration rather than platform support.
+This is first because the manual test demonstrated a real exported-runtime failure. Removing an invalid manifest entry is correct fail-soft packaging for legacy-only projects, but it is not Native Web support.
 
 ### Priority 2 — Close NATIVE-02 and NATIVE-03 contracts
 
@@ -713,13 +723,14 @@ This is first because an editor-native plugin cannot be considered feasible whil
 2. Define explicit behavior for absent, old, current, and future Native format versions.
 3. Define the conversion-result data contract before implementing conversion.
 4. Add benchmark cases for all ease modes, compile invalidation, signal amplification, snapshots, and the backend calls used by the first editor migration.
-5. Archive a new baseline only after the manual smoke test and debug/release artifacts pass.
+5. Add a small timing probe to the Match Tween harness so the shared start jitter can be classified as scheduling/render noise or a sampled-value difference.
+6. Archive a new baseline only after the platform artifacts and corresponding manual checks pass.
 
 This prevents later runtime and editor work from accidentally changing serialized fields or performance expectations.
 
-### Priority 3 — Retarget one legacy editor vertical slice
+### Priority 3 — Retarget one shared editor vertical slice
 
-Move one complete workflow—resource selection, sampling preview, and point-list read access—through `LegacyCurveEditorBackend`. Keep the concrete legacy implementation available behind the adapter until behavior and timing tests pass. Then migrate mutation, snapshots, presets, and save normalization one workflow at a time.
+Move one complete workflow—resource selection, sampling preview, and point-list read access—through `LegacyCurveEditorBackend`. Keep the concrete legacy implementation available behind the adapter until behavior and timing tests pass. Add the corresponding Native path next, including point selection plus force-linear and lock controls, so C/D can be completed without creating a second temporary editor. Then migrate mutation, snapshots, presets, and save normalization one workflow at a time.
 
 This incremental adapter approach is preferred over a broad editor rewrite. It tests the boundary against real behavior and avoids growing an interface from speculative Native requirements.
 
@@ -734,7 +745,7 @@ This incremental adapter approach is preferred over a broad editor rewrite. It t
 
 Proceed to NATIVE-08 through NATIVE-11 only after the shared legacy editor path is stable. Add Native editor support capability by capability, then non-destructive conversion, exact-ZIP staging, checksums, and clean-project installation/export tests.
 
-The next recommended implementation session should therefore be **NATIVE-01 closeout plus NATIVE-02 format/reflection contracts**. The first editor vertical slice follows immediately after those gates; adding more adapter abstractions before that evidence would increase complexity without reducing current risk.
+The next recommended implementation session should therefore be **Native Web artifact closeout**: correct the non-threaded build/output contract, produce both WASM variants in CI, restore verified manifest entries, and run clean browser fixtures containing built-in and custom Native resources. Follow that with the NATIVE-02 format/reflection contracts and the first shared editor vertical slice. Do not add a separate test-scene implementation of locks or force-linear; expose them through the editor boundary that will become the production workflow.
 
 ## 10. Definition of Done
 

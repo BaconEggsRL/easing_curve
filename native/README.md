@@ -27,8 +27,10 @@ Web builds require Emscripten on `PATH`. The Web preset is non-threaded and has
 Extension Support enabled.
 
 Web library entries are intentionally absent from the extension manifest until
-both WASM variants have been built and runtime-tested. Web exports currently use
-the independent legacy implementation instead of failing on missing binaries.
+both WASM variants have been built and runtime-tested. A legacy-only Web project
+can export without Native, but a scene or resource containing serialized Native
+types cannot fall back: the matching extension must load before Godot can
+deserialize `NativeEasingCurve` or `NativeEasingCurvePoint`.
 
 Until the Windows debug artifact passes local security validation, editor
 sessions use the verified release DLL through the generic `windows.x86_64`
@@ -101,11 +103,27 @@ reverse, and random sampling order; mutation; and deep runtime duplication.
 Tween is used only as a benchmark and numerical oracle. No Native sampling path
 calls Tween, GDScript, or a Callable.
 
+## Manual smoke-test status — 2026-09-03
+
+| Area | Result | Follow-up |
+|---|---|---|
+| Standard transition parity | Pass with observation | Circ, Cubic, Elastic, Expo, Quart, and Quint showed slight start jitter relative to Tween. Legacy showed the same behavior, so this is recorded as a harness/timing investigation rather than a Native release blocker. |
+| Deterministic modes and transforms | Pass | No follow-up from this run. |
+| Custom editing and ownership | Partial | Handle modes and ordinary point operations worked. Force-linear and point-lock controls are not exposed by the current test/editor UI. |
+| Save, reload, and coexistence | Partial | Observed state round-tripped, but force-linear and locks require editor integration before manual verification is complete. |
+| Web export with Native resource | Blocked | Without a wasm32 extension, Godot cannot instantiate `NativeEasingCurvePoint` while loading the exported test scene. |
+
+The Web failure is not solved by silently selecting the legacy backend: that is
+safe only when the exported project contains no serialized Native resources.
+Native Web qualification now precedes further release claims.
+
 ## Remaining release work
 
+- Build and validate non-threaded Web debug/release WASM libraries, then restore
+  only the verified manifest entries.
 - Finish generated, CSS, and extended Bounce representations.
 - Complete the remaining Native point-state edge cases and curve-level snapshots.
 - Retarget the existing editor to the backend foundation and add Native Inspector/graph support.
 - Add optional, non-destructive bidirectional conversion.
-- Validate Web runtime/export and build the exact dual-API release archive.
+- Build the exact dual-API release archive.
 - Add remaining platforms before any legacy deprecation proposal.
