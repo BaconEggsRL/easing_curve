@@ -64,7 +64,7 @@ Architecture:
 | Editor boundary performance | Three repeated 65-point runs show preview dispatch adds about 12–15 microseconds per 121-sample draw, bulk point reads and snapshots are near direct cost, and optimized Native atomic mutation adds about 6–7 microseconds per mutation |
 | Native Web export | Non-threaded debug (339,080 bytes) and release (334,967 bytes) WASM libraries export and run in isolated headless-browser projects; built-in/custom resources load, sample, and deep-copy correctly |
 | Build automation | Pinned Windows/Web build script, manifest preflight, and GitHub Actions build-plus-browser workflow are present; Windows release and local Web paths are verified |
-| Manual smoke test | 2026-09-03: deterministic modes passed; standard transitions passed with a shared legacy/native start-jitter observation; point-state UI is incomplete; the reported Native Web failure is resolved by automated debug/release browser validation, with a user-facing rerun still pending |
+| Manual smoke test | 2026-09-03: the first shared-editor slice passed startup, standard/custom rendering, selection, point options, Undo/Redo, persistence, and legacy regression checks. Native Inspector preview routing passed; the FileSystem class-icon fix awaits one editor-restart rerun. The timing probe was deferred |
 | Legacy status | Existing `EasingCurve` remains functional and comprehensively tested |
 
 ### Partially complete
@@ -699,12 +699,18 @@ Record results here rather than relying on memory:
 | 2026-09-03 | 4.7.1 | Windows x86_64 release editor fallback; Web export without wasm32 extension | Pass with observation | Pass | Partial | Partial | Blocked on Native Web | A: Circ, Cubic, Elastic, Expo, Quart, and Quint showed slight start jitter relative to Tween; legacy showed the same behavior. C/D: force-linear and lock state exist in Native but have no current UI controls, so they were not manually verified. E: Web reported no wasm32 library, then failed to deserialize `NativeEasingCurvePoint` from the exported test scene. |
 | 2026-09-03 | 4.7.1 | Non-threaded wasm32 debug and release; isolated automated browser fixture | Not rerun | Not rerun | Automated runtime coverage only | Automated runtime coverage only | Pass (automated) | Both exports registered Native classes and loaded, sampled, and deep-copied built-in and custom Native resources in headless Chrome. User-facing scene/export validation remains to be rerun manually. |
 
+### Shared-editor vertical-slice record
+
+| Date | Godot | Startup/Inspector | Standard graph | Custom selection | Point options | Undo/Redo | Persistence | Previews | Legacy regression | Timing probe | Notes/evidence |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-09-03 | 4.7.1 | Pass | Pass | Pass | Pass with note | Pass | Pass | Inspector preview pass; FileSystem icon fix awaiting rerun | Pass | Deferred | Force Linear is editable through the shared point toolbar and persisted correctly. Its C++ property is storage-only, so absence from the raw point Inspector is intentional. Adding `NativeEasingCurve` to `_handles()` enabled generated Inspector previews. The FileSystem tree remained a white resource page because it uses the GDExtension class icon; the manifest now maps `NativeEasingCurve` to the existing `Curve.svg`. |
+
 Any crash, data loss, stale result after mutation, missing class, serialization mismatch, or exported-runtime failure blocks the next release qualification step. Visual differences should be recorded with the transition/ease/parameters and a screenshot or short capture.
 
 Interpretation:
 
 - The shared start jitter in A does not currently implicate the Native equations. Keep it as a diagnostic item and capture per-frame elapsed time/offset before changing either solver.
-- C and D do not overturn the automated point-state results. They demonstrate that NATIVE-04 cannot receive final manual acceptance until the shared editor exposes force-linear and lock operations.
+- The shared editor now exposes force-linear and lock operations, and the vertical-slice smoke test confirms their toolbar, Undo/Redo, and persistence behavior. Final NATIVE-04 manual acceptance still waits for Native geometry and topology editing.
 - The original E failure was correctly treated as a Native Web blocker. The non-threaded wasm32 implementation now resolves that technical blocker in isolated debug and release browser fixtures without substituting the legacy API. Final visible-scene acceptance remains manual.
 
 ## 9. Recommended next execution tranche

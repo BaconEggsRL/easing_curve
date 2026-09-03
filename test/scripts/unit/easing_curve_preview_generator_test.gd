@@ -17,6 +17,10 @@ func _run() -> void:
 	var generator := PREVIEW_GENERATOR.new()
 	_expect(generator._handles("Resource"), "Preview generator did not handle script Resource base type")
 	_expect(generator._handles("EasingCurve"), "Preview generator did not handle EasingCurve script type")
+	_expect(
+		generator._handles("NativeEasingCurve"),
+		"Preview generator did not handle the NativeEasingCurve extension type",
+	)
 	_expect(not generator._handles("Curve"), "Preview generator intercepted built-in Curve resources")
 	_expect(
 		generator._generate(Resource.new(), Vector2i(64, 64), {}) == null,

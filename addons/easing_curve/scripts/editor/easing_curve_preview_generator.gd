@@ -4,15 +4,20 @@ extends EditorResourcePreviewGenerator
 const BackendFactory := preload(
 	"res://addons/easing_curve/scripts/editor/backend/curve_editor_backend_factory.gd"
 )
-const NATIVE_RESOURCE_TYPE := "Resource"
+const GENERIC_RESOURCE_TYPE := "Resource"
 const SCRIPT_RESOURCE_TYPE := "EasingCurve"
+const NATIVE_RESOURCE_TYPE := "NativeEasingCurve"
 
 var line_color := Color.WHITE
 
 
 func _handles(resource_type: String) -> bool:
 	# Script resources are reported by their native base type in some Godot versions.
-	return resource_type == NATIVE_RESOURCE_TYPE or resource_type == SCRIPT_RESOURCE_TYPE
+	return resource_type in [
+		GENERIC_RESOURCE_TYPE,
+		SCRIPT_RESOURCE_TYPE,
+		NATIVE_RESOURCE_TYPE,
+	]
 
 
 func _generate(

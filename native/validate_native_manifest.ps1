@@ -14,22 +14,25 @@ if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
 }
 $ManifestPath = (Resolve-Path -LiteralPath $ManifestPath -ErrorAction Stop).Path
 
-function Get-LibraryEntries {
-	param([string]$Path)
+function Get-ManifestEntries {
+	param(
+		[string]$Path,
+		[string]$Section
+	)
 
 	$entries = @{}
-	$inLibraries = $false
+	$inSection = $false
 	foreach ($line in Get-Content -LiteralPath $Path) {
 		$trimmed = $line.Trim()
 		if ($trimmed -match '^\[(.+)\]$') {
-			$inLibraries = $Matches[1] -eq "libraries"
+			$inSection = $Matches[1] -eq $Section
 			continue
 		}
-		if (-not $inLibraries -or [string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith(";")) {
+		if (-not $inSection -or [string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith(";")) {
 			continue
 		}
 		if ($trimmed -notmatch '^([^=]+?)\s*=\s*"([^"]+)"$') {
-			throw "Invalid library entry in ${Path}: $line"
+			throw "Invalid $Section entry in ${Path}: $line"
 		}
 		$entries[$Matches[1].Trim()] = $Matches[2]
 	}
@@ -51,10 +54,18 @@ function Assert-ManifestEntry {
 	}
 }
 
-$libraries = Get-LibraryEntries -Path $ManifestPath
+$libraries = Get-ManifestEntries -Path $ManifestPath -Section "libraries"
+$icons = Get-ManifestEntries -Path $ManifestPath -Section "icons"
 $expectedWindowsLibrary = "res://addons/easing_curve/bin/libeasing_curve_native.windows.template_release.x86_64.dll"
 $expectedWebDebugLibrary = "res://addons/easing_curve/bin/libeasing_curve_native.web.template_debug.wasm32.nothreads.wasm"
 $expectedWebReleaseLibrary = "res://addons/easing_curve/bin/libeasing_curve_native.web.template_release.wasm32.nothreads.wasm"
+$expectedCurveIcon = "res://addons/easing_curve/assets/Curve.svg"
+
+Assert-ManifestEntry -Entries $icons -Key "NativeEasingCurve" -ExpectedResourcePath $expectedCurveIcon
+$curveIconPath = Join-Path $projectRoot $expectedCurveIcon.Substring("res://".Length).Replace("/", [IO.Path]::DirectorySeparatorChar)
+if (-not (Test-Path -LiteralPath $curveIconPath -PathType Leaf)) {
+	throw "Native manifest references a missing NativeEasingCurve icon: $curveIconPath"
+}
 
 if ($Platform -in @("windows", "all")) {
 	Assert-ManifestEntry -Entries $libraries -Key "windows.x86_64" -ExpectedResourcePath $expectedWindowsLibrary

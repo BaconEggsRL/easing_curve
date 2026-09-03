@@ -136,8 +136,10 @@ topology tranche; legacy editing behavior is unchanged.
 |---|---|---|
 | Standard transition parity | Pass with observation | Circ, Cubic, Elastic, Expo, Quart, and Quint showed slight start jitter relative to Tween. Legacy showed the same behavior, so this is recorded as a harness/timing investigation rather than a Native release blocker. |
 | Deterministic modes and transforms | Pass | No follow-up from this run. |
-| Custom editing and ownership | Partial | Handle modes and ordinary point operations worked. Force-linear and point-lock controls are not exposed by the current test/editor UI. |
-| Save, reload, and coexistence | Partial | Observed state round-tripped, but force-linear and locks require editor integration before manual verification is complete. |
+| Custom editing and ownership | First editor slice passed | Native selection, handle modes, force-linear, and locks passed through the shared toolbar. Geometry/topology editing remains intentionally read-only until the next tranche. Force-linear fields are storage-only and therefore do not appear in the raw point Inspector. |
+| Save, reload, and coexistence | Pass for the shared-editor slice | Native point options, Undo/Redo, and persistence passed; both public APIs continue to work independently. |
+| Native resource preview/icon | Inspector preview pass; FileSystem icon fix awaiting rerun | The generator now advertises `NativeEasingCurve`, enabling generated Inspector previews. Godot's FileSystem tree uses the GDExtension class icon instead, so the manifest now maps the Native class to the existing `Curve.svg`. Restart the editor and confirm the icon. |
+| Match Tween timing probe | Deferred | The probe remains available for a later jitter investigation. |
 | Web export with Native resource | Automated pass; manual rerun pending | Isolated debug and release exports loaded, sampled, and deep-copied built-in and custom Native resources in headless Chrome. Rerun the user-facing test scene before final release qualification. |
 
 The original Web failure was caused by the absent wasm32 library. The validated

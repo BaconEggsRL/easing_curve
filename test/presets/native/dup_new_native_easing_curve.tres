@@ -1,4 +1,4 @@
-[gd_resource type="NativeEasingCurve" format=3 uid="uid://bt0q1y84n4vwv"]
+[gd_resource type="NativeEasingCurve" format=3 uid="uid://b3emoemimsy8h"]
 
 [sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_5p28q"]
 handle_mode = 1
@@ -8,7 +8,6 @@ position = Vector2(0.45, 0.53)
 left_control_point = Vector2(0.45, 0.53)
 right_control_point = Vector2(0.45, 0.53)
 handle_mode = 1
-left_force_linear = true
 
 [resource]
 transition = 100
