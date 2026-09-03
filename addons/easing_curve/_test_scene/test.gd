@@ -11,26 +11,28 @@ extends Control
 const PLUGIN_CONFIG_PATH := "res://addons/easing_curve/plugin.cfg"
 const MARKER_DOT_RADIUS := 8.0
 const DROPDOWN_MAX_WIDTH := 120.0
+# Frozen Native public IDs are repeated here so this fallback harness parses
+# before the optional GDExtension has registered its classes.
 const NATIVE_TRANSITIONS := [
-	["Linear", NativeEasingCurve.TRANS_LINEAR],
-	["Sine", NativeEasingCurve.TRANS_SINE],
-	["Quint", NativeEasingCurve.TRANS_QUINT],
-	["Quart", NativeEasingCurve.TRANS_QUART],
-	["Quad", NativeEasingCurve.TRANS_QUAD],
-	["Expo", NativeEasingCurve.TRANS_EXPO],
-	["Elastic", NativeEasingCurve.TRANS_ELASTIC],
-	["Cubic", NativeEasingCurve.TRANS_CUBIC],
-	["Circ", NativeEasingCurve.TRANS_CIRC],
-	["Bounce", NativeEasingCurve.TRANS_BOUNCE],
-	["Back", NativeEasingCurve.TRANS_BACK],
-	["Spring", NativeEasingCurve.TRANS_SPRING],
-	["Custom", NativeEasingCurve.TRANS_CUSTOM],
+	["Linear", 0],
+	["Sine", 1],
+	["Quint", 2],
+	["Quart", 3],
+	["Quad", 4],
+	["Expo", 5],
+	["Elastic", 6],
+	["Cubic", 7],
+	["Circ", 8],
+	["Bounce", 9],
+	["Back", 10],
+	["Spring", 11],
+	["Custom", 100],
 ]
 const NATIVE_EASES := [
-	["In", NativeEasingCurve.EASE_IN],
-	["Out", NativeEasingCurve.EASE_OUT],
-	["In Out", NativeEasingCurve.EASE_IN_OUT],
-	["Out In", NativeEasingCurve.EASE_OUT_IN],
+	["In", 0],
+	["Out", 1],
+	["In Out", 2],
+	["Out In", 3],
 ]
 
 @export var tween_ease: Tween.EaseType = 0:
@@ -53,7 +55,7 @@ const NATIVE_EASES := [
 @export var use_native_curve := true:
 	set = set_use_native_curve
 
-@export var native_curve: NativeEasingCurve = NativeEasingCurve.new():
+@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "NativeEasingCurve") var native_curve: Resource:
 	set = set_native_curve
 
 @export var easing_curve: EasingCurve = EasingCurve.new():
@@ -68,7 +70,7 @@ var points: Array[EasingCurvePoint] = []:
 var curve_tween: Tween
 var tween_tween: Tween
 var _runtime_easing_curve: EasingCurve
-var _runtime_native_curve: NativeEasingCurve
+var _runtime_native_curve: Resource
 var _debug_prev_curve_pos: Vector2
 var _debug_prev_tween_pos: Vector2
 var _debug_curve_speed: float = 0.0
@@ -78,6 +80,10 @@ var _debug_curve_value: float = 0.0
 var _debug_last_t: float = 0.0
 
 func _init() -> void:
+	if native_curve == null and ClassDB.class_exists(&"NativeEasingCurve"):
+		native_curve = ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	if native_curve == null:
+		use_native_curve = false
 	if easing_curve != null and not easing_curve.changed.is_connected(_on_easing_curve_changed):
 		easing_curve.changed.connect(_on_easing_curve_changed)
 	if native_curve != null and not native_curve.changed.is_connected(_on_native_curve_changed):
@@ -184,8 +190,8 @@ func _sync_dropdowns() -> void:
 		return
 
 	if use_native_curve and native_curve:
-		_select_dropdown_value(curve_trans_dropdown, native_curve.transition)
-		_select_dropdown_value(curve_ease_dropdown, native_curve.ease_type)
+		_select_dropdown_value(curve_trans_dropdown, int(native_curve.get(&"transition")))
+		_select_dropdown_value(curve_ease_dropdown, int(native_curve.get(&"ease_type")))
 	elif easing_curve:
 		_select_dropdown_value(curve_trans_dropdown, easing_curve.trans_type)
 		_select_dropdown_value(curve_ease_dropdown, easing_curve.ease_type)
@@ -287,7 +293,7 @@ func _on_curve_ease_selected(index: int) -> void:
 	if use_native_curve:
 		if not _runtime_native_curve:
 			return
-		_runtime_native_curve.ease_type = ease_type
+		_runtime_native_curve.set(&"ease_type", ease_type)
 	else:
 		if not _runtime_easing_curve:
 			return
@@ -300,7 +306,7 @@ func _on_curve_trans_selected(index: int) -> void:
 	if use_native_curve:
 		if not _runtime_native_curve:
 			return
-		_runtime_native_curve.transition = transition
+		_runtime_native_curve.set(&"transition", transition)
 	else:
 		if not _runtime_easing_curve:
 			return
@@ -470,6 +476,7 @@ func restart_runtime() -> void:
 
 
 func set_use_native_curve(value: bool) -> void:
+	value = value and native_curve != null
 	if use_native_curve == value:
 		return
 	use_native_curve = value
@@ -479,7 +486,10 @@ func set_use_native_curve(value: bool) -> void:
 	reset_and_start.call_deferred()
 
 
-func set_native_curve(value: NativeEasingCurve) -> void:
+func set_native_curve(value: Resource) -> void:
+	if value != null and value.get_class() != &"NativeEasingCurve":
+		push_warning("Native Curve must be a NativeEasingCurve resource.")
+		return
 	if native_curve == value:
 		return
 	if native_curve != null and native_curve.changed.is_connected(_on_native_curve_changed):
@@ -508,7 +518,7 @@ func _capture_runtime_curves() -> void:
 	_runtime_easing_curve = null
 	if use_native_curve:
 		_runtime_native_curve = (
-			native_curve.create_runtime_copy()
+			native_curve.call(&"create_runtime_copy") as Resource
 			if native_curve != null
 			else null
 		)
@@ -536,7 +546,7 @@ func print_points() -> void:
 	print("print_points active curve points = ")
 	var active_points: Array = []
 	if use_native_curve and native_curve:
-		active_points = native_curve.points
+		active_points = native_curve.get(&"points")
 	elif easing_curve:
 		active_points = easing_curve.points
 	if active_points.is_empty():
@@ -588,7 +598,7 @@ func tween_native_curve(offset: float) -> float:
 	if _runtime_native_curve == null:
 		return 0.0
 	_debug_offset = offset
-	_debug_curve_value = _runtime_native_curve.sample(offset)
+	_debug_curve_value = float(_runtime_native_curve.call(&"sample", offset))
 	return _debug_curve_value
 
 
@@ -644,8 +654,8 @@ func _match_curve_to_tween() -> void:
 	if use_native_curve:
 		if not _runtime_native_curve:
 			return
-		_runtime_native_curve.transition = transition
-		_runtime_native_curve.ease_type = ease_type
+		_runtime_native_curve.set(&"transition", transition)
+		_runtime_native_curve.set(&"ease_type", ease_type)
 	else:
 		if not _runtime_easing_curve:
 			return
@@ -692,14 +702,14 @@ func _get_matching_curve_ease() -> int:
 	if use_native_curve:
 		match tween_ease:
 			Tween.EASE_IN:
-				return NativeEasingCurve.EASE_IN
+				return 0
 			Tween.EASE_OUT:
-				return NativeEasingCurve.EASE_OUT
+				return 1
 			Tween.EASE_IN_OUT:
-				return NativeEasingCurve.EASE_IN_OUT
+				return 2
 			Tween.EASE_OUT_IN:
-				return NativeEasingCurve.EASE_OUT_IN
-		return NativeEasingCurve.EASE_IN
+				return 3
+		return 0
 
 	match tween_ease:
 		Tween.EASE_IN:

@@ -41,7 +41,6 @@ $powerShellExecutable = (Get-Process -Id $PID).Path
 $nativeDirectory = Join-Path $projectRoot "native"
 $sourceBinDirectory = Join-Path $projectRoot "addons\easing_curve\bin"
 $releaseDllName = "libeasing_curve_native.windows.template_release.x86_64.dll"
-$debugDllName = "libeasing_curve_native.windows.template_debug.x86_64.dll"
 $releaseDll = Join-Path $sourceBinDirectory $releaseDllName
 $selectedGodotPath = if (-not [string]::IsNullOrWhiteSpace($GodotPath)) {
 	$GodotPath
@@ -103,7 +102,7 @@ try {
 
 	$destinationBin = Join-Path $tempProject "addons\easing_curve\bin"
 	New-Item -ItemType Directory -Force -Path $destinationBin | Out-Null
-	foreach ($fileName in @("easing_curve_native.gdextension", "easing_curve_native.gdextension.uid", $debugDllName, $releaseDllName)) {
+	foreach ($fileName in @("easing_curve_native.gdextension", "easing_curve_native.gdextension.uid", $releaseDllName)) {
 		$source = Join-Path $sourceBinDirectory $fileName
 		if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
 			throw "Required Native export file was not found: $source"

@@ -26,6 +26,12 @@ release variants from the repository root:
 Web builds require Emscripten on `PATH`. The Web preset is non-threaded and has
 Extension Support enabled.
 
+Until the Windows debug artifact passes local security validation, editor
+sessions use the verified release DLL through the generic `windows.x86_64`
+manifest entry. Release exports use the explicit release entry. This keeps the
+project and fallback test scene loadable without claiming debug/hot-reload
+support.
+
 The Windows ABI fixture validates one 4.4-built DLL against Godot 4.4–4.7:
 
 ```powershell

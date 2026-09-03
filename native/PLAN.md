@@ -208,7 +208,7 @@ Legacy must not depend on Native classes or binaries.
 | Graph editing | Complete | Not integrated | Shared adapter | Yes |
 | Presets/preview/save | Complete | Not integrated | Shared adapter | Yes |
 | Undo/Redo | Complete | Not integrated | Native snapshots | Yes |
-| Windows | Complete | Release runtime/export proof | Debug proof and reproducible package | Yes |
+| Windows | Complete | Release runtime/export proof; release DLL is the editor fallback | Debug proof and reproducible package | Yes |
 | Web | Complete | Build configuration only | wasm32 build and browser export proof | Yes |
 | Linux/macOS/Android | Legacy available | Missing | Deferred initially | Required or explicitly excepted |
 | Packaging/CI | Legacy scripts exist | Build workflow present | Execute builds and add exact-ZIP pipeline | Full supported matrix |
@@ -617,13 +617,13 @@ This smoke test verifies visible behavior and resource persistence that headless
 
 1. Preserve or commit unrelated work before testing.
 2. Use Godot 4.7.1 and open this repository as the project.
-3. Build the editor library with:
+3. Build the verified editor fallback library with:
 
    ```powershell
-   ./native/build_native.ps1 -Platform windows -Target template_debug
+   ./native/build_native.ps1 -Platform windows -Target template_release
    ```
 
-4. Do not disable security software if the build reports Windows error 225. Record that as **Blocked: debug artifact** and use a trusted release artifact only if it has already been approved for local testing.
+4. The manifest intentionally uses this release DLL for Windows editor sessions until the debug artifact passes local security validation. Do not disable security software if a separate debug build reports Windows error 225; record that as **Blocked: debug artifact**.
 5. In the Godot Output panel, confirm there are no missing-library, missing-class, parse, or resource-load errors.
 6. Confirm **Create New Resource** offers all four public classes: `EasingCurve`, `EasingCurvePoint`, `NativeEasingCurve`, and `NativeEasingCurvePoint`.
 
@@ -691,7 +691,7 @@ Record results here rather than relying on memory:
 
 | Date | Godot | Build/artifact | A | B | C | D | E | Notes/evidence |
 |---|---|---|---|---|---|---|---|---|
-| Pending | 4.7.1 | Windows x86_64 debug + release | — | — | — | — | — | Manual run required |
+| Pending | 4.7.1 | Windows x86_64 release editor fallback + release export | — | — | — | — | — | Manual run required |
 
 Any crash, data loss, stale result after mutation, missing class, serialization mismatch, or exported-runtime failure blocks the next release qualification step. Visual differences should be recorded with the transition/ease/parameters and a screenshot or short capture.
 
@@ -702,7 +702,8 @@ Any crash, data loss, stale result after mutation, missing class, serialization 
 1. Diagnose the Windows debug DLL security rejection without weakening machine security.
 2. Produce and load a genuine debug DLL in the editor; verify hot reload separately from release export.
 3. Run the Web CI build, retain the wasm artifacts, and test a non-threaded browser export.
-4. Keep Web manifest entries only after the referenced debug and release artifacts are proven loadable.
+4. Add a Windows debug-specific manifest entry only after that artifact is proven loadable; until then the verified release DLL remains the generic editor fallback.
+5. Keep Web manifest entries only after the referenced debug and release artifacts are proven loadable.
 
 This is first because an editor-native plugin cannot be considered feasible while its development artifact is blocked, and an unexecuted Web workflow is configuration rather than platform support.
 

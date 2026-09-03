@@ -16,6 +16,7 @@ try {
 	New-Item -ItemType Directory -Force -Path $addonDestination, (Split-Path -Parent $logPath) | Out-Null
 	Copy-Item -LiteralPath (Join-Path $projectRoot "addons\easing_curve\assets") -Destination $addonDestination -Recurse -Force
 	Copy-Item -LiteralPath (Join-Path $projectRoot "addons\easing_curve\scripts") -Destination $addonDestination -Recurse -Force
+	Copy-Item -LiteralPath (Join-Path $projectRoot "addons\easing_curve\_test_scene") -Destination $addonDestination -Recurse -Force
 	Copy-Item -LiteralPath (Join-Path $projectRoot "addons\easing_curve\plugin.cfg") -Destination $addonDestination -Force
 	Copy-Item -LiteralPath (Join-Path $projectRoot "addons\easing_curve\plugin.gd") -Destination $addonDestination -Force
 	Copy-Item -LiteralPath (Join-Path $projectRoot "test\scripts\integration\legacy_without_native_main.gd") -Destination (Join-Path $validationRoot "main.gd") -Force

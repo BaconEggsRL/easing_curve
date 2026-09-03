@@ -6,7 +6,7 @@ reloadable = true
 
 [libraries]
 
-windows.debug.x86_64 = "res://addons/easing_curve/bin/libeasing_curve_native.windows.template_debug.x86_64.dll"
+windows.x86_64 = "res://addons/easing_curve/bin/libeasing_curve_native.windows.template_release.x86_64.dll"
 windows.release.x86_64 = "res://addons/easing_curve/bin/libeasing_curve_native.windows.template_release.x86_64.dll"
 web.debug.wasm32 = "res://addons/easing_curve/bin/libeasing_curve_native.web.template_debug.wasm32.wasm"
 web.release.wasm32 = "res://addons/easing_curve/bin/libeasing_curve_native.web.template_release.wasm32.wasm"

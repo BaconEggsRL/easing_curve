@@ -12,6 +12,17 @@ func _initialize() -> void:
 		not ClassDB.class_exists(&"NativeEasingCurve"),
 		"NativeEasingCurve unexpectedly exists in the legacy-only fixture"
 	)
+	var test_scene := load("res://addons/easing_curve/_test_scene/test.tscn") as PackedScene
+	_check(test_scene != null, "dual-backend test scene does not parse without Native")
+	if test_scene != null:
+		var test_instance := test_scene.instantiate()
+		_check(test_instance != null, "dual-backend test scene does not instantiate without Native")
+		if test_instance != null:
+			_check(
+				not bool(test_instance.get("use_native_curve")),
+				"dual-backend test scene did not fall back to legacy"
+			)
+			test_instance.free()
 
 	var curve := LEGACY_CURVE_SCRIPT.new()
 	curve.trans_type = LEGACY_CURVE_SCRIPT.TRANS.CUBIC
