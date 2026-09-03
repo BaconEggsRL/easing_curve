@@ -5,10 +5,20 @@ const LEGACY_CURVE_SCRIPT := preload(
 )
 const SAMPLE_ITERATIONS := 200000
 const TRIAL_COUNT := 9
-const TRANS_SINE := 1
-const TRANS_CUBIC := 2
-const TRANS_ELASTIC := 3
-const EASE_OUT := 1
+const BUILTIN_CASES := [
+	["linear_out", NativeEasingCurve.TRANS_LINEAR, Tween.TRANS_LINEAR],
+	["sine_out", NativeEasingCurve.TRANS_SINE, Tween.TRANS_SINE],
+	["quint_out", NativeEasingCurve.TRANS_QUINT, Tween.TRANS_QUINT],
+	["quart_out", NativeEasingCurve.TRANS_QUART, Tween.TRANS_QUART],
+	["quad_out", NativeEasingCurve.TRANS_QUAD, Tween.TRANS_QUAD],
+	["expo_out", NativeEasingCurve.TRANS_EXPO, Tween.TRANS_EXPO],
+	["elastic_out", NativeEasingCurve.TRANS_ELASTIC, Tween.TRANS_ELASTIC],
+	["cubic_out", NativeEasingCurve.TRANS_CUBIC, Tween.TRANS_CUBIC],
+	["circ_out", NativeEasingCurve.TRANS_CIRC, Tween.TRANS_CIRC],
+	["bounce_out", NativeEasingCurve.TRANS_BOUNCE, Tween.TRANS_BOUNCE],
+	["back_out", NativeEasingCurve.TRANS_BACK, Tween.TRANS_BACK],
+	["spring_out", NativeEasingCurve.TRANS_SPRING, Tween.TRANS_SPRING],
+]
 
 var _offsets := PackedFloat64Array()
 var _sink := 0.0
@@ -31,9 +41,8 @@ func _run() -> void:
 		SAMPLE_ITERATIONS,
 		TRIAL_COUNT,
 	])
-	_benchmark_builtin("cubic_out", TRANS_CUBIC, Tween.TRANS_CUBIC)
-	_benchmark_builtin("sine_out", TRANS_SINE, Tween.TRANS_SINE)
-	_benchmark_builtin("elastic_out", TRANS_ELASTIC, Tween.TRANS_ELASTIC)
+	for benchmark_case in BUILTIN_CASES:
+		_benchmark_builtin(benchmark_case[0], benchmark_case[1], benchmark_case[2])
 	_benchmark_custom_bezier()
 	print("SINK|%.9f" % _sink)
 	quit()
@@ -51,7 +60,7 @@ func _benchmark_builtin(label: String, native_transition: int, tween_transition:
 
 
 func _benchmark_custom_bezier() -> void:
-	var native_curve := _new_native_curve(TRANS_CUBIC)
+	var native_curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC)
 	native_curve.cubic_bezier(0.42, 0.0, 0.58, 1.0)
 	var legacy_curve := LEGACY_CURVE_SCRIPT.new()
 	legacy_curve.cubic_bezier(0.42, 0.0, 0.58, 1.0)
@@ -135,5 +144,5 @@ func _sample_tween(transition: int) -> void:
 func _new_native_curve(transition: int) -> NativeEasingCurve:
 	var curve := NativeEasingCurve.new()
 	curve.transition = transition
-	curve.ease_type = EASE_OUT
+	curve.ease_type = NativeEasingCurve.EASE_OUT
 	return curve

@@ -12,8 +12,17 @@ namespace {
 constexpr double PI = 3.14159265358979323846;
 constexpr double SOLVE_EPSILON = 0.00000001;
 constexpr double SEGMENT_X_EPSILON = 0.000001;
+constexpr double BACK_OVERSHOOT = 1.70158;
 constexpr int NEWTON_ITERATIONS = 8;
 constexpr int BINARY_ITERATIONS = 32;
+
+bool is_valid_transition(NativeEasingCurve::Transition p_transition) {
+	return (p_transition >= NativeEasingCurve::TRANS_LINEAR && p_transition <= NativeEasingCurve::TRANS_SPRING) || p_transition == NativeEasingCurve::TRANS_CUSTOM;
+}
+
+bool is_valid_ease_type(NativeEasingCurve::EaseType p_ease_type) {
+	return p_ease_type >= NativeEasingCurve::EASE_IN && p_ease_type <= NativeEasingCurve::EASE_OUT_IN;
+}
 } // namespace
 
 void NativeEasingCurve::_bind_methods() {
@@ -32,16 +41,24 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("cubic_bezier", "x1", "y1", "x2", "y2"), &NativeEasingCurve::cubic_bezier);
 	ClassDB::bind_method(D_METHOD("sample", "offset"), &NativeEasingCurve::sample);
 
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear,Sine,Cubic,Elastic,Custom"), "set_transition", "get_transition");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100"), "set_transition", "get_transition");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "ease_type", PROPERTY_HINT_ENUM, "In,Out,In Out,Out In"), "set_ease_type", "get_ease_type");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "amplitude", PROPERTY_HINT_RANGE, "0.001,10.0,0.001,or_greater"), "set_amplitude", "get_amplitude");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "period", PROPERTY_HINT_RANGE, "0.001,2.0,0.001,or_greater"), "set_period", "get_period");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "amplitude", PROPERTY_HINT_RANGE, "1.0,10.0,0.001,or_greater"), "set_amplitude", "get_amplitude");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "period", PROPERTY_HINT_RANGE, "0.01,2.0,0.001,or_greater"), "set_period", "get_period");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "points", PROPERTY_HINT_ARRAY_TYPE, "NativeEasingCurvePoint"), "set_points", "get_points");
 
 	BIND_ENUM_CONSTANT(TRANS_LINEAR);
 	BIND_ENUM_CONSTANT(TRANS_SINE);
-	BIND_ENUM_CONSTANT(TRANS_CUBIC);
+	BIND_ENUM_CONSTANT(TRANS_QUINT);
+	BIND_ENUM_CONSTANT(TRANS_QUART);
+	BIND_ENUM_CONSTANT(TRANS_QUAD);
+	BIND_ENUM_CONSTANT(TRANS_EXPO);
 	BIND_ENUM_CONSTANT(TRANS_ELASTIC);
+	BIND_ENUM_CONSTANT(TRANS_CUBIC);
+	BIND_ENUM_CONSTANT(TRANS_CIRC);
+	BIND_ENUM_CONSTANT(TRANS_BOUNCE);
+	BIND_ENUM_CONSTANT(TRANS_BACK);
+	BIND_ENUM_CONSTANT(TRANS_SPRING);
 	BIND_ENUM_CONSTANT(TRANS_CUSTOM);
 	BIND_ENUM_CONSTANT(EASE_IN);
 	BIND_ENUM_CONSTANT(EASE_OUT);
@@ -59,7 +76,7 @@ NativeEasingCurve::~NativeEasingCurve() {
 }
 
 void NativeEasingCurve::set_transition(Transition p_transition) {
-	if (transition == p_transition) {
+	if (!is_valid_transition(p_transition) || transition == p_transition) {
 		return;
 	}
 	transition = p_transition;
@@ -71,7 +88,7 @@ NativeEasingCurve::Transition NativeEasingCurve::get_transition() const {
 }
 
 void NativeEasingCurve::set_ease_type(EaseType p_ease_type) {
-	if (ease_type == p_ease_type) {
+	if (!is_valid_ease_type(p_ease_type) || ease_type == p_ease_type) {
 		return;
 	}
 	ease_type = p_ease_type;
@@ -83,7 +100,10 @@ NativeEasingCurve::EaseType NativeEasingCurve::get_ease_type() const {
 }
 
 void NativeEasingCurve::set_amplitude(double p_amplitude) {
-	const double value = std::max(p_amplitude, 0.001);
+	if (!std::isfinite(p_amplitude)) {
+		return;
+	}
+	const double value = std::max(p_amplitude, 1.0);
 	if (amplitude == value) {
 		return;
 	}
@@ -96,7 +116,10 @@ double NativeEasingCurve::get_amplitude() const {
 }
 
 void NativeEasingCurve::set_period(double p_period) {
-	const double value = std::max(p_period, 0.001);
+	if (!std::isfinite(p_period)) {
+		return;
+	}
+	const double value = std::max(p_period, 0.01);
 	if (period == value) {
 		return;
 	}
@@ -156,6 +179,9 @@ void NativeEasingCurve::cubic_bezier(double p_x1, double p_y1, double p_x2, doub
 }
 
 double NativeEasingCurve::sample(double p_offset) {
+	if (!std::isfinite(p_offset)) {
+		return 0.0;
+	}
 	const double offset = std::clamp(p_offset, 0.0, 1.0);
 	return transition == TRANS_CUSTOM ? sample_custom(offset) : sample_builtin(offset);
 }
@@ -202,12 +228,21 @@ void NativeEasingCurve::compile_segments() {
 	std::stable_sort(ordered_points.begin(), ordered_points.end(), [](const Ref<NativeEasingCurvePoint> &p_left, const Ref<NativeEasingCurvePoint> &p_right) {
 		return p_left->get_position().x < p_right->get_position().x;
 	});
+	std::vector<Ref<NativeEasingCurvePoint>> unique_points;
+	unique_points.reserve(ordered_points.size());
+	for (const Ref<NativeEasingCurvePoint> &point : ordered_points) {
+		if (!unique_points.empty() && std::abs(point->get_position().x - unique_points.back()->get_position().x) <= SEGMENT_X_EPSILON) {
+			unique_points.back() = point;
+		} else {
+			unique_points.push_back(point);
+		}
+	}
 
 	segments.clear();
-	segments.reserve(ordered_points.size() > 1 ? ordered_points.size() - 1 : 0);
-	for (size_t index = 0; index + 1 < ordered_points.size(); ++index) {
-		const Ref<NativeEasingCurvePoint> &start = ordered_points[index];
-		const Ref<NativeEasingCurvePoint> &end = ordered_points[index + 1];
+	segments.reserve(unique_points.size() > 1 ? unique_points.size() - 1 : 0);
+	for (size_t index = 0; index + 1 < unique_points.size(); ++index) {
+		const Ref<NativeEasingCurvePoint> &start = unique_points[index];
+		const Ref<NativeEasingCurvePoint> &end = unique_points[index + 1];
 		const Vector2 start_position = start->get_position();
 		const Vector2 end_position = end->get_position();
 		if (end_position.x - start_position.x <= SEGMENT_X_EPSILON) {
@@ -246,6 +281,12 @@ double NativeEasingCurve::sample_builtin(double p_offset) const {
 			if (transition == TRANS_ELASTIC) {
 				return sample_elastic_in_out(p_offset);
 			}
+			if (transition == TRANS_BACK) {
+				return sample_back_in_out(p_offset);
+			}
+			if (transition == TRANS_EXPO) {
+				return sample_expo_in_out(p_offset);
+			}
 			return p_offset < 0.5 ? sample_transition_in(p_offset * 2.0) * 0.5 : 0.5 + sample_transition_out(p_offset * 2.0 - 1.0) * 0.5;
 		case EASE_OUT_IN:
 			return p_offset < 0.5 ? sample_transition_out(p_offset * 2.0) * 0.5 : 0.5 + sample_transition_in(p_offset * 2.0 - 1.0) * 0.5;
@@ -257,10 +298,30 @@ double NativeEasingCurve::sample_transition_in(double p_offset) const {
 	switch (transition) {
 		case TRANS_SINE:
 			return 1.0 - std::cos(p_offset * PI * 0.5);
+		case TRANS_QUINT: {
+			const double squared = p_offset * p_offset;
+			return squared * squared * p_offset;
+		}
+		case TRANS_QUART: {
+			const double squared = p_offset * p_offset;
+			return squared * squared;
+		}
+		case TRANS_QUAD:
+			return p_offset * p_offset;
+		case TRANS_EXPO:
+			return p_offset == 0.0 ? 0.0 : std::pow(2.0, 10.0 * (p_offset - 1.0)) - 0.001;
 		case TRANS_CUBIC:
 			return p_offset * p_offset * p_offset;
 		case TRANS_ELASTIC:
 			return sample_elastic_in(p_offset);
+		case TRANS_CIRC:
+			return 1.0 - std::sqrt(std::max(0.0, 1.0 - p_offset * p_offset));
+		case TRANS_BOUNCE:
+			return 1.0 - sample_bounce_out(1.0 - p_offset);
+		case TRANS_BACK:
+			return p_offset * p_offset * ((BACK_OVERSHOOT + 1.0) * p_offset - BACK_OVERSHOOT);
+		case TRANS_SPRING:
+			return 1.0 - sample_spring_out(1.0 - p_offset);
 		case TRANS_LINEAR:
 		case TRANS_CUSTOM:
 			return p_offset;
@@ -272,12 +333,38 @@ double NativeEasingCurve::sample_transition_out(double p_offset) const {
 	switch (transition) {
 		case TRANS_SINE:
 			return std::sin(p_offset * PI * 0.5);
+		case TRANS_QUINT: {
+			const double shifted = p_offset - 1.0;
+			const double squared = shifted * shifted;
+			return squared * squared * shifted + 1.0;
+		}
+		case TRANS_QUART: {
+			const double shifted = p_offset - 1.0;
+			const double squared = shifted * shifted;
+			return 1.0 - squared * squared;
+		}
+		case TRANS_QUAD:
+			return -p_offset * (p_offset - 2.0);
+		case TRANS_EXPO:
+			return p_offset == 1.0 ? 1.0 : 1.001 * (1.0 - std::pow(2.0, -10.0 * p_offset));
 		case TRANS_CUBIC: {
 			const double shifted = p_offset - 1.0;
 			return shifted * shifted * shifted + 1.0;
 		}
 		case TRANS_ELASTIC:
 			return sample_elastic_out(p_offset);
+		case TRANS_CIRC: {
+			const double shifted = p_offset - 1.0;
+			return std::sqrt(std::max(0.0, 1.0 - shifted * shifted));
+		}
+		case TRANS_BOUNCE:
+			return sample_bounce_out(p_offset);
+		case TRANS_BACK: {
+			const double shifted = p_offset - 1.0;
+			return shifted * shifted * ((BACK_OVERSHOOT + 1.0) * shifted + BACK_OVERSHOOT) + 1.0;
+		}
+		case TRANS_SPRING:
+			return sample_spring_out(p_offset);
 		case TRANS_LINEAR:
 		case TRANS_CUSTOM:
 			return p_offset;
@@ -329,6 +416,50 @@ double NativeEasingCurve::sample_elastic_in_out(double p_offset) const {
 	}
 	normalized -= 1.0;
 	return amplitude * std::pow(2.0, -10.0 * normalized) * std::sin((normalized - phase) * (2.0 * PI) / in_out_period) * 0.5 + 1.0;
+}
+
+double NativeEasingCurve::sample_back_in_out(double p_offset) {
+	const double overshoot = BACK_OVERSHOOT * 1.525;
+	double normalized = p_offset * 2.0;
+	if (normalized < 1.0) {
+		return 0.5 * normalized * normalized * ((overshoot + 1.0) * normalized - overshoot);
+	}
+	normalized -= 2.0;
+	return 0.5 * (normalized * normalized * ((overshoot + 1.0) * normalized + overshoot) + 2.0);
+}
+
+double NativeEasingCurve::sample_expo_in_out(double p_offset) {
+	if (p_offset == 0.0 || p_offset == 1.0) {
+		return p_offset;
+	}
+	double normalized = p_offset * 2.0;
+	if (normalized < 1.0) {
+		return 0.5 * std::pow(2.0, 10.0 * (normalized - 1.0)) - 0.0005;
+	}
+	normalized -= 1.0;
+	return 0.5 * 1.0005 * (-std::pow(2.0, -10.0 * normalized) + 2.0);
+}
+
+double NativeEasingCurve::sample_bounce_out(double p_offset) {
+	if (p_offset < 1.0 / 2.75) {
+		return 7.5625 * p_offset * p_offset;
+	}
+	if (p_offset < 2.0 / 2.75) {
+		const double shifted = p_offset - 1.5 / 2.75;
+		return 7.5625 * shifted * shifted + 0.75;
+	}
+	if (p_offset < 2.5 / 2.75) {
+		const double shifted = p_offset - 2.25 / 2.75;
+		return 7.5625 * shifted * shifted + 0.9375;
+	}
+	const double shifted = p_offset - 2.625 / 2.75;
+	return 7.5625 * shifted * shifted + 0.984375;
+}
+
+double NativeEasingCurve::sample_spring_out(double p_offset) {
+	const double inverse = 1.0 - p_offset;
+	const double oscillation = std::sin(p_offset * PI * (0.2 + 2.5 * p_offset * p_offset * p_offset));
+	return (oscillation * std::pow(inverse, 2.2) + p_offset) * (1.0 + 1.2 * inverse);
 }
 
 double NativeEasingCurve::sample_custom(double p_offset) {

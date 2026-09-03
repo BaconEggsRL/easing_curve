@@ -14,8 +14,16 @@ const DROPDOWN_MAX_WIDTH := 120.0
 const NATIVE_TRANSITIONS := [
 	["Linear", NativeEasingCurve.TRANS_LINEAR],
 	["Sine", NativeEasingCurve.TRANS_SINE],
-	["Cubic", NativeEasingCurve.TRANS_CUBIC],
+	["Quint", NativeEasingCurve.TRANS_QUINT],
+	["Quart", NativeEasingCurve.TRANS_QUART],
+	["Quad", NativeEasingCurve.TRANS_QUAD],
+	["Expo", NativeEasingCurve.TRANS_EXPO],
 	["Elastic", NativeEasingCurve.TRANS_ELASTIC],
+	["Cubic", NativeEasingCurve.TRANS_CUBIC],
+	["Circ", NativeEasingCurve.TRANS_CIRC],
+	["Bounce", NativeEasingCurve.TRANS_BOUNCE],
+	["Back", NativeEasingCurve.TRANS_BACK],
+	["Spring", NativeEasingCurve.TRANS_SPRING],
 	["Custom", NativeEasingCurve.TRANS_CUSTOM],
 ]
 const NATIVE_EASES := [
@@ -649,16 +657,7 @@ func _match_curve_to_tween() -> void:
 
 func _get_matching_curve_trans() -> int:
 	if use_native_curve:
-		match tween_trans:
-			Tween.TRANS_LINEAR:
-				return NativeEasingCurve.TRANS_LINEAR
-			Tween.TRANS_SINE:
-				return NativeEasingCurve.TRANS_SINE
-			Tween.TRANS_ELASTIC:
-				return NativeEasingCurve.TRANS_ELASTIC
-			Tween.TRANS_CUBIC:
-				return NativeEasingCurve.TRANS_CUBIC
-		return NativeEasingCurve.TRANS_LINEAR
+		return int(tween_trans)
 
 	match tween_trans:
 		Tween.TRANS_LINEAR:

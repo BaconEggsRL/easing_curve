@@ -5,7 +5,7 @@
 ## Automated suites
 
 `test/runners/run_all_tests.ps1` is the sole source of truth for the explicit
-automated-suite manifest. It currently registers 18 suites: eight headless and
+automated-suite manifest. It currently registers 20 suites: ten headless and
 ten Editor-host. Their entrypoint scripts and `.uid` sidecars live under
 `test/scripts/`. Do not infer an automated suite or its mode from its filename.
 
@@ -16,8 +16,10 @@ ten Editor-host. Their entrypoint scripts and `.uid` sidecars live under
 - `easing_curve_manual_reorder_test.gd`
 - `easing_curve_transform_test.gd`
 - `easing_curve_v105_regression_test.gd`
+- `native_v2_smoke_test.gd`
 - `runtime_curve_updates_test.gd`
 - `serialization_transition_contract_test.gd`
+- `test_scene_curve_backend_test.gd`
 - `tween_equivalence_test.gd`
 
 ### Editor-host suites
@@ -58,7 +60,7 @@ a generated project under `test/_temp/runner` containing only the Easing Curve
 addon, test scripts, and test presets. The generated project enables only the
 Easing Curve plugin, so root-project development plugins and autoloads cannot
 affect product-test startup. An Editor import pass initializes its script-class
-cache, then the runner starts the 8 compatible suites with `--headless` and adds
+cache, then the runner starts the 10 compatible suites with `--headless` and adds
 `--editor` only for the 10 suites that require an Editor/Inspector host.
 
 Only after that command exits successfully with every suite passing, immediately
@@ -111,7 +113,7 @@ responses. It does not invoke real `git push`, tag mutation, or `gh` commands.
 
 ## Test-asset ownership
 
-Only the 18 scripts under `test/scripts/unit/` in the explicit runner manifest
+Only the 20 scripts under `test/scripts/unit/` in the explicit runner manifest
 above are release-gating automated suites. The following assets are
 intentionally documented by their observed repository role; none is registered
 by `test/runners/run_all_tests.ps1`.

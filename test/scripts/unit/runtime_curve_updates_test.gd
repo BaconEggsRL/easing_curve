@@ -65,6 +65,7 @@ func _test_legacy_resources_and_nested_changes() -> void:
 		scene_curve = instance.get("easing_curve") as EasingCurve
 	_expect(scene_curve != null, "Demo scene did not load its curve resource")
 	_expect(scene_curve.changed.is_connected(Callable(instance, "_on_easing_curve_changed")), "Demo does not restart for ordinary mode or parameter changes")
+	instance.set("use_native_curve", false)
 	instance.call("_capture_runtime_curves")
 	var runtime_scene_curve := instance.get("_runtime_easing_curve") as EasingCurve
 	_expect(runtime_scene_curve != null and runtime_scene_curve != scene_curve, "Demo animation did not capture an independent runtime curve")

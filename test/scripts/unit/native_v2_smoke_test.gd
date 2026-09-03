@@ -4,13 +4,7 @@ const LEGACY_CURVE_SCRIPT := preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve.gd"
 )
 const SAMPLE_COUNT := 256
-const TRANS_CUBIC := 2
-const TRANS_SINE := 1
-const TRANS_ELASTIC := 3
-const EASE_IN := 0
-const EASE_OUT := 1
-const EASE_IN_OUT := 2
-const EASE_OUT_IN := 3
+const TRANS_CUSTOM := 100
 
 
 func _init() -> void:
@@ -25,8 +19,11 @@ func _run() -> void:
 		return
 
 	_test_points_property_metadata()
+	_test_stable_enum_contract()
+	_test_invalid_property_contract()
 	_test_builtin_equivalence()
 	_test_custom_bezier_equivalence()
+	_test_point_ordering_contract()
 	_test_point_change_invalidates_compiled_segments()
 	_test_points_array_assignment()
 	_test_resource_round_trip()
@@ -34,7 +31,7 @@ func _run() -> void:
 
 
 func _test_points_property_metadata() -> void:
-	var curve := _new_native_curve(TRANS_CUBIC, EASE_OUT)
+	var curve := _new_native_curve(Tween.TRANS_CUBIC, Tween.EASE_OUT)
 	var points_property := {}
 	for property in curve.get_property_list():
 		if property[&"name"] == &"points":
@@ -47,22 +44,64 @@ func _test_points_property_metadata() -> void:
 	)
 
 
+func _test_stable_enum_contract() -> void:
+	var transitions := [
+		[NativeEasingCurve.TRANS_LINEAR, Tween.TRANS_LINEAR],
+		[NativeEasingCurve.TRANS_SINE, Tween.TRANS_SINE],
+		[NativeEasingCurve.TRANS_QUINT, Tween.TRANS_QUINT],
+		[NativeEasingCurve.TRANS_QUART, Tween.TRANS_QUART],
+		[NativeEasingCurve.TRANS_QUAD, Tween.TRANS_QUAD],
+		[NativeEasingCurve.TRANS_EXPO, Tween.TRANS_EXPO],
+		[NativeEasingCurve.TRANS_ELASTIC, Tween.TRANS_ELASTIC],
+		[NativeEasingCurve.TRANS_CUBIC, Tween.TRANS_CUBIC],
+		[NativeEasingCurve.TRANS_CIRC, Tween.TRANS_CIRC],
+		[NativeEasingCurve.TRANS_BOUNCE, Tween.TRANS_BOUNCE],
+		[NativeEasingCurve.TRANS_BACK, Tween.TRANS_BACK],
+		[NativeEasingCurve.TRANS_SPRING, Tween.TRANS_SPRING],
+	]
+	for transition_pair in transitions:
+		_expect(
+			transition_pair[0] == transition_pair[1],
+			"native transition ID %d does not match Tween ID %d" % transition_pair,
+		)
+	_expect(NativeEasingCurve.TRANS_CUSTOM == TRANS_CUSTOM, "custom transition ID changed")
+	_expect(NativeEasingCurve.EASE_IN == Tween.EASE_IN, "EASE_IN ID does not match Tween")
+	_expect(NativeEasingCurve.EASE_OUT == Tween.EASE_OUT, "EASE_OUT ID does not match Tween")
+	_expect(NativeEasingCurve.EASE_IN_OUT == Tween.EASE_IN_OUT, "EASE_IN_OUT ID does not match Tween")
+	_expect(NativeEasingCurve.EASE_OUT_IN == Tween.EASE_OUT_IN, "EASE_OUT_IN ID does not match Tween")
+
+
+func _test_invalid_property_contract() -> void:
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
+	curve.set(&"transition", 999)
+	_expect(curve.get(&"transition") == NativeEasingCurve.TRANS_CUBIC, "invalid transition was accepted")
+	curve.set(&"ease_type", 999)
+	_expect(curve.get(&"ease_type") == NativeEasingCurve.EASE_OUT, "invalid ease type was accepted")
+
+	curve.set(&"amplitude", 0.25)
+	_expect(is_equal_approx(curve.get(&"amplitude"), 1.0), "amplitude minimum is not 1.0")
+	curve.set(&"amplitude", 2.0)
+	curve.set(&"amplitude", NAN)
+	_expect(is_equal_approx(curve.get(&"amplitude"), 2.0), "non-finite amplitude was accepted")
+	curve.set(&"amplitude", INF)
+	_expect(is_equal_approx(curve.get(&"amplitude"), 2.0), "infinite amplitude was accepted")
+
+	curve.set(&"period", 0.0)
+	_expect(is_equal_approx(curve.get(&"period"), 0.01), "period minimum is not 0.01")
+	curve.set(&"period", 0.5)
+	curve.set(&"period", NAN)
+	_expect(is_equal_approx(curve.get(&"period"), 0.5), "non-finite period was accepted")
+	_expect(is_equal_approx(curve.call(&"sample", NAN), 0.0), "non-finite sample input is not deterministic")
+	_expect(is_equal_approx(curve.call(&"sample", INF), 0.0), "infinite sample input is not deterministic")
+
+	var point := _new_native_point(Vector2(0.25, 0.75))
+	point.set(&"position", Vector2(NAN, 0.5))
+	_expect(point.get(&"position") == Vector2(0.25, 0.75), "non-finite point position was accepted")
+
+
 func _test_builtin_equivalence() -> void:
-	var transitions := {
-		TRANS_CUBIC: Tween.TRANS_CUBIC,
-		TRANS_SINE: Tween.TRANS_SINE,
-		TRANS_ELASTIC: Tween.TRANS_ELASTIC,
-	}
-	var eases := {
-		EASE_IN: Tween.EASE_IN,
-		EASE_OUT: Tween.EASE_OUT,
-		EASE_IN_OUT: Tween.EASE_IN_OUT,
-		EASE_OUT_IN: Tween.EASE_OUT_IN,
-	}
-	for native_transition_value in transitions:
-		var native_transition := int(native_transition_value)
-		for native_ease_value in eases:
-			var native_ease := int(native_ease_value)
+	for native_transition in range(Tween.TRANS_SPRING + 1):
+		for native_ease in range(Tween.EASE_OUT_IN + 1):
 			var curve := _new_native_curve(native_transition, native_ease)
 			var max_error := 0.0
 			for index in range(SAMPLE_COUNT + 1):
@@ -72,8 +111,8 @@ func _test_builtin_equivalence() -> void:
 					1.0,
 					offset,
 					1.0,
-					transitions[native_transition],
-					eases[native_ease],
+					native_transition as Tween.TransitionType,
+					native_ease as Tween.EaseType,
 				)
 				max_error = maxf(max_error, absf(curve.call(&"sample", offset) - expected))
 			_expect(
@@ -87,7 +126,7 @@ func _test_builtin_equivalence() -> void:
 
 
 func _test_custom_bezier_equivalence() -> void:
-	var native_curve := _new_native_curve(TRANS_CUBIC, EASE_OUT)
+	var native_curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
 	native_curve.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
 	var legacy_curve := LEGACY_CURVE_SCRIPT.new()
 	legacy_curve.cubic_bezier(0.42, 0.0, 0.58, 1.0)
@@ -101,8 +140,33 @@ func _test_custom_bezier_equivalence() -> void:
 	_expect(max_error <= 0.000002, "native custom Bézier differs by %.9f" % max_error)
 
 
+func _test_point_ordering_contract() -> void:
+	var start := _new_native_point(Vector2(0.0, 0.0))
+	var middle := _new_native_point(Vector2(0.5, 0.8))
+	var end := _new_native_point(Vector2(1.0, 1.0))
+	var sorted := _new_native_curve(TRANS_CUSTOM, Tween.EASE_OUT)
+	var unsorted := _new_native_curve(TRANS_CUSTOM, Tween.EASE_OUT)
+	sorted.set(&"points", [start, middle, end])
+	unsorted.set(&"points", [end, start, middle])
+	for index in range(SAMPLE_COUNT + 1):
+		var offset := float(index) / SAMPLE_COUNT
+		_expect(
+			is_equal_approx(sorted.call(&"sample", offset), unsorted.call(&"sample", offset)),
+			"point order changed sampling at %.6f" % offset,
+		)
+
+	var duplicate_low := _new_native_point(Vector2(0.5, 0.2))
+	var duplicate_high := _new_native_point(Vector2(0.5, 0.8))
+	var duplicate_curve := _new_native_curve(TRANS_CUSTOM, Tween.EASE_OUT)
+	duplicate_curve.set(&"points", [start, duplicate_low, duplicate_high, end])
+	_expect(
+		is_equal_approx(duplicate_curve.call(&"sample", 0.5), 0.8),
+		"the last point at a duplicate x coordinate did not win",
+	)
+
+
 func _test_point_change_invalidates_compiled_segments() -> void:
-	var curve := _new_native_curve(TRANS_CUBIC, EASE_OUT)
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
 	curve.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
 	var before: float = curve.call(&"sample", 0.25)
 	var points: Array = curve.get(&"points")
@@ -113,7 +177,7 @@ func _test_point_change_invalidates_compiled_segments() -> void:
 
 
 func _test_points_array_assignment() -> void:
-	var curve := _new_native_curve(TRANS_CUBIC, EASE_OUT)
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
 	curve.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
 	var updated_points: Array = curve.get(&"points")
 	var midpoint := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
@@ -132,7 +196,7 @@ func _test_points_array_assignment() -> void:
 
 
 func _test_resource_round_trip() -> void:
-	var curve := _new_native_curve(TRANS_CUBIC, EASE_OUT)
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
 	curve.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
 	var expected: float = curve.call(&"sample", 0.37)
 	var path := "res://test/_temp/native_v2_curve.tres"
@@ -152,3 +216,9 @@ func _new_native_curve(transition: int, ease_type: int) -> Resource:
 	curve.set(&"transition", transition)
 	curve.set(&"ease_type", ease_type)
 	return curve
+
+
+func _new_native_point(position: Vector2) -> Resource:
+	var point := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+	point.set(&"position", position)
+	return point

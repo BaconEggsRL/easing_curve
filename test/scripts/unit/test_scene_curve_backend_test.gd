@@ -1,7 +1,7 @@
 extends "res://test/scripts/support/test_case.gd"
 
 const TEST_SCENE := preload("res://addons/easing_curve/_test_scene/test.tscn")
-const NATIVE_TRANSITION_COUNT := 5
+const NATIVE_TRANSITION_COUNT := 13
 const SAMPLE_OFFSET := 0.37
 
 
@@ -31,6 +31,12 @@ func _run() -> void:
 		transition_dropdown.item_count == NATIVE_TRANSITION_COUNT,
 		"native transition options are incomplete",
 	)
+	for transition in range(Tween.TRANS_SPRING + 1):
+		test_scene.set("tween_trans", transition)
+		_expect(
+			test_scene.call("_get_matching_curve_trans") == transition,
+			"Tween transition %d does not map to the native equivalent" % transition,
+		)
 
 	test_scene.set("use_native_curve", false)
 	await process_frame

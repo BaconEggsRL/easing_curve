@@ -22,23 +22,44 @@ cannot bypass cache invalidation. Assign a changed array back to `points`, or
 use `add_point()` / `remove_point()`. Editing a point Resource in place remains
 supported and recompiles the affected curve through its `changed` signal.
 
+The native transition and ease IDs intentionally match Godot's
+`Tween.TransitionType` and `Tween.EaseType` values. `TRANS_CUSTOM` uses the
+separate stable value `100`. Invalid enum assignments and non-finite numeric
+inputs are rejected. Custom points are sampled in ascending x order; when
+multiple points share an x coordinate, the last point in the assigned array
+wins.
+
+This freezes a different numeric layout from the pre-contract spike. Native
+resources saved with the experimental transition values `2` through `4` must
+be recreated or explicitly reassigned; those values are ambiguous and cannot
+be migrated safely.
+
 Run the smoke test from the project root after building:
 
 ```powershell
 $env:EASING_CURVE_GODOT_PATH --headless --path . --log-file test/_temp/native_v2_smoke.log --script test/scripts/unit/native_v2_smoke_test.gd
 ```
 
-## Initial result
+## Current result
 
 Godot 4.7.1 on Windows, 200,000 samples per trial, median of nine alternating
 trials:
 
 | Case | Native | Comparison | Result |
 | --- | ---: | ---: | ---: |
-| Cubic Out | 4.886 ms | Tween 12.950 ms | 2.65x faster |
-| Sine Out | 5.156 ms | Tween 21.974 ms | 4.26x faster |
-| Elastic Out | 8.022 ms | Tween 32.397 ms | 4.04x faster |
-| Custom Bézier | 9.497 ms | GDScript 319.684 ms | 33.66x faster |
+| Linear Out | 5.110 ms | Tween 9.659 ms | 1.89x faster |
+| Sine Out | 5.440 ms | Tween 18.311 ms | 3.37x faster |
+| Quint Out | 5.165 ms | Tween 10.998 ms | 2.13x faster |
+| Quart Out | 5.143 ms | Tween 10.952 ms | 2.13x faster |
+| Quad Out | 5.148 ms | Tween 9.826 ms | 1.91x faster |
+| Expo Out | 6.869 ms | Tween 23.805 ms | 3.47x faster |
+| Elastic Out | 8.167 ms | Tween 29.026 ms | 3.55x faster |
+| Cubic Out | 5.106 ms | Tween 9.708 ms | 1.90x faster |
+| Circ Out | 5.137 ms | Tween 10.163 ms | 1.98x faster |
+| Bounce Out | 5.182 ms | Tween 9.661 ms | 1.86x faster |
+| Back Out | 5.077 ms | Tween 9.713 ms | 1.91x faster |
+| Spring Out | 7.411 ms | Tween 30.764 ms | 4.15x faster |
+| Custom Bézier | 9.645 ms | GDScript 316.670 ms | 32.83x faster |
 
 Run `test/scripts/performance/native_v2_vs_tween_benchmark.gd` to reproduce
 the comparison. Tween is used only as the benchmark and equivalence oracle;
@@ -49,4 +70,6 @@ the native implementation owns its equations and Bézier solver.
 - Windows x86_64 binaries only in the current extension manifest.
 - Point data includes position and two control handles, without v1's editor
   lock and handle-mode policies.
-- No legacy resource migration, graph editor, or arbitrary Callable mode yet.
+- The standard Tween transition set and all four ease modes are implemented;
+  extended legacy functions and arbitrary Callable mode are not yet native.
+- No legacy resource migration or graph editor yet.

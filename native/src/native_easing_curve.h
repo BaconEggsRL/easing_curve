@@ -15,18 +15,26 @@ class NativeEasingCurve : public Resource {
 
 public:
 	enum Transition {
-		TRANS_LINEAR,
-		TRANS_SINE,
-		TRANS_CUBIC,
-		TRANS_ELASTIC,
-		TRANS_CUSTOM,
+		TRANS_LINEAR = 0,
+		TRANS_SINE = 1,
+		TRANS_QUINT = 2,
+		TRANS_QUART = 3,
+		TRANS_QUAD = 4,
+		TRANS_EXPO = 5,
+		TRANS_ELASTIC = 6,
+		TRANS_CUBIC = 7,
+		TRANS_CIRC = 8,
+		TRANS_BOUNCE = 9,
+		TRANS_BACK = 10,
+		TRANS_SPRING = 11,
+		TRANS_CUSTOM = 100,
 	};
 
 	enum EaseType {
-		EASE_IN,
-		EASE_OUT,
-		EASE_IN_OUT,
-		EASE_OUT_IN,
+		EASE_IN = 0,
+		EASE_OUT = 1,
+		EASE_IN_OUT = 2,
+		EASE_OUT_IN = 3,
 	};
 
 private:
@@ -62,6 +70,10 @@ private:
 	double sample_elastic_in(double p_offset) const;
 	double sample_elastic_out(double p_offset) const;
 	double sample_elastic_in_out(double p_offset) const;
+	static double sample_back_in_out(double p_offset);
+	static double sample_expo_in_out(double p_offset);
+	static double sample_bounce_out(double p_offset);
+	static double sample_spring_out(double p_offset);
 
 	static double bezier(double p0, double p1, double p2, double p3, double p_t);
 	static double bezier_derivative(double p0, double p1, double p2, double p3, double p_t);
