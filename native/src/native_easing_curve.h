@@ -63,7 +63,7 @@ private:
 		double y3;
 	};
 
-	Transition transition = TRANS_CUBIC;
+	Transition transition = TRANS_LINEAR;
 	EaseType ease_type = EASE_IN;
 	double amplitude = 1.0;
 	double period = 0.3;

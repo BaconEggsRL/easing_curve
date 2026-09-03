@@ -92,6 +92,7 @@ func _test_stable_enum_contract() -> void:
 
 func _test_default_contract() -> void:
 	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	_expect(curve.get(&"transition") == NativeEasingCurve.TRANS_LINEAR, "new native curve does not default to Linear")
 	_expect(curve.get(&"ease_type") == NativeEasingCurve.EASE_IN, "new native curve does not default to Ease In")
 
 

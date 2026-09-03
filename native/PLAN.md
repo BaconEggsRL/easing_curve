@@ -37,10 +37,10 @@ Architecture:
 
 | Area | Current state |
 |---|---|
-| Branch | `native-v2-spike` at `b6c0578` plus the current Ease In default change |
+| Branch | `native-v2-spike` at `fd68f0d` plus the current Linear default change |
 | Plan tracking | This file is the mutable source of truth for migration status and manual evidence |
 | Automated tests | All 21 suites pass under Godot 4.7.1 |
-| Native smoke tests | 472 checks pass |
+| Native smoke tests | 473 checks pass |
 | Legacy runtime tests | 1,380 checks pass |
 | Serialization tests | 902 checks pass |
 | Windows export | 471,040-byte release DLL loads built-in and custom Native resources in an isolated exported project |

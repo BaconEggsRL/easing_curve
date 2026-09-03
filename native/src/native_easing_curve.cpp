@@ -134,7 +134,7 @@ void NativeEasingCurve::_bind_methods() {
 
 NativeEasingCurve::NativeEasingCurve() {
 	cubic_bezier(1.0 / 3.0, 0.0, 2.0 / 3.0, 1.0);
-	transition = TRANS_CUBIC;
+	transition = TRANS_LINEAR;
 }
 
 NativeEasingCurve::~NativeEasingCurve() {
