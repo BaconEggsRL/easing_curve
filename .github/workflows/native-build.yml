@@ -20,10 +20,13 @@ jobs:
       - name: Build Windows debug and release
         shell: pwsh
         run: ./native/build_native.ps1 -Platform windows -Target all
+      - name: Validate Windows manifest contract
+        shell: pwsh
+        run: ./native/validate_native_manifest.ps1 -Platform windows
       - uses: actions/upload-artifact@v4
         with:
           name: easing-curve-native-windows-x86_64
-          path: addons/easing_curve/bin/*.dll
+          path: addons/easing_curve/bin/*windows*.dll
 
   web:
     runs-on: ubuntu-latest
@@ -35,13 +38,43 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install scons
-      - uses: mymindstorm/setup-emsdk@v14
+      - uses: emscripten-core/setup-emsdk@v14
         with:
           version: 3.1.62
       - name: Build Web debug and release
         shell: pwsh
         run: ./native/build_native.ps1 -Platform web -Target all
+      - name: Validate non-threaded Web manifest contract
+        shell: pwsh
+        run: ./native/validate_native_manifest.ps1 -Platform web
       - uses: actions/upload-artifact@v4
         with:
           name: easing-curve-native-web-wasm32
-          path: addons/easing_curve/bin/*.wasm
+          path: addons/easing_curve/bin/*web*.nothreads.wasm
+
+  web-runtime:
+    needs: [windows, web]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.1
+          use-dotnet: false
+          include-templates: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: easing-curve-native-windows-x86_64
+          path: addons/easing_curve/bin
+      - uses: actions/download-artifact@v4
+        with:
+          name: easing-curve-native-web-wasm32
+          path: addons/easing_curve/bin
+      - name: Export and run Native Web debug and release fixtures
+        shell: pwsh
+        run: |
+          $godotPath = (Get-Command godot -ErrorAction Stop).Source
+          ./test/runners/run_native_web_export_test.ps1 -SkipBuild -GodotPath $godotPath

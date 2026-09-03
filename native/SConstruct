@@ -1,5 +1,17 @@
 #!/usr/bin/env python
 
+import os
+import shutil
+
+
+if ARGUMENTS.get("platform") == "web" and shutil.which("emcc") is None:
+    emsdk_root = os.environ.get("EMSDK")
+    if emsdk_root:
+        emscripten_bin = os.path.join(emsdk_root, "upstream", "emscripten")
+        emcc_name = "emcc.bat" if os.name == "nt" else "emcc"
+        if os.path.isfile(os.path.join(emscripten_bin, emcc_name)):
+            os.environ["PATH"] = emscripten_bin + os.pathsep + os.environ.get("PATH", "")
+
 if "build_profile" not in ARGUMENTS:
     ARGUMENTS["build_profile"] = "build_profile.json"
 

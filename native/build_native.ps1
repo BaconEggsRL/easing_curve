@@ -31,21 +31,47 @@ if ($apiVersion -ne "4.4.1-stable") {
 $platforms = if ($Platform -eq "all") { @("windows", "web") } else { @($Platform) }
 $targets = if ($Target -eq "all") { @("template_debug", "template_release") } else { @($Target) }
 
+function Get-NativeOutputPath {
+	param(
+		[string]$BuildPlatform,
+		[string]$BuildTarget,
+		[string]$BuildArchitecture
+	)
+
+	$threadSuffix = if ($BuildPlatform -eq "web") { ".nothreads" } else { "" }
+	$extension = if ($BuildPlatform -eq "windows") { "dll" } else { "wasm" }
+	$fileName = "libeasing_curve_native.{0}.{1}.{2}{3}.{4}" -f (
+		$BuildPlatform,
+		$BuildTarget,
+		$BuildArchitecture,
+		$threadSuffix,
+		$extension
+	)
+	return Join-Path $outputDirectory $fileName
+}
+
 Push-Location $nativeRoot
 try {
 	foreach ($currentPlatform in $platforms) {
 		foreach ($currentTarget in $targets) {
 			$currentArchitecture = if ($currentPlatform -eq "web") { "wasm32" } else { $Architecture }
 			Write-Host "Building $currentPlatform $currentTarget $currentArchitecture against Godot API $apiVersion..."
-			& scons "platform=$currentPlatform" "target=$currentTarget" "arch=$currentArchitecture"
+			$sconsArguments = @(
+				"platform=$currentPlatform",
+				"target=$currentTarget",
+				"arch=$currentArchitecture"
+			)
+			if ($currentPlatform -eq "web") {
+				$sconsArguments += "threads=no"
+			}
+			& scons @sconsArguments
 			if ($LASTEXITCODE -ne 0) {
 				throw "Native build failed for $currentPlatform/$currentTarget/$currentArchitecture (exit $LASTEXITCODE)."
 			}
-			$extension = if ($currentPlatform -eq "windows") { "dll" } else { "wasm" }
-			$output = Join-Path $outputDirectory (
-				"libeasing_curve_native.{0}.{1}.{2}.{3}" -f
-				$currentPlatform, $currentTarget, $currentArchitecture, $extension
-			)
+			$output = Get-NativeOutputPath `
+				-BuildPlatform $currentPlatform `
+				-BuildTarget $currentTarget `
+				-BuildArchitecture $currentArchitecture
 			if (-not (Test-Path -LiteralPath $output -PathType Leaf)) {
 				throw "Native build reported success but its output is missing: $output"
 			}

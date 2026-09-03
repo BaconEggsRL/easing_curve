@@ -23,14 +23,16 @@ release variants from the repository root:
 ./native/build_native.ps1 -Platform web -Target all
 ```
 
-Web builds require Emscripten on `PATH`. The Web preset is non-threaded and has
-Extension Support enabled.
+Web builds require Emscripten 3.1.62. The build script resolves an activated
+`EMSDK` toolchain when `emcc` is not already on `PATH`. The Web artifacts are
+explicitly non-threaded, and the export preset must have Extension Support
+enabled and thread support disabled. Both debug and release manifest entries
+were restored after isolated browser runtime validation.
 
-Web library entries are intentionally absent from the extension manifest until
-both WASM variants have been built and runtime-tested. A legacy-only Web project
-can export without Native, but a scene or resource containing serialized Native
-types cannot fall back: the matching extension must load before Godot can
-deserialize `NativeEasingCurve` or `NativeEasingCurvePoint`.
+A legacy-only Web project can export without Native, but a scene or resource
+containing serialized Native types cannot fall back: the matching extension
+must load before Godot can deserialize `NativeEasingCurve` or
+`NativeEasingCurvePoint`.
 
 Until the Windows debug artifact passes local security validation, editor
 sessions use the verified release DLL through the generic `windows.x86_64`
@@ -95,6 +97,8 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_godot.ps1 --headless --path . --script test/scripts/unit/native_v2_smoke_test.gd
 ./test/runners/run_native_runtime_benchmark.ps1
 ./test/runners/run_native_release_export_test.ps1
+./native/validate_native_manifest.ps1 -Platform all
+./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
 The benchmark reports median, median absolute deviation, and raw values for all
@@ -111,16 +115,16 @@ calls Tween, GDScript, or a Callable.
 | Deterministic modes and transforms | Pass | No follow-up from this run. |
 | Custom editing and ownership | Partial | Handle modes and ordinary point operations worked. Force-linear and point-lock controls are not exposed by the current test/editor UI. |
 | Save, reload, and coexistence | Partial | Observed state round-tripped, but force-linear and locks require editor integration before manual verification is complete. |
-| Web export with Native resource | Blocked | Without a wasm32 extension, Godot cannot instantiate `NativeEasingCurvePoint` while loading the exported test scene. |
+| Web export with Native resource | Automated pass; manual rerun pending | Isolated debug and release exports loaded, sampled, and deep-copied built-in and custom Native resources in headless Chrome. Rerun the user-facing test scene before final release qualification. |
 
-The Web failure is not solved by silently selecting the legacy backend: that is
-safe only when the exported project contains no serialized Native resources.
-Native Web qualification now precedes further release claims.
+The original Web failure was caused by the absent wasm32 library. The validated
+manifest now loads the matching non-threaded extension; no legacy substitution
+is used for serialized Native resources.
 
 ## Remaining release work
 
-- Build and validate non-threaded Web debug/release WASM libraries, then restore
-  only the verified manifest entries.
+- Run the Web build/preflight and browser-runtime jobs in GitHub Actions and
+  retain their artifacts.
 - Finish generated, CSS, and extended Bounce representations.
 - Complete the remaining Native point-state edge cases and curve-level snapshots.
 - Retarget the existing editor to the backend foundation and add Native Inspector/graph support.

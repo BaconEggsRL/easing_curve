@@ -14,7 +14,9 @@ addons/godot_ai_tunnel/tunnel_config.json
 
 # Native v2 spike build products
 /native/.sconsign.dblite
+/native/.toolchains/
 /native/src/*.obj
+/native/src/*.o
 /native/src/*.os
 /native/src/*.obj.import
 /addons/easing_curve/bin/*.dll
