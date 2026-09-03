@@ -9,6 +9,9 @@ It is not deprecated. A future deprecation label is conditional on full Native
 runtime, editor, serialization, platform, test, and release qualification, and
 would begin a compatibility period rather than remove the legacy classes.
 
+See [PLAN.md](PLAN.md) for milestone status, the manual smoke-test checklist,
+and the prioritized next implementation tranche.
+
 ## Build contract
 
 The `godot-cpp` submodule is pinned to `godot-4.4.1-stable`. The extension

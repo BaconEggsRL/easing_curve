@@ -1,5 +1,10 @@
 # Native Easing Curve Migration and Conditional Legacy Deprecation Plan
 
+> Living plan and progress tracker. Last updated: 2026-09-03.
+>
+> Status values: **Verified**, **In progress**, **Blocked**, and **Not started**.
+> A milestone is **Verified** only when every acceptance condition has evidence.
+
 ## 1. Executive assessment
 
 Maintain two independent public APIs while the Native implementation matures:
@@ -32,39 +37,48 @@ Architecture:
 
 | Area | Current state |
 |---|---|
-| Branch | `native-v2-spike` at `b52eaa7` |
-| Working tree | User-authored change exists in `res://addons/easing_curve/_test_scene/test.tscn`; implementation must preserve it |
-| Automated tests | All 20 suites pass under Godot 4.7.1 |
-| Native smoke tests | 369 checks pass |
+| Branch | `native-v2-spike` at `d49b4e0` plus the current plan-tracking edits |
+| Plan tracking | This file is the mutable source of truth for migration status and manual evidence |
+| Automated tests | All 21 suites pass under Godot 4.7.1 |
+| Native smoke tests | 471 checks pass |
 | Legacy runtime tests | 1,380 checks pass |
 | Serialization tests | 902 checks pass |
-| Windows export | Release DLL loads built-in and custom Native resources in an isolated exported project |
+| Windows export | 471,040-byte release DLL loads built-in and custom Native resources in an isolated exported project |
+| Native ABI | `godot-cpp` is pinned to `godot-4.4.1-stable`; one release DLL loads under Godot 4.4.1, 4.5.1, 4.6.1, and 4.7.1 |
+| Legacy fallback | Complete legacy addon loads, samples, and serializes in an isolated project with no Native manifest or binary |
 | Native standard set | All 12 Godot Tween transitions implemented directly in C++ |
+| Native deterministic modes | Constant, Step, Power, Physics Spring, parameterized Back/Elastic/Spring, reverse, and invert are implemented directly in C++ |
+| Native Callable policy | Explicit point baking is implemented; no Native sampling path invokes a Callable |
 | Native custom solver | Compiled segments, sorting, monotonic controls, Newton/binary fallback, duplicate-X handling, and locality cache implemented |
-| Ownership | Point-array container ownership and deep runtime duplication are implemented |
-| Change propagation | Point changes invalidate Native compiled state; removed points disconnect |
-| Native performance | Standard transitions are approximately 1.9–4.2× faster than Tween |
-| Custom performance | Native custom Bézier is approximately 34× faster than legacy custom |
+| Ownership | Isolated point-array containers, indexed topology mutation, point identity preservation, and deep runtime duplication are implemented |
+| Point state | Five handle modes, locks, force-linear flags, and atomic point/curve snapshots are implemented |
+| Change propagation | Point changes invalidate Native compiled state; removed points disconnect; atomic restore emits one curve-level change |
+| Native performance | Standard transitions are approximately 1.8–4.1× faster than Tween |
+| Function performance | Native deterministic function modes are approximately 63–103× faster than legacy |
+| Custom performance | Native custom Bézier is approximately 43–136× faster than legacy across 2-, 9-, and 65-point workloads |
+| Performance regression gate | All 27 baseline cases pass the median/MAD noise-aware comparison |
+| Editor boundary | Narrow legacy/native backend foundation and capability discovery are implemented and covered by 16 contract checks |
+| Build automation | Pinned Windows/Web build script and GitHub Actions workflow are present; Windows release path is locally verified |
 | Legacy status | Existing `EasingCurve` remains functional and comprehensively tested |
 
 ### Partially complete
 
-- Native format versioning exists but is not a stable production migration boundary.
-- Native points lack handle modes, locks, and force-linear behavior.
-- Windows binaries build locally but are ignored and absent from clean archives.
-- Native benchmarks do not cover every plugin mode, mutation path, point count, or editor workload.
+- Native format version 2 and frozen IDs exist, but production migration behavior still needs explicit old/future-version policy and fixtures.
+- Point parity covers the core state matrix, but remaining graph edge cases and full legacy differential coverage are incomplete.
+- Windows release binaries build locally, but debug builds are blocked on the reference machine by Windows Security error 225.
+- Web build entries and CI exist, but Emscripten is unavailable locally and neither Web build nor browser runtime has been verified.
+- Native benchmarks cover 27 runtime cases but not every mode, signal/compilation path, or editor workload.
 - The test scene can switch resource types, but the production editor cannot.
+- The editor adapter is a foundation only; the production editor still uses concrete legacy types.
 
 ### Missing
 
-- Stable Godot 4.4-targeted native ABI.
-- WebAssembly builds and browser runtime validation.
-- Fail-soft legacy operation when Native is absent.
-- Native plugin transition parity.
-- Shared editor backend adapters.
+- Verified Windows debug artifact and editor hot-reload workflow.
+- WebAssembly build and browser runtime/export validation.
+- Generated Jitter/Irregular modes, CSS modes, and extended Bounce parameters.
 - Full Native graph, Inspector, preset, preview, and Undo/Redo support.
 - Explicit optional conversion between resource types.
-- Reproducible native build, package, and release CI.
+- Exact-ZIP allowlist packaging, checksums, metadata, and clean-project tests.
 - Native support for the complete legacy platform matrix.
 - Evidence sufficient to consider legacy deprecation.
 
@@ -173,31 +187,31 @@ Legacy must not depend on Native classes or binaries.
 |---|---|---|---|---|
 | Custom Bézier | Complete | Sampling complete | Editing parity | Yes |
 | Standard Tween set | Complete | Complete | Differential tests | Yes |
-| Constant | Complete | Missing | Native equation | Yes |
-| Power | Complete | Missing | Native equation | Yes |
-| Step | Complete | Missing | Native equation | Yes |
-| Back parameters | Complete | Default only | Native overshoot | Yes |
-| Elastic parameters | Complete | Partial | Complete parameters | Yes |
+| Constant | Complete | Complete | Differential/manual verification | Yes |
+| Power | Complete | Complete | Differential/manual verification | Yes |
+| Step | Complete | Complete | Differential/manual verification | Yes |
+| Back parameters | Complete | Overshoot implemented | Complete remaining metadata and edge cases | Yes |
+| Elastic parameters | Complete | Amplitude/period implemented | Complete remaining metadata and edge cases | Yes |
 | Bounce parameters | Complete | Standard only | Extended form | Yes |
-| Spring parameters | Complete | Standard only | Extended form | Yes |
-| Physics Spring | Complete | Missing | Native equation | Yes |
+| Spring parameters | Complete | Frequency/decay implemented | Complete remaining metadata and edge cases | Yes |
+| Physics Spring | Complete | Complete | Differential/manual verification | Yes |
 | Jitter/Irregular | Complete | Missing | Generated Native data | Yes |
 | CSS Linear | Complete | Missing | Parser and compiled data | Yes |
 | CSS Cubic Bézier | Complete | Missing | Parser and solver | Yes |
-| Reverse/invert | Complete | Missing | Native transform | Yes |
-| Arbitrary Callable | Live runtime support | Bake only | Explicit baking | Approved replacement |
+| Reverse/invert | Complete | Complete | Manual/editor verification | Yes |
+| Arbitrary Callable | Live runtime support | Explicit point baking implemented | Bake UI and user acceptance | Approved replacement |
 | Point geometry | Complete | Complete | Extended mutation | Yes |
-| Handle modes | Complete | Missing | Port five modes | Yes |
-| Locks/force-linear | Complete | Missing | Persist and enforce | Yes |
-| Deep runtime copy | Complete | Core complete | Include all fields | Yes |
+| Handle modes | Complete | Five modes implemented | Complete edge-case differential tests | Yes |
+| Locks/force-linear | Complete | Persisted and enforced | Complete editor verification | Yes |
+| Deep runtime copy | Complete | Complete for current fields | Extend with each new field | Yes |
 | Inspector | Complete | Not integrated | Shared adapter | Yes |
 | Graph editing | Complete | Not integrated | Shared adapter | Yes |
 | Presets/preview/save | Complete | Not integrated | Shared adapter | Yes |
 | Undo/Redo | Complete | Not integrated | Native snapshots | Yes |
-| Windows | Complete | Runtime proof | Reproducible package | Yes |
-| Web | Complete | Missing | wasm32 build | Yes |
+| Windows | Complete | Release runtime/export proof | Debug proof and reproducible package | Yes |
+| Web | Complete | Build configuration only | wasm32 build and browser export proof | Yes |
 | Linux/macOS/Android | Legacy available | Missing | Deferred initially | Required or explicitly excepted |
-| Packaging/CI | Legacy scripts exist | Missing | Windows/Web pipeline | Full supported matrix |
+| Packaging/CI | Legacy scripts exist | Build workflow present | Execute builds and add exact-ZIP pipeline | Full supported matrix |
 | Stable field use | Established | Unproven | Initial release evidence | One stable release cycle |
 
 ## 6. Architecture decisions
@@ -309,6 +323,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-01 — Toolchain, platforms, and fallback feasibility
 
+**Status:** **In progress.** Windows release, Godot 4.4–4.7 ABI loading, and legacy-only fallback are verified. Windows debug is blocked by Windows Security error 225. Web build/runtime remains unverified.
+
 **Goal:** Prove Godot 4.4 compatibility, Windows/Web builds, and legacy-only fallback.
 
 **Implementation:**
@@ -325,6 +341,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 **Complexity:** Medium.
 
 ### NATIVE-02 — Freeze independent public contracts
+
+**Status:** **In progress.** Native IDs, format version 2, indexed point APIs, atomic snapshots, and the initial adapter contract are implemented. Legacy reflection fixtures, conversion-result contracts, and production migration behavior remain.
 
 **Goal:** Stabilize both APIs and Native format version 2.
 
@@ -344,6 +362,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-03 — Expand performance baselines
 
+**Status:** **In progress.** Twenty-seven runtime cases, raw trials, median/MAD reporting, and a noise-aware gate are implemented. Complete ease coverage, signal/compilation amplification, and editor workloads remain.
+
 **Goal:** Establish regression gates for both implementations.
 
 **Coverage:**
@@ -361,6 +381,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 **Complexity:** Medium.
 
 ### NATIVE-04 — Complete Native point parity
+
+**Status:** **In progress.** Five handle modes, locks, force-linear state, indexed topology mutation, identity-preserving atomic state restore, serialization, and deep copy are implemented. Remaining graph edge cases and full legacy differential coverage must close before acceptance.
 
 **Goal:** Support every existing graph mutation safely.
 
@@ -380,6 +402,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-05 — Complete deterministic Native transitions
 
+**Status:** **In progress.** Constant, Power, Step, Physics Spring, parameterized Back/Elastic/Spring, and reverse/invert are implemented and differentially tested. Extended Bounce, complete metadata, and remaining edge cases are outstanding.
+
 **Goal:** Port all equation-based modes.
 
 **Implementation:**
@@ -396,6 +420,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 **Complexity:** Large.
 
 ### NATIVE-06 — Generated, CSS, and Callable-bake support
+
+**Status:** **In progress.** Callable-to-points baking is implemented and verified not to retain callbacks. Jitter, Irregular, CSS Linear, and CSS Cubic Bézier remain.
 
 **Goal:** Complete remaining Native runtime modes without per-sample callbacks.
 
@@ -415,6 +441,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-07 — Extract the shared editor boundary
 
+**Status:** **In progress.** The narrow backend base, factory, capability discovery, Legacy adapter, Native adapter foundation, and contract tests exist. No production editor workflow has been retargeted yet.
+
 **Goal:** Decouple the existing editor from concrete legacy types without changing its behavior.
 
 **Implementation:**
@@ -433,6 +461,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-08 — Add full Native editor support
 
+**Status:** **Not started.**
+
 **Goal:** Make Native resources first-class in the shared editor.
 
 **Implementation:**
@@ -450,6 +480,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 **Complexity:** Very large.
 
 ### NATIVE-09 — Optional bidirectional conversion
+
+**Status:** **Not started.**
 
 **Goal:** Let users switch resource types without forced migration.
 
@@ -470,6 +502,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-10 — Final runtime and editor certification
 
+**Status:** **Not started.**
+
 **Goal:** Certify the initial Native implementation.
 
 **Acceptance:**
@@ -485,6 +519,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 **Complexity:** Medium.
 
 ### NATIVE-11 — Reproducible CI and dual-API packaging
+
+**Status:** **In progress.** Pinned build automation and Windows/Web build jobs exist. Exact-ZIP staging, checksums, metadata, artifact installation, and clean ZIP validation remain.
 
 **Goal:** Produce one tested addon containing both APIs.
 
@@ -504,6 +540,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-12 — Initial dual-API release
 
+**Status:** **Not started.**
+
 **Goal:** Release Native for Windows and Web without deprecating legacy.
 
 **Policy:**
@@ -520,6 +558,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 **Complexity:** Medium.
 
 ### NATIVE-13 — Full-coverage qualification
+
+**Status:** **Not started.**
 
 **Goal:** Raise Native from initial-release quality to the same or better overall standard as legacy.
 
@@ -538,6 +578,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 **Complexity:** Very large.
 
 ### NATIVE-14 — Conditional legacy deprecation
+
+**Status:** **Not started and not authorized.** This milestone still requires all gates plus explicit owner approval.
 
 **Goal:** Label `EasingCurve` deprecated only after NATIVE-13 is accepted.
 
@@ -567,17 +609,133 @@ Removal is not included in NATIVE-14. If considered later, it requires:
 - A recovery path for archived projects.
 - Independent release and rollback plans.
 
-## 8. Recommended first three milestones
+## 8. Manual user smoke test — first production-grade tranche
 
-Begin with:
+This smoke test verifies visible behavior and resource persistence that headless tests cannot fully establish. It is deliberately shorter than the automated matrix. Run it in a clean editor session before starting the next implementation tranche.
 
-1. **NATIVE-01 — Toolchain, platforms, and fallback feasibility**
-2. **NATIVE-02 — Freeze independent public contracts**
-3. **NATIVE-03 — Expand performance baselines**
+### Preconditions
 
-These establish whether one package can provide a dependable backup API, whether Native has a stable independent contract, and whether subsequent work can be measured reliably.
+1. Preserve or commit unrelated work before testing.
+2. Use Godot 4.7.1 and open this repository as the project.
+3. Build the editor library with:
 
-## 9. Definition of Done
+   ```powershell
+   ./native/build_native.ps1 -Platform windows -Target template_debug
+   ```
+
+4. Do not disable security software if the build reports Windows error 225. Record that as **Blocked: debug artifact** and use a trusted release artifact only if it has already been approved for local testing.
+5. In the Godot Output panel, confirm there are no missing-library, missing-class, parse, or resource-load errors.
+6. Confirm **Create New Resource** offers all four public classes: `EasingCurve`, `EasingCurvePoint`, `NativeEasingCurve`, and `NativeEasingCurvePoint`.
+
+### A. Standard transition parity
+
+1. Open `res://addons/easing_curve/_test_scene/test.tscn`.
+2. Select the root `TestScene`; confirm `Use Native Curve` is enabled and both Native and legacy resource properties are present.
+3. Run the main scene and enable **Match Tween**.
+4. Test every standard transition once with **Out** easing: Linear, Sine, Quint, Quart, Quad, Expo, Elastic, Cubic, Circ, Bounce, Back, and Spring.
+5. Test Sine, Elastic, Back, and Spring with all four ease modes.
+6. Toggle **Play Reverse**, then press **Restart** for at least Sine, Bounce, Back, and Spring.
+
+Pass when the Native and Tween markers start and finish together, remain visually coincident except for negligible frame/render noise, and show no jump, stall, NaN position, crash, or Output error.
+
+### B. Native deterministic modes and transforms
+
+For each case below, stop the scene, edit the assigned `Native Curve` resource in the Inspector, run again, and observe at least two complete cycles:
+
+- Constant with a non-default value.
+- Step with 5 steps, then toggle its from-start behavior.
+- Power with exponents below and above 1.
+- Physics Spring with visibly different stiffness/damping values.
+- Back with non-default overshoot.
+- Elastic with non-default amplitude/period.
+- Spring with non-default frequency/decay.
+- Reverse and invert independently, then together.
+
+Pass when each parameter causes a stable, repeatable, visibly appropriate change, endpoints remain correct for the selected transform, and restarting does not retain stale compiled behavior.
+
+### C. Custom curve editing and ownership
+
+1. Assign a saved `NativeEasingCurve` resource and set its transition to Custom.
+2. Use at least three `NativeEasingCurvePoint` resources.
+3. Exercise Free, Linear, Balanced, Mirrored, and Linked handle modes.
+4. Toggle left/right force-linear and point locking.
+5. Move a point and both controls, add a point, reorder or replace a point, and remove a point.
+6. Run after each meaningful edit and confirm the motion changes without reopening the project.
+7. After removing a point, edit that detached point resource and confirm the active curve does not change.
+
+Pass when constraints behave predictably, one edit produces one visible refresh/restart, point order remains valid, removed points no longer affect the curve, and no edit causes a crash or recursive refresh loop.
+
+### D. Save, reload, and coexistence
+
+1. Save the Native curve as a side-by-side `.tres`; do not overwrite a legacy resource.
+2. Record transition, ease, parameters, point positions, controls, handle modes, locks, and force-linear flags.
+3. Close and reopen the editor, reload the resource, and compare every recorded field.
+4. Run the scene with `Use Native Curve` enabled.
+5. Disable `Use Native Curve`, assign a legacy custom curve, and run it.
+6. Re-enable Native and confirm both resources retained their independent values.
+
+Pass when the Native resource round-trips exactly, both APIs coexist in one scene, and switching backends does not mutate or replace either resource.
+
+### E. Release export
+
+1. Set the scene to a standard Native transition and export the **Windows Desktop** release preset.
+2. Run the exported executable and exercise Match Tween, Reverse, Restart, and several standard transitions.
+3. Repeat with a saved custom Native curve.
+4. Repeat one export with `Use Native Curve` disabled to verify the legacy fallback remains shippable in the dual-API package.
+
+Pass when all three exports start without missing-extension/resource errors and reproduce the editor behavior. Keep the export logs with the smoke-test record.
+
+### Smoke-test record
+
+Record results here rather than relying on memory:
+
+| Date | Godot | Build/artifact | A | B | C | D | E | Notes/evidence |
+|---|---|---|---|---|---|---|---|---|
+| Pending | 4.7.1 | Windows x86_64 debug + release | — | — | — | — | — | Manual run required |
+
+Any crash, data loss, stale result after mutation, missing class, serialization mismatch, or exported-runtime failure blocks the next release qualification step. Visual differences should be recorded with the transition/ease/parameters and a screenshot or short capture.
+
+## 9. Recommended next execution tranche
+
+### Priority 1 — Close NATIVE-01 platform/toolchain evidence
+
+1. Diagnose the Windows debug DLL security rejection without weakening machine security.
+2. Produce and load a genuine debug DLL in the editor; verify hot reload separately from release export.
+3. Run the Web CI build, retain the wasm artifacts, and test a non-threaded browser export.
+4. Keep Web manifest entries only after the referenced debug and release artifacts are proven loadable.
+
+This is first because an editor-native plugin cannot be considered feasible while its development artifact is blocked, and an unexecuted Web workflow is configuration rather than platform support.
+
+### Priority 2 — Close NATIVE-02 and NATIVE-03 contracts
+
+1. Add reflection fixtures for the complete legacy and current Native public contracts.
+2. Define explicit behavior for absent, old, current, and future Native format versions.
+3. Define the conversion-result data contract before implementing conversion.
+4. Add benchmark cases for all ease modes, compile invalidation, signal amplification, snapshots, and the backend calls used by the first editor migration.
+5. Archive a new baseline only after the manual smoke test and debug/release artifacts pass.
+
+This prevents later runtime and editor work from accidentally changing serialized fields or performance expectations.
+
+### Priority 3 — Retarget one legacy editor vertical slice
+
+Move one complete workflow—resource selection, sampling preview, and point-list read access—through `LegacyCurveEditorBackend`. Keep the concrete legacy implementation available behind the adapter until behavior and timing tests pass. Then migrate mutation, snapshots, presets, and save normalization one workflow at a time.
+
+This incremental adapter approach is preferred over a broad editor rewrite. It tests the boundary against real behavior and avoids growing an interface from speculative Native requirements.
+
+### Priority 4 — Finish core Native runtime parity
+
+1. Close remaining point-state edge cases and full legacy differential coverage (NATIVE-04).
+2. Complete extended Bounce and transition metadata/validation (NATIVE-05).
+3. Implement persisted Jitter/Irregular data and CSS Linear/Cubic Bézier parsing and sampling (NATIVE-06).
+4. Run correctness and performance gates after each mode family, not after the whole group.
+
+### Priority 5 — Native editor, conversion, and packaging
+
+Proceed to NATIVE-08 through NATIVE-11 only after the shared legacy editor path is stable. Add Native editor support capability by capability, then non-destructive conversion, exact-ZIP staging, checksums, and clean-project installation/export tests.
+
+The next recommended implementation session should therefore be **NATIVE-01 closeout plus NATIVE-02 format/reflection contracts**. The first editor vertical slice follows immediately after those gates; adding more adapter abstractions before that evidence would increase complexity without reducing current risk.
+
+## 10. Definition of Done
 
 ### Initial Native release
 
