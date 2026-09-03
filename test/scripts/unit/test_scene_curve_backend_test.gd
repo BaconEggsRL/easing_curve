@@ -20,6 +20,16 @@ func _run() -> void:
 	_expect(test_scene.get("_runtime_native_curve") != null, "native runtime copy is missing")
 	_expect(test_scene.get("_runtime_easing_curve") == null, "legacy runtime copy is active")
 	var native_runtime := test_scene.get("_runtime_native_curve") as NativeEasingCurve
+	var authored_native := test_scene.get("native_curve") as NativeEasingCurve
+	var authored_points := authored_native.points
+	var runtime_points := native_runtime.points
+	_expect(runtime_points[0] != authored_points[0], "test scene runtime copy shares authored point Resources")
+	var runtime_handle_before := runtime_points[0].right_control_point
+	authored_points[0].right_control_point = Vector2(0.15, 0.85)
+	_expect(
+		runtime_points[0].right_control_point == runtime_handle_before,
+		"authored point edit leaked into the active runtime curve",
+	)
 	_expect(
 		is_equal_approx(
 			float(test_scene.call("tween_native_curve", SAMPLE_OFFSET)),

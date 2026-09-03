@@ -508,7 +508,7 @@ func _capture_runtime_curves() -> void:
 	_runtime_easing_curve = null
 	if use_native_curve:
 		_runtime_native_curve = (
-			native_curve.duplicate() as NativeEasingCurve
+			native_curve.create_runtime_copy()
 			if native_curve != null
 			else null
 		)

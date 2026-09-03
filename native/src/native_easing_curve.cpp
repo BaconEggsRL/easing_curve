@@ -34,10 +34,13 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_amplitude"), &NativeEasingCurve::get_amplitude);
 	ClassDB::bind_method(D_METHOD("set_period", "period"), &NativeEasingCurve::set_period);
 	ClassDB::bind_method(D_METHOD("get_period"), &NativeEasingCurve::get_period);
+	ClassDB::bind_method(D_METHOD("set_format_version", "format_version"), &NativeEasingCurve::set_format_version);
+	ClassDB::bind_method(D_METHOD("get_format_version"), &NativeEasingCurve::get_format_version);
 	ClassDB::bind_method(D_METHOD("set_points", "points"), &NativeEasingCurve::set_points);
 	ClassDB::bind_method(D_METHOD("get_points"), &NativeEasingCurve::get_points);
 	ClassDB::bind_method(D_METHOD("add_point", "point"), &NativeEasingCurve::add_point);
 	ClassDB::bind_method(D_METHOD("remove_point", "index"), &NativeEasingCurve::remove_point);
+	ClassDB::bind_method(D_METHOD("create_runtime_copy"), &NativeEasingCurve::create_runtime_copy);
 	ClassDB::bind_method(D_METHOD("cubic_bezier", "x1", "y1", "x2", "y2"), &NativeEasingCurve::cubic_bezier);
 	ClassDB::bind_method(D_METHOD("sample", "offset"), &NativeEasingCurve::sample);
 
@@ -45,8 +48,11 @@ void NativeEasingCurve::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "ease_type", PROPERTY_HINT_ENUM, "In,Out,In Out,Out In"), "set_ease_type", "get_ease_type");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "amplitude", PROPERTY_HINT_RANGE, "1.0,10.0,0.001,or_greater"), "set_amplitude", "get_amplitude");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "period", PROPERTY_HINT_RANGE, "0.01,2.0,0.001,or_greater"), "set_period", "get_period");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "format_version", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_format_version", "get_format_version");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "points", PROPERTY_HINT_ARRAY_TYPE, "NativeEasingCurvePoint"), "set_points", "get_points");
+	ADD_SIGNAL(MethodInfo("points_changed", PropertyInfo(Variant::ARRAY, "points", PROPERTY_HINT_ARRAY_TYPE, "NativeEasingCurvePoint")));
 
+	BIND_CONSTANT(FORMAT_VERSION);
 	BIND_ENUM_CONSTANT(TRANS_LINEAR);
 	BIND_ENUM_CONSTANT(TRANS_SINE);
 	BIND_ENUM_CONSTANT(TRANS_QUINT);
@@ -131,12 +137,24 @@ double NativeEasingCurve::get_period() const {
 	return period;
 }
 
+void NativeEasingCurve::set_format_version(int64_t p_format_version) {
+	if (p_format_version <= 0 || format_version == p_format_version) {
+		return;
+	}
+	format_version = p_format_version;
+	emit_changed();
+}
+
+int64_t NativeEasingCurve::get_format_version() const {
+	return format_version;
+}
+
 void NativeEasingCurve::set_points(const TypedArray<NativeEasingCurvePoint> &p_points) {
 	disconnect_points();
 	points = TypedArray<NativeEasingCurvePoint>(p_points.duplicate());
 	reconnect_points();
 	compile_segments();
-	emit_changed();
+	emit_points_changed();
 }
 
 TypedArray<NativeEasingCurvePoint> NativeEasingCurve::get_points() const {
@@ -159,6 +177,18 @@ void NativeEasingCurve::remove_point(int64_t p_index) {
 	TypedArray<NativeEasingCurvePoint> updated(points.duplicate());
 	updated.remove_at(p_index);
 	set_points(updated);
+}
+
+Ref<NativeEasingCurve> NativeEasingCurve::create_runtime_copy() const {
+	Ref<NativeEasingCurve> runtime_copy;
+	runtime_copy.instantiate();
+	runtime_copy->set_format_version(format_version);
+	runtime_copy->set_transition(transition);
+	runtime_copy->set_ease_type(ease_type);
+	runtime_copy->set_amplitude(amplitude);
+	runtime_copy->set_period(period);
+	runtime_copy->set_points(duplicate_points());
+	return runtime_copy;
 }
 
 void NativeEasingCurve::cubic_bezier(double p_x1, double p_y1, double p_x2, double p_y2) {
@@ -210,9 +240,33 @@ void NativeEasingCurve::disconnect_points() {
 	connected_points.clear();
 }
 
+void NativeEasingCurve::emit_points_changed() {
+	emit_signal("points_changed", get_points());
+	emit_changed();
+}
+
 void NativeEasingCurve::on_point_changed() {
 	compile_segments();
-	emit_changed();
+	emit_points_changed();
+}
+
+TypedArray<NativeEasingCurvePoint> NativeEasingCurve::duplicate_points() const {
+	TypedArray<NativeEasingCurvePoint> duplicated;
+	for (int64_t index = 0; index < points.size(); ++index) {
+		Ref<NativeEasingCurvePoint> source = points[index];
+		if (source.is_null()) {
+			duplicated.append(Variant());
+			continue;
+		}
+
+		Ref<NativeEasingCurvePoint> copy;
+		copy.instantiate();
+		copy->set_position(source->get_position());
+		copy->set_left_control_point(source->get_left_control_point());
+		copy->set_right_control_point(source->get_right_control_point());
+		duplicated.append(copy);
+	}
+	return duplicated;
 }
 
 void NativeEasingCurve::compile_segments() {

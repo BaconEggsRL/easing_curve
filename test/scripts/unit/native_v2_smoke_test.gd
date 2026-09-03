@@ -20,12 +20,15 @@ func _run() -> void:
 
 	_test_points_property_metadata()
 	_test_stable_enum_contract()
+	_test_resource_version_contract()
 	_test_invalid_property_contract()
 	_test_builtin_equivalence()
 	_test_custom_bezier_equivalence()
 	_test_point_ordering_contract()
 	_test_point_change_invalidates_compiled_segments()
 	_test_points_array_assignment()
+	_test_point_ownership_and_change_propagation()
+	_test_deep_runtime_copy()
 	_test_resource_round_trip()
 	_finish("native v2 smoke")
 
@@ -69,6 +72,29 @@ func _test_stable_enum_contract() -> void:
 	_expect(NativeEasingCurve.EASE_OUT == Tween.EASE_OUT, "EASE_OUT ID does not match Tween")
 	_expect(NativeEasingCurve.EASE_IN_OUT == Tween.EASE_IN_OUT, "EASE_IN_OUT ID does not match Tween")
 	_expect(NativeEasingCurve.EASE_OUT_IN == Tween.EASE_OUT_IN, "EASE_OUT_IN ID does not match Tween")
+
+
+func _test_resource_version_contract() -> void:
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
+	_expect(NativeEasingCurve.FORMAT_VERSION == 1, "native format version changed unexpectedly")
+	_expect(curve.get(&"format_version") == NativeEasingCurve.FORMAT_VERSION, "new native curve has the wrong format version")
+
+	var version_property := {}
+	for property in curve.get_property_list():
+		if property[&"name"] == &"format_version":
+			version_property = property
+			break
+	_expect(not version_property.is_empty(), "format_version property is missing")
+	_expect(
+		(int(version_property.get(&"usage", 0)) & PROPERTY_USAGE_STORAGE) != 0,
+		"format_version is not serialized",
+	)
+	_expect(
+		(int(version_property.get(&"usage", 0)) & PROPERTY_USAGE_EDITOR) == 0,
+		"format_version should not be editable in the Inspector",
+	)
+	curve.set(&"format_version", 0)
+	_expect(curve.get(&"format_version") == NativeEasingCurve.FORMAT_VERSION, "invalid format version was accepted")
 
 
 func _test_invalid_property_contract() -> void:
@@ -195,16 +221,84 @@ func _test_points_array_assignment() -> void:
 	_expect(curve.get(&"points").size() == 2, "remove_point did not update topology")
 
 
+func _test_point_ownership_and_change_propagation() -> void:
+	var start := _new_native_point(Vector2.ZERO)
+	var end := _new_native_point(Vector2.ONE)
+	var assigned_points := [start, end]
+	var curve := _new_native_curve(TRANS_CUSTOM, Tween.EASE_OUT)
+	curve.set(&"points", assigned_points)
+
+	var stored_points: Array = curve.get(&"points")
+	_expect(stored_points[0] == start, "authored point Resources are not shared after assignment")
+	assigned_points.clear()
+	_expect(curve.get(&"points").size() == 2, "curve does not own its points array topology")
+
+	var notifications := {&"changed": 0, &"points_changed": 0}
+	curve.changed.connect(func() -> void: notifications[&"changed"] += 1)
+	curve.connect(&"points_changed", func(_points: Array) -> void: notifications[&"points_changed"] += 1)
+	start.set(&"right_control_point", Vector2(0.2, 0.8))
+	_expect(notifications[&"changed"] == 1, "nested point edit did not propagate Resource.changed exactly once")
+	_expect(notifications[&"points_changed"] == 1, "nested point edit did not propagate points_changed exactly once")
+
+	curve.call(&"remove_point", 0)
+	_expect(notifications[&"changed"] == 2, "point removal did not propagate Resource.changed")
+	_expect(notifications[&"points_changed"] == 2, "point removal did not propagate points_changed")
+	start.set(&"right_control_point", Vector2(0.3, 0.7))
+	_expect(notifications[&"changed"] == 2, "removed point still propagated Resource.changed")
+	_expect(notifications[&"points_changed"] == 2, "removed point still propagated points_changed")
+
+
+func _test_deep_runtime_copy() -> void:
+	var source := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
+	source.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
+	var source_before: float = source.call(&"sample", 0.25)
+	var runtime := source.call(&"create_runtime_copy") as Resource
+	_expect(runtime != null, "create_runtime_copy did not return a NativeEasingCurve")
+	if runtime == null:
+		return
+
+	var source_points: Array = source.get(&"points")
+	var runtime_points: Array = runtime.get(&"points")
+	_expect(runtime_points.size() == source_points.size(), "runtime copy changed point topology")
+	_expect(runtime_points[0] != source_points[0], "runtime copy shares point Resources with its source")
+	_expect(
+		is_equal_approx(runtime.call(&"sample", 0.25), source_before),
+		"runtime copy changed the sampled curve",
+	)
+	_expect(
+		runtime.get(&"format_version") == source.get(&"format_version"),
+		"runtime copy lost the resource format version",
+	)
+
+	var runtime_notifications := {&"count": 0}
+	runtime.connect(&"points_changed", func(_points: Array) -> void: runtime_notifications[&"count"] += 1)
+	(source_points[0] as Resource).set(&"right_control_point", Vector2(0.1, 0.95))
+	_expect(not is_equal_approx(source.call(&"sample", 0.25), source_before), "source edit did not change source sampling")
+	_expect(is_equal_approx(runtime.call(&"sample", 0.25), source_before), "source edit changed the runtime copy")
+	_expect(runtime_notifications[&"count"] == 0, "source edit signaled the independent runtime copy")
+
+
 func _test_resource_round_trip() -> void:
 	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
 	curve.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
 	var expected: float = curve.call(&"sample", 0.37)
+	const EXPLICIT_SAVED_VERSION := 7
+	curve.set(&"format_version", EXPLICIT_SAVED_VERSION)
 	var path := "res://test/_temp/native_v2_curve.tres"
 	var error := ResourceSaver.save(curve, path)
 	_expect(error == OK, "native curve could not be saved: %s" % error_string(error))
+	var serialized := FileAccess.get_file_as_string(path)
+	_expect(
+		serialized.contains("format_version = %d" % EXPLICIT_SAVED_VERSION),
+		"explicit native curve format version was not serialized",
+	)
 	var loaded := ResourceLoader.load(path)
 	_expect(loaded != null, "native curve could not be loaded")
 	if loaded != null:
+		_expect(
+			loaded.get(&"format_version") == EXPLICIT_SAVED_VERSION,
+			"native curve format version changed after save/load",
+		)
 		_expect(
 			is_equal_approx(expected, loaded.call(&"sample", 0.37)),
 			"native curve changed after save/load",

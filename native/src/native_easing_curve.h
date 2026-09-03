@@ -14,6 +14,10 @@ class NativeEasingCurve : public Resource {
 	GDCLASS(NativeEasingCurve, Resource)
 
 public:
+	enum {
+		FORMAT_VERSION = 1,
+	};
+
 	enum Transition {
 		TRANS_LINEAR = 0,
 		TRANS_SINE = 1,
@@ -53,6 +57,7 @@ private:
 	EaseType ease_type = EASE_OUT;
 	double amplitude = 1.0;
 	double period = 0.3;
+	int64_t format_version = FORMAT_VERSION;
 	TypedArray<NativeEasingCurvePoint> points;
 	std::vector<Ref<NativeEasingCurvePoint>> connected_points;
 	std::vector<Segment> segments;
@@ -60,8 +65,10 @@ private:
 
 	void reconnect_points();
 	void disconnect_points();
+	void emit_points_changed();
 	void compile_segments();
 	void on_point_changed();
+	TypedArray<NativeEasingCurvePoint> duplicate_points() const;
 
 	double sample_builtin(double p_offset) const;
 	double sample_custom(double p_offset);
@@ -97,11 +104,14 @@ public:
 
 	void set_period(double p_period);
 	double get_period() const;
+	void set_format_version(int64_t p_format_version);
+	int64_t get_format_version() const;
 
 	void set_points(const TypedArray<NativeEasingCurvePoint> &p_points);
 	TypedArray<NativeEasingCurvePoint> get_points() const;
 	void add_point(const Ref<NativeEasingCurvePoint> &p_point);
 	void remove_point(int64_t p_index);
+	Ref<NativeEasingCurve> create_runtime_copy() const;
 
 	void cubic_bezier(double p_x1, double p_y1, double p_x2, double p_y2);
 	double sample(double p_offset);

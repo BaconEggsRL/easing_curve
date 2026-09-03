@@ -16,6 +16,7 @@ addons/godot_ai_tunnel/tunnel_config.json
 /native/.sconsign.dblite
 /native/src/*.obj
 /native/src/*.os
+/native/src/*.obj.import
 /addons/easing_curve/bin/*.dll
 /addons/easing_curve/bin/*.exp
 /addons/easing_curve/bin/*.lib

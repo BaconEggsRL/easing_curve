@@ -1,6 +1,6 @@
 # Native v2 spike
 
-This directory contains the source-only GDExtension spike. It intentionally
+This directory contains the GDExtension spike source. It intentionally
 registers `NativeEasingCurve` and `NativeEasingCurvePoint` so it can be loaded
 beside the existing GDScript implementation without changing serialized v1
 resources.
@@ -17,10 +17,28 @@ release pipeline can produce and package platform binaries after the design is
 validated. The build profile generates only `Resource` and the binding classes
 required by godot-cpp instead of compiling the entire engine API.
 
+Build the Windows release library with:
+
+```powershell
+scons platform=windows target=template_release arch=x86_64
+```
+
 `points` returns an isolated typed array so external in-place array mutation
 cannot bypass cache invalidation. Assign a changed array back to `points`, or
 use `add_point()` / `remove_point()`. Editing a point Resource in place remains
-supported and recompiles the affected curve through its `changed` signal.
+supported and recompiles the affected curve through its `changed` signal. The
+curve emits both `points_changed` and `Resource.changed` for topology and nested
+point edits.
+
+Authored curves follow Godot's normal subresource model: assigning a points
+array copies the array container while retaining the point Resource references.
+Use `create_runtime_copy()` when playback needs an isolated snapshot; it clones
+every point Resource and preserves the curve parameters and format version.
+
+`NativeEasingCurve.FORMAT_VERSION` is the current resource contract version.
+The storage-only `format_version` property preserves explicit version values
+through save/load. Godot omits properties equal to their class defaults, so an
+absent marker is the implicit v1 format.
 
 The native transition and ease IDs intentionally match Godot's
 `Tween.TransitionType` and `Tween.EaseType` values. `TRANS_CUSTOM` uses the
@@ -38,6 +56,13 @@ Run the smoke test from the project root after building:
 
 ```powershell
 $env:EASING_CURVE_GODOT_PATH --headless --path . --log-file test/_temp/native_v2_smoke.log --script test/scripts/unit/native_v2_smoke_test.gd
+```
+
+Build the release DLL, export an isolated Windows project, and execute it to
+load both a built-in transition and a custom Bézier Native resource:
+
+```powershell
+./test/runners/run_native_release_export_test.ps1
 ```
 
 ## Current result
