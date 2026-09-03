@@ -64,7 +64,7 @@ private:
 	};
 
 	Transition transition = TRANS_CUBIC;
-	EaseType ease_type = EASE_OUT;
+	EaseType ease_type = EASE_IN;
 	double amplitude = 1.0;
 	double period = 0.3;
 	double constant_value = 0.5;

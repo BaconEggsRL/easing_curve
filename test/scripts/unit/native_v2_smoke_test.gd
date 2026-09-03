@@ -23,6 +23,7 @@ func _run() -> void:
 
 	_test_points_property_metadata()
 	_test_stable_enum_contract()
+	_test_default_contract()
 	_test_resource_version_contract()
 	_test_invalid_property_contract()
 	_test_builtin_equivalence()
@@ -87,6 +88,11 @@ func _test_stable_enum_contract() -> void:
 	_expect(NativeEasingCurve.EASE_OUT == Tween.EASE_OUT, "EASE_OUT ID does not match Tween")
 	_expect(NativeEasingCurve.EASE_IN_OUT == Tween.EASE_IN_OUT, "EASE_IN_OUT ID does not match Tween")
 	_expect(NativeEasingCurve.EASE_OUT_IN == Tween.EASE_OUT_IN, "EASE_OUT_IN ID does not match Tween")
+
+
+func _test_default_contract() -> void:
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	_expect(curve.get(&"ease_type") == NativeEasingCurve.EASE_IN, "new native curve does not default to Ease In")
 
 
 func _test_resource_version_contract() -> void:
