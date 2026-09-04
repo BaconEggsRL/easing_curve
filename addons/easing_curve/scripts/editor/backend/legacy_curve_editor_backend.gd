@@ -55,6 +55,57 @@ func get_points() -> Array[Resource]:
 	return result
 
 
+func create_point(position: Vector2) -> Resource:
+	var point := EasingCurvePoint.new(position)
+	point.left_control_point = position - Vector2(0.1, 0.0)
+	point.right_control_point = position + Vector2(0.1, 0.0)
+	return point
+
+
+func add_point(point: Resource) -> int:
+	if point is not EasingCurvePoint:
+		return -1
+	var point_order := get_ordered_points(point)
+	if point_order.is_empty():
+		return -1
+	var typed_order: Array[EasingCurvePoint] = []
+	for ordered_point in point_order:
+		typed_order.append(ordered_point as EasingCurvePoint)
+	var point_states := (curve as EasingCurve).make_point_snapshot(typed_order)
+	if not (curve as EasingCurve)._apply_editor_point_topology_snapshot(typed_order, point_states):
+		return -1
+	return find_point(point)
+
+
+func remove_point(index: int) -> bool:
+	if index < 0 or index >= get_point_count():
+		return false
+	var point_order := get_points()
+	point_order.remove_at(index)
+	var typed_order: Array[EasingCurvePoint] = []
+	for point in point_order:
+		typed_order.append(point as EasingCurvePoint)
+	var point_states := (curve as EasingCurve).make_point_snapshot(typed_order)
+	return (curve as EasingCurve)._apply_editor_point_topology_snapshot(
+		typed_order,
+		point_states,
+	)
+
+
+func apply_point_order(point_order: Array[Resource]) -> int:
+	if not _is_valid_point_order(point_order):
+		return -1
+	var typed_order: Array[EasingCurvePoint] = []
+	for point in point_order:
+		typed_order.append(point as EasingCurvePoint)
+	var point_states := (curve as EasingCurve).make_point_snapshot(typed_order)
+	return (
+		0
+		if (curve as EasingCurve)._apply_editor_point_topology_snapshot(typed_order, point_states)
+		else -1
+	)
+
+
 func sample(offset: float) -> float:
 	return (curve as EasingCurve).sample(offset)
 
@@ -164,14 +215,30 @@ func apply_point_property(
 
 
 func capture_snapshot() -> Variant:
-	return (curve as EasingCurve).get_point_snapshot()
+	return {
+		SNAPSHOT_POINT_ORDER: get_points(),
+		SNAPSHOT_POINT_STATES: (curve as EasingCurve).get_point_snapshot(),
+	}
 
 
 func apply_snapshot(snapshot: Variant) -> bool:
-	if snapshot is not Dictionary:
+	if snapshot is not Dictionary or not snapshot.has(SNAPSHOT_POINT_ORDER):
 		return false
-	(curve as EasingCurve).set_point_snapshot(snapshot)
-	return true
+	var point_order: Variant = snapshot[SNAPSHOT_POINT_ORDER]
+	var point_states: Variant = snapshot.get(SNAPSHOT_POINT_STATES)
+	if point_order is not Array or point_states is not Dictionary:
+		return false
+	var resources: Array[Resource] = []
+	resources.assign(point_order)
+	if not _is_unique_legacy_points(resources):
+		return false
+	var typed_order: Array[EasingCurvePoint] = []
+	for point in resources:
+		typed_order.append(point as EasingCurvePoint)
+	return (curve as EasingCurve)._apply_editor_point_topology_snapshot(
+		typed_order,
+		point_states,
+	)
 
 
 func create_preview_backend() -> RefCounted:
@@ -220,3 +287,25 @@ func _apply_geometry_change(
 			snapshot["right_control_points"] = right_controls
 			return true
 	return false
+
+
+func _is_valid_point_order(point_order: Array[Resource]) -> bool:
+	var current := get_points()
+	if point_order.size() != current.size() or not _is_unique_legacy_points(point_order):
+		return false
+	for point in point_order:
+		if point not in current:
+			return false
+	return true
+
+
+func _is_unique_legacy_points(point_order: Array[Resource]) -> bool:
+	var seen := {}
+	for point in point_order:
+		if point is not EasingCurvePoint:
+			return false
+		var point_id := point.get_instance_id()
+		if seen.has(point_id):
+			return false
+		seen[point_id] = true
+	return true

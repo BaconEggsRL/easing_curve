@@ -112,13 +112,15 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
-The runtime benchmark reports median, median absolute deviation, and raw values
+The runtime benchmark runs in an isolated project containing only this addon and
+the benchmark script. It reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
 custom curves in sequential, reverse, and random sampling order; mutation; and
-deep runtime duplication. The editor-backend benchmark compares adapter and
-direct costs for preview sampling, 65-point reads, snapshots,
-mutation-plus-recompile, and transaction-shaped gestures, then reports curve
-change signals for each backend.
+deep runtime duplication. By default it evaluates the median of three release-
+library runs. The editor-backend benchmark compares adapter and direct costs for
+preview sampling, 65-point reads, snapshots, mutation-plus-recompile, and
+transaction-shaped gestures, then reports curve-change signals and 65-point
+add/remove/reorder/snapshot topology workloads for each backend.
 Tween is used only as a benchmark and numerical oracle. No Native sampling path
 calls Tween, GDScript, or a Callable.
 
@@ -126,22 +128,25 @@ calls Tween, GDScript, or a Callable.
 
 The production Inspector and Curve Editor now choose either the legacy or Native
 backend through the shared adapter boundary. Native custom curves render,
-support point selection and existing point/handle dragging, expose force-linear
-and lock options, generate previews, and record one Undo/Redo action per
-gesture. Native add/delete/reorder and point-list editing remain gated for the
-topology tranche; legacy editing behavior is preserved through the adapter.
+support point selection, point/handle dragging, graph add/delete/crossing,
+endpoint takeover, and toolbar reorder. They expose force-linear and lock
+options, generate previews, preserve point identity and selection, and record
+one Undo/Redo action per committed gesture. Topology snapshots validate before
+mutation, reconnect point signals once, compile once, and publish one curve-level
+change. Native point-list editing remains gated for the next tranche; legacy
+editing behavior is preserved through the adapter.
 
-## Manual smoke-test status — 2026-09-03
+## Manual smoke-test status — 2026-09-04
 
 | Area | Result | Follow-up |
 |---|---|---|
 | Standard transition parity | Pass with observation | Circ, Cubic, Elastic, Expo, Quart, and Quint showed slight start jitter relative to Tween. Legacy showed the same behavior, so this is recorded as a harness/timing investigation rather than a Native release blocker. |
 | Deterministic modes and transforms | Pass | No follow-up from this run. |
-| Custom editing and ownership | Geometry slice automated; manual check pending | Native selection, handle modes, force-linear, locks, existing-point dragging, handle dragging, and one-action gesture Undo/Redo are covered. Add/delete/reorder and point-list editing remain intentionally disabled until the topology tranche. Force-linear fields are storage-only and therefore do not appear in the raw point Inspector. |
+| Custom editing and ownership | Graph topology automated; manual check pending | Native selection, handle modes, force-linear, locks, existing-point/handle dragging, add/delete/crossing/reorder, endpoint takeover, detached-point disconnection, exact identity restoration, and one-action Undo/Redo are covered. Point-list editing remains intentionally disabled. Force-linear fields are storage-only and therefore do not appear in the raw point Inspector. |
 | Save, reload, and coexistence | Pass for the shared-editor slice | Native point options, Undo/Redo, and persistence passed; both public APIs continue to work independently. |
 | Native resource preview/icon | Pass | Generated Native Inspector previews and the `Curve.svg` FileSystem class icon both passed manual verification. |
 | Match Tween timing probe | Deferred | The probe remains available for a later jitter investigation. |
-| Web export with Native resource | Automated pass; manual rerun pending | Isolated debug and release exports loaded, sampled, and deep-copied built-in and custom Native resources in headless Chrome. Rerun the user-facing test scene before final release qualification. |
+| Web export with Native resource | Prior automated pass; local rerun limited | Both local exports succeeded, but Chrome could not start in the current sandbox because crashpad access was denied. The latest hosted build produced Windows and Web artifacts; its dependent browser-runtime job failed before Godot launch on an extensionless setup symlink. The workflow fix is implemented locally but still needs a hosted run. |
 
 The original Web failure was caused by the absent wasm32 library. The validated
 manifest now loads the matching non-threaded extension; no legacy substitution
@@ -149,11 +154,12 @@ is used for serialized Native resources.
 
 ## Remaining release work
 
-- Run the Web build/preflight and browser-runtime jobs in GitHub Actions and
-  retain their artifacts.
+- Run the corrected Windows-test and Web browser-runtime jobs in GitHub Actions
+  and retain the debug/release Web artifacts.
 - Finish generated, CSS, and extended Bounce representations.
 - Complete the remaining Native point-state edge cases and curve-level snapshots.
-- Finish add/delete/reorder graph topology and point-list integration through the shared editor backend.
+- Integrate Native point-list editing and graph/Inspector selection synchronization
+  through the shared editor backend.
 - Add optional, non-destructive bidirectional conversion.
 - Build the exact dual-API release archive.
 - Add remaining platforms before any legacy deprecation proposal.

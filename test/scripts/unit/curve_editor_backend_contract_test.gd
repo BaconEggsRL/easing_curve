@@ -14,6 +14,7 @@ func _init() -> void:
 	_expect(not legacy_backend.get_capabilities()[&"callable_baking"], "legacy advertises unimplemented Callable baking")
 	_expect(legacy_backend.get_capabilities()[&"point_options"], "legacy point options are missing")
 	_expect(legacy_backend.get_capabilities()[&"point_geometry"], "legacy point geometry is missing")
+	_expect(legacy_backend.get_capabilities()[&"point_topology"], "legacy point topology is missing")
 	_expect(legacy_backend.is_point_graph(), "legacy custom curve did not expose its point graph")
 	_expect(legacy_backend.get_point_count() == legacy.points.size(), "legacy backend point count changed")
 	_expect(legacy_backend.get_points().size() == legacy.points.size(), "legacy backend point list changed")
@@ -42,6 +43,7 @@ func _init() -> void:
 	_expect(legacy_backend.apply_snapshot(legacy_snapshot), "legacy backend rejected its own snapshot")
 	_expect(not legacy.points[0].right_force_linear, "legacy backend snapshot did not restore Force Linear")
 	_expect(not legacy.points[0].locked[&"right_control_point"], "legacy backend snapshot did not restore locks")
+	_test_topology_contract(legacy, legacy_backend, "legacy")
 
 	if ClassDB.class_exists(&"NativeEasingCurve"):
 		var native := ClassDB.instantiate(&"NativeEasingCurve") as Resource
@@ -53,6 +55,7 @@ func _init() -> void:
 		_expect(native_backend.get_capabilities()[&"callable_baking"], "Native Callable-baking capability is missing")
 		_expect(native_backend.get_capabilities()[&"point_options"], "Native point options are missing")
 		_expect(native_backend.get_capabilities()[&"point_geometry"], "Native point geometry is missing")
+		_expect(native_backend.get_capabilities()[&"point_topology"], "Native point topology is missing")
 		_expect(native_backend.is_point_graph(), "Native custom curve did not expose its point graph")
 		_expect(native_backend.get_transition_ids().has(100), "Native custom transition is missing")
 		_expect(not native_backend.get_transition_ids().has(102), "Native advertises unimplemented Jitter")
@@ -103,6 +106,90 @@ func _init() -> void:
 		_expect(native_backend.is_point_property_locked(0, &"position"), "Native backend did not report the position lock")
 		native.set(&"transition", 0)
 		_expect(not native_backend.is_point_graph(), "Native standard transition exposed point editing")
+		var native_topology := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+		native_topology.set(&"transition", 100)
+		_test_topology_contract(
+			native_topology,
+			BackendFactory.create(native_topology),
+			"Native",
+		)
 
 	_expect(BackendFactory.create(Resource.new()) == null, "backend factory accepted an unrelated Resource")
 	_finish("curve editor backend contract")
+
+
+func _test_topology_contract(curve: Resource, backend: RefCounted, context: String) -> void:
+	var initial_points: Array[Resource] = backend.get_points()
+	_expect(initial_points.size() == 2, "%s topology fixture changed" % context)
+	var midpoint: Resource = backend.create_point(Vector2(0.5, 0.4))
+	_expect(midpoint != null, "%s point factory failed" % context)
+	var publication := {&"count": 0}
+	curve.changed.connect(func() -> void: publication[&"count"] += 1)
+	var inserted_index: int = backend.add_point(midpoint)
+	_expect(inserted_index == 1, "%s sorted insertion returned the wrong index" % context)
+	_expect(backend.get_point(1) == midpoint, "%s sorted insertion lost point identity" % context)
+	_expect(publication[&"count"] == 1, "%s insertion published more than once" % context)
+
+	var inserted_snapshot: Variant = backend.capture_snapshot()
+	var endpoint: Resource = backend.create_point(Vector2(0.0, 0.75))
+	publication[&"count"] = 0
+	_expect(backend.add_point(endpoint) == 0, "%s endpoint takeover returned the wrong index" % context)
+	_expect(
+		backend.get_point_count() == 3 and backend.get_point(0) == endpoint,
+		"%s endpoint takeover did not replace the old endpoint" % context,
+	)
+	_expect(backend.find_point(initial_points[0]) == -1, "%s endpoint takeover retained the old endpoint" % context)
+	_expect(publication[&"count"] == 1, "%s endpoint takeover published more than once" % context)
+	publication[&"count"] = 0
+	initial_points[0].set(&"position", Vector2(0.1, 0.1))
+	_expect(publication[&"count"] == 0, "%s retained a connection to the detached endpoint" % context)
+
+	publication[&"count"] = 0
+	_expect(backend.remove_point(1), "%s indexed removal failed" % context)
+	_expect(backend.find_point(midpoint) == -1, "%s indexed removal retained the point" % context)
+	_expect(publication[&"count"] == 1, "%s indexed removal published more than once" % context)
+
+	publication[&"count"] = 0
+	_expect(backend.apply_snapshot(inserted_snapshot), "%s atomic snapshot restoration failed" % context)
+	_expect(
+		backend.get_points() == [initial_points[0], midpoint, initial_points[1]],
+		"%s snapshot restoration did not restore exact point resources" % context,
+	)
+	_expect(publication[&"count"] == 1, "%s snapshot restoration published more than once" % context)
+
+	var reversed: Array[Resource] = backend.get_points()
+	reversed.reverse()
+	publication[&"count"] = 0
+	_expect(backend.apply_point_order(reversed) >= 0, "%s point-order application failed" % context)
+	_expect(backend.get_points() == reversed, "%s point-order application lost resource order" % context)
+	_expect(publication[&"count"] == 1, "%s point-order application published more than once" % context)
+
+	var before_invalid: Variant = backend.capture_snapshot()
+	var duplicate_order: Array[Resource] = backend.get_points()
+	duplicate_order[1] = duplicate_order[0]
+	_expect(backend.apply_point_order(duplicate_order) == -1, "%s accepted a duplicate point order" % context)
+	_expect(not backend.apply_snapshot({}), "%s accepted an invalid topology snapshot" % context)
+	_expect(backend.capture_snapshot() == before_invalid, "%s invalid input mutated topology" % context)
+	if context == "Native":
+		var native_snapshot: Dictionary = before_invalid
+		var native_order: Array = native_snapshot[&"point_order"]
+		var native_states: Array = native_snapshot[&"point_states"]
+		publication[&"count"] = 0
+		_expect(
+			not curve.call(&"apply_point_topology_snapshot", native_order, native_states.slice(1)),
+			"Native atomic topology accepted mismatched state count",
+		)
+		var duplicated_native_order := native_order.duplicate()
+		duplicated_native_order[1] = duplicated_native_order[0]
+		_expect(
+			not curve.call(&"apply_point_topology_snapshot", duplicated_native_order, native_states),
+			"Native atomic topology accepted duplicate point resources",
+		)
+		var partial_native_states := native_states.duplicate(true)
+		partial_native_states[0] = {&"position": Vector2.ZERO}
+		_expect(
+			not curve.call(&"apply_point_topology_snapshot", native_order, partial_native_states),
+			"Native atomic topology accepted a partial point state",
+		)
+		_expect(publication[&"count"] == 0, "Native invalid atomic topology published a change")
+		_expect(backend.capture_snapshot() == before_invalid, "Native invalid atomic topology mutated state")

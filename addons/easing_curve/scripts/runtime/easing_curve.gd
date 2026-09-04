@@ -1540,6 +1540,53 @@ func set_point_snapshot(snapshot: Dictionary) -> void:
 		)
 
 
+func _apply_editor_point_topology_snapshot(
+		point_order: Array[EasingCurvePoint],
+		point_snapshot: Dictionary,
+) -> bool:
+	if point_order.has(null):
+		return false
+	var validation := SNAPSHOT_CODEC.validate_point_snapshot(
+		point_snapshot,
+		POINT_PROPERTY_DEFINITIONS,
+	)
+	if not bool(validation.get("compatible", false)):
+		return false
+	for definition in POINT_PROPERTY_DEFINITIONS:
+		var snapshot_key: StringName = definition["snapshot_key"]
+		var property_type: int = definition["type"]
+		if not point_snapshot.has(snapshot_key):
+			return false
+		var values: Variant = point_snapshot[snapshot_key]
+		if (
+			not SNAPSHOT_CODEC.is_point_snapshot_container(values, property_type)
+			or values.size() != point_order.size()
+		):
+			return false
+	var seen := {}
+	for point in point_order:
+		var point_id := point.get_instance_id()
+		if seen.has(point_id):
+			return false
+		seen[point_id] = true
+	var changed := not _point_arrays_match(_points, point_order)
+	if not changed:
+		changed = get_point_snapshot() != point_snapshot
+	if not changed:
+		return true
+
+	_disconnect_point_signals()
+	_points = point_order.duplicate()
+	_points_array_exposed = true
+	_mark_point_topology_dirty()
+	_synchronize_point_connections()
+	var revision_before := _change_revision
+	set_point_snapshot(point_snapshot)
+	if _change_revision == revision_before:
+		_notify_curve_changed(true, true)
+	return true
+
+
 func _restore_point_snapshot_state(
 		point: EasingCurvePoint,
 		index: int,

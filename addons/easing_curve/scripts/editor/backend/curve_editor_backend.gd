@@ -14,6 +14,10 @@ const CONTROL_SIDE_RIGHT := 1
 const CONTROL_STATE_FREE := 0
 const CONTROL_STATE_LINEAR := 1
 const CONTROL_STATE_LOCKED := 2
+const POINT_ORDER_EPSILON := 0.000001
+
+const SNAPSHOT_POINT_ORDER := &"point_order"
+const SNAPSHOT_POINT_STATES := &"point_states"
 
 var curve: Resource
 
@@ -63,6 +67,48 @@ func find_point(point: Resource) -> int:
 	for index in range(get_point_count()):
 		if get_point(index) == point:
 			return index
+	return -1
+
+
+func create_point(_position: Vector2) -> Resource:
+	return null
+
+
+func add_point(_point: Resource) -> int:
+	return -1
+
+
+func remove_point(_index: int) -> bool:
+	return false
+
+
+func get_ordered_points(active_point: Resource = null) -> Array[Resource]:
+	var result := get_points()
+	if active_point == null:
+		return result
+	var active_position: Variant = active_point.get(&"position")
+	if active_position is not Vector2:
+		return []
+	var takes_left_endpoint := absf(active_position.x) <= POINT_ORDER_EPSILON
+	var takes_right_endpoint := absf(active_position.x - 1.0) <= POINT_ORDER_EPSILON
+	for index in range(result.size() - 1, -1, -1):
+		var point := result[index]
+		if point == active_point:
+			continue
+		var position: Variant = point.get(&"position")
+		if position is not Vector2:
+			return []
+		if (
+			(takes_left_endpoint and absf(position.x) <= POINT_ORDER_EPSILON)
+			or (takes_right_endpoint and absf(position.x - 1.0) <= POINT_ORDER_EPSILON)
+		):
+			result.remove_at(index)
+	if active_point not in result:
+		result.append(active_point)
+	return _sort_points_by_x(result)
+
+
+func apply_point_order(_point_order: Array[Resource]) -> int:
 	return -1
 
 
@@ -117,3 +163,28 @@ func apply_snapshot(_snapshot: Variant) -> bool:
 
 func create_preview_backend() -> RefCounted:
 	return null
+
+
+func _sort_points_by_x(point_order: Array[Resource]) -> Array[Resource]:
+	var entries: Array[Dictionary] = []
+	for index in range(point_order.size()):
+		var point := point_order[index]
+		if point == null:
+			return []
+		var position: Variant = point.get(&"position")
+		if position is not Vector2:
+			return []
+		entries.append({
+			&"point": point,
+			&"index": index,
+			&"bucket": roundi(position.x / POINT_ORDER_EPSILON),
+		})
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a[&"bucket"] == b[&"bucket"]:
+			return a[&"index"] < b[&"index"]
+		return a[&"bucket"] < b[&"bucket"]
+	)
+	var result: Array[Resource] = []
+	for entry in entries:
+		result.append(entry[&"point"])
+	return result

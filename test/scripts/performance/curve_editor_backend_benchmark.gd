@@ -11,6 +11,7 @@ const SNAPSHOT_ITERATIONS := 300
 const MUTATION_ITERATIONS := 1000
 const GESTURE_ITERATIONS := 200
 const GESTURE_MOTIONS := 12
+const TOPOLOGY_ITERATIONS := 32
 const TRIAL_COUNT := 9
 
 var _sink := 0.0
@@ -32,9 +33,10 @@ func _run() -> void:
 	])
 	_benchmark_curve("legacy", _make_legacy_curve())
 	_benchmark_curve("native", _make_native_curve())
+	var topology_passed := _benchmark_topology_comparison()
 	print("SINK|%.9f" % _sink)
-	print("BACKEND_BENCHMARK_COMPLETE|cases=10|signal_cases=2")
-	quit()
+	print("BACKEND_BENCHMARK_COMPLETE|cases=14|signal_cases=2|topology_cases=4")
+	quit(0 if topology_passed else 1)
 
 
 func _benchmark_curve(label: String, curve: Resource) -> void:
@@ -254,6 +256,92 @@ func _measure_gesture_signal_count(label: String, curve: Resource, backend: RefC
 		changes[0],
 		float(changes[0]) / GESTURE_MOTIONS,
 	])
+	backend.apply_snapshot(before)
+
+
+func _benchmark_topology_comparison() -> bool:
+	var legacy_backend := BackendFactory.create(_make_legacy_curve())
+	var native_backend := BackendFactory.create(_make_native_curve())
+	var workloads := [
+		["add_65", Callable(self, "_topology_add")],
+		["remove_65", Callable(self, "_topology_remove")],
+		["reorder_65", Callable(self, "_topology_reorder")],
+		["snapshot_65", Callable(self, "_topology_snapshot")],
+	]
+	var passed := true
+	for workload: Array in workloads:
+		var legacy_workload: Callable = workload[1].bind(legacy_backend)
+		var native_workload: Callable = workload[1].bind(native_backend)
+		legacy_workload.call()
+		native_workload.call()
+		var legacy_samples: Array[float] = []
+		var native_samples: Array[float] = []
+		for trial in range(TRIAL_COUNT):
+			if trial % 2 == 0:
+				legacy_samples.append(_measure(legacy_workload))
+				native_samples.append(_measure(native_workload))
+			else:
+				native_samples.append(_measure(native_workload))
+				legacy_samples.append(_measure(legacy_workload))
+		legacy_samples.sort()
+		native_samples.sort()
+		var legacy_median := legacy_samples[TRIAL_COUNT / 2]
+		var native_median := native_samples[TRIAL_COUNT / 2]
+		var legacy_mad := _median_absolute_deviation(legacy_samples, legacy_median)
+		var native_mad := _median_absolute_deviation(native_samples, native_median)
+		var limit := legacy_median + 3.0 * (legacy_mad + native_mad)
+		var status := "PASS" if native_median <= limit else "REGRESSION"
+		print("TOPOLOGY_COMPARE|%s|%s|legacy_usec=%.1f|legacy_mad=%.1f|native_usec=%.1f|native_mad=%.1f|limit=%.1f" % [
+			status,
+			workload[0],
+			legacy_median,
+			legacy_mad,
+			native_median,
+			native_mad,
+			limit,
+		])
+		if status == "REGRESSION":
+			push_error("Native topology workload %s exceeded the combined MAD envelope" % workload[0])
+			passed = false
+	return passed
+
+
+func _topology_add(backend: RefCounted) -> void:
+	var before: Variant = backend.capture_snapshot()
+	for iteration in range(TOPOLOGY_ITERATIONS):
+		var x := (float(iteration) + 0.5) / TOPOLOGY_ITERATIONS
+		var point: Resource = backend.create_point(Vector2(x, 0.25 + x * 0.5))
+		_sink += backend.add_point(point)
+	backend.apply_snapshot(before)
+
+
+func _topology_remove(backend: RefCounted) -> void:
+	var before: Variant = backend.capture_snapshot()
+	for _iteration in range(TOPOLOGY_ITERATIONS):
+		_sink += 1.0 if backend.remove_point(backend.get_point_count() / 2) else 0.0
+	backend.apply_snapshot(before)
+
+
+func _topology_reorder(backend: RefCounted) -> void:
+	var before: Variant = backend.capture_snapshot()
+	var point_order: Array[Resource] = backend.get_points()
+	for iteration in range(TOPOLOGY_ITERATIONS):
+		var left := 1 + iteration % (point_order.size() - 2)
+		var swap := point_order[left]
+		point_order[left] = point_order[left + 1]
+		point_order[left + 1] = swap
+		_sink += backend.apply_point_order(point_order)
+	backend.apply_snapshot(before)
+
+
+func _topology_snapshot(backend: RefCounted) -> void:
+	var before: Variant = backend.capture_snapshot()
+	var point_order: Array[Resource] = backend.get_points()
+	point_order.reverse()
+	backend.apply_point_order(point_order)
+	var reversed: Variant = backend.capture_snapshot()
+	for iteration in range(TOPOLOGY_ITERATIONS):
+		_sink += 1.0 if backend.apply_snapshot(before if iteration % 2 == 0 else reversed) else 0.0
 	backend.apply_snapshot(before)
 
 

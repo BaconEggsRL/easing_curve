@@ -52,8 +52,35 @@ jobs:
           name: easing-curve-native-web-wasm32
           path: addons/easing_curve/bin/*web*.nothreads.wasm
 
+  windows-tests:
+    needs: windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.1
+          use-dotnet: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: easing-curve-native-windows-x86_64
+          path: addons/easing_curve/bin
+      - name: Run all Windows test suites against the release library
+        shell: pwsh
+        run: |
+          $godotLinkPath = (Get-Command godot -ErrorAction Stop).Source
+          $godotLink = Get-Item -LiteralPath $godotLinkPath -Force
+          $godotTarget = @($godotLink.Target)[0]
+          if ([string]::IsNullOrWhiteSpace($godotTarget)) {
+            $godotTarget = $godotLinkPath
+          } elseif (-not [IO.Path]::IsPathRooted($godotTarget)) {
+            $godotTarget = Join-Path $godotLink.DirectoryName $godotTarget
+          }
+          $godotPath = (Resolve-Path -LiteralPath $godotTarget).Path
+          ./test/runners/run_all_tests.ps1 --run -GodotPath $godotPath
+
   web-runtime:
-    needs: [windows, web]
+    needs: [windows, windows-tests, web]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,5 +103,13 @@ jobs:
       - name: Export and run Native Web debug and release fixtures
         shell: pwsh
         run: |
-          $godotPath = (Get-Command godot -ErrorAction Stop).Source
+          $godotLinkPath = (Get-Command godot -ErrorAction Stop).Source
+          $godotLink = Get-Item -LiteralPath $godotLinkPath -Force
+          $godotTarget = @($godotLink.Target)[0]
+          if ([string]::IsNullOrWhiteSpace($godotTarget)) {
+            $godotTarget = $godotLinkPath
+          } elseif (-not [IO.Path]::IsPathRooted($godotTarget)) {
+            $godotTarget = Join-Path $godotLink.DirectoryName $godotTarget
+          }
+          $godotPath = (Resolve-Path -LiteralPath $godotTarget).Path
           ./test/runners/run_native_web_export_test.ps1 -SkipBuild -GodotPath $godotPath

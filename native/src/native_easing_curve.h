@@ -183,6 +183,7 @@ public:
 	void clear_points();
 	Array capture_point_states() const;
 	bool apply_point_states(const Array &p_states);
+	bool apply_point_topology_snapshot(const Array &p_point_order, const Array &p_point_states);
 	Ref<NativeEasingCurve> create_runtime_copy() const;
 
 	void cubic_bezier(double p_x1, double p_y1, double p_x2, double p_y2);

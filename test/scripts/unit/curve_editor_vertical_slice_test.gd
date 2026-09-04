@@ -16,6 +16,8 @@ func _run() -> void:
 	_test_legacy_selection_path()
 	_test_native_selection_and_point_options()
 	_test_native_geometry_gestures()
+	_test_native_add_delete_and_endpoint_topology()
+	_test_native_crossing_and_toolbar_reorder()
 	_test_native_inspector_path()
 	_finish("shared curve editor vertical slice")
 
@@ -166,9 +168,178 @@ func _test_native_geometry_gestures() -> void:
 	editor.queue_free()
 
 
-func _mouse_button(position: Vector2, pressed: bool) -> InputEventMouseButton:
+func _test_native_add_delete_and_endpoint_topology() -> void:
+	if not ClassDB.class_exists(&"NativeEasingCurve"):
+		return
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	curve.set(&"transition", 100)
+	var editor := CURVE_EDITOR.new() as EasingCurveEditor
+	var history := UndoRedo.new()
+	editor.editor_undo_redo = history
+	editor.set_curve(curve)
+	editor.size = Vector2(520.0, 260.0)
+	root.add_child(editor)
+	editor.update_view_transform()
+
+	var add_world := Vector2(0.35, 0.4)
+	var add_view := editor.get_view_pos(add_world)
+	editor._gui_input(_mouse_button(add_view, true))
+	var cancelled_point := editor.get(&"pending_add_point") as Resource
+	_expect(cancelled_point != null, "Native pending add did not create a backend point")
+	_expect(curve.call(&"get_point_count") == 2, "Native pending add mutated topology before release")
+	editor._gui_input(_mouse_button(add_view, true, MOUSE_BUTTON_RIGHT))
+	_expect(editor.get(&"pending_add_point") == null, "Native RMB did not cancel pending add")
+	_expect(not history.has_undo(), "Native pending-add cancellation created Undo history")
+
+	var changes := [0]
+	curve.changed.connect(func() -> void: changes[0] += 1)
+	editor._gui_input(_mouse_button(add_view, true))
+	var added_point := editor.get(&"pending_add_point") as Resource
+	editor._gui_input(_mouse_button(add_view, false))
+	_expect(curve.call(&"get_point_count") == 3, "Native click add did not commit topology")
+	_expect(editor.selected_index == 1 and curve.call(&"get_point", 1) == added_point, "Native click add lost point identity or selection")
+	_expect(changes[0] == 1, "Native click add published more than once")
+	_expect(history.has_undo(), "Native click add did not create Undo history")
+	history.undo()
+	_expect(curve.call(&"get_point_count") == 2, "Native click-add Undo did not remove the point")
+	_expect(editor.selected_index == -1, "Native click-add Undo did not restore selection")
+	_expect(not history.has_undo() and history.has_redo(), "Native click add created more than one Undo action")
+	history.redo()
+	_expect(curve.call(&"get_point", 1) == added_point, "Native click-add Redo recreated point identity")
+	_expect(editor.selected_index == 1, "Native click-add Redo did not restore point selection")
+
+	history.clear_history()
+	add_view = editor.get_view_pos(added_point.get(&"position"))
+	editor._gui_input(_mouse_button(add_view, true))
+	editor._gui_input(_mouse_button(add_view, false))
+	_expect(not history.has_undo(), "Native no-op point release created Undo history")
+
+	var old_left := curve.call(&"get_point", 0) as Resource
+	var endpoint_start_view := editor.get_view_pos(Vector2(0.2, 0.7))
+	var endpoint_view := editor.get_view_pos(Vector2(0.0, 0.7))
+	history.clear_history()
+	editor._gui_input(_mouse_button(endpoint_start_view, true))
+	var replacement := editor.get(&"pending_add_point") as Resource
+	editor._gui_input(_mouse_motion(endpoint_view))
+	changes[0] = 0
+	editor._gui_input(_mouse_button(endpoint_view, false))
+	_expect(curve.call(&"get_point_count") == 3, "Native endpoint takeover changed the point count")
+	_expect(curve.call(&"get_point", 0) == replacement, "Native endpoint takeover lost the replacement resource")
+	_expect(curve.call(&"get_points").find(old_left) == -1, "Native endpoint takeover retained the displaced endpoint")
+	_expect(changes[0] == 1, "Native endpoint takeover published more than once")
+
+	var selected_point := curve.call(&"get_point", 2) as Resource
+	editor.select_point(selected_point)
+	var delete_point := curve.call(&"get_point", 1) as Resource
+	var delete_view := editor.get_view_pos(delete_point.get(&"position"))
+	history.clear_history()
+	changes[0] = 0
+	editor._gui_input(_mouse_button(delete_view, true, MOUSE_BUTTON_RIGHT))
+	editor._gui_input(_mouse_button(delete_view, false, MOUSE_BUTTON_RIGHT))
+	_expect(curve.call(&"get_point_count") == 2, "Native RMB delete did not remove the point")
+	_expect(editor.selected_index == 1 and curve.call(&"get_point", 1) == selected_point, "Native RMB delete did not preserve shifted selection identity")
+	_expect(changes[0] == 1, "Native RMB delete published more than once")
+	_expect(not editor.is_right_delete_dragging, "Native RMB release retained stale drag state")
+	history.undo()
+	_expect(curve.call(&"get_point", 1) == delete_point, "Native RMB-delete Undo recreated point identity")
+	_expect(editor.selected_index == 2 and curve.call(&"get_point", 2) == selected_point, "Native RMB-delete Undo lost selection identity")
+	history.redo()
+	_expect(editor.selected_index == 1 and curve.call(&"get_point", 1) == selected_point, "Native RMB-delete Redo lost selection identity")
+
+	history.clear_history()
+	delete_view = editor.get_view_pos(selected_point.get(&"position"))
+	editor._gui_input(_mouse_button(delete_view, true, MOUSE_BUTTON_RIGHT))
+	editor._gui_input(_mouse_button(delete_view, false, MOUSE_BUTTON_RIGHT))
+	_expect(editor.selected_index == -1, "Deleting the selected Native point did not clear selection")
+	history.undo()
+	_expect(editor.selected_index == 1 and curve.call(&"get_point", 1) == selected_point, "Selected-point delete Undo lost selection identity")
+	history.redo()
+	_expect(editor.selected_index == -1, "Selected-point delete Redo did not clear selection")
+	editor.queue_free()
+
+
+func _test_native_crossing_and_toolbar_reorder() -> void:
+	if not ClassDB.class_exists(&"NativeEasingCurve"):
+		return
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	curve.set(&"transition", 100)
+	var first := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+	first.set(&"position", Vector2(0.35, 0.35))
+	first.set(&"left_control_point", Vector2(0.25, 0.35))
+	first.set(&"right_control_point", Vector2(0.45, 0.35))
+	var second := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+	second.set(&"position", Vector2(0.65, 0.65))
+	second.set(&"left_control_point", Vector2(0.55, 0.65))
+	second.set(&"right_control_point", Vector2(0.75, 0.65))
+	curve.call(&"insert_point", 1, first)
+	curve.call(&"insert_point", 2, second)
+	var editor := CURVE_EDITOR.new() as EasingCurveEditor
+	var history := UndoRedo.new()
+	editor.editor_undo_redo = history
+	editor.set_curve(curve)
+	editor.size = Vector2(520.0, 260.0)
+	root.add_child(editor)
+	editor.update_view_transform()
+
+	var start_view := editor.get_view_pos(first.get(&"position"))
+	var target_position := Vector2(0.8, 0.45)
+	var target_view := editor.get_view_pos(target_position)
+	var changes := [0]
+	curve.changed.connect(func() -> void: changes[0] += 1)
+	editor._gui_input(_mouse_button(start_view, true))
+	_expect(editor.selected_index == 1, "Native crossing press did not select the dragged point")
+	editor._gui_input(_mouse_motion(target_view))
+	_expect(editor.get("_backend_point_edit_selected_before") == first, "Native crossing transaction did not capture selected resource identity")
+	var changes_before_release: int = changes[0]
+	editor._gui_input(_mouse_button(target_view, false))
+	_expect(curve.call(&"get_point", 2) == first, "Native right crossing did not commit point order")
+	_expect(editor.selected_index == 2, "Native right crossing lost selected point identity")
+	_expect(changes[0] == changes_before_release + 1, "Native crossing release did not publish exactly once")
+	_expect(history.has_undo(), "Native crossing did not create Undo history")
+	history.undo()
+	_expect(curve.call(&"get_point", 1) == first, "Native crossing Undo lost point identity")
+	_expect(
+		editor.selected_index == 1,
+		"Native crossing Undo lost selection identity (index=%d, resolved=%d)"
+		% [editor.selected_index, (curve.call(&"get_points") as Array).find(first)],
+	)
+	_expect(not history.has_undo() and history.has_redo(), "Native crossing created more than one Undo action")
+	history.redo()
+	_expect(curve.call(&"get_point", 2) == first and editor.selected_index == 2, "Native crossing Redo lost identity or selection")
+
+	history.clear_history()
+	start_view = editor.get_view_pos(first.get(&"position"))
+	target_position = Vector2(0.2, 0.45)
+	target_view = editor.get_view_pos(target_position)
+	editor._gui_input(_mouse_button(start_view, true))
+	editor._gui_input(_mouse_motion(target_view))
+	editor._gui_input(_mouse_button(target_view, false))
+	_expect(curve.call(&"get_point", 1) == first and editor.selected_index == 1, "Native left crossing lost identity or selection")
+	history.undo()
+	_expect(curve.call(&"get_point", 2) == first and editor.selected_index == 2, "Native left-crossing Undo lost identity or selection")
+	history.redo()
+	_expect(curve.call(&"get_point", 1) == first and editor.selected_index == 1, "Native left-crossing Redo lost identity or selection")
+	history.undo()
+
+	history.clear_history()
+	editor.point_move_buttons_reorder_points = true
+	editor.call(&"_request_point_move_up")
+	_expect(curve.call(&"get_point", 1) == first and editor.selected_index == 1, "Native toolbar reorder lost identity or selection")
+	_expect(history.has_undo(), "Native toolbar reorder did not create Undo history")
+	history.undo()
+	_expect(curve.call(&"get_point", 2) == first and editor.selected_index == 2, "Native toolbar reorder Undo lost identity or selection")
+	history.redo()
+	_expect(curve.call(&"get_point", 1) == first and editor.selected_index == 1, "Native toolbar reorder Redo lost identity or selection")
+	editor.queue_free()
+
+
+func _mouse_button(
+	position: Vector2,
+	pressed: bool,
+	button_index: MouseButton = MOUSE_BUTTON_LEFT,
+) -> InputEventMouseButton:
 	var event := InputEventMouseButton.new()
-	event.button_index = MOUSE_BUTTON_LEFT
+	event.button_index = button_index
 	event.position = position
 	event.pressed = pressed
 	return event

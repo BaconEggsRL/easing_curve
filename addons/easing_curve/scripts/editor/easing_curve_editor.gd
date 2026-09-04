@@ -43,7 +43,6 @@ enum ControlIndex { NONE = -1, LEFT = 0, RIGHT = 1 }
 const ZOOM_SLIDER_CONTAINER = preload(
 	"res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.tscn"
 )
-const EASING_CURVE_EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const ZOOM_MIN := EasingCurve.ZOOM_MIN
 const ZOOM_MAX := EasingCurve.ZOOM_MAX
 const ZOOM_FACTOR := EasingCurve.ZOOM_FACTOR
@@ -94,8 +93,8 @@ var hovered_control_index: ControlIndex = ControlIndex.NONE
 
 var dragging_point: int = -1
 var dragging_control: ControlIndex = ControlIndex.NONE
-var pending_add_point: EasingCurvePoint
-var position_x_order_preview_point: EasingCurvePoint
+var pending_add_point: Resource
+var position_x_order_preview_point: Resource
 var is_right_delete_dragging := false
 var _right_delete_requires_exit := false
 var _right_delete_blocked_position := Vector2.ZERO
@@ -138,6 +137,7 @@ var _graph_render_suppressed := false
 var _backend_point_edit_active := false
 var _backend_point_edit_before: Variant
 var _backend_point_edit_action_name := "Edit Easing Curve Point"
+var _backend_point_edit_selected_before: Resource
 
 
 func _ready() -> void:
@@ -232,11 +232,12 @@ func _handle_pending_add_motion(event: InputEventMouseMotion) -> void:
 	var world_pos := get_world_pos(event.position)
 	if not world_pos.is_finite():
 		return
+	var value_range := _value_range()
 	var clamped_pos := world_pos.clamp(
-		Vector2(0, _curve.min_value),
-		Vector2(1.0, _curve.max_value),
+		Vector2(0, value_range.x),
+		Vector2(1.0, value_range.y),
 	)
-	pending_add_point.position = clamped_pos
+	pending_add_point.set(&"position", clamped_pos)
 	queue_redraw()
 
 
@@ -435,25 +436,19 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 	var world_pos := get_world_pos(event.position)
 	if not world_pos.is_finite():
 		return
-	var clamped_pos := world_pos.clamp(Vector2(0, _curve.min_value), Vector2(1.0, _curve.max_value))
+	var value_range := _value_range()
+	var clamped_pos := world_pos.clamp(Vector2(0, value_range.x), Vector2(1.0, value_range.y))
 	if use_pending_add:
-		pending_add_point = EasingCurvePoint.new()
-		pending_add_point.position = clamped_pos
-		pending_add_point.left_control_point = clamped_pos + Vector2(-0.1, 0.0)
-		pending_add_point.right_control_point = clamped_pos + Vector2(0.1, 0.0)
+		pending_add_point = _backend.create_point(clamped_pos)
+		if pending_add_point == null:
+			return
 		queue_redraw()
 		accept_event()
 		return
-	var new_point := EasingCurvePoint.new()
-	new_point.position = clamped_pos
-	new_point.left_control_point = clamped_pos + Vector2(-0.1, 0.0)
-	new_point.right_control_point = clamped_pos + Vector2(0.1, 0.0)
-	_request_point_add(new_point)
-	selected_index = -1
-	for i in range(_curve.points.size()):
-		if _curve.points[i].position == clamped_pos:
-			selected_index = i
-			break
+	var new_point: Resource = _backend.create_point(clamped_pos)
+	if new_point == null:
+		return
+	selected_index = _request_point_add(new_point)
 	if selected_index != -1:
 		dragging_point = selected_index
 		dragging_control = ControlIndex.NONE
@@ -482,31 +477,30 @@ func _handle_right_pressed(event: InputEventMouseButton) -> void:
 func _handle_left_released() -> void:
 	if pending_add_point != null:
 		var point := pending_add_point
-		var point_position := point.position
 		pending_add_point = null
-		_request_point_add(point)
-		selected_index = -1
-		for i in range(_curve.points.size()):
-			if _curve.points[i].position == point_position:
-				selected_index = i
-				break
+		selected_index = _request_point_add(point)
 		dragging_point = -1
 		dragging_control = ControlIndex.NONE
 		_clear_axis_drag()
 		queue_redraw()
 		return
 	var finish_point_edit := dragging_point != -1
-	var point_order: Array[EasingCurvePoint] = []
-	if finish_point_edit and dragging_control == ControlIndex.NONE and _curve != null:
-		var dragged_point := _curve.points[dragging_point]
+	var point_order: Array[Resource] = []
+	var dragged_point: Resource
+	if finish_point_edit and dragging_control == ControlIndex.NONE:
+		dragged_point = _point(dragging_point)
 		point_order = _get_display_points()
-		selected_index = point_order.find(dragged_point)
+		if _curve == null:
+			_backend.apply_point_order(point_order)
+		selected_index = _backend.find_point(dragged_point)
 	dragging_point = -1
 	dragging_control = ControlIndex.NONE
 	_clear_axis_drag()
 	if finish_point_edit:
-		if point_edit_finished.has_connections():
-			point_edit_finished.emit(point_order)
+		if _curve != null and point_edit_finished.has_connections():
+			var legacy_order: Array[EasingCurvePoint] = []
+			legacy_order.assign(point_order)
+			point_edit_finished.emit(legacy_order)
 		else:
 			_finish_backend_point_edit()
 	queue_redraw()
@@ -521,6 +515,7 @@ func _request_point_property_change(index: int, property_name: StringName, value
 	if changing and not _backend_point_edit_active:
 		_backend_point_edit_before = _duplicate_snapshot(_backend.capture_snapshot())
 		_backend_point_edit_action_name = _point_edit_action_name(property_name)
+		_backend_point_edit_selected_before = _selected_point_resource()
 		_backend_point_edit_active = true
 		_backend.begin_point_edit()
 
@@ -552,32 +547,58 @@ func _finish_backend_point_edit() -> void:
 	_backend_point_edit_active = false
 	_backend_point_edit_before = null
 	_backend_point_edit_action_name = "Edit Easing Curve Point"
+	var selected_before := _backend_point_edit_selected_before
+	_backend_point_edit_selected_before = null
 	_backend.finish_point_edit()
 	var after: Variant = _duplicate_snapshot(_backend.capture_snapshot())
 	if before == after:
 		return
-	_commit_backend_snapshot_action(action_name, before, after)
+	_commit_backend_snapshot_action(
+		action_name,
+		before,
+		after,
+		selected_before,
+		_selected_point_resource(),
+	)
 
 
 func _commit_backend_snapshot_action(
 	action_name: String,
 	before: Variant,
 	after: Variant,
+	selected_before: Resource = null,
+	selected_after: Resource = null,
 ) -> void:
 	if editor_undo_redo == null:
 		return
+	var selected_before_id := selected_before.get_instance_id() if selected_before != null else 0
+	var selected_after_id := selected_after.get_instance_id() if selected_after != null else 0
 	editor_undo_redo.create_action(action_name)
 	if editor_undo_redo is EditorUndoRedoManager:
-		editor_undo_redo.add_do_method(_backend, &"apply_snapshot", after)
-		editor_undo_redo.add_undo_method(_backend, &"apply_snapshot", before)
+		editor_undo_redo.add_do_method(self, &"_apply_backend_snapshot_and_selection", after, selected_after_id)
+		editor_undo_redo.add_undo_method(self, &"_apply_backend_snapshot_and_selection", before, selected_before_id)
 	else:
 		editor_undo_redo.add_do_method(
-			Callable(_backend, &"apply_snapshot").bind(after),
+			Callable(self, &"_apply_backend_snapshot_and_selection").bind(after, selected_after_id),
 		)
 		editor_undo_redo.add_undo_method(
-			Callable(_backend, &"apply_snapshot").bind(before),
+			Callable(self, &"_apply_backend_snapshot_and_selection").bind(before, selected_before_id),
 		)
 	editor_undo_redo.commit_action(false)
+
+
+func _apply_backend_snapshot_and_selection(snapshot: Variant, selected_point_id: int) -> void:
+	if _backend == null or not _backend.apply_snapshot(snapshot):
+		return
+	selected_index = -1
+	if selected_point_id != 0:
+		for index in range(_point_count()):
+			var point := _point(index)
+			if point != null and point.get_instance_id() == selected_point_id:
+				selected_index = index
+				break
+	if selected_index == -1:
+		selected_control_index = ControlIndex.NONE
 
 
 func _duplicate_snapshot(snapshot: Variant) -> Variant:
@@ -601,35 +622,58 @@ func _point_edit_action_name(property_name: StringName) -> String:
 	return "Edit Easing Curve Point"
 
 
-func _request_point_add(point: EasingCurvePoint) -> void:
-	if point_add_requested.has_connections():
+func _request_point_add(point: Resource) -> int:
+	if _curve != null and point is EasingCurvePoint and point_add_requested.has_connections():
 		point_add_requested.emit(point)
-	else:
-		EASING_CURVE_EDITOR_UNDO.apply_action(
-			editor_undo_redo,
-			_curve,
-			"Add Easing Curve Point",
-			_curve.add_point.bind(point),
-		)
+		return _backend.find_point(point)
+	var before := _duplicate_snapshot(_backend.capture_snapshot())
+	var selected_before := _selected_point_resource()
+	var result: int = _backend.add_point(point)
+	if result < 0:
+		return -1
+	var after := _duplicate_snapshot(_backend.capture_snapshot())
+	_commit_backend_snapshot_action(
+		"Add Easing Curve Point",
+		before,
+		after,
+		selected_before,
+		point,
+	)
+	return result
 
 
-func _request_point_remove(point: EasingCurvePoint) -> void:
-	if point_remove_requested.has_connections():
+func _request_point_remove(point: Resource) -> bool:
+	if _curve != null and point is EasingCurvePoint and point_remove_requested.has_connections():
 		point_remove_requested.emit(point)
-	else:
-		EASING_CURVE_EDITOR_UNDO.apply_action(
-			editor_undo_redo,
-			_curve,
-			"Remove Easing Curve Point",
-			_curve.remove_point.bind(point),
-		)
+		return true
+	var index: int = _backend.find_point(point)
+	if index < 0:
+		return false
+	var before := _duplicate_snapshot(_backend.capture_snapshot())
+	var selected_before := _selected_point_resource()
+	var selected_after := selected_before if selected_before != point else null
+	if not _backend.remove_point(index):
+		return false
+	selected_index = _backend.find_point(selected_after) if selected_after != null else -1
+	var after := _duplicate_snapshot(_backend.capture_snapshot())
+	_commit_backend_snapshot_action(
+		"Remove Easing Curve Point",
+		before,
+		after,
+		selected_before,
+		selected_after,
+	)
+	return true
 
 
 func _request_point_move_up() -> void:
 	if not _can_use_point_move_buttons():
 		return
-	if point_move_buttons_reorder_points and _curve != null:
-		point_move_up_requested.emit(selected_index)
+	if point_move_buttons_reorder_points:
+		if _curve != null:
+			point_move_up_requested.emit(selected_index)
+		else:
+			_reorder_selected_point(wrapi(selected_index - 1, 0, _point_count()))
 	else:
 		selected_index = wrapi(selected_index - 1, 0, _point_count())
 
@@ -637,8 +681,11 @@ func _request_point_move_up() -> void:
 func _request_point_move_down() -> void:
 	if not _can_use_point_move_buttons():
 		return
-	if point_move_buttons_reorder_points and _curve != null:
-		point_move_down_requested.emit(selected_index)
+	if point_move_buttons_reorder_points:
+		if _curve != null:
+			point_move_down_requested.emit(selected_index)
+		else:
+			_reorder_selected_point(wrapi(selected_index + 1, 0, _point_count()))
 	else:
 		selected_index = wrapi(selected_index + 1, 0, _point_count())
 
@@ -650,7 +697,27 @@ func _can_use_point_move_buttons() -> bool:
 		and selected_index >= 0
 		and selected_index < _point_count()
 		and _point_count() >= 2
-		and (not point_move_buttons_reorder_points or _curve != null)
+	)
+
+
+func _reorder_selected_point(to_index: int) -> void:
+	var selected_point := _selected_point_resource()
+	if selected_point == null or to_index < 0 or to_index >= _point_count():
+		return
+	var before := _duplicate_snapshot(_backend.capture_snapshot())
+	var point_order := _points()
+	point_order.remove_at(selected_index)
+	point_order.insert(to_index, selected_point)
+	if _backend.apply_point_order(point_order) < 0:
+		return
+	selected_index = _backend.find_point(selected_point)
+	var after := _duplicate_snapshot(_backend.capture_snapshot())
+	_commit_backend_snapshot_action(
+		"Reorder Easing Curve Point",
+		before,
+		after,
+		selected_point,
+		selected_point,
 	)
 
 
@@ -670,15 +737,10 @@ func _try_remove_point_at(view_pos: Vector2) -> bool:
 	if point_idx == -1:
 		return false
 
-	var point := _curve.points[point_idx]
+	var point := _point(point_idx)
 	_right_delete_requires_exit = true
 	_right_delete_blocked_position = get_view_pos(point.position)
 	_store_right_delete_drag_state()
-
-	if selected_index == point_idx:
-		selected_index = -1
-	elif selected_index > point_idx:
-		selected_index -= 1
 
 	_request_point_remove(point)
 	queue_redraw()
@@ -690,26 +752,29 @@ func _set_right_delete_dragging(enabled: bool) -> void:
 	if not enabled:
 		_right_delete_requires_exit = false
 		_right_delete_blocked_position = Vector2.ZERO
-		if _curve != null:
-			_right_delete_drag_state_by_curve.erase(_curve.get_instance_id())
+		var resource := get_curve()
+		if resource != null:
+			_right_delete_drag_state_by_curve.erase(resource.get_instance_id())
 		return
 	_store_right_delete_drag_state()
 
 
 func _store_right_delete_drag_state() -> void:
-	if _curve == null or not is_right_delete_dragging:
+	var resource := get_curve()
+	if resource == null or not is_right_delete_dragging:
 		return
-	_right_delete_drag_state_by_curve[_curve.get_instance_id()] = {
+	_right_delete_drag_state_by_curve[resource.get_instance_id()] = {
 		"requires_exit": _right_delete_requires_exit,
 		"blocked_position": _right_delete_blocked_position,
 	}
 
 
 func _restore_right_delete_drag_state() -> void:
-	if _curve == null:
+	var resource := get_curve()
+	if resource == null:
 		return
 
-	var curve_id := _curve.get_instance_id()
+	var curve_id := resource.get_instance_id()
 	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		_right_delete_drag_state_by_curve.erase(curve_id)
 		return
@@ -788,7 +853,9 @@ func _draw():
 
 	# --- Draw curve using the same X-to-Y evaluation as EasingCurve.sample() ---
 	if _curve != null and _is_point_graph():
-		_draw_bezier_curve(display_points)
+		var legacy_display_points: Array[EasingCurvePoint] = []
+		legacy_display_points.assign(display_points)
+		_draw_bezier_curve(legacy_display_points)
 
 	# --- Draw points and control points ---
 	for i in range(display_points.size()):
@@ -905,6 +972,7 @@ func set_curve(resource: Resource) -> void:
 	_backend_point_edit_active = false
 	_backend_point_edit_before = null
 	_backend_point_edit_action_name = "Edit Easing Curve Point"
+	_backend_point_edit_selected_before = null
 	var previous := get_curve()
 	if previous != null and previous.changed.is_connected(_on_curve_changed):
 		previous.changed.disconnect(_on_curve_changed)
@@ -943,6 +1011,10 @@ func _point(index: int) -> Resource:
 
 func _points() -> Array[Resource]:
 	return _backend.get_points() if _backend != null else []
+
+
+func _selected_point_resource() -> Resource:
+	return _point(selected_index) if selected_index >= 0 else null
 
 
 func _is_point_graph() -> bool:
@@ -1282,31 +1354,23 @@ func _get_minimum_size() -> Vector2:
 
 
 func _get_display_points() -> Array:
-	if _curve == null:
-		return _points()
-	var display_points: Array[EasingCurvePoint] = _curve.points.duplicate()
-	var active_point: EasingCurvePoint
-
+	if _backend == null:
+		return []
+	var active_point: Resource
 	if pending_add_point != null or (
 		dragging_point != -1
 		and dragging_control == ControlIndex.NONE
 	) or position_x_order_preview_point != null:
 		if pending_add_point != null:
-			display_points.append(pending_add_point)
 			active_point = pending_add_point
 		elif dragging_point != -1 and dragging_control == ControlIndex.NONE:
-			active_point = _curve.points[dragging_point]
+			active_point = _point(dragging_point)
 		else:
 			active_point = position_x_order_preview_point
-		return EasingCurve.build_ordered_points_with_endpoint_takeover(
-			display_points,
-			active_point,
-		)
-
-	return display_points
+	return _backend.get_ordered_points(active_point)
 
 
-func set_position_x_order_preview(point: EasingCurvePoint) -> void:
+func set_position_x_order_preview(point: Resource) -> void:
 	position_x_order_preview_point = point
 	queue_redraw()
 

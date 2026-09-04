@@ -44,7 +44,7 @@ const LEGACY_POINT_METHODS := [
 	"set_position", "set_right_control_point", "set_right_force_linear", "supports_control_state",
 ]
 const NATIVE_CURVE_METHODS := [
-	"add_point", "apply_point_states", "bake_callable", "capture_point_states", "clear_points",
+	"add_point", "apply_point_states", "apply_point_topology_snapshot", "bake_callable", "capture_point_states", "clear_points",
 	"create_runtime_copy", "cubic_bezier", "get_amplitude", "get_constant_value", "get_damping",
 	"get_decay", "get_ease_type", "get_format_status", "get_format_version", "get_frequency",
 	"get_mass", "get_overshoot", "get_period", "get_point", "get_point_count", "get_points",

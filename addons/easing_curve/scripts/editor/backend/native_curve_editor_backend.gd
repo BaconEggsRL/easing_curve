@@ -26,7 +26,7 @@ func get_capabilities() -> Dictionary[StringName, bool]:
 		CAP_HANDLE_MODES: true,
 		CAP_POINT_OPTIONS: true,
 		CAP_POINT_GEOMETRY: true,
-		CAP_POINT_TOPOLOGY: false,
+		CAP_POINT_TOPOLOGY: true,
 		CAP_CONVERSION: false,
 	}
 
@@ -51,6 +51,43 @@ func get_points() -> Array[Resource]:
 	var result: Array[Resource] = []
 	result.assign(curve.get(&"points"))
 	return result
+
+
+func create_point(position: Vector2) -> Resource:
+	var point := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+	if point == null:
+		return null
+	point.set(&"position", position)
+	point.set(&"left_control_point", position - Vector2(0.1, 0.0))
+	point.set(&"right_control_point", position + Vector2(0.1, 0.0))
+	return point
+
+
+func add_point(point: Resource) -> int:
+	if not _is_native_point(point):
+		return -1
+	var point_order := get_ordered_points(point)
+	if point_order.is_empty() or not _apply_topology(point_order):
+		return -1
+	return find_point(point)
+
+
+func remove_point(index: int) -> bool:
+	if index < 0 or index >= get_point_count():
+		return false
+	var point_order := get_points()
+	point_order.remove_at(index)
+	return _apply_topology(point_order)
+
+
+func apply_point_order(point_order: Array[Resource]) -> int:
+	var current := get_points()
+	if point_order.size() != current.size() or not _is_unique_native_points(point_order):
+		return -1
+	for point in point_order:
+		if point not in current:
+			return -1
+	return 0 if _apply_topology(point_order) else -1
 
 
 func sample(offset: float) -> float:
@@ -140,11 +177,24 @@ func apply_point_property(
 
 
 func capture_snapshot() -> Variant:
-	return curve.call(&"capture_point_states")
+	return {
+		SNAPSHOT_POINT_ORDER: get_points(),
+		SNAPSHOT_POINT_STATES: curve.call(&"capture_point_states"),
+	}
 
 
 func apply_snapshot(snapshot: Variant) -> bool:
-	return snapshot is Array and bool(curve.call(&"apply_point_states", snapshot))
+	if snapshot is not Dictionary:
+		return false
+	var point_order: Variant = snapshot.get(SNAPSHOT_POINT_ORDER)
+	var point_states: Variant = snapshot.get(SNAPSHOT_POINT_STATES)
+	if point_order is not Array or point_states is not Array:
+		return false
+	var resources: Array[Resource] = []
+	resources.assign(point_order)
+	if not _is_unique_native_points(resources):
+		return false
+	return bool(curve.call(&"apply_point_topology_snapshot", resources, point_states))
 
 
 func create_preview_backend() -> RefCounted:
@@ -172,3 +222,28 @@ func _control_property(side: int) -> StringName:
 
 func _force_linear_property(side: int) -> StringName:
 	return &"left_force_linear" if side == CONTROL_SIDE_LEFT else &"right_force_linear"
+
+
+func _apply_topology(point_order: Array[Resource]) -> bool:
+	if not _is_unique_native_points(point_order):
+		return false
+	var point_states: Array = []
+	for point in point_order:
+		point_states.append(point.call(&"capture_state"))
+	return bool(curve.call(&"apply_point_topology_snapshot", point_order, point_states))
+
+
+func _is_unique_native_points(point_order: Array[Resource]) -> bool:
+	var seen := {}
+	for point in point_order:
+		if not _is_native_point(point):
+			return false
+		var point_id := point.get_instance_id()
+		if seen.has(point_id):
+			return false
+		seen[point_id] = true
+	return true
+
+
+func _is_native_point(point: Resource) -> bool:
+	return point != null and point.get_class() == &"NativeEasingCurvePoint"

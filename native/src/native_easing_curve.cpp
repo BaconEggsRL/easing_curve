@@ -80,6 +80,7 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("clear_points"), &NativeEasingCurve::clear_points);
 	ClassDB::bind_method(D_METHOD("capture_point_states"), &NativeEasingCurve::capture_point_states);
 	ClassDB::bind_method(D_METHOD("apply_point_states", "states"), &NativeEasingCurve::apply_point_states);
+	ClassDB::bind_method(D_METHOD("apply_point_topology_snapshot", "point_order", "point_states"), &NativeEasingCurve::apply_point_topology_snapshot);
 	ClassDB::bind_method(D_METHOD("create_runtime_copy"), &NativeEasingCurve::create_runtime_copy);
 	ClassDB::bind_method(D_METHOD("cubic_bezier", "x1", "y1", "x2", "y2"), &NativeEasingCurve::cubic_bezier);
 	ClassDB::bind_method(D_METHOD("bake_callable", "callable", "resolution"), &NativeEasingCurve::bake_callable, DEFVAL(40));
@@ -520,6 +521,63 @@ bool NativeEasingCurve::apply_point_states(const Array &p_states) {
 		compile_segments();
 		emit_points_changed();
 	}
+	return true;
+}
+
+bool NativeEasingCurve::apply_point_topology_snapshot(const Array &p_point_order, const Array &p_point_states) {
+	if (p_point_order.size() != p_point_states.size()) {
+		return false;
+	}
+
+	TypedArray<NativeEasingCurvePoint> validated_points;
+	validated_points.resize(p_point_order.size());
+	bool changed = p_point_order.size() != points.size();
+	for (int64_t index = 0; index < p_point_order.size(); ++index) {
+		Ref<NativeEasingCurvePoint> point = p_point_order[index];
+		if (point.is_null() || p_point_states[index].get_type() != Variant::DICTIONARY) {
+			return false;
+		}
+		const Dictionary state = p_point_states[index];
+		const Variant state_position = state.get(StringName("position"), Variant());
+		const Variant state_left = state.get(StringName("left_control_point"), Variant());
+		const Variant state_right = state.get(StringName("right_control_point"), Variant());
+		const Variant state_mode = state.get(StringName("handle_mode"), Variant());
+		const Variant state_left_linear = state.get(StringName("left_force_linear"), Variant());
+		const Variant state_right_linear = state.get(StringName("right_force_linear"), Variant());
+		const Variant state_locks = state.get(StringName("locked"), Variant());
+		if (state_position.get_type() != Variant::VECTOR2 || state_left.get_type() != Variant::VECTOR2 || state_right.get_type() != Variant::VECTOR2 || state_mode.get_type() != Variant::INT || state_left_linear.get_type() != Variant::BOOL || state_right_linear.get_type() != Variant::BOOL || state_locks.get_type() != Variant::DICTIONARY) {
+			return false;
+		}
+		for (int64_t previous = 0; previous < index; ++previous) {
+			if (Ref<NativeEasingCurvePoint>(validated_points[previous]) == point) {
+				return false;
+			}
+		}
+
+		Ref<NativeEasingCurvePoint> validator;
+		validator.instantiate();
+		if (!validator->apply_state(state)) {
+			return false;
+		}
+		validated_points[index] = point;
+		if (!changed && (Ref<NativeEasingCurvePoint>(points[index]) != point || point->capture_state() != state)) {
+			changed = true;
+		}
+	}
+
+	if (!changed) {
+		return true;
+	}
+
+	disconnect_points();
+	points = validated_points;
+	for (int64_t index = 0; index < points.size(); ++index) {
+		Ref<NativeEasingCurvePoint> point = points[index];
+		point->apply_state(p_point_states[index]);
+	}
+	reconnect_points();
+	compile_segments();
+	emit_points_changed();
 	return true;
 }
 
