@@ -105,7 +105,7 @@ func _init() -> void:
 		native_point.call(&"set_locked", &"position", true)
 		_expect(native_backend.is_point_property_locked(0, &"position"), "Native backend did not report the position lock")
 		native.set(&"transition", 0)
-		_expect(not native_backend.is_point_graph(), "Native standard transition exposed point editing")
+		_expect(native_backend.is_point_graph(), "Native editable preset did not expose point editing")
 		var native_topology := ClassDB.instantiate(&"NativeEasingCurve") as Resource
 		native_topology.set(&"transition", 100)
 		_test_topology_contract(

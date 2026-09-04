@@ -55,15 +55,15 @@ with no GDExtension manifest or binary:
 
 ## Resource contract
 
-Native production resources use `format_version = 2`. Godot omits stored
+Native production resources use `format_version = 3`. Godot omits stored
 properties equal to their class defaults, so an absent marker means the current
-v2 default. Explicit malformed (`<= 0`), older (`1`), and future (`> 2`)
-versions are retained through load, save, and runtime duplication so tools can
-diagnose them. Only current-v2 resources can sample; unsupported versions return
-`NAN` instead of being silently interpreted with the current solver. Call
-`get_format_status()` or `is_format_supported()` before migration tooling uses
-the resource. The experimental v1 Native format was never released and is not
-automatically migrated.
+v3 default. Version 3 adds an explicit modified-preset marker. Version 2 remains
+loadable and samples with its original rule: standard transitions stay analytic
+while Custom retains its authored points. Malformed (`<= 0`), experimental v1,
+and future (`> 3`) resources fail closed and return `NAN`. Clean presets omit
+redundant canonical point geometry when saved; modified presets retain their
+point states and marker. Call `get_format_status()` or `is_format_supported()`
+before migration tooling uses the resource.
 
 Future bidirectional converters share the validated dictionary schema in
 `curve_conversion_result.gd`. Every converted field must be classified as
@@ -112,7 +112,8 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
-The runtime benchmark runs in an isolated project containing only this addon and
+The Native smoke suite currently contains 871 checks. The runtime benchmark runs
+in an isolated project containing only this addon and
 the benchmark script. It reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
 custom curves in sequential, reverse, and random sampling order; mutation; and
@@ -126,15 +127,15 @@ calls Tween, GDScript, or a Callable.
 
 ## Shared editor status
 
-The production Inspector and Curve Editor now choose either the legacy or Native
-backend through the shared adapter boundary. Native custom curves render,
-support point selection, point/handle dragging, graph add/delete/crossing,
-endpoint takeover, and toolbar reorder. They expose force-linear and lock
-options, generate previews, preserve point identity and selection, and record
-one Undo/Redo action per committed gesture. Topology snapshots validate before
-mutation, reconnect point signals once, compile once, and publish one curve-level
-change. Native point-list editing remains gated for the next tranche; legacy
-editing behavior is preserved through the adapter.
+The production Inspector and Curve Editor choose either the legacy or Native
+backend through the shared adapter boundary. Native custom curves and the ten
+Bézier-backed presets support graph and point-list creation, deletion, crossing,
+reordering, point/handle dragging, handle modes, force-linear state, locks, and
+preset reset. Graph and list drags compile local previews but defer public and
+live-debug publication until release. Discrete edits, Undo, and Redo publish one
+resource-free editor snapshot. Point identity and selection survive reorder and
+Undo/Redo, and detached points are disconnected. Clean presets continue on the
+analytic sampler; only Custom and modified preset geometry use compiled segments.
 
 ## Manual smoke-test status — 2026-09-04
 
@@ -142,8 +143,9 @@ editing behavior is preserved through the adapter.
 |---|---|---|
 | Standard transition parity | Pass with observation | Circ, Cubic, Elastic, Expo, Quart, and Quint showed slight start jitter relative to Tween. Legacy showed the same behavior, so this is recorded as a harness/timing investigation rather than a Native release blocker. |
 | Deterministic modes and transforms | Pass | No follow-up from this run. |
-| Custom editing and ownership | Graph topology automated; manual check pending | Native selection, handle modes, force-linear, locks, existing-point/handle dragging, add/delete/crossing/reorder, endpoint takeover, detached-point disconnection, exact identity restoration, and one-action Undo/Redo are covered. Point-list editing remains intentionally disabled. Force-linear fields are storage-only and therefore do not appear in the raw point Inspector. |
-| Save, reload, and coexistence | Pass for the shared-editor slice | Native point options, Undo/Redo, and persistence passed; both public APIs continue to work independently. |
+| Custom editing and ownership | Graph and point-list paths automated; manual check pending | Native selection, handle modes, force-linear, locks, deferred drags, add/delete/crossing/reorder, endpoint takeover, detached-point disconnection, exact identity restoration, one-action Undo/Redo, and one live publication per commit are covered. |
+| Preset editing and persistence | Automated pass; manual check pending | Constant, Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, and Back use canonical legacy geometry, retain Transition/Ease identity while edited, show modified/reset state, save overrides, and normalize clean saves. |
+| Save, reload, and coexistence | Automated pass | Modified Native presets and Custom curves round-trip; clean presets omit redundant geometry; both public APIs continue to work independently. |
 | Native resource preview/icon | Pass | Generated Native Inspector previews and the `Curve.svg` FileSystem class icon both passed manual verification. |
 | Match Tween timing probe | Deferred | The probe remains available for a later jitter investigation. |
 | Web export with Native resource | Prior automated pass; local rerun limited | Both local exports succeeded, but Chrome could not start in the current sandbox because crashpad access was denied. The latest hosted build produced Windows and Web artifacts; its dependent browser-runtime job failed before Godot launch on an extensionless setup symlink. The workflow fix is implemented locally but still needs a hosted run. |
@@ -157,9 +159,8 @@ is used for serialized Native resources.
 - Run the corrected Windows-test and Web browser-runtime jobs in GitHub Actions
   and retain the debug/release Web artifacts.
 - Finish generated, CSS, and extended Bounce representations.
-- Complete the remaining Native point-state edge cases and curve-level snapshots.
-- Integrate Native point-list editing and graph/Inspector selection synchronization
-  through the shared editor backend.
+- Complete visible-editor smoke testing for deferred live updates, point-list
+  synchronization, editable presets, reset, and save normalization.
 - Add optional, non-destructive bidirectional conversion.
 - Build the exact dual-API release archive.
 - Add remaining platforms before any legacy deprecation proposal.

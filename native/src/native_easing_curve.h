@@ -4,9 +4,12 @@
 #include "native_easing_curve_point.h"
 
 #include <godot_cpp/classes/resource.hpp>
+#include <godot_cpp/core/property_info.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/callable.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
+#include <godot_cpp/variant/vector4.hpp>
 
 #include <vector>
 
@@ -17,7 +20,7 @@ class NativeEasingCurve : public Resource {
 
 public:
 	enum {
-		FORMAT_VERSION = 2,
+		FORMAT_VERSION = 3,
 	};
 
 	enum Transition {
@@ -95,13 +98,27 @@ private:
 	int64_t last_segment_index = -1;
 	bool applying_point_states = false;
 	bool point_state_changed_while_applying = false;
+	int64_t point_edit_depth = 0;
+	bool point_edit_changed = false;
+	Dictionary point_edit_before;
+	bool preset_override_active = false;
+	bool use_compiled_points = false;
 
 	void reconnect_points();
 	void disconnect_points();
 	void emit_points_changed();
+	void publish_point_change();
 	void compile_segments();
 	void on_point_changed();
 	TypedArray<NativeEasingCurvePoint> duplicate_points() const;
+	void update_sampling_mode();
+	void update_preset_override_from_points();
+	void replace_points(const TypedArray<NativeEasingCurvePoint> &p_points, bool p_publish);
+	TypedArray<NativeEasingCurvePoint> build_selected_preset_points() const;
+	static Ref<NativeEasingCurvePoint> make_point(const Vector2 &p_position);
+	static TypedArray<NativeEasingCurvePoint> make_cubic_bezier(const Vector4 &p_controls);
+	static TypedArray<NativeEasingCurvePoint> make_cubic_bezier_pair(const Vector4 &p_first, const Vector4 &p_second);
+	bool point_states_match(const Array &p_left, const Array &p_right) const;
 
 	double sample_builtin(double p_offset) const;
 	double sample_custom(double p_offset);
@@ -123,6 +140,7 @@ private:
 
 protected:
 	static void _bind_methods();
+	void _validate_property(PropertyInfo &p_property) const;
 
 public:
 	NativeEasingCurve();
@@ -184,6 +202,15 @@ public:
 	Array capture_point_states() const;
 	bool apply_point_states(const Array &p_states);
 	bool apply_point_topology_snapshot(const Array &p_point_order, const Array &p_point_states);
+	void begin_point_edit();
+	void finish_point_edit();
+	Dictionary get_editor_state_snapshot() const;
+	void set_editor_state_snapshot(const Dictionary &p_snapshot);
+	bool is_builtin_bezier_preset() const;
+	bool is_selected_preset_modified() const;
+	void reset_selected_preset();
+	void set_preset_override_active(bool p_active);
+	bool is_preset_override_active() const;
 	Ref<NativeEasingCurve> create_runtime_copy() const;
 
 	void cubic_bezier(double p_x1, double p_y1, double p_x2, double p_y2);

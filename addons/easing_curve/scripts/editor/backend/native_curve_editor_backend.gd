@@ -36,7 +36,10 @@ func get_transition_ids() -> PackedInt32Array:
 
 
 func is_point_graph() -> bool:
-	return int(curve.get(&"transition")) == 100
+	return (
+		int(curve.get(&"transition")) == 100
+		or bool(curve.call(&"is_builtin_bezier_preset"))
+	)
 
 
 func get_point_count() -> int:
@@ -200,6 +203,14 @@ func apply_snapshot(snapshot: Variant) -> bool:
 func create_preview_backend() -> RefCounted:
 	var preview_curve := curve.call(&"create_runtime_copy") as Resource
 	return get_script().new(preview_curve) if preview_curve != null else null
+
+
+func begin_point_edit() -> void:
+	curve.call(&"begin_point_edit")
+
+
+func finish_point_edit() -> void:
+	curve.call(&"finish_point_edit")
 
 
 func _apply_control_state(point: Resource, side: int, control_state: int) -> bool:

@@ -6,6 +6,9 @@ const LEGACY_CURVE_SCRIPT := preload(
 const LEGACY_POINT_SCRIPT := preload(
 	"res://addons/easing_curve/scripts/runtime/point.gd"
 )
+const PRESET_FACTORY := preload(
+	"res://addons/easing_curve/scripts/runtime/easing_curve_preset_geometry_factory.gd"
+)
 const SAMPLE_COUNT := 256
 const TRANS_CUSTOM := 100
 
@@ -35,6 +38,10 @@ func _run() -> void:
 	_test_points_array_assignment()
 	_test_point_ownership_and_change_propagation()
 	_test_point_editor_state_contract()
+	_test_deferred_point_edit_transaction()
+	_test_resource_free_editor_snapshot()
+	_test_editable_preset_geometry()
+	_test_modified_preset_round_trip()
 	_test_point_mode_differential()
 	_test_deep_runtime_copy()
 	_test_resource_round_trip()
@@ -98,7 +105,7 @@ func _test_default_contract() -> void:
 
 func _test_resource_version_contract() -> void:
 	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
-	_expect(NativeEasingCurve.FORMAT_VERSION == 2, "native production format version changed unexpectedly")
+	_expect(NativeEasingCurve.FORMAT_VERSION == 3, "native production format version changed unexpectedly")
 	_expect(curve.get(&"format_version") == NativeEasingCurve.FORMAT_VERSION, "new native curve has the wrong format version")
 
 	var version_property := {}
@@ -400,6 +407,143 @@ func _test_point_editor_state_contract() -> void:
 		(curve.call(&"get_point", 1) as Resource).get(&"position") == before_rejected_state,
 		"rejected curve point snapshot partially mutated points",
 	)
+
+
+func _test_deferred_point_edit_transaction() -> void:
+	var curve := _new_native_curve(TRANS_CUSTOM, NativeEasingCurve.EASE_IN)
+	var point := curve.call(&"get_point", 0) as Resource
+	var changes := {&"curve": 0, &"points": 0}
+	curve.changed.connect(func() -> void: changes[&"curve"] += 1)
+	curve.connect(&"points_changed", func(_points: Array) -> void: changes[&"points"] += 1)
+	var sample_before: float = curve.call(&"sample", 0.25)
+	curve.call(&"begin_point_edit")
+	point.set(&"right_control_point", Vector2(0.2, 0.8))
+	var preview_sample: float = curve.call(&"sample", 0.25)
+	point.set(&"right_control_point", Vector2(0.15, 0.9))
+	_expect(not is_equal_approx(sample_before, preview_sample), "point transaction did not compile local previews")
+	_expect(changes[&"curve"] == 0 and changes[&"points"] == 0, "point transaction published during drag")
+	curve.call(&"finish_point_edit")
+	_expect(changes[&"curve"] == 1 and changes[&"points"] == 1, "point transaction did not publish once on release")
+	curve.call(&"finish_point_edit")
+	_expect(changes[&"curve"] == 1 and changes[&"points"] == 1, "unbalanced transaction finish published")
+	changes[&"curve"] = 0
+	changes[&"points"] = 0
+	var committed_control: Vector2 = point.get(&"right_control_point")
+	curve.call(&"begin_point_edit")
+	point.set(&"right_control_point", Vector2(0.4, 0.4))
+	point.set(&"right_control_point", committed_control)
+	curve.call(&"finish_point_edit")
+	_expect(changes[&"curve"] == 0 and changes[&"points"] == 0, "canceled point transaction published")
+
+
+func _test_resource_free_editor_snapshot() -> void:
+	var curve := _new_native_curve(TRANS_CUSTOM, NativeEasingCurve.EASE_OUT)
+	var snapshot: Dictionary = curve.call(&"get_editor_state_snapshot")
+	_expect(not _contains_object(snapshot), "Native editor snapshot contains a Resource")
+	var remote := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	var remote_publications := [0]
+	remote.changed.connect(func(): remote_publications[0] += 1)
+	remote.call(&"set_editor_state_snapshot", snapshot)
+	_expect(remote_publications[0] == 1, "editor snapshot amplified running-resource publication")
+	_expect(remote.get(&"transition") == curve.get(&"transition"), "editor snapshot lost transition")
+	_expect(remote.get(&"ease_type") == curve.get(&"ease_type"), "editor snapshot lost ease")
+	_expect(remote.call(&"capture_point_states") == curve.call(&"capture_point_states"), "editor snapshot lost point geometry")
+
+
+func _test_editable_preset_geometry() -> void:
+	var presets := [
+		[NativeEasingCurve.TRANS_CONSTANT, &"CONSTANT"],
+		[NativeEasingCurve.TRANS_LINEAR, &"LINEAR"],
+		[NativeEasingCurve.TRANS_SINE, &"SINE"],
+		[NativeEasingCurve.TRANS_QUAD, &"QUAD"],
+		[NativeEasingCurve.TRANS_CUBIC, &"CUBIC"],
+		[NativeEasingCurve.TRANS_QUART, &"QUART"],
+		[NativeEasingCurve.TRANS_QUINT, &"QUINT"],
+		[NativeEasingCurve.TRANS_EXPO, &"EXPO"],
+		[NativeEasingCurve.TRANS_CIRC, &"CIRC"],
+		[NativeEasingCurve.TRANS_BACK, &"BACK"],
+	]
+	var ease_names := [&"IN", &"OUT", &"IN_OUT", &"OUT_IN"]
+	for preset in presets:
+		for ease in range(4):
+			var curve := _new_native_curve(preset[0], ease)
+			var legacy_points: Array[EasingCurvePoint] = PRESET_FACTORY.build(
+				preset[1],
+				ease_names[ease],
+				float(curve.get(&"constant_value")),
+				float(curve.get(&"overshoot")),
+			)
+			var native_states: Array = curve.call(&"capture_point_states")
+			_expect(native_states.size() == legacy_points.size(), "%s/%s preset point count differs" % [preset[1], ease_names[ease]])
+			for index in range(mini(native_states.size(), legacy_points.size())):
+				var state: Dictionary = native_states[index]
+				_expect(state[&"position"].is_equal_approx(legacy_points[index].position), "%s/%s position differs" % [preset[1], ease_names[ease]])
+				_expect(state[&"left_control_point"].is_equal_approx(legacy_points[index].left_control_point), "%s/%s left control differs" % [preset[1], ease_names[ease]])
+				_expect(state[&"right_control_point"].is_equal_approx(legacy_points[index].right_control_point), "%s/%s right control differs" % [preset[1], ease_names[ease]])
+			_expect(not curve.call(&"is_selected_preset_modified"), "%s/%s started modified" % [preset[1], ease_names[ease]])
+
+	var modified := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_IN)
+	var clean_sample: float = modified.call(&"sample", 0.25)
+	var start := modified.call(&"get_point", 0) as Resource
+	start.set(&"right_control_point", Vector2(0.1, 0.9))
+	_expect(modified.call(&"is_selected_preset_modified"), "preset point edit did not set modified state")
+	_expect(not is_equal_approx(clean_sample, modified.call(&"sample", 0.25)), "modified preset did not use compiled geometry")
+	modified.set(&"ease_type", NativeEasingCurve.EASE_OUT)
+	_expect(modified.get(&"ease_type") == NativeEasingCurve.EASE_IN, "modified preset accepted an incompatible ease change")
+	var extra := _new_native_point(Vector2(0.5, 0.5))
+	_expect(modified.call(&"insert_point", 1, extra), "editable preset rejected point insertion")
+	_expect(modified.call(&"get_point_count") == 3, "editable preset did not retain inserted point")
+	_expect(modified.call(&"remove_point", 1), "editable preset rejected point removal")
+	modified.call(&"reset_selected_preset")
+	_expect(not modified.call(&"is_selected_preset_modified"), "preset reset did not clear modified state")
+	_expect(is_equal_approx(clean_sample, modified.call(&"sample", 0.25)), "preset reset did not restore analytic sampling")
+	var assigned := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_IN)
+	assigned.set(&"points", [_new_native_point(Vector2.ZERO), _new_native_point(Vector2(1.0, 0.0))])
+	_expect(assigned.call(&"is_selected_preset_modified"), "current-format point assignment did not mark a preset modified")
+	_expect(not is_equal_approx(assigned.call(&"sample", 0.5), 0.125), "current-format point assignment did not activate compiled geometry")
+
+	var migrated := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_IN)
+	migrated.set(&"format_version", 2)
+	migrated.set(&"points", [_new_native_point(Vector2.ZERO), _new_native_point(Vector2(1.0, 0.0))])
+	_expect(not migrated.call(&"is_selected_preset_modified"), "v2 standard resource was treated as a modified preset")
+	_expect(is_equal_approx(migrated.call(&"sample", 0.5), 0.125), "v2 standard resource did not retain analytic behavior")
+
+
+func _test_modified_preset_round_trip() -> void:
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_QUAD, NativeEasingCurve.EASE_OUT)
+	var start := curve.call(&"get_point", 0) as Resource
+	start.set(&"right_control_point", Vector2(0.1, 0.8))
+	var expected: float = curve.call(&"sample", 0.35)
+	var save_path := "res://test/_temp/native_modified_preset_round_trip.tres"
+	_expect(ResourceSaver.save(curve, save_path) == OK, "modified preset could not be saved")
+	var loaded := ResourceLoader.load(save_path, "", ResourceLoader.CACHE_MODE_IGNORE) as Resource
+	_expect(loaded != null, "modified preset could not be loaded")
+	if loaded != null:
+		_expect(loaded.call(&"is_selected_preset_modified"), "modified preset lost its saved override marker")
+		_expect(is_equal_approx(loaded.call(&"sample", 0.35), expected), "modified preset round trip changed sampling")
+		loaded.call(&"reset_selected_preset")
+		var clean_path := "res://test/_temp/native_clean_preset_round_trip.tres"
+		_expect(ResourceSaver.save(loaded, clean_path) == OK, "clean preset could not be saved")
+		var clean_file := FileAccess.open(clean_path, FileAccess.READ)
+		_expect(clean_file != null, "clean preset save could not be inspected")
+		if clean_file != null:
+			var serialized := clean_file.get_as_text()
+			_expect(not serialized.contains("points ="), "clean preset serialized redundant point geometry")
+			_expect(not serialized.contains("preset_override_active = true"), "clean preset serialized a stale override marker")
+
+
+func _contains_object(value: Variant) -> bool:
+	if value is Object:
+		return true
+	if value is Dictionary:
+		for key in value:
+			if _contains_object(key) or _contains_object(value[key]):
+				return true
+	elif value is Array:
+		for item in value:
+			if _contains_object(item):
+				return true
+	return false
 
 
 func _test_point_mode_differential() -> void:

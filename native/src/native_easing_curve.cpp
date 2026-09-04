@@ -81,11 +81,21 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("capture_point_states"), &NativeEasingCurve::capture_point_states);
 	ClassDB::bind_method(D_METHOD("apply_point_states", "states"), &NativeEasingCurve::apply_point_states);
 	ClassDB::bind_method(D_METHOD("apply_point_topology_snapshot", "point_order", "point_states"), &NativeEasingCurve::apply_point_topology_snapshot);
+	ClassDB::bind_method(D_METHOD("begin_point_edit"), &NativeEasingCurve::begin_point_edit);
+	ClassDB::bind_method(D_METHOD("finish_point_edit"), &NativeEasingCurve::finish_point_edit);
+	ClassDB::bind_method(D_METHOD("get_editor_state_snapshot"), &NativeEasingCurve::get_editor_state_snapshot);
+	ClassDB::bind_method(D_METHOD("set_editor_state_snapshot", "snapshot"), &NativeEasingCurve::set_editor_state_snapshot);
+	ClassDB::bind_method(D_METHOD("is_builtin_bezier_preset"), &NativeEasingCurve::is_builtin_bezier_preset);
+	ClassDB::bind_method(D_METHOD("is_selected_preset_modified"), &NativeEasingCurve::is_selected_preset_modified);
+	ClassDB::bind_method(D_METHOD("reset_selected_preset"), &NativeEasingCurve::reset_selected_preset);
+	ClassDB::bind_method(D_METHOD("set_preset_override_active", "active"), &NativeEasingCurve::set_preset_override_active);
+	ClassDB::bind_method(D_METHOD("is_preset_override_active"), &NativeEasingCurve::is_preset_override_active);
 	ClassDB::bind_method(D_METHOD("create_runtime_copy"), &NativeEasingCurve::create_runtime_copy);
 	ClassDB::bind_method(D_METHOD("cubic_bezier", "x1", "y1", "x2", "y2"), &NativeEasingCurve::cubic_bezier);
 	ClassDB::bind_method(D_METHOD("bake_callable", "callable", "resolution"), &NativeEasingCurve::bake_callable, DEFVAL(40));
 	ClassDB::bind_method(D_METHOD("sample", "offset"), &NativeEasingCurve::sample);
 
+	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "_editor_state_snapshot", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_editor_state_snapshot", "get_editor_state_snapshot");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100,Constant:101,Step:104,Power:105,Physics Spring:106"), "set_transition", "get_transition");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "ease_type", PROPERTY_HINT_ENUM, "In,Out,In Out,Out In"), "set_ease_type", "get_ease_type");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "amplitude", PROPERTY_HINT_RANGE, "1.0,10.0,0.001,or_greater"), "set_amplitude", "get_amplitude");
@@ -105,6 +115,7 @@ void NativeEasingCurve::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "reverse"), "set_reverse", "is_reverse");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "invert"), "set_invert", "is_invert");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "format_version", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_format_version", "get_format_version");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "preset_override_active", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_preset_override_active", "is_preset_override_active");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "points", PROPERTY_HINT_ARRAY_TYPE, "NativeEasingCurvePoint"), "set_points", "get_points");
 	ADD_SIGNAL(MethodInfo("points_changed", PropertyInfo(Variant::ARRAY, "points", PROPERTY_HINT_ARRAY_TYPE, "NativeEasingCurvePoint")));
 
@@ -140,9 +151,15 @@ void NativeEasingCurve::_bind_methods() {
 	BIND_ENUM_CONSTANT(FORMAT_STATUS_NEWER);
 }
 
+void NativeEasingCurve::_validate_property(PropertyInfo &p_property) const {
+	if (p_property.name == StringName("points") && is_builtin_bezier_preset() && !preset_override_active) {
+		p_property.usage = static_cast<PropertyUsageFlags>(p_property.usage & ~PROPERTY_USAGE_STORAGE);
+	}
+}
+
 NativeEasingCurve::NativeEasingCurve() {
-	cubic_bezier(1.0 / 3.0, 0.0, 2.0 / 3.0, 1.0);
-	transition = TRANS_LINEAR;
+	replace_points(build_selected_preset_points(), false);
+	update_sampling_mode();
 }
 
 NativeEasingCurve::~NativeEasingCurve() {
@@ -154,6 +171,14 @@ void NativeEasingCurve::set_transition(Transition p_transition) {
 		return;
 	}
 	transition = p_transition;
+	preset_override_active = false;
+	if (is_builtin_bezier_preset()) {
+		replace_points(build_selected_preset_points(), false);
+		update_sampling_mode();
+		emit_points_changed();
+		return;
+	}
+	update_sampling_mode();
 	emit_changed();
 }
 
@@ -162,11 +187,15 @@ NativeEasingCurve::Transition NativeEasingCurve::get_transition() const {
 }
 
 void NativeEasingCurve::set_ease_type(EaseType p_ease_type) {
-	if (!is_valid_ease_type(p_ease_type) || ease_type == p_ease_type) {
+	if (!is_valid_ease_type(p_ease_type) || ease_type == p_ease_type || (is_builtin_bezier_preset() && preset_override_active)) {
 		return;
 	}
 	ease_type = p_ease_type;
-	emit_changed();
+	if (is_builtin_bezier_preset()) {
+		replace_points(build_selected_preset_points(), false);
+	}
+	update_sampling_mode();
+	emit_points_changed();
 }
 
 NativeEasingCurve::EaseType NativeEasingCurve::get_ease_type() const {
@@ -214,7 +243,12 @@ void NativeEasingCurve::set_constant_value(double p_value) {
 		return;
 	}
 	constant_value = value;
-	emit_changed();
+	if (transition == TRANS_CONSTANT && !preset_override_active) {
+		replace_points(build_selected_preset_points(), false);
+		emit_points_changed();
+	} else {
+		emit_changed();
+	}
 }
 
 double NativeEasingCurve::get_constant_value() const { return constant_value; }
@@ -228,7 +262,12 @@ void NativeEasingCurve::set_overshoot(double p_overshoot) {
 		return;
 	}
 	overshoot = value;
-	emit_changed();
+	if (transition == TRANS_BACK && !preset_override_active) {
+		replace_points(build_selected_preset_points(), false);
+		emit_points_changed();
+	} else {
+		emit_changed();
+	}
 }
 
 double NativeEasingCurve::get_overshoot() const { return overshoot; }
@@ -408,15 +447,26 @@ NativeEasingCurve::FormatStatus NativeEasingCurve::get_format_status() const {
 }
 
 bool NativeEasingCurve::is_format_supported() const {
-	return get_format_status() == FORMAT_STATUS_CURRENT;
+	return format_version >= 2 && format_version <= FORMAT_VERSION;
 }
 
 void NativeEasingCurve::set_points(const TypedArray<NativeEasingCurvePoint> &p_points) {
+	replace_points(p_points, false);
+	if (format_version >= FORMAT_VERSION) {
+		update_preset_override_from_points();
+	}
+	publish_point_change();
+}
+
+void NativeEasingCurve::replace_points(const TypedArray<NativeEasingCurvePoint> &p_points, bool p_publish) {
 	disconnect_points();
 	points = TypedArray<NativeEasingCurvePoint>(p_points.duplicate());
 	reconnect_points();
 	compile_segments();
-	emit_points_changed();
+	update_sampling_mode();
+	if (p_publish) {
+		publish_point_change();
+	}
 }
 
 TypedArray<NativeEasingCurvePoint> NativeEasingCurve::get_points() const {
@@ -443,7 +493,9 @@ bool NativeEasingCurve::set_point(int64_t p_index, const Ref<NativeEasingCurvePo
 	}
 	TypedArray<NativeEasingCurvePoint> updated(points.duplicate());
 	updated[p_index] = p_point;
-	set_points(updated);
+	replace_points(updated, false);
+	update_preset_override_from_points();
+	publish_point_change();
 	return true;
 }
 
@@ -453,7 +505,9 @@ bool NativeEasingCurve::insert_point(int64_t p_index, const Ref<NativeEasingCurv
 	}
 	TypedArray<NativeEasingCurvePoint> updated(points.duplicate());
 	updated.insert(p_index, p_point);
-	set_points(updated);
+	replace_points(updated, false);
+	update_preset_override_from_points();
+	publish_point_change();
 	return true;
 }
 
@@ -463,7 +517,9 @@ bool NativeEasingCurve::add_point(const Ref<NativeEasingCurvePoint> &p_point) {
 	}
 	TypedArray<NativeEasingCurvePoint> updated(points.duplicate());
 	updated.append(p_point);
-	set_points(updated);
+	replace_points(updated, false);
+	update_preset_override_from_points();
+	publish_point_change();
 	return true;
 }
 
@@ -473,7 +529,9 @@ bool NativeEasingCurve::remove_point(int64_t p_index) {
 	}
 	TypedArray<NativeEasingCurvePoint> updated(points.duplicate());
 	updated.remove_at(p_index);
-	set_points(updated);
+	replace_points(updated, false);
+	update_preset_override_from_points();
+	publish_point_change();
 	return true;
 }
 
@@ -481,7 +539,9 @@ void NativeEasingCurve::clear_points() {
 	if (points.is_empty()) {
 		return;
 	}
-	set_points(TypedArray<NativeEasingCurvePoint>());
+	replace_points(TypedArray<NativeEasingCurvePoint>(), false);
+	update_preset_override_from_points();
+	publish_point_change();
 }
 
 Array NativeEasingCurve::capture_point_states() const {
@@ -519,7 +579,8 @@ bool NativeEasingCurve::apply_point_states(const Array &p_states) {
 	applying_point_states = false;
 	if (point_state_changed_while_applying) {
 		compile_segments();
-		emit_points_changed();
+		update_preset_override_from_points();
+		publish_point_change();
 	}
 	return true;
 }
@@ -577,8 +638,111 @@ bool NativeEasingCurve::apply_point_topology_snapshot(const Array &p_point_order
 	}
 	reconnect_points();
 	compile_segments();
-	emit_points_changed();
+	update_preset_override_from_points();
+	publish_point_change();
 	return true;
+}
+
+void NativeEasingCurve::begin_point_edit() {
+	if (point_edit_depth == 0) {
+		point_edit_before = get_editor_state_snapshot();
+		point_edit_changed = false;
+	}
+	++point_edit_depth;
+}
+
+void NativeEasingCurve::finish_point_edit() {
+	if (point_edit_depth <= 0) {
+		return;
+	}
+	--point_edit_depth;
+	if (point_edit_depth == 0 && point_edit_changed) {
+		const bool state_changed = point_edit_before != get_editor_state_snapshot();
+		point_edit_changed = false;
+		point_edit_before.clear();
+		if (state_changed) {
+			emit_points_changed();
+		}
+	} else if (point_edit_depth == 0) {
+		point_edit_before.clear();
+	}
+}
+
+Dictionary NativeEasingCurve::get_editor_state_snapshot() const {
+	Dictionary snapshot;
+	snapshot[StringName("transition")] = static_cast<int64_t>(transition);
+	snapshot[StringName("ease_type")] = static_cast<int64_t>(ease_type);
+	snapshot[StringName("preset_override_active")] = preset_override_active;
+	snapshot[StringName("point_states")] = capture_point_states();
+	return snapshot;
+}
+
+void NativeEasingCurve::set_editor_state_snapshot(const Dictionary &p_snapshot) {
+	const Variant transition_value = p_snapshot.get(StringName("transition"), Variant());
+	const Variant ease_value = p_snapshot.get(StringName("ease_type"), Variant());
+	const Variant override_value = p_snapshot.get(StringName("preset_override_active"), Variant());
+	const Variant states_value = p_snapshot.get(StringName("point_states"), Variant());
+	if (transition_value.get_type() != Variant::INT || ease_value.get_type() != Variant::INT || override_value.get_type() != Variant::BOOL || states_value.get_type() != Variant::ARRAY) {
+		return;
+	}
+	const Transition next_transition = static_cast<Transition>(static_cast<int64_t>(transition_value));
+	const EaseType next_ease = static_cast<EaseType>(static_cast<int64_t>(ease_value));
+	if (!is_valid_transition(next_transition) || !is_valid_ease_type(next_ease)) {
+		return;
+	}
+	const Array states = states_value;
+	TypedArray<NativeEasingCurvePoint> restored_points;
+	restored_points.resize(states.size());
+	for (int64_t index = 0; index < states.size(); ++index) {
+		if (states[index].get_type() != Variant::DICTIONARY) {
+			return;
+		}
+		Ref<NativeEasingCurvePoint> point;
+		point.instantiate();
+		if (!point->apply_state(states[index])) {
+			return;
+		}
+		restored_points[index] = point;
+	}
+
+	transition = next_transition;
+	ease_type = next_ease;
+	preset_override_active = static_cast<bool>(override_value);
+	replace_points(restored_points, false);
+	update_sampling_mode();
+	emit_points_changed();
+}
+
+bool NativeEasingCurve::is_builtin_bezier_preset() const {
+	return transition == TRANS_CONSTANT || transition == TRANS_LINEAR || transition == TRANS_SINE || transition == TRANS_QUAD || transition == TRANS_CUBIC || transition == TRANS_QUART || transition == TRANS_QUINT || transition == TRANS_EXPO || transition == TRANS_CIRC || transition == TRANS_BACK;
+}
+
+bool NativeEasingCurve::is_selected_preset_modified() const {
+	return is_builtin_bezier_preset() && preset_override_active;
+}
+
+void NativeEasingCurve::reset_selected_preset() {
+	if (!is_builtin_bezier_preset()) {
+		return;
+	}
+	preset_override_active = false;
+	replace_points(build_selected_preset_points(), false);
+	update_sampling_mode();
+	emit_points_changed();
+}
+
+void NativeEasingCurve::set_preset_override_active(bool p_active) {
+	const bool active = p_active && is_builtin_bezier_preset();
+	if (preset_override_active == active) {
+		return;
+	}
+	preset_override_active = active;
+	update_sampling_mode();
+	emit_changed();
+}
+
+bool NativeEasingCurve::is_preset_override_active() const {
+	return preset_override_active;
 }
 
 Ref<NativeEasingCurve> NativeEasingCurve::create_runtime_copy() const {
@@ -604,6 +768,7 @@ Ref<NativeEasingCurve> NativeEasingCurve::create_runtime_copy() const {
 	runtime_copy->set_reverse(reverse);
 	runtime_copy->set_invert(invert);
 	runtime_copy->set_points(duplicate_points());
+	runtime_copy->set_preset_override_active(preset_override_active);
 	return runtime_copy;
 }
 
@@ -678,7 +843,7 @@ double NativeEasingCurve::sample(double p_offset) {
 	if (reverse) {
 		offset = 1.0 - offset;
 	}
-	double result = transition == TRANS_CUSTOM ? sample_custom(offset) : sample_builtin(offset);
+	double result = use_compiled_points ? sample_custom(offset) : sample_builtin(offset);
 	if (invert) {
 		result = 1.0 - result;
 	}
@@ -714,13 +879,22 @@ void NativeEasingCurve::emit_points_changed() {
 	emit_changed();
 }
 
+void NativeEasingCurve::publish_point_change() {
+	if (point_edit_depth > 0) {
+		point_edit_changed = true;
+		return;
+	}
+	emit_points_changed();
+}
+
 void NativeEasingCurve::on_point_changed() {
 	if (applying_point_states) {
 		point_state_changed_while_applying = true;
 		return;
 	}
 	compile_segments();
-	emit_points_changed();
+	update_preset_override_from_points();
+	publish_point_change();
 }
 
 TypedArray<NativeEasingCurvePoint> NativeEasingCurve::duplicate_points() const {
@@ -738,6 +912,159 @@ TypedArray<NativeEasingCurvePoint> NativeEasingCurve::duplicate_points() const {
 		duplicated.append(copy);
 	}
 	return duplicated;
+}
+
+void NativeEasingCurve::update_sampling_mode() {
+	use_compiled_points = transition == TRANS_CUSTOM || (is_builtin_bezier_preset() && preset_override_active);
+}
+
+void NativeEasingCurve::update_preset_override_from_points() {
+	if (!is_builtin_bezier_preset()) {
+		update_sampling_mode();
+		return;
+	}
+	const TypedArray<NativeEasingCurvePoint> canonical_points = build_selected_preset_points();
+	Array canonical_states;
+	canonical_states.resize(canonical_points.size());
+	for (int64_t index = 0; index < canonical_points.size(); ++index) {
+		Ref<NativeEasingCurvePoint> point = canonical_points[index];
+		canonical_states[index] = point->capture_state();
+	}
+	preset_override_active = !point_states_match(capture_point_states(), canonical_states);
+	update_sampling_mode();
+}
+
+Ref<NativeEasingCurvePoint> NativeEasingCurve::make_point(const Vector2 &p_position) {
+	Ref<NativeEasingCurvePoint> point;
+	point.instantiate();
+	point->set_position(p_position);
+	return point;
+}
+
+TypedArray<NativeEasingCurvePoint> NativeEasingCurve::make_cubic_bezier(const Vector4 &p_controls) {
+	Ref<NativeEasingCurvePoint> start = make_point(Vector2(0.0, 0.0));
+	Ref<NativeEasingCurvePoint> end = make_point(Vector2(1.0, 1.0));
+	start->set_right_control_point(Vector2(p_controls.x, p_controls.y));
+	end->set_left_control_point(Vector2(p_controls.z, p_controls.w));
+	TypedArray<NativeEasingCurvePoint> result;
+	result.append(start);
+	result.append(end);
+	return result;
+}
+
+TypedArray<NativeEasingCurvePoint> NativeEasingCurve::make_cubic_bezier_pair(const Vector4 &p_first, const Vector4 &p_second) {
+	Ref<NativeEasingCurvePoint> start = make_point(Vector2(0.0, 0.0));
+	Ref<NativeEasingCurvePoint> midpoint = make_point(Vector2(0.5, 0.5));
+	Ref<NativeEasingCurvePoint> end = make_point(Vector2(1.0, 1.0));
+	start->set_right_control_point(Vector2(p_first.x, p_first.y) * 0.5);
+	midpoint->set_left_control_point(Vector2(p_first.z, p_first.w) * 0.5);
+	midpoint->set_right_control_point(Vector2(0.5, 0.5) + Vector2(p_second.x, p_second.y) * 0.5);
+	end->set_left_control_point(Vector2(0.5, 0.5) + Vector2(p_second.z, p_second.w) * 0.5);
+	TypedArray<NativeEasingCurvePoint> result;
+	result.append(start);
+	result.append(midpoint);
+	result.append(end);
+	return result;
+}
+
+TypedArray<NativeEasingCurvePoint> NativeEasingCurve::build_selected_preset_points() const {
+	if (transition == TRANS_CONSTANT) {
+		TypedArray<NativeEasingCurvePoint> result;
+		result.append(make_point(Vector2(0.0, constant_value)));
+		result.append(make_point(Vector2(1.0, constant_value)));
+		return result;
+	}
+	if (transition == TRANS_LINEAR) {
+		TypedArray<NativeEasingCurvePoint> result;
+		result.append(make_point(Vector2(0.0, 0.0)));
+		result.append(make_point(Vector2(1.0, 1.0)));
+		return result;
+	}
+
+	Vector4 in_controls;
+	Vector4 out_controls;
+	switch (transition) {
+		case TRANS_SINE:
+			in_controls = Vector4(0.361149818, -0.000326393, 0.673540771, 0.486909956);
+			out_controls = Vector4(0.326459229, 0.513090014, 0.638850212, 1.0003264);
+			break;
+		case TRANS_QUAD:
+			in_controls = Vector4(1.0 / 3.0, 0.0, 2.0 / 3.0, 1.0 / 3.0);
+			out_controls = Vector4(1.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0, 1.0);
+			break;
+		case TRANS_CUBIC:
+			in_controls = Vector4(1.0 / 3.0, 0.0, 2.0 / 3.0, 0.0);
+			out_controls = Vector4(1.0 / 3.0, 1.0, 2.0 / 3.0, 1.0);
+			if (ease_type == EASE_OUT_IN) {
+				return make_cubic_bezier(Vector4(1.0 / 3.0, 1.0, 2.0 / 3.0, 0.0));
+			}
+			break;
+		case TRANS_QUART:
+			in_controls = Vector4(0.439210773, 0.004901892, 0.732221782, -0.067109145);
+			out_controls = Vector4(0.267778218, 1.06710911, 0.560789227, 0.995098114);
+			break;
+		case TRANS_QUINT:
+			in_controls = Vector4(0.522905409, 0.010620826, 0.775169373, -0.113423072);
+			out_controls = Vector4(0.224830627, 1.11342311, 0.477094591, 0.989379168);
+			break;
+		case TRANS_EXPO:
+			in_controls = Vector4(0.632421792, 0.015909066, 0.846576214, -0.060294569);
+			out_controls = Vector4(0.153921053, 1.0531143, 0.359647602, 0.985371113);
+			break;
+		case TRANS_CIRC:
+			in_controls = Vector4(0.565830648, 0.002238899, 0.999889314, 0.459180534);
+			out_controls = Vector4(0.000110686, 0.540819466, 0.434169352, 0.99776113);
+			break;
+		case TRANS_BACK: {
+			double selected_overshoot = overshoot;
+			if (ease_type == EASE_IN_OUT) {
+				selected_overshoot *= 1.525;
+			}
+			in_controls = Vector4(1.0 / 3.0, 0.0, 2.0 / 3.0, -selected_overshoot / 3.0);
+			out_controls = Vector4(1.0 / 3.0, 1.0 + selected_overshoot / 3.0, 2.0 / 3.0, 1.0);
+			break;
+		}
+		default:
+			return TypedArray<NativeEasingCurvePoint>();
+	}
+
+	switch (ease_type) {
+		case EASE_IN:
+			return make_cubic_bezier(in_controls);
+		case EASE_OUT:
+			return make_cubic_bezier(out_controls);
+		case EASE_IN_OUT:
+			return make_cubic_bezier_pair(in_controls, out_controls);
+		case EASE_OUT_IN:
+			return make_cubic_bezier_pair(out_controls, in_controls);
+	}
+	return TypedArray<NativeEasingCurvePoint>();
+}
+
+bool NativeEasingCurve::point_states_match(const Array &p_left, const Array &p_right) const {
+	if (p_left.size() != p_right.size()) {
+		return false;
+	}
+	for (int64_t index = 0; index < p_left.size(); ++index) {
+		if (p_left[index].get_type() != Variant::DICTIONARY || p_right[index].get_type() != Variant::DICTIONARY) {
+			return false;
+		}
+		const Dictionary left = p_left[index];
+		const Dictionary right = p_right[index];
+		const Vector2 left_position = left.get(StringName("position"), Vector2());
+		const Vector2 right_position = right.get(StringName("position"), Vector2());
+		const Vector2 left_in = left.get(StringName("left_control_point"), Vector2());
+		const Vector2 right_in = right.get(StringName("left_control_point"), Vector2());
+		const Vector2 left_out = left.get(StringName("right_control_point"), Vector2());
+		const Vector2 right_out = right.get(StringName("right_control_point"), Vector2());
+		if (!left_position.is_equal_approx(right_position) || !left_in.is_equal_approx(right_in) || !left_out.is_equal_approx(right_out)) {
+			return false;
+		}
+		if (left.get(StringName("handle_mode"), -1) != right.get(StringName("handle_mode"), -1) || left.get(StringName("left_force_linear"), false) != right.get(StringName("left_force_linear"), false) || left.get(StringName("right_force_linear"), false) != right.get(StringName("right_force_linear"), false) || left.get(StringName("locked"), Dictionary()) != right.get(StringName("locked"), Dictionary())) {
+			return false;
+		}
+	}
+	return true;
 }
 
 void NativeEasingCurve::compile_segments() {

@@ -9,7 +9,7 @@ format_version = 1
 format_version = 2
 
 [sub_resource type="NativeEasingCurve" id="NativeEasingCurve_future"]
-format_version = 3
+format_version = 4
 
 [node name="NativeFormatVersionFixture" type="Node"]
 metadata/absent = SubResource("NativeEasingCurve_absent")

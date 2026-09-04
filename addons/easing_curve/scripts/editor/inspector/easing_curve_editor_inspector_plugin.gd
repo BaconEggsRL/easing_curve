@@ -55,6 +55,9 @@ var _zero_margin_panel_stylebox: StyleBox = (
 )
 var _point_property_clipboard := PointPropertyClipboardController.new()
 var _point_edit_transaction_controller := PointEditTransactionController.new()
+var _native_curve: Resource
+var _native_points_content: VBoxContainer
+var _native_points_refresh_queued := false
 
 
 ## Inspector-only transition grouping, ordering, and presentation.
@@ -134,7 +137,7 @@ func _parse_begin(object: Object) -> void:
 	var backend := BackendFactory.create(resource)
 	if backend != null and backend.get_backend_id() == &"native":
 		curve = null
-		add_custom_control(handle_easing_curve_editor(resource))
+		_native_curve = resource
 		return
 
 	if not object is EasingCurve:
@@ -631,13 +634,27 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 
 
 func _handle_native_curve_editor(object: Resource) -> Control:
+	var root := VBoxContainer.new()
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", _compact_separation())
+
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", _compact_separation())
 
+	var preset_row := HBoxContainer.new()
+	preset_row.add_theme_constant_override("separation", _compact_separation())
+	var preset_status := Label.new()
+	preset_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var preset_reset := _create_reserved_reset_button("Restore selected preset geometry")
+	preset_row.add_child(preset_status)
+	preset_row.add_child(preset_reset)
+	content.add_child(preset_row)
+
 	easing_curve_editor = EasingCurveEditor.new()
 	easing_curve_editor.editor_undo_redo = editor_undo_redo
 	easing_curve_editor.set_curve(object)
+	preset_reset.pressed.connect(easing_curve_editor.reset_native_preset)
 	content.add_child(easing_curve_editor)
 	easing_curve_editor.resized.connect(easing_curve_editor.update_minimum_size)
 
@@ -663,8 +680,282 @@ func _handle_native_curve_editor(object: Resource) -> Control:
 	_curve_editor_section.folding_changed.connect(
 		_on_curve_editor_section_folding_changed
 	)
+	root.add_child(_curve_editor_section)
+
+	_native_points_content = VBoxContainer.new()
+	_native_points_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_build_native_point_list(object)
+	var native_points_section := _create_foldable_section("Points", _native_points_content, object)
+	root.add_child(native_points_section)
+
+	var changed_callback := _on_native_curve_changed.bind(
+		object,
+		preset_status,
+		preset_reset,
+		native_points_section,
+	)
+	object.changed.connect(changed_callback)
+	root.tree_exiting.connect(_disconnect_native_curve_changed.bind(object, changed_callback))
+	_update_native_preset_status(object, preset_status, preset_reset, native_points_section)
 	_queue_autofit_curve_editor()
-	return _curve_editor_section
+	return root
+
+
+func _on_native_curve_changed(
+	object: Resource,
+	preset_status: Label,
+	preset_reset: Button,
+	points_section: Control,
+) -> void:
+	_update_native_preset_status(object, preset_status, preset_reset, points_section)
+	if not _native_points_refresh_queued:
+		_native_points_refresh_queued = true
+		_refresh_native_point_list.call_deferred(object)
+
+
+func _disconnect_native_curve_changed(object: Resource, callback: Callable) -> void:
+	if object != null and object.changed.is_connected(callback):
+		object.changed.disconnect(callback)
+
+
+func _update_native_preset_status(
+	object: Resource,
+	status: Label,
+	reset_button: Button,
+	points_section: Control,
+) -> void:
+	if object == null or not is_instance_valid(status) or not is_instance_valid(reset_button) or not is_instance_valid(points_section):
+		return
+	var modified := bool(object.call(&"is_selected_preset_modified"))
+	var backend := BackendFactory.create(object)
+	status.text = "Preset geometry modified *" if modified else "Preset geometry"
+	status.visible = bool(object.call(&"is_builtin_bezier_preset"))
+	points_section.visible = backend != null and backend.is_point_graph()
+	_set_preset_reset_button_available(reset_button, modified)
+
+
+func _refresh_native_point_list(object: Resource) -> void:
+	_native_points_refresh_queued = false
+	if not is_instance_valid(_native_points_content) or object != _native_curve:
+		return
+	for child in _native_points_content.get_children():
+		child.queue_free()
+	_build_native_point_list(object)
+
+
+func _build_native_point_list(object: Resource) -> void:
+	if not is_instance_valid(_native_points_content) or not is_instance_valid(easing_curve_editor):
+		return
+	var backend := BackendFactory.create(object)
+	if backend == null:
+		return
+	var points: Array[Resource] = backend.get_points()
+	for index in range(points.size()):
+		_native_points_content.add_child(
+			_create_native_point_panel(points[index], index, points.size())
+		)
+	var add_button := Button.new()
+	add_button.text = "Add Point"
+	add_button.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_ADD)
+	add_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	add_button.pressed.connect(easing_curve_editor.add_point_from_list)
+	_native_points_content.add_child(add_button)
+
+
+func _create_native_point_panel(
+	point: Resource,
+	index: int,
+	point_count: int,
+) -> Control:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override(&"panel", _zero_margin_panel_stylebox)
+	var selection_callback := func(selected_point: Resource) -> void:
+		_update_native_point_panel_selection(selected_point, panel, point)
+	easing_curve_editor.point_selection_changed.connect(selection_callback)
+	panel.tree_exiting.connect(
+		_disconnect_native_selection_callback.bind(selection_callback)
+	)
+	_update_native_point_panel_selection(
+		easing_curve_editor.get_selected_point_resource(),
+		panel,
+		point,
+	)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", _compact_separation())
+	panel.add_child(row)
+
+	var move_buttons := VBoxContainer.new()
+	var move_up := Button.new()
+	move_up.flat = true
+	move_up.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_MOVE_UP)
+	move_up.pressed.connect(
+		easing_curve_editor.move_point_from_list.bind(index, wrapi(index - 1, 0, point_count))
+	)
+	move_buttons.add_child(move_up)
+	var move_down := Button.new()
+	move_down.flat = true
+	move_down.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_MOVE_DOWN)
+	move_down.pressed.connect(
+		easing_curve_editor.move_point_from_list.bind(index, wrapi(index + 1, 0, point_count))
+	)
+	move_buttons.add_child(move_down)
+	row.add_child(move_buttons)
+
+	var properties := GridContainer.new()
+	properties.columns = 2
+	properties.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	properties.add_theme_constant_override(&"h_separation", _compact_separation())
+	properties.add_theme_constant_override(&"v_separation", _compact_separation())
+	row.add_child(properties)
+	_add_native_vector_property(properties, point, &"position", "Position")
+	_add_native_handle_mode_property(properties, point, index)
+	if index > 0:
+		_add_native_vector_property(properties, point, &"left_control_point", "Left Control")
+	if index < point_count - 1:
+		_add_native_vector_property(properties, point, &"right_control_point", "Right Control")
+
+	var remove_button := Button.new()
+	remove_button.flat = true
+	remove_button.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_REMOVE)
+	remove_button.tooltip_text = "Remove Point"
+	remove_button.pressed.connect(easing_curve_editor.remove_point_from_list.bind(point))
+	row.add_child(remove_button)
+	return panel
+
+
+func _add_native_vector_property(
+	grid: GridContainer,
+	point: Resource,
+	property_name: StringName,
+	label_text: String,
+) -> void:
+	var label := Label.new()
+	label.text = label_text
+	grid.add_child(label)
+	var values := HBoxContainer.new()
+	values.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_child(values)
+	var inputs: Array[EditorSpinSlider] = []
+	for axis in range(2):
+		var input := EditorSpinSlider.new()
+		input.label = "X" if axis == 0 else "Y"
+		input.min_value = 0.0 if property_name == &"position" and axis == 0 else -1024.0
+		input.max_value = 1.0 if property_name == &"position" and axis == 0 else 1024.0
+		input.step = SLIDER_INPUT_STEP
+		input.hide_slider = true
+		input.flat = true
+		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var value: Vector2 = point.get(property_name)
+		input.value = value[axis]
+		input.grabbed.connect(_on_native_input_grabbed.bind(input, point))
+		input.ungrabbed.connect(
+			_on_native_input_ungrabbed.bind(input, point, property_name)
+		)
+		input.focus_entered.connect(easing_curve_editor.select_point_resource.bind(point))
+		input.value_changed.connect(
+			_on_native_vector_value_changed.bind(
+				point,
+				property_name,
+				axis,
+				input,
+			)
+		)
+		inputs.append(input)
+		values.add_child(input)
+	var changed_callback := func():
+		_refresh_native_vector_inputs(point, property_name, inputs)
+	point.changed.connect(changed_callback)
+	values.tree_exiting.connect(_disconnect_native_point_callback.bind(point, changed_callback))
+
+
+func _on_native_input_grabbed(input: EditorSpinSlider, point: Resource) -> void:
+	input.set_meta(DRAGGING_META, true)
+	easing_curve_editor.select_point_resource(point)
+
+
+func _on_native_input_ungrabbed(
+	input: EditorSpinSlider,
+	point: Resource,
+	property_name: StringName,
+) -> void:
+	input.remove_meta(DRAGGING_META)
+	easing_curve_editor.finish_point_list_edit(point, property_name)
+
+
+func _on_native_vector_value_changed(
+	value: float,
+	point: Resource,
+	property_name: StringName,
+	axis: int,
+	input: EditorSpinSlider,
+) -> void:
+	var points: Array = _native_curve.get(&"points")
+	var current_index: int = points.find(point)
+	if current_index < 0:
+		return
+	var vector: Vector2 = point.get(property_name)
+	vector[axis] = value
+	easing_curve_editor.edit_point_property(
+		current_index,
+		property_name,
+		vector,
+		input.has_meta(DRAGGING_META),
+	)
+
+
+func _refresh_native_vector_inputs(
+	point: Resource,
+	property_name: StringName,
+	inputs: Array[EditorSpinSlider],
+) -> void:
+	var value: Vector2 = point.get(property_name)
+	for axis in range(mini(2, inputs.size())):
+		if is_instance_valid(inputs[axis]):
+			inputs[axis].set_value_no_signal(value[axis])
+
+
+func _add_native_handle_mode_property(
+	grid: GridContainer,
+	point: Resource,
+	index: int,
+) -> void:
+	var label := Label.new()
+	label.text = "Handle Mode"
+	grid.add_child(label)
+	var option := OptionButton.new()
+	_configure_compact_option(option)
+	for mode_name in ["Free", "Linear", "Balanced", "Mirrored", "Linked"]:
+		option.add_item(mode_name)
+	option.select(int(point.get(&"handle_mode")))
+	option.focus_entered.connect(easing_curve_editor.select_point_resource.bind(point))
+	option.item_selected.connect(
+		func(mode: int):
+			var points: Array = _native_curve.get(&"points")
+			var current_index: int = points.find(point)
+			if current_index >= 0:
+				easing_curve_editor.select_point_resource(point)
+				easing_curve_editor.edit_point_property(current_index, &"handle_mode", mode)
+	)
+	grid.add_child(option)
+
+
+func _disconnect_native_point_callback(point: Resource, callback: Callable) -> void:
+	if point != null and point.changed.is_connected(callback):
+		point.changed.disconnect(callback)
+
+
+func _update_native_point_panel_selection(
+	selected_point: Resource,
+	panel: PanelContainer,
+	point: Resource,
+) -> void:
+	if is_instance_valid(panel):
+		panel.self_modulate = Color(0.72, 0.86, 1.0) if selected_point == point else Color.WHITE
+
+
+func _disconnect_native_selection_callback(callback: Callable) -> void:
+	if is_instance_valid(easing_curve_editor) and easing_curve_editor.point_selection_changed.is_connected(callback):
+		easing_curve_editor.point_selection_changed.disconnect(callback)
 
 
 func _can_handle(object: Object) -> bool:
@@ -676,6 +967,20 @@ func _can_handle(object: Object) -> bool:
 
 func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wide):
 	# Handle properties
+	var native_backend := BackendFactory.create(object as Resource)
+	if native_backend != null and native_backend.get_backend_id() == &"native":
+		if name == "_editor_state_snapshot":
+			var native_property := PointsEditorProperty.new()
+			native_property.set_content(handle_easing_curve_editor(object))
+			curve_editor_property = native_property
+			easing_curve_editor.committed_change_publisher = Callable(
+				native_property,
+				"publish_current_value",
+			)
+			add_property_editor(name, native_property, false, "")
+			return true
+		if name in ["points", "preset_override_active"]:
+			return true
 	if object is EasingCurve and name == "easing_curve_editor":
 		curve = object
 		var content := handle_easing_curve_editor(object)

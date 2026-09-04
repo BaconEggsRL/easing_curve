@@ -15,6 +15,19 @@ func _update_property() -> void:
 	_hide_property_chrome()
 
 
+func publish_current_value() -> void:
+	var object := get_edited_object()
+	var property_name := get_edited_property()
+	if object == null or property_name.is_empty():
+		return
+	var current: Node = self
+	while current != null and current is not EditorInspector:
+		current = current.get_parent()
+	if current is EditorInspector:
+		current.call(&"_edit_request_change", object, "")
+		current.emit_signal(&"property_edited", String(property_name))
+
+
 func _hide_property_chrome() -> void:
 	label = ""
 	draw_label = false

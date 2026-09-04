@@ -44,16 +44,16 @@ const LEGACY_POINT_METHODS := [
 	"set_position", "set_right_control_point", "set_right_force_linear", "supports_control_state",
 ]
 const NATIVE_CURVE_METHODS := [
-	"add_point", "apply_point_states", "apply_point_topology_snapshot", "bake_callable", "capture_point_states", "clear_points",
+	"add_point", "apply_point_states", "apply_point_topology_snapshot", "bake_callable", "begin_point_edit", "capture_point_states", "clear_points",
 	"create_runtime_copy", "cubic_bezier", "get_amplitude", "get_constant_value", "get_damping",
-	"get_decay", "get_ease_type", "get_format_status", "get_format_version", "get_frequency",
+	"get_decay", "get_ease_type", "get_editor_state_snapshot", "get_format_status", "get_format_version", "get_frequency",
 	"get_mass", "get_overshoot", "get_period", "get_point", "get_point_count", "get_points",
 	"get_power", "get_steps", "get_stiffness", "get_transition", "get_velocity", "get_y_offset",
-	"insert_point", "is_format_supported", "is_from_start", "is_invert", "is_reverse",
+	"insert_point", "is_builtin_bezier_preset", "is_format_supported", "is_from_start", "is_invert", "is_preset_override_active", "is_reverse", "is_selected_preset_modified",
 	"remove_point", "sample", "set_amplitude", "set_constant_value", "set_damping", "set_decay",
-	"set_ease_type", "set_format_version", "set_frequency", "set_from_start", "set_invert",
+	"reset_selected_preset", "set_ease_type", "set_editor_state_snapshot", "set_format_version", "set_frequency", "set_from_start", "set_invert",
 	"set_mass", "set_overshoot", "set_period", "set_point", "set_points", "set_power",
-	"set_reverse", "set_steps", "set_stiffness", "set_transition", "set_velocity", "set_y_offset",
+	"set_preset_override_active", "set_reverse", "set_steps", "set_stiffness", "set_transition", "set_velocity", "set_y_offset", "finish_point_edit",
 ]
 const NATIVE_POINT_METHODS := [
 	"apply_state", "capture_state", "get_handle_mode", "get_left_control_point", "get_locks",
@@ -106,6 +106,7 @@ const LEGACY_POINT_PROPERTIES := {
 	"use_display_space_handles": TYPE_BOOL,
 }
 const NATIVE_CURVE_PROPERTIES := {
+	"_editor_state_snapshot": TYPE_DICTIONARY,
 	"amplitude": TYPE_FLOAT,
 	"constant_value": TYPE_FLOAT,
 	"damping": TYPE_FLOAT,
@@ -119,6 +120,7 @@ const NATIVE_CURVE_PROPERTIES := {
 	"overshoot": TYPE_FLOAT,
 	"period": TYPE_FLOAT,
 	"points": TYPE_ARRAY,
+	"preset_override_active": TYPE_BOOL,
 	"power": TYPE_FLOAT,
 	"reverse": TYPE_BOOL,
 	"steps": TYPE_INT,
@@ -249,10 +251,10 @@ func _test_native_reflection_contract() -> void:
 
 
 func _test_format_version_contract() -> void:
-	_assert_format_fixture("absent_version_native_curve.tres", 2, 2, true)
+	_assert_format_fixture("absent_version_native_curve.tres", 3, 2, true)
 	_assert_format_fixture("old_v1_native_curve.tres", 1, 1, false)
-	_assert_format_fixture("current_v2_native_curve.tres", 2, 2, true)
-	_assert_format_fixture("future_v3_native_curve.tres", 3, 3, false)
+	_assert_format_fixture("current_v2_native_curve.tres", 2, 1, true)
+	_assert_format_fixture("future_v4_native_curve.tres", 4, 3, false)
 
 	var malformed := ClassDB.instantiate(&"NativeEasingCurve") as Resource
 	malformed.set(&"format_version", 0)
@@ -361,10 +363,10 @@ func _assert_format_resource(
 
 
 func _assert_embedded_format_resources(root: Node, context: String) -> void:
-	_assert_format_resource(root.get_meta(&"absent") as Resource, 2, 2, true, context + " absent")
+	_assert_format_resource(root.get_meta(&"absent") as Resource, 3, 2, true, context + " absent")
 	_assert_format_resource(root.get_meta(&"old") as Resource, 1, 1, false, context + " old")
-	_assert_format_resource(root.get_meta(&"current") as Resource, 2, 2, true, context + " current")
-	_assert_format_resource(root.get_meta(&"future") as Resource, 3, 3, false, context + " future")
+	_assert_format_resource(root.get_meta(&"current") as Resource, 2, 1, true, context + " current")
+	_assert_format_resource(root.get_meta(&"future") as Resource, 4, 3, false, context + " future")
 
 
 func _script_public_method_names(script: Script) -> PackedStringArray:
@@ -423,7 +425,7 @@ func _native_integer_constants(native_class_name: StringName) -> Dictionary:
 
 func _expected_native_curve_constants() -> Dictionary:
 	return {
-		"FORMAT_VERSION": 2,
+		"FORMAT_VERSION": 3,
 		"TRANS_LINEAR": 0, "TRANS_SINE": 1, "TRANS_QUINT": 2, "TRANS_QUART": 3,
 		"TRANS_QUAD": 4, "TRANS_EXPO": 5, "TRANS_ELASTIC": 6, "TRANS_CUBIC": 7,
 		"TRANS_CIRC": 8, "TRANS_BOUNCE": 9, "TRANS_BACK": 10, "TRANS_SPRING": 11,

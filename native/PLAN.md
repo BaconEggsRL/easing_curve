@@ -37,14 +37,14 @@ Architecture:
 
 | Area | Current state |
 |---|---|
-| Branch | `native-v2-spike` at `515b506` plus the current NATIVE-07B worktree |
+| Branch | `native-v2-spike` at `870cea9` plus the current NATIVE-07C/NATIVE-08 worktree |
 | Plan tracking | This file is the mutable source of truth for migration status and manual evidence |
 | Automated tests | All 23 suites pass under Godot 4.7.1 |
-| Native smoke tests | 476 checks pass |
+| Native smoke tests | 871 checks pass, including deferred/no-op publication, resource-free live snapshots, canonical preset geometry, direct point assignment, modified sampling, migration, and save normalization |
 | Dual public API contract | Reflection fixtures freeze intended methods, properties, signals, enum/constant IDs, and Native format status across both resource APIs; 143 checks pass |
 | Legacy runtime tests | 1,380 checks pass |
 | Serialization tests | 902 checks pass |
-| Windows export | 477,184-byte release DLL loads built-in and custom Native resources in an isolated exported project |
+| Windows export | The isolated release export loads built-in and custom Native resources; the final release DLL is 491,008 bytes |
 | Native ABI | `godot-cpp` is pinned to `godot-4.4.1-stable`; one release DLL loads under Godot 4.4.1, 4.5.1, 4.6.1, and 4.7.1 |
 | Legacy fallback | Complete legacy addon loads, samples, and serializes in an isolated project with no Native manifest or binary |
 | Native standard set | All 12 Godot Tween transitions implemented directly in C++ |
@@ -54,15 +54,15 @@ Architecture:
 | Ownership | Isolated point-array containers, indexed topology mutation, point identity preservation, and deep runtime duplication are implemented |
 | Point state | Five handle modes, locks, force-linear flags, and atomic point/curve snapshots are implemented |
 | Change propagation | Point changes invalidate Native compiled state; removed points disconnect; atomic restore emits one curve-level change |
-| Native resource versioning | Absent markers resolve to current v2; malformed, older, and future values are retained but fail closed for sampling; standalone, embedded, runtime-copy, and round-trip fixtures pass |
+| Native resource versioning | Absent markers resolve to current v3; v2 remains loadable as the migration source, modified presets persist an explicit override marker, clean presets omit redundant geometry, and malformed/v1/future values fail closed |
 | Conversion result contract | Versioned result schema records source/target backends, output resource, messages, and per-field exact/approximated/baked/unsupported outcomes |
 | Native performance | All 12 standard transitions across all four ease modes beat Tween in the expanded 48-case comparison; the current run measured approximately 1.5–4.1× faster |
 | Function performance | Native deterministic function modes are approximately 63–103× faster than legacy |
 | Custom performance | Native custom Bézier is approximately 43–136× faster than legacy across 2-, 9-, and 65-point workloads |
-| Performance regression gate | Three isolated release-library runs passed all 63 relative comparisons. The median-of-medians exceeded the retained 27-case absolute envelope in 10 cases (`back_out`, `bounce_out`, `circ_out`, `cubic_out`, `custom_65_random`, `elastic_out`, `expo_out`, `function_power`, `quad_out`, and `spring_out`), so the old baseline remains unpromoted |
-| Editor boundary | The shared boundary covers backend selection, sampled graph/preview rendering, bulk point reads, selection, point options, existing-point geometry, and graph topology. Native add/delete/crossing/toolbar reorder preserve exact point identity and selection and commit one Undo/Redo action. It is covered by 98 contract and 79 vertical-slice checks |
-| Editor boundary performance | The benchmark covers ten adapter/direct cases, two signal cases, and four 65-point topology cases. Native add/remove/reorder/snapshot measured 26,806/10,888/17,515/13,698 µs versus legacy 87,809/49,072/66,056/64,659 µs; every topology gate passed its combined MAD envelope |
-| Native Web export | Non-threaded debug (339,080 bytes) and release (334,967 bytes) WASM libraries export and run in isolated headless-browser projects; built-in/custom resources load, sample, and deep-copy correctly |
+| Performance regression gate | Pre- and post-tranche isolated release gates passed all 63 relative comparisons. The pre-tranche run exceeded 2/27 retained absolute envelopes; the noisier post-tranche run exceeded 7/27. The historical baseline remains deliberately unpromoted pending a quiet reference-host run |
+| Editor boundary | The shared boundary covers graph and Inspector point-list geometry/topology, identity-based selection, deferred drag transactions, resource-free live publication, editable preset geometry, modified/reset state, and save normalization. The sampling hot path retains one cached analytic/compiled decision |
+| Editor boundary performance | The benchmark covers ten adapter/direct cases, two signal cases, and four 65-point topology cases. The final Native add/remove/reorder/snapshot run measured 27,190/10,741/17,243/13,551 µs versus legacy 88,009/48,648/65,278/64,757 µs; every topology gate passed its combined MAD envelope |
+| Native Web export | Non-threaded debug (352,271 bytes) and release (348,383 bytes) WASM libraries build and export. A prior isolated browser run proved built-in/custom load, sample, and deep-copy behavior; the current local browser rerun is blocked by Chrome crashpad/IPC sandbox access and awaits hosted confirmation |
 | Build automation | Pinned Windows/Web build jobs pass and retain their artifacts. A Windows job now downloads the release artifact and runs all 23 suites. The extensionless setup-Godot symlink is dereferenced before both Windows test and browser-runtime launch; the workflow changes still require a hosted run |
 | Manual smoke test | 2026-09-03: the first shared-editor slice passed startup, standard/custom rendering, selection, point options, Undo/Redo, persistence, Native Inspector previews, the Native FileSystem class icon, and legacy regression checks. The timing probe was deferred |
 | Legacy status | Existing `EasingCurve` remains functional and comprehensively tested |
@@ -70,17 +70,17 @@ Architecture:
 ### Partially complete
 
 - Point parity covers the core state matrix, but remaining graph edge cases and full legacy differential coverage are incomplete.
-- Windows release binaries build locally, but debug builds are blocked on the reference machine by Windows Security error 225.
+- Windows debug and release binaries build locally; exact hosted artifact validation remains pending.
 - Web build and browser runtime are locally verified; the updated GitHub Actions job and its retained artifacts still need an actual hosted run.
 - Native runtime benchmarks cover 63 cases, including every standard transition/ease pair. The isolated three-run relative gate is green, but the retained absolute baseline is not stable enough to promote.
-- Editor benchmarks cover adapter reads, snapshots, mutation-plus-recompile, transaction-shaped gestures, signal publication, and 65-point topology; preset, save-normalization, and point-list workloads remain.
-- The production Inspector and Curve Editor can display/select both resource types and edit Native point options, geometry, and graph topology. Native point-list integration remains intentionally disabled until the following tranche.
+- Editor benchmarks cover adapter reads, snapshots, mutation-plus-recompile, transaction-shaped gestures, signal publication, and 65-point topology. Visible-editor point-list/preset smoke testing remains.
+- The production Inspector and Curve Editor can display/select both resource types and edit Native point options, graph topology, point-list topology, and the ten Bézier-backed presets. Hosted live-debug and visible-editor confirmation remain.
 
 ### Missing
 
 - Verified Windows debug artifact and editor hot-reload workflow.
 - Generated Jitter/Irregular modes, CSS modes, and extended Bounce parameters.
-- Native point-list, preset, save-normalization, and remaining Inspector support.
+- Manual visible-editor certification of Native point-list, preset, save-normalization, and live-runtime restart behavior.
 - Explicit optional conversion between resource types.
 - Exact-ZIP allowlist packaging, checksums, metadata, and clean-project tests.
 - Native support for the complete legacy platform matrix.
@@ -208,15 +208,15 @@ Legacy must not depend on Native classes or binaries.
 | Handle modes | Complete | Five modes implemented | Complete edge-case differential tests | Yes |
 | Locks/force-linear | Complete | Persisted, enforced, and exposed by shared graph controls | Complete manual verification | Yes |
 | Deep runtime copy | Complete | Complete for current fields | Extend with each new field | Yes |
-| Inspector | Complete | Geometry/options integrated; point list pending | Point-list adapter and selection sync | Yes |
+| Inspector | Complete | Shared graph and point list integrated with selection sync | Visible-editor live-edit verification | Yes |
 | Graph editing | Complete | Add/delete/crossing/reorder and geometry integrated | Manual verification | Yes |
-| Presets/preview/save | Complete | Preview integrated; presets/save pending | Shared preset and normalization paths | Yes |
-| Undo/Redo | Complete | Graph geometry/topology integrated with exact point identity | Point-list/preset coverage | Yes |
+| Presets/preview/save | Complete | Ten Bézier presets editable; modified/reset and save normalization integrated | Visible-editor verification | Yes |
+| Undo/Redo | Complete | Graph/list geometry, topology, and presets preserve exact point identity | Visible-editor verification | Yes |
 | Windows | Complete | Release runtime/export proof; release DLL is the editor fallback | Debug proof and reproducible package | Yes |
 | Web | Complete | Non-threaded debug/release build and isolated browser runtime verified on Godot 4.7.1 | Hosted CI run and user-facing export rerun | Yes |
 | Linux/macOS/Android | Legacy available | Missing | Deferred initially | Required or explicitly excepted |
 | Packaging/CI | Legacy scripts exist | Windows/Web builds pass; Windows behavior job and symlink fix added locally | Hosted green run and exact-ZIP pipeline | Full supported matrix |
-| Stable field use | Established | v2 public/serialization contract frozen and fixture-tested | Initial release evidence | One stable release cycle |
+| Stable field use | Established | v3 public/serialization contract and v2 migration fixture-tested | Initial release evidence | One stable release cycle |
 
 ## 6. Architecture decisions
 
@@ -328,7 +328,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-01 — Toolchain, platforms, and fallback feasibility
 
-**Status:** **In progress.** Windows release, Godot 4.4–4.7 ABI loading, legacy-only fallback, and prior Godot 4.7.1 non-threaded Web debug/release browser runtime are verified. The latest hosted Windows and Web build jobs pass and retain their artifacts. The dependent `web-runtime` job failed before launching Godot because PowerShell received setup-Godot's extensionless symlink. The workflow now dereferences that symlink and adds a downloaded-release-DLL Windows test job, but those changes still need a hosted run. Windows debug remains blocked by Windows Security error 225.
+**Status:** **In progress.** Windows debug/release builds, Windows release export, Godot 4.4–4.7 ABI loading, legacy-only fallback, and prior Godot 4.7.1 non-threaded Web debug/release browser runtime are verified. The latest hosted Windows and Web build jobs pass and retain their artifacts. The dependent `web-runtime` job failed before launching Godot because PowerShell received setup-Godot's extensionless symlink. The workflow now dereferences that symlink and adds a downloaded-release-DLL Windows test job, but those changes still need a hosted run. Current local Web exports succeed; Chrome launch remains blocked by crashpad/IPC sandbox access.
 
 **Goal:** Prove Godot 4.4 compatibility, Windows/Web builds, and legacy-only fallback.
 
@@ -347,9 +347,9 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-02 — Freeze independent public contracts
 
-**Status:** **Verified.** Reflection fixtures freeze both intended public APIs. Native IDs, format version 2, indexed point APIs, atomic snapshots, adapter contracts, and the conversion-result schema are fixed. Absent, malformed, old, current, and future version behavior is covered by standalone, embedded, runtime-copy, and save/load fixtures. The isolated Native-only export and legacy-without-Native fixtures prove neither runtime depends on the other.
+**Status:** **Verified.** Reflection fixtures freeze both intended public APIs. Native IDs, format version 3, indexed point APIs, atomic snapshots, adapter contracts, and the conversion-result schema are fixed. Absent, malformed, v1, v2 migration, current, and future version behavior is covered by standalone, embedded, runtime-copy, and save/load fixtures. The isolated Native-only export and legacy-without-Native fixtures prove neither runtime depends on the other.
 
-**Goal:** Stabilize both APIs and Native format version 2.
+**Goal:** Stabilize both APIs and the current Native format contract.
 
 **Implementation:**
 
@@ -367,7 +367,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-03 — Expand performance baselines
 
-**Status:** **In progress.** Runtime coverage is expanded from 27 to 63 cases: all 12 standard transitions exercise In, Out, In-Out, and Out-In, alongside deterministic functions, 2/9/65-point access patterns, mutation, and duplication. The runner creates an isolated project with no unrelated plugins or autoloads and evaluates the median of three release-library runs. All 63 relative comparisons pass, including all 48 standard Native pairs versus Tween and every comparable Native function/custom mode versus GDScript. The retained absolute reference fails 10 of 27 cases, so it has not been promoted. The editor benchmark now adds four 65-point topology workloads; Native passes every combined-MAD gate and is faster than legacy in each.
+**Status:** **In progress.** Runtime coverage is expanded from 27 to 63 cases: all 12 standard transitions exercise In, Out, In-Out, and Out-In, alongside deterministic functions, 2/9/65-point access patterns, mutation, and duplication. The runner creates an isolated project with no unrelated plugins or autoloads and evaluates the median of three release-library runs. The post-NATIVE-08 run passed all 63 relative comparisons, including all 48 standard Native pairs versus Tween and every comparable Native function/custom mode versus GDScript. The retained absolute reference exceeded its noise envelope in 7 of 27 cases (`back_out`, `custom_2_random`, `custom_65_random`, `elastic_out`, `expo_out`, `mutate_control_and_sample_65`, and `spring_out`), so the baseline remains deliberately unpromoted pending a quiet reference-host run. The editor benchmark now adds four 65-point topology workloads; Native passes every combined-MAD gate and is faster than legacy in each.
 
 **Goal:** Establish regression gates for both implementations.
 
@@ -446,7 +446,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-07 — Extract the shared editor boundary
 
-**Status:** **In progress.** The read path, geometry slice, and NATIVE-07B graph-topology slice are complete locally. The shared Curve Editor and preview generator select a backend once, then use it for sampling, value ranges, point reads, selection, point-option state, lock checks, point/control mutations, add/delete, endpoint takeover, crossings, and toolbar reorder. Native atomic topology snapshots validate before mutation, preserve exact point resources, reconnect once, compile once, and publish one curve-level change. One-action Undo/Redo preserves resource identity and selection. All legacy characterization suites pass. Point-list integration, presets, and save normalization remain.
+**Status:** **Implemented locally; verification in progress.** NATIVE-07C routes both graph and Native point-list geometry/topology through the existing backend. Native point edits now use begin/finish transactions: local previews recompile during motion, while `changed`, `points_changed`, and the resource-free live-edit snapshot publish once at commit. Graph/list selection follows point identity across crossings, reorder, Undo, and Redo. All 23 suites pass; hosted live-debug and visible-editor smoke evidence remain.
 
 **Goal:** Decouple the existing editor from concrete legacy types without changing its behavior.
 
@@ -466,7 +466,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-08 — Add full Native editor support
 
-**Status:** **In progress.** Native Inspector/graph support includes sampled rendering, point/control visualization, selection, force-linear, locks, preview generation, existing-point and handle dragging, graph add/delete, endpoint takeover, crossings, toolbar reorder, and one-action Undo/Redo. Position/control locks block graph dragging, and topology restore preserves exact point resources and selection. Point-list synchronization, presets, save hooks, and their manual verification remain.
+**Status:** **Implemented locally; verification in progress.** Constant, Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, and Back expose canonical Bézier geometry in the shared graph/list editor. Editing preserves Transition/Ease identity, enables compiled geometry through a cached sampling-mode flag, displays modified/reset state, and persists overrides. Clean presets remain analytic and omit redundant points on save. Format v3 records modified presets while v2 standard resources retain analytic behavior and v2 Custom points remain usable. Automated correctness, round-trip, normalization, and relative performance coverage passes; visible-editor, hosted Web, and a repeatable quiet-host absolute baseline remain.
 
 **Goal:** Make Native resources first-class in the shared editor.
 
@@ -716,60 +716,39 @@ Any crash, data loss, stale result after mutation, missing class, serialization 
 Interpretation:
 
 - The shared start jitter in A does not currently implicate the Native equations. Keep it as a diagnostic item and capture per-frame elapsed time/offset before changing either solver.
-- The shared editor exposes force-linear and lock operations, and automated coverage confirms Native point/control geometry, graph topology, lock enforcement, exact identity/selection restoration, and one-action gesture Undo/Redo. Final NATIVE-04/NATIVE-07 acceptance still waits for the visible custom-editing smoke test and point-list integration.
+- The shared editor exposes force-linear and lock operations, and automated coverage confirms Native point/control geometry, graph and point-list topology, deferred commit publication, preset override/reset behavior, save normalization, exact identity/selection restoration, and one-action gesture Undo/Redo. Final NATIVE-07/NATIVE-08 acceptance waits for visible live-edit and preset smoke testing.
 - The original E failure was correctly treated as a Native Web blocker. The non-threaded wasm32 implementation now resolves that technical blocker in isolated debug and release browser fixtures without substituting the legacy API. Final visible-scene acceptance remains manual.
 
 ## 9. Recommended next execution tranche
 
-### NATIVE-07C — Shared Inspector Point-List Synchronization
+### NATIVE-08 certification closeout — Full Editor MVP evidence
 
-**Description:** Move the Inspector point-list workflow onto the existing shared
-editor backend and enable it for `NativeEasingCurve`. Keep graph and Inspector
-selection synchronized by point resource identity while preserving indexed
-add/delete/reorder behavior, endpoint rules, detached-point disconnection, and
-one-action atomic Undo/Redo. Runtime sampling and compiled segment layout remain
-untouched.
-
-**Preparation gates:**
-
-1. Push the CI repair and require a hosted run where Windows build, Windows
-   release-library tests, Web build, and browser runtime all pass, with both Web
-   artifacts retained.
-2. Keep the current 27-case absolute performance baseline unpromoted. Repeat the
-   isolated three-run gate on a quiet reference host and investigate the 10
-   aggregate failures before accepting a replacement baseline.
-3. Complete and record manual smoke-test section C for NATIVE-07B graph topology.
+**Description:** The NATIVE-07C and NATIVE-08 implementation is present locally.
+The next tranche is evidence-only: verify deferred live-runtime restarts,
+editable presets, point-list synchronization, save normalization, exports, and
+performance without expanding runtime scope or promoting a noisy baseline.
 
 **Implementation plan:**
 
-1. Retarget the existing point-list `EditorProperty` and its add/remove/reorder
-   call sites to `CurveEditorBackend` operations using `Resource` values only;
-   do not introduce another adapter or expose concrete point classes.
-2. Use backend factories and ordered-point operations for list insertion,
-   deletion, drag reorder, endpoint takeover, and cancellation. Preserve the
-   legacy list's serialized behavior and characterization results.
-3. Add an identity-based selection bridge so graph selection highlights the
-   matching Inspector entry and list selection highlights the same graph point.
-   Reorder and Undo/Redo must retain the selected resource; deleting it clears
-   selection, while deleting an earlier point only remaps its index.
-4. Commit each list mutation through the standardized opaque snapshot and the
-   Native atomic topology method. Refresh the property list once, reconnect
-   point signals once, compile once, and publish one curve-level change per
-   committed operation.
-5. Mirror the legacy point-list add/reorder/delete suites for Native, including
-   invalid drops, canceled drags, endpoint replacement, detached resources,
-   selection synchronization, exact identity after Undo/Redo, and one-action/
-   one-publication assertions. Keep all 23 existing suites green.
-6. Extend the backend benchmark with 65-point Inspector add/remove/reorder and
-   selection-sync workloads. Native must remain within the combined legacy MAD
-   envelope, and the isolated runtime benchmark must show no relative or
-   aggregate absolute regression caused by the tranche.
-7. Finish with manifest validation, Windows release export, hosted Web browser
-   runtime, and manual smoke-test sections C and D. Presets, save normalization,
-   conversion, and new runtime modes remain out of scope.
+1. Complete visible-editor smoke sections C and D for Custom and every editable
+   preset. Confirm graph and point-list drags restart the running comparison only
+   on release, while handle-mode, add/remove/reorder, reset, Undo, and Redo
+   restart exactly once.
+2. Run the isolated three-release-run benchmark on a quiet reference host. Keep
+   every standard Native transition faster than Tween and every comparable mode
+   faster than GDScript. Investigate any historical absolute failure; do not
+   promote the baseline merely to absorb slower measurements.
+3. Run the editor-backend scaling benchmark, manifest validation, Windows release
+   export, both Web builds, and the browser-runtime fixture.
+4. Push the CI repair and MVP changes, then retain a hosted run where Windows
+   build/tests, Web build, and browser runtime all pass with debug/release Web
+   artifacts.
+5. Record the exact artifacts and manual evidence here. When those gates are
+   green, mark NATIVE-07 and NATIVE-08 Verified and treat NATIVE-08 as the MVP
+   floor.
 
-After NATIVE-07C, the next editor tranche should cover shared presets and save
-normalization. NATIVE-01 and NATIVE-03 remain **In progress** until hosted Web
+After this closeout, NATIVE-09 optional bidirectional conversion is the next
+feature tranche. NATIVE-01 and NATIVE-03 remain **In progress** until hosted Web
 evidence and repeatable absolute performance evidence are green.
 
 ## 10. Definition of Done

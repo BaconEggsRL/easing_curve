@@ -33,6 +33,7 @@ signal point_remove_requested(point: EasingCurvePoint)
 signal point_move_up_requested(index: int)
 signal point_move_down_requested(index: int)
 signal point_edit_finished(point_order: Array[EasingCurvePoint])
+signal point_selection_changed(point: Resource)
 signal slider_changed
 signal zoom_changed
 signal pan_changed
@@ -67,6 +68,7 @@ const AUTOFIT_PADDING_RATIO := 0.10
 const FUNCTION_DRAW_STEPS := 120
 
 var editor_undo_redo: Object
+var committed_change_publisher: Callable
 var pan_offset := Vector2.ZERO
 var is_panning := false
 var last_mouse_pos := Vector2.ZERO
@@ -86,6 +88,7 @@ var selected_index: int = -1:
 			_selected_index_by_curve[resource.get_instance_id()] = value
 		_update_point_toolbar()
 		queue_redraw()
+		point_selection_changed.emit(_selected_point_resource())
 
 var hovered_index: int = -1
 var selected_control_index: ControlIndex = ControlIndex.NONE
@@ -527,8 +530,16 @@ func _request_point_property_change(index: int, property_name: StringName, value
 	if changing:
 		return
 	if _backend_point_edit_active:
+		if property_name == &"position":
+			var active_point := _point(index)
+			_backend.apply_point_order(_backend.get_ordered_points(active_point))
+			selected_index = _backend.find_point(active_point)
 		_finish_backend_point_edit()
 		return
+	if property_name == &"position":
+		var active_point := _point(index)
+		_backend.apply_point_order(_backend.get_ordered_points(active_point))
+		selected_index = _backend.find_point(active_point)
 	var after: Variant = _duplicate_snapshot(_backend.capture_snapshot())
 	if before == after:
 		return
@@ -570,13 +581,16 @@ func _commit_backend_snapshot_action(
 	selected_after: Resource = null,
 ) -> void:
 	if editor_undo_redo == null:
+		_publish_backend_change()
 		return
 	var selected_before_id := selected_before.get_instance_id() if selected_before != null else 0
 	var selected_after_id := selected_after.get_instance_id() if selected_after != null else 0
 	editor_undo_redo.create_action(action_name)
 	if editor_undo_redo is EditorUndoRedoManager:
 		editor_undo_redo.add_do_method(self, &"_apply_backend_snapshot_and_selection", after, selected_after_id)
+		editor_undo_redo.add_do_method(self, &"_publish_backend_change")
 		editor_undo_redo.add_undo_method(self, &"_apply_backend_snapshot_and_selection", before, selected_before_id)
+		editor_undo_redo.add_undo_method(self, &"_publish_backend_change")
 	else:
 		editor_undo_redo.add_do_method(
 			Callable(self, &"_apply_backend_snapshot_and_selection").bind(after, selected_after_id),
@@ -584,7 +598,108 @@ func _commit_backend_snapshot_action(
 		editor_undo_redo.add_undo_method(
 			Callable(self, &"_apply_backend_snapshot_and_selection").bind(before, selected_before_id),
 		)
+		editor_undo_redo.add_do_method(Callable(self, &"_publish_backend_change"))
+		editor_undo_redo.add_undo_method(Callable(self, &"_publish_backend_change"))
 	editor_undo_redo.commit_action(false)
+	_publish_backend_change()
+
+
+func _publish_backend_change() -> void:
+	if committed_change_publisher.is_valid():
+		committed_change_publisher.call()
+
+
+func edit_point_property(
+	index: int,
+	property_name: StringName,
+	value: Variant,
+	changing := false,
+) -> void:
+	_request_point_property_change(index, property_name, value, changing)
+
+
+func finish_point_list_edit(point: Resource, property_name: StringName) -> void:
+	if not _backend_point_edit_active or point == null:
+		return
+	if property_name == &"position":
+		_backend.apply_point_order(_backend.get_ordered_points(point))
+		selected_index = _backend.find_point(point)
+	_finish_backend_point_edit()
+
+
+func add_point_from_list() -> Resource:
+	if _backend == null:
+		return null
+	var points := _points()
+	var position := Vector2.ZERO
+	if points.is_empty():
+		position = Vector2.ZERO
+	elif not _has_endpoint_at(0.0):
+		position = Vector2(0.0, 0.0)
+	elif not _has_endpoint_at(1.0):
+		position = Vector2(1.0, 1.0)
+	else:
+		var largest_gap := -1.0
+		for index in range(points.size() - 1):
+			var left: Vector2 = points[index].get(&"position")
+			var right: Vector2 = points[index + 1].get(&"position")
+			var gap := right.x - left.x
+			if gap > largest_gap:
+				largest_gap = gap
+				position.x = (left.x + right.x) * 0.5
+		position.y = _backend.sample(position.x)
+	var point: Resource = _backend.create_point(position)
+	if point == null:
+		return null
+	_request_point_add(point)
+	selected_index = _backend.find_point(point)
+	return point
+
+
+func remove_point_from_list(point: Resource) -> void:
+	_request_point_remove(point)
+
+
+func move_point_from_list(from_index: int, to_index: int) -> void:
+	if from_index < 0 or from_index >= _point_count() or to_index < 0 or to_index >= _point_count():
+		return
+	selected_index = from_index
+	_reorder_selected_point(to_index)
+
+
+func select_point_resource(point: Resource) -> void:
+	selected_index = _backend.find_point(point) if _backend != null else -1
+
+
+func get_selected_point_resource() -> Resource:
+	return _selected_point_resource()
+
+
+func reset_native_preset() -> void:
+	var resource := get_curve()
+	if _backend == null or resource == null or not resource.has_method(&"reset_selected_preset"):
+		return
+	var before := _duplicate_snapshot(_backend.capture_snapshot())
+	var selected_before := _selected_point_resource()
+	resource.call(&"reset_selected_preset")
+	var after := _duplicate_snapshot(_backend.capture_snapshot())
+	if before == after:
+		return
+	_commit_backend_snapshot_action(
+		"Reset Easing Curve Preset",
+		before,
+		after,
+		selected_before,
+		null,
+	)
+
+
+func _has_endpoint_at(x: float) -> bool:
+	for point in _points():
+		var position: Vector2 = point.get(&"position")
+		if is_equal_approx(position.x, x):
+			return true
+	return false
 
 
 func _apply_backend_snapshot_and_selection(snapshot: Variant, selected_point_id: int) -> void:

@@ -68,7 +68,7 @@ func _test_native_selection_and_point_options() -> void:
 	_expect(change_count[0] == 2, "Native locking amplified curve change signals")
 
 	curve.set(&"transition", 0)
-	_expect(editor.call(&"_is_point_toolbar_hidden"), "Native standard transition exposed point options")
+	_expect(not editor.call(&"_is_point_toolbar_hidden"), "Native editable preset hid point options")
 	editor.queue_free()
 
 
@@ -86,6 +86,12 @@ func _test_native_inspector_path() -> void:
 		_expect(editor != null, "Native Inspector content omitted the shared Curve Editor")
 		if editor != null:
 			_expect(editor.get_backend_id() == &"native", "Native Inspector used the wrong backend")
+			var add_button := _find_button(content, "Add Point")
+			_expect(add_button != null, "Native Inspector omitted the shared point-list Add control")
+			if add_button != null:
+				var before_count: int = curve.call(&"get_point_count")
+				add_button.pressed.emit()
+				_expect(curve.call(&"get_point_count") == before_count + 1, "Native point-list Add did not use the shared backend")
 		content.queue_free()
 
 
@@ -102,6 +108,8 @@ func _test_native_geometry_gestures() -> void:
 	var editor := CURVE_EDITOR.new() as EasingCurveEditor
 	var history := UndoRedo.new()
 	editor.editor_undo_redo = history
+	var live_publications := [0]
+	editor.committed_change_publisher = func(): live_publications[0] += 1
 	editor.set_curve(curve)
 	editor.size = Vector2(520.0, 260.0)
 	root.add_child(editor)
@@ -132,13 +140,16 @@ func _test_native_geometry_gestures() -> void:
 		"Native point drag did not translate its right handle once",
 	)
 	_expect(not bool(editor.get("_backend_point_edit_active")), "Native point drag did not close its backend transaction")
-	_expect(change_count[0] == 2, "Native point drag amplified curve change signals")
+	_expect(change_count[0] == 1, "Native point drag did not defer publication to release")
+	_expect(live_publications[0] == 1, "Native point drag did not publish one live-edit snapshot")
 	_expect(history.has_undo(), "Native point drag did not create an Undo action")
 	history.undo()
 	_expect(point.get(&"position").is_equal_approx(original_position), "Native point drag Undo did not restore geometry")
+	_expect(live_publications[0] == 2, "Native point drag Undo did not publish one live-edit snapshot")
 	_expect(not history.has_undo() and history.has_redo(), "Native point drag created more than one Undo action")
 	history.redo()
 	_expect(point.get(&"position").is_equal_approx(target_position), "Native point drag Redo did not restore geometry")
+	_expect(live_publications[0] == 3, "Native point drag Redo did not publish one live-edit snapshot")
 
 	history.clear_history()
 	var original_control := point.get(&"right_control_point") as Vector2
@@ -357,6 +368,16 @@ func _find_curve_editor(node: Node) -> EasingCurveEditor:
 		return node
 	for child in node.get_children():
 		var result := _find_curve_editor(child)
+		if result != null:
+			return result
+	return null
+
+
+func _find_button(node: Node, text: String) -> Button:
+	if node is Button and node.text == text:
+		return node
+	for child in node.get_children():
+		var result := _find_button(child, text)
 		if result != null:
 			return result
 	return null
