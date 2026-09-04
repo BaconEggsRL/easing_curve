@@ -507,6 +507,7 @@ func restart_runtime() -> void:
 	kill_tweens()
 	reset_positions()
 	_reset_timing_probe()
+	_capture_runtime_curves()
 
 	start_tween(curve_tween, curve_end_marker, curve_node, true)
 	start_tween(tween_tween, tween_end_marker, tween_node, false)

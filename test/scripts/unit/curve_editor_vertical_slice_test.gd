@@ -6,6 +6,9 @@ const CURVE_EDITOR := preload(
 const INSPECTOR_PLUGIN := preload(
 	"res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd"
 )
+const POINTS_EDITOR_PROPERTY := preload(
+	"res://addons/easing_curve/scripts/editor/inspector/points_editor_property.gd"
+)
 
 
 func _init() -> void:
@@ -17,6 +20,7 @@ func _run() -> void:
 	_test_native_selection_and_point_options()
 	_test_native_geometry_gestures()
 	_test_native_add_delete_and_endpoint_topology()
+	_test_native_existing_point_endpoint_takeover()
 	_test_native_crossing_and_toolbar_reorder()
 	_test_native_inspector_path()
 	_finish("shared curve editor vertical slice")
@@ -76,6 +80,23 @@ func _test_native_inspector_path() -> void:
 	if not ClassDB.class_exists(&"NativeEasingCurve"):
 		return
 	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	var live_property := POINTS_EDITOR_PROPERTY.new() as EditorProperty
+	live_property.set_object_and_property(curve, &"_editor_state_snapshot")
+	var published_values: Array[Variant] = []
+	live_property.property_changed.connect(
+		func(property: StringName, value: Variant, _field: StringName, changing: bool) -> void:
+			if property == &"_editor_state_snapshot" and not changing:
+				published_values.append(value)
+	)
+	live_property.call(&"publish_current_value")
+	_expect(published_values.size() == 1, "Native EditorProperty did not explicitly publish its live-edit snapshot")
+	_expect(not curve.call(&"_dont_undo_redo"), "Native EditorProperty left Inspector Undo bypass active")
+	_expect(
+		published_values[0] is Dictionary
+		and not _variant_contains_resource(published_values[0]),
+		"Native live-edit publication crossed the boundary with Resource references",
+	)
+	live_property.free()
 	var inspector := INSPECTOR_PLUGIN.new()
 	_expect(inspector._can_handle(curve), "Inspector plugin rejected NativeEasingCurve")
 	var content := inspector.handle_easing_curve_editor(curve)
@@ -88,6 +109,30 @@ func _test_native_inspector_path() -> void:
 			_expect(editor.get_backend_id() == &"native", "Native Inspector used the wrong backend")
 			var add_button := _find_button(content, "Add Point")
 			_expect(add_button != null, "Native Inspector omitted the shared point-list Add control")
+			_expect(_find_drag_handle(content) != null, "Native point list omitted the legacy drag handle")
+			var first_point := curve.call(&"get_point", 0) as Resource
+			var first_panel: Node = inspector.get("_native_points_content").get_child(0)
+			var original_position: Vector2 = first_point.get(&"position")
+			var preview_position := original_position + Vector2(0.0, 0.2)
+			editor.edit_point_property(0, &"position", preview_position, true)
+			_expect(
+				editor.get("position_x_order_preview_point") == first_point,
+				"Native point-list drag did not enable graph-order preview",
+			)
+			_expect(
+				(editor.call(&"_get_display_points") as Array).has(first_point),
+				"Native point-list drag omitted the edited point from graph preview",
+			)
+			editor.finish_point_list_edit(first_point, &"position")
+			_expect(
+				editor.get("position_x_order_preview_point") == null,
+				"Native point-list drag retained stale graph-order preview state",
+			)
+			_expect(
+				not inspector.get("_native_points_refresh_queued")
+				and inspector.get("_native_points_content").get_child(0) == first_panel,
+				"Native geometry commit rebuilt the entire point list",
+			)
 			if add_button != null:
 				var before_count: int = curve.call(&"get_point_count")
 				add_button.pressed.emit()
@@ -118,6 +163,10 @@ func _test_native_geometry_gestures() -> void:
 	var original_position := point.get(&"position") as Vector2
 	var original_left := point.get(&"left_control_point") as Vector2
 	var original_right := point.get(&"right_control_point") as Vector2
+	point.set(&"right_control_point", Vector2(0.6, 3.5))
+	var native_bounds := editor.call(&"_get_autofit_world_bounds") as Rect2
+	_expect(native_bounds.end.y >= 3.5, "Native Autofit bounds ignored a visible control handle")
+	point.set(&"right_control_point", original_right)
 	var target_position := Vector2(0.55, 0.6)
 	var position_delta := target_position - original_position
 	var start_view := editor.get_view_pos(original_position)
@@ -176,6 +225,42 @@ func _test_native_geometry_gestures() -> void:
 	editor._gui_input(_mouse_button(target_view, false))
 	_expect(point.get(&"position").is_equal_approx(target_position), "Native position lock did not block graph dragging")
 	_expect(not history.has_undo(), "Blocked Native point drag created an Undo action")
+	editor.queue_free()
+
+
+func _test_native_existing_point_endpoint_takeover() -> void:
+	if not ClassDB.class_exists(&"NativeEasingCurve"):
+		return
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	curve.set(&"transition", 100)
+	var middle := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+	middle.set(&"position", Vector2(0.5, 0.5))
+	middle.set(&"left_control_point", Vector2(0.4, 0.5))
+	middle.set(&"right_control_point", Vector2(0.6, 0.5))
+	curve.call(&"insert_point", 1, middle)
+	var old_right := curve.call(&"get_point", 2) as Resource
+	var editor := CURVE_EDITOR.new() as EasingCurveEditor
+	var history := UndoRedo.new()
+	editor.editor_undo_redo = history
+	editor.set_curve(curve)
+	editor.size = Vector2(520.0, 260.0)
+	root.add_child(editor)
+	editor.update_view_transform()
+	var start_view := editor.get_view_pos(middle.get(&"position"))
+	var endpoint_view := editor.get_view_pos(Vector2(1.0, 0.75))
+	editor._gui_input(_mouse_button(start_view, true))
+	editor._gui_input(_mouse_motion(endpoint_view))
+	editor._gui_input(_mouse_button(endpoint_view, false))
+	_expect(curve.call(&"get_point_count") == 2, "Native point drag to x=1 retained the old endpoint")
+	_expect(curve.call(&"get_point", 1) == middle, "Native point drag endpoint takeover lost point identity")
+	_expect((curve.call(&"get_points") as Array).find(old_right) == -1, "Native point drag did not detach the displaced endpoint")
+	_expect(editor.selected_index == 1, "Native point drag endpoint takeover lost selection")
+	_expect(history.has_undo(), "Native point drag endpoint takeover omitted Undo history")
+	history.undo()
+	_expect(curve.call(&"get_point_count") == 3, "Native endpoint takeover Undo did not restore the displaced endpoint")
+	_expect(curve.call(&"get_point", 1) == middle and curve.call(&"get_point", 2) == old_right, "Native endpoint takeover Undo lost resource identity")
+	history.redo()
+	_expect(curve.call(&"get_point_count") == 2 and curve.call(&"get_point", 1) == middle, "Native endpoint takeover Redo failed")
 	editor.queue_free()
 
 
@@ -381,3 +466,27 @@ func _find_button(node: Node, text: String) -> Button:
 		if result != null:
 			return result
 	return null
+
+
+func _find_drag_handle(node: Node) -> EasingCurveDragHandle:
+	if node is EasingCurveDragHandle:
+		return node
+	for child in node.get_children():
+		var result := _find_drag_handle(child)
+		if result != null:
+			return result
+	return null
+
+
+func _variant_contains_resource(value: Variant) -> bool:
+	if value is Resource:
+		return true
+	if value is Array:
+		for item in value:
+			if _variant_contains_resource(item):
+				return true
+	if value is Dictionary:
+		for key in value:
+			if _variant_contains_resource(key) or _variant_contains_resource(value[key]):
+				return true
+	return false

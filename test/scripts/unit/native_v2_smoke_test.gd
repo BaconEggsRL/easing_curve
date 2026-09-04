@@ -438,8 +438,16 @@ func _test_deferred_point_edit_transaction() -> void:
 
 func _test_resource_free_editor_snapshot() -> void:
 	var curve := _new_native_curve(TRANS_CUSTOM, NativeEasingCurve.EASE_OUT)
+	_expect(not curve.call(&"_dont_undo_redo"), "Native curve bypasses Inspector Undo outside snapshot publication")
+	curve.set_meta(&"_easing_curve_publishing_editor_snapshot", true)
+	_expect(curve.call(&"_dont_undo_redo"), "Native snapshot publication did not bypass duplicate Inspector Undo")
+	curve.remove_meta(&"_easing_curve_publishing_editor_snapshot")
+	_expect(not curve.call(&"_dont_undo_redo"), "Native snapshot publication left Inspector Undo bypass active")
 	var snapshot: Dictionary = curve.call(&"get_editor_state_snapshot")
 	_expect(not _contains_object(snapshot), "Native editor snapshot contains a Resource")
+	var local_point := curve.call(&"get_point", 0) as Resource
+	curve.call(&"set_editor_state_snapshot", snapshot)
+	_expect(curve.call(&"get_point", 0) == local_point, "Equal live snapshot replaced local point identity")
 	var remote := ClassDB.instantiate(&"NativeEasingCurve") as Resource
 	var remote_publications := [0]
 	remote.changed.connect(func(): remote_publications[0] += 1)

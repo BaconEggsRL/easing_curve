@@ -58,6 +58,7 @@ var _point_edit_transaction_controller := PointEditTransactionController.new()
 var _native_curve: Resource
 var _native_points_content: VBoxContainer
 var _native_points_refresh_queued := false
+var _native_point_identity_signature := PackedInt64Array()
 
 
 ## Inspector-only transition grouping, ordering, and presentation.
@@ -682,7 +683,11 @@ func _handle_native_curve_editor(object: Resource) -> Control:
 	)
 	root.add_child(_curve_editor_section)
 
-	_native_points_content = VBoxContainer.new()
+	_native_points_content = PointsListContainer.new()
+	_native_points_content.connect(
+		&"point_swap_requested",
+		easing_curve_editor.move_point_from_list,
+	)
 	_native_points_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_build_native_point_list(object)
 	var native_points_section := _create_foldable_section("Points", _native_points_content, object)
@@ -708,7 +713,13 @@ func _on_native_curve_changed(
 	points_section: Control,
 ) -> void:
 	_update_native_preset_status(object, preset_status, preset_reset, points_section)
-	if not _native_points_refresh_queued:
+	var backend := BackendFactory.create(object)
+	var identity_signature := (
+		_get_native_point_identity_signature(backend.get_points())
+		if backend != null
+		else PackedInt64Array()
+	)
+	if identity_signature != _native_point_identity_signature and not _native_points_refresh_queued:
 		_native_points_refresh_queued = true
 		_refresh_native_point_list.call_deferred(object)
 
@@ -739,6 +750,7 @@ func _refresh_native_point_list(object: Resource) -> void:
 	if not is_instance_valid(_native_points_content) or object != _native_curve:
 		return
 	for child in _native_points_content.get_children():
+		_native_points_content.remove_child(child)
 		child.queue_free()
 	_build_native_point_list(object)
 
@@ -751,15 +763,23 @@ func _build_native_point_list(object: Resource) -> void:
 		return
 	var points: Array[Resource] = backend.get_points()
 	for index in range(points.size()):
-		_native_points_content.add_child(
-			_create_native_point_panel(points[index], index, points.size())
-		)
+		var panel := _create_native_point_panel(points[index], index, points.size())
+		_native_points_content.add_child(panel)
+		_native_points_content.call(&"enable_drop_forwarding", panel)
 	var add_button := Button.new()
 	add_button.text = "Add Point"
 	add_button.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_ADD)
 	add_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	add_button.pressed.connect(easing_curve_editor.add_point_from_list)
 	_native_points_content.add_child(add_button)
+	_native_point_identity_signature = _get_native_point_identity_signature(points)
+
+
+func _get_native_point_identity_signature(points: Array[Resource]) -> PackedInt64Array:
+	var signature := PackedInt64Array()
+	for point in points:
+		signature.append(point.get_instance_id())
+	return signature
 
 
 func _create_native_point_panel(
@@ -785,16 +805,28 @@ func _create_native_point_panel(
 	panel.add_child(row)
 
 	var move_buttons := VBoxContainer.new()
+	move_buttons.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var move_up := Button.new()
 	move_up.flat = true
 	move_up.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_MOVE_UP)
+	move_up.tooltip_text = "Move Point Up"
 	move_up.pressed.connect(
 		easing_curve_editor.move_point_from_list.bind(index, wrapi(index - 1, 0, point_count))
 	)
 	move_buttons.add_child(move_up)
+	var drag_handle := EasingCurveDragHandle.new()
+	drag_handle.texture = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_TRIPLE_BAR)
+	drag_handle.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	drag_handle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	drag_handle.focus_mode = Control.FOCUS_ALL
+	drag_handle.index = index
+	drag_handle.point_panel = panel
+	drag_handle.point_list = _native_points_content
+	move_buttons.add_child(drag_handle)
 	var move_down := Button.new()
 	move_down.flat = true
 	move_down.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_MOVE_DOWN)
+	move_down.tooltip_text = "Move Point Down"
 	move_down.pressed.connect(
 		easing_curve_editor.move_point_from_list.bind(index, wrapi(index + 1, 0, point_count))
 	)
@@ -936,6 +968,11 @@ func _add_native_handle_mode_property(
 				easing_curve_editor.select_point_resource(point)
 				easing_curve_editor.edit_point_property(current_index, &"handle_mode", mode)
 	)
+	var changed_callback := func() -> void:
+		if is_instance_valid(option):
+			option.select(int(point.get(&"handle_mode")))
+	point.changed.connect(changed_callback)
+	option.tree_exiting.connect(_disconnect_native_point_callback.bind(point, changed_callback))
 	grid.add_child(option)
 
 

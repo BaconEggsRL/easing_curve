@@ -85,6 +85,7 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("finish_point_edit"), &NativeEasingCurve::finish_point_edit);
 	ClassDB::bind_method(D_METHOD("get_editor_state_snapshot"), &NativeEasingCurve::get_editor_state_snapshot);
 	ClassDB::bind_method(D_METHOD("set_editor_state_snapshot", "snapshot"), &NativeEasingCurve::set_editor_state_snapshot);
+	ClassDB::bind_method(D_METHOD("_dont_undo_redo"), &NativeEasingCurve::_dont_undo_redo);
 	ClassDB::bind_method(D_METHOD("is_builtin_bezier_preset"), &NativeEasingCurve::is_builtin_bezier_preset);
 	ClassDB::bind_method(D_METHOD("is_selected_preset_modified"), &NativeEasingCurve::is_selected_preset_modified);
 	ClassDB::bind_method(D_METHOD("reset_selected_preset"), &NativeEasingCurve::reset_selected_preset);
@@ -677,7 +678,14 @@ Dictionary NativeEasingCurve::get_editor_state_snapshot() const {
 	return snapshot;
 }
 
+bool NativeEasingCurve::_dont_undo_redo() const {
+	return bool(get_meta(StringName("_easing_curve_publishing_editor_snapshot"), false));
+}
+
 void NativeEasingCurve::set_editor_state_snapshot(const Dictionary &p_snapshot) {
+	if (p_snapshot == get_editor_state_snapshot()) {
+		return;
+	}
 	const Variant transition_value = p_snapshot.get(StringName("transition"), Variant());
 	const Variant ease_value = p_snapshot.get(StringName("ease_type"), Variant());
 	const Variant override_value = p_snapshot.get(StringName("preset_override_active"), Variant());

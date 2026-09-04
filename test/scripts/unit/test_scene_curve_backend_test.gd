@@ -30,6 +30,13 @@ func _run() -> void:
 		runtime_points[0].right_control_point == runtime_handle_before,
 		"authored point edit leaked into the active runtime curve",
 	)
+	test_scene.call(&"restart_runtime")
+	var restarted_native := test_scene.get("_runtime_native_curve") as NativeEasingCurve
+	_expect(
+		restarted_native.points[0].right_control_point == authored_points[0].right_control_point,
+		"manual Restart reused a stale Native runtime copy",
+	)
+	native_runtime = restarted_native
 	_expect(
 		is_equal_approx(
 			float(test_scene.call("tween_native_curve", SAMPLE_OFFSET)),

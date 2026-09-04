@@ -40,7 +40,7 @@ Architecture:
 | Branch | `native-v2-spike` at `870cea9` plus the current NATIVE-07C/NATIVE-08 worktree |
 | Plan tracking | This file is the mutable source of truth for migration status and manual evidence |
 | Automated tests | All 23 suites pass under Godot 4.7.1 |
-| Native smoke tests | 871 checks pass, including deferred/no-op publication, resource-free live snapshots, canonical preset geometry, direct point assignment, modified sampling, migration, and save normalization |
+| Native smoke tests | 875 checks pass, including deferred/no-op publication, resource-free live snapshots, duplicate-Undo suppression, canonical preset geometry, direct point assignment, modified sampling, migration, and save normalization |
 | Dual public API contract | Reflection fixtures freeze intended methods, properties, signals, enum/constant IDs, and Native format status across both resource APIs; 143 checks pass |
 | Legacy runtime tests | 1,380 checks pass |
 | Serialization tests | 902 checks pass |
@@ -446,7 +446,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-07 — Extract the shared editor boundary
 
-**Status:** **Implemented locally; verification in progress.** NATIVE-07C routes both graph and Native point-list geometry/topology through the existing backend. Native point edits now use begin/finish transactions: local previews recompile during motion, while `changed`, `points_changed`, and the resource-free live-edit snapshot publish once at commit. Graph/list selection follows point identity across crossings, reorder, Undo, and Redo. All 23 suites pass; hosted live-debug and visible-editor smoke evidence remain.
+**Status:** **Implemented locally; verification in progress.** NATIVE-07C routes both graph and Native point-list geometry/topology through the existing backend. Native point edits now use begin/finish transactions: local previews recompile during motion, while `changed`, `points_changed`, and the resource-free live-edit snapshot publish once at commit. Graph/list selection follows point identity across crossings, endpoint takeover, reorder, Undo, and Redo. Native graph rendering now uses backend points for pending-add and point-list previews, Autofit includes handles, function modes hide stale point controls, and same-topology geometry edits no longer rebuild the point list. The custom `EditorProperty` publishes the resource-free snapshot value through Godot's standard change signal instead of relying on `Array[Resource]` live editing. All 23 suites pass; a visible running-editor check is still required to certify the remote debugger channel.
 
 **Goal:** Decouple the existing editor from concrete legacy types without changing its behavior.
 
@@ -733,7 +733,8 @@ performance without expanding runtime scope or promoting a noisy baseline.
 1. Complete visible-editor smoke sections C and D for Custom and every editable
    preset. Confirm graph and point-list drags restart the running comparison only
    on release, while handle-mode, add/remove/reorder, reset, Undo, and Redo
-   restart exactly once.
+   restart exactly once. Also confirm pending-add preview, endpoint takeover,
+   function-mode point hiding, handle-aware Autofit, and point-list drag handles.
 2. Run the isolated three-release-run benchmark on a quiet reference host. Keep
    every standard Native transition faster than Tween and every comparable mode
    faster than GDScript. Investigate any historical absolute failure; do not

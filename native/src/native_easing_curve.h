@@ -206,6 +206,7 @@ public:
 	void finish_point_edit();
 	Dictionary get_editor_state_snapshot() const;
 	void set_editor_state_snapshot(const Dictionary &p_snapshot);
+	bool _dont_undo_redo() const;
 	bool is_builtin_bezier_preset() const;
 	bool is_selected_preset_modified() const;
 	void reset_selected_preset();

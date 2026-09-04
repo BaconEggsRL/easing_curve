@@ -112,7 +112,7 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
-The Native smoke suite currently contains 871 checks. The runtime benchmark runs
+The Native smoke suite currently contains 875 checks. The runtime benchmark runs
 in an isolated project containing only this addon and
 the benchmark script. It reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
@@ -136,6 +136,9 @@ live-debug publication until release. Discrete edits, Undo, and Redo publish one
 resource-free editor snapshot. Point identity and selection survive reorder and
 Undo/Redo, and detached points are disconnected. Clean presets continue on the
 analytic sampler; only Custom and modified preset geometry use compiled segments.
+Pending additions and point-list drags render directly from backend point state,
+Autofit includes visible handles, and point-list controls rebuild only when point
+identity/order changes.
 
 ## Manual smoke-test status — 2026-09-04
 

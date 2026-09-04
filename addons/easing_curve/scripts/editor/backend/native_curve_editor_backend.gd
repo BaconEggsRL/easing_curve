@@ -85,11 +85,8 @@ func remove_point(index: int) -> bool:
 
 func apply_point_order(point_order: Array[Resource]) -> int:
 	var current := get_points()
-	if point_order.size() != current.size() or not _is_unique_native_points(point_order):
+	if not _is_valid_order_or_endpoint_takeover(current, point_order):
 		return -1
-	for point in point_order:
-		if point not in current:
-			return -1
 	return 0 if _apply_topology(point_order) else -1
 
 
@@ -253,6 +250,37 @@ func _is_unique_native_points(point_order: Array[Resource]) -> bool:
 		if seen.has(point_id):
 			return false
 		seen[point_id] = true
+	return true
+
+
+func _is_valid_order_or_endpoint_takeover(
+	current: Array[Resource],
+	point_order: Array[Resource],
+) -> bool:
+	if point_order.size() > current.size() or not _is_unique_native_points(point_order):
+		return false
+	for point in point_order:
+		if point not in current:
+			return false
+	for omitted_point in current:
+		if omitted_point in point_order:
+			continue
+		var omitted_position: Vector2 = omitted_point.get(&"position")
+		var endpoint_x := -1.0
+		if absf(omitted_position.x) <= POINT_ORDER_EPSILON:
+			endpoint_x = 0.0
+		elif absf(omitted_position.x - 1.0) <= POINT_ORDER_EPSILON:
+			endpoint_x = 1.0
+		else:
+			return false
+		var has_takeover := false
+		for retained_point in point_order:
+			var retained_position: Vector2 = retained_point.get(&"position")
+			if absf(retained_position.x - endpoint_x) <= POINT_ORDER_EPSILON:
+				has_takeover = true
+				break
+		if not has_takeover:
+			return false
 	return true
 
 

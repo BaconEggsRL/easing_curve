@@ -527,6 +527,9 @@ func _request_point_property_change(index: int, property_name: StringName, value
 		before = _duplicate_snapshot(_backend.capture_snapshot())
 	if not _backend.apply_point_property(index, property_name, value, changing):
 		return
+	if property_name == &"position":
+		position_x_order_preview_point = _point(index) if changing else null
+	queue_redraw()
 	if changing:
 		return
 	if _backend_point_edit_active:
@@ -624,7 +627,9 @@ func finish_point_list_edit(point: Resource, property_name: StringName) -> void:
 	if property_name == &"position":
 		_backend.apply_point_order(_backend.get_ordered_points(point))
 		selected_index = _backend.find_point(point)
+		position_x_order_preview_point = null
 	_finish_backend_point_edit()
+	queue_redraw()
 
 
 func add_point_from_list() -> Resource:
@@ -958,19 +963,17 @@ func _draw():
 			grid_color,
 		)
 
-	# --- Draw function instead of bezier curve ---
-	if not _is_point_graph() or _curve == null:
+	# --- Draw function or point-backed curve ---
+	if not _is_point_graph():
 		_draw_sampled_curve()
+		return
 
-	var display_points := _get_display_points()
+	var display_points: Array[Resource] = _get_display_points()
 	var selected_point := _point(selected_index) if selected_index >= 0 else null
 	var hovered_point := _point(hovered_index) if hovered_index >= 0 else null
 
 	# --- Draw curve using the same X-to-Y evaluation as EasingCurve.sample() ---
-	if _curve != null and _is_point_graph():
-		var legacy_display_points: Array[EasingCurvePoint] = []
-		legacy_display_points.assign(display_points)
-		_draw_bezier_curve(legacy_display_points)
+	_draw_bezier_curve(display_points)
 
 	# --- Draw points and control points ---
 	for i in range(display_points.size()):
@@ -1373,7 +1376,7 @@ func _get_autofit_world_bounds() -> Rect2:
 	var min_bound := Vector2(MIN_X, value_range.x)
 	var max_bound := Vector2(MAX_X, value_range.y)
 
-	if not _is_point_graph() or _curve == null:
+	if not _is_point_graph():
 		for i in range(FUNCTION_DRAW_STEPS + 1):
 			var x := float(i) / FUNCTION_DRAW_STEPS
 			var sample_point := Vector2(x, _sample_curve(x))
@@ -1395,7 +1398,7 @@ func _get_autofit_world_bounds() -> Rect2:
 			max_bound = max_bound.max(point.right_control_point)
 
 	for i in range(display_points.size() - 1):
-		var controls := BEZIER_SOLVER.get_effective_segment_controls(
+		var controls := _get_effective_segment_controls(
 			display_points[i],
 			display_points[i + 1],
 		)
@@ -1468,7 +1471,7 @@ func _get_minimum_size() -> Vector2:
 	) * _editor_scale
 
 
-func _get_display_points() -> Array:
+func _get_display_points() -> Array[Resource]:
 	if _backend == null:
 		return []
 	var active_point: Resource
@@ -1495,7 +1498,7 @@ func clear_position_x_order_preview() -> void:
 	queue_redraw()
 
 
-func _draw_bezier_curve(point_list: Array[EasingCurvePoint]) -> void:
+func _draw_bezier_curve(point_list: Array[Resource]) -> void:
 	var fallback_y := EasingCurve.get_bezier_fallback_value(0.0)
 	if point_list.size() < 2:
 		draw_line(
@@ -1506,8 +1509,8 @@ func _draw_bezier_curve(point_list: Array[EasingCurvePoint]) -> void:
 		)
 		return
 
-	var first_point: EasingCurvePoint = point_list.front()
-	var last_point: EasingCurvePoint = point_list.back()
+	var first_point: Resource = point_list.front()
+	var last_point: Resource = point_list.back()
 
 	if not EasingCurve.is_left_endpoint_x(first_point.position.x):
 		draw_line(
@@ -1556,38 +1559,40 @@ func _get_visible_world_x_bounds() -> Vector2:
 
 
 func _draw_bezier_segment(
-		a: EasingCurvePoint,
-		b: EasingCurvePoint,
+		a: Resource,
+		b: Resource,
 		visible_min_x: float,
 		visible_max_x: float,
 ) -> void:
-	var segment_width := b.position.x - a.position.x
+	var a_position: Vector2 = a.get(&"position")
+	var b_position: Vector2 = b.get(&"position")
+	var segment_width := b_position.x - a_position.x
 	if absf(segment_width) <= EasingCurve.SEGMENT_X_EPSILON:
-		if a.position.x >= visible_min_x and a.position.x <= visible_max_x:
-			draw_line(get_view_pos(a.position), get_view_pos(b.position), LINE_COLOR, 2)
+		if a_position.x >= visible_min_x and a_position.x <= visible_max_x:
+			draw_line(get_view_pos(a_position), get_view_pos(b_position), LINE_COLOR, 2)
 		return
 
-	var segment_min_x := minf(a.position.x, b.position.x)
-	var segment_max_x := maxf(a.position.x, b.position.x)
+	var segment_min_x := minf(a_position.x, b_position.x)
+	var segment_max_x := maxf(a_position.x, b_position.x)
 	var start_x := maxf(segment_min_x, visible_min_x)
 	var end_x := minf(segment_max_x, visible_max_x)
 	if start_x > end_x:
 		return
 
-	var controls := BEZIER_SOLVER.get_effective_segment_controls(a, b)
+	var controls := _get_effective_segment_controls(a, b)
 	var start_t := BEZIER_SOLVER.solve_monotonic_t(
 		start_x,
-		a.position.x,
+		a_position.x,
 		controls[0].x,
 		controls[1].x,
-		b.position.x,
+		b_position.x,
 	)
 	var end_t := BEZIER_SOLVER.solve_monotonic_t(
 		end_x,
-		a.position.x,
+		a_position.x,
 		controls[0].x,
 		controls[1].x,
-		b.position.x,
+		b_position.x,
 	)
 	if start_t > end_t:
 		var swap_t := start_t
@@ -1679,53 +1684,77 @@ func _point_to_line_distance(point: Vector2, line_start: Vector2, line_end: Vect
 
 
 func _bezier_world_position(
-		a: EasingCurvePoint,
-		b: EasingCurvePoint,
+		a: Resource,
+		b: Resource,
 		out_control: Vector2,
 		in_control: Vector2,
 		t: float,
 ) -> Vector2:
+	var a_position: Vector2 = a.get(&"position")
+	var b_position: Vector2 = b.get(&"position")
 	return Vector2(
 		BEZIER_SOLVER.bezier_interpolate(
-			a.position.x,
+			a_position.x,
 			out_control.x,
 			in_control.x,
-			b.position.x,
+			b_position.x,
 			t,
 		),
 		BEZIER_SOLVER.bezier_interpolate(
-			a.position.y,
+			a_position.y,
 			out_control.y,
 			in_control.y,
-			b.position.y,
+			b_position.y,
 			t,
 		),
 	)
 
 
 func _bezier_world_derivative(
-		a: EasingCurvePoint,
-		b: EasingCurvePoint,
+		a: Resource,
+		b: Resource,
 		out_control: Vector2,
 		in_control: Vector2,
 		t: float,
 ) -> Vector2:
+	var a_position: Vector2 = a.get(&"position")
+	var b_position: Vector2 = b.get(&"position")
 	return Vector2(
 		BEZIER_SOLVER.bezier_derivative(
-			a.position.x,
+			a_position.x,
 			out_control.x,
 			in_control.x,
-			b.position.x,
+			b_position.x,
 			t,
 		),
 		BEZIER_SOLVER.bezier_derivative(
-			a.position.y,
+			a_position.y,
 			out_control.y,
 			in_control.y,
-			b.position.y,
+			b_position.y,
 			t,
 		),
 	)
+
+
+func _get_effective_segment_controls(a: Resource, b: Resource) -> Array[Vector2]:
+	var a_position: Vector2 = a.get(&"position")
+	var b_position: Vector2 = b.get(&"position")
+	var out_control: Vector2 = a.get(&"right_control_point")
+	var in_control: Vector2 = b.get(&"left_control_point")
+	var min_x := minf(a_position.x, b_position.x)
+	var max_x := maxf(a_position.x, b_position.x)
+	out_control.x = clampf(out_control.x, min_x, max_x)
+	in_control.x = clampf(in_control.x, min_x, max_x)
+	var increasing := b_position.x >= a_position.x
+	if (
+		(increasing and out_control.x > in_control.x)
+		or (not increasing and out_control.x < in_control.x)
+	):
+		var shared_x := (out_control.x + in_control.x) * 0.5
+		out_control.x = shared_x
+		in_control.x = shared_x
+	return [out_control, in_control]
 
 
 func _draw_sampled_curve() -> void:
