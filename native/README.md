@@ -112,7 +112,7 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
-The Native smoke suite currently contains 875 checks. The runtime benchmark runs
+The Native smoke suite currently contains 972 checks. The runtime benchmark runs
 in an isolated project containing only this addon and
 the benchmark script. It reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
@@ -132,13 +132,17 @@ backend through the shared adapter boundary. Native custom curves and the ten
 Bézier-backed presets support graph and point-list creation, deletion, crossing,
 reordering, point/handle dragging, handle modes, force-linear state, locks, and
 preset reset. Graph and list drags compile local previews but defer public and
-live-debug publication until release. Discrete edits, Undo, and Redo publish one
-resource-free editor snapshot. Point identity and selection survive reorder and
-Undo/Redo, and detached points are disconnected. Clean presets continue on the
-analytic sampler; only Custom and modified preset geometry use compiled segments.
-Pending additions and point-list drags render directly from backend point state,
-Autofit includes visible handles, and point-list controls rebuild only when point
-identity/order changes.
+live-debug publication until release. Discrete edits, Undo, and Redo add one
+resource-owned Undo/Redo operation carrying a resource-free snapshot; this gives
+Godot's live debugger a method call it can replay in the running game and gives
+the owning scene the correct dirty history. Point-list reorder now matches legacy
+by exchanging the points' x positions and translating both handles. Point identity
+and selection survive reorder and Undo/Redo, and detached points are disconnected.
+Clean presets continue on the analytic sampler; only Custom and modified preset
+geometry use compiled segments. Pending additions and point-list drags render
+directly from backend point state, stale pending/detached previews are discarded,
+Autofit includes visible handles, transition parameters are shown only for their
+owning preset, and point-list controls rebuild only when point identity/order changes.
 
 ## Manual smoke-test status — 2026-09-04
 

@@ -40,7 +40,7 @@ Architecture:
 | Branch | `native-v2-spike` at `870cea9` plus the current NATIVE-07C/NATIVE-08 worktree |
 | Plan tracking | This file is the mutable source of truth for migration status and manual evidence |
 | Automated tests | All 23 suites pass under Godot 4.7.1 |
-| Native smoke tests | 875 checks pass, including deferred/no-op publication, resource-free live snapshots, duplicate-Undo suppression, canonical preset geometry, direct point assignment, modified sampling, migration, and save normalization |
+| Native smoke tests | 972 checks pass, including deferred/no-op publication, resource-free live snapshots, transition-specific parameter visibility, canonical preset geometry, direct point assignment, modified sampling, migration, and save normalization |
 | Dual public API contract | Reflection fixtures freeze intended methods, properties, signals, enum/constant IDs, and Native format status across both resource APIs; 143 checks pass |
 | Legacy runtime tests | 1,380 checks pass |
 | Serialization tests | 902 checks pass |
@@ -446,7 +446,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-07 — Extract the shared editor boundary
 
-**Status:** **Implemented locally; verification in progress.** NATIVE-07C routes both graph and Native point-list geometry/topology through the existing backend. Native point edits now use begin/finish transactions: local previews recompile during motion, while `changed`, `points_changed`, and the resource-free live-edit snapshot publish once at commit. Graph/list selection follows point identity across crossings, endpoint takeover, reorder, Undo, and Redo. Native graph rendering now uses backend points for pending-add and point-list previews, Autofit includes handles, function modes hide stale point controls, and same-topology geometry edits no longer rebuild the point list. The custom `EditorProperty` publishes the resource-free snapshot value through Godot's standard change signal instead of relying on `Array[Resource]` live editing. All 23 suites pass; a visible running-editor check is still required to certify the remote debugger channel.
+**Status:** **Implemented locally; verification in progress.** NATIVE-07C routes both graph and Native point-list geometry/topology through the existing backend. Native point edits now use begin/finish transactions: local previews recompile during motion, while `changed` and `points_changed` publish once at commit. Each committed Native editor action also records a method on the edited Resource carrying the resource-free snapshot. The Resource is the action context, so the owning scene receives dirty history, and Godot's live debugger can replay the method in the running process without transporting `Array[Resource]`. Graph/list selection follows point identity across crossings, endpoint takeover, reorder, Undo, and Redo. Point-list reorder matches legacy by swapping x positions and translating both handles instead of shifting array entries. Native graph rendering uses backend points for pending-add and point-list previews, discards stale pending/detached preview resources, includes handles in Autofit, hides point controls in function modes, and avoids rebuilding the list for same-topology geometry edits. All 23 suites pass; a visible running-editor check is still required to certify the remote debugger channel end to end.
 
 **Goal:** Decouple the existing editor from concrete legacy types without changing its behavior.
 
@@ -466,7 +466,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-08 — Add full Native editor support
 
-**Status:** **Implemented locally; verification in progress.** Constant, Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, and Back expose canonical Bézier geometry in the shared graph/list editor. Editing preserves Transition/Ease identity, enables compiled geometry through a cached sampling-mode flag, displays modified/reset state, and persists overrides. Clean presets remain analytic and omit redundant points on save. Format v3 records modified presets while v2 standard resources retain analytic behavior and v2 Custom points remain usable. Automated correctness, round-trip, normalization, and relative performance coverage passes; visible-editor, hosted Web, and a repeatable quiet-host absolute baseline remain.
+**Status:** **Implemented locally; verification in progress.** Constant, Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, and Back expose canonical Bézier geometry in the shared graph/list editor. Editing preserves Transition/Ease identity, enables compiled geometry through a cached sampling-mode flag, displays modified/reset state, and persists overrides. Transition-specific metadata is conditionally visible for Constant, Back, Elastic, Step, Power, Spring, and Physics Spring, matching the legacy Inspector policy. Clean presets remain analytic and omit redundant points on save. Format v3 records modified presets while v2 standard resources retain analytic behavior and v2 Custom points remain usable. Automated correctness, round-trip, normalization, and relative performance coverage passes; visible-editor, hosted Web, and a repeatable quiet-host absolute baseline remain.
 
 **Goal:** Make Native resources first-class in the shared editor.
 

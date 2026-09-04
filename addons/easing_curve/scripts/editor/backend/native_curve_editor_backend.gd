@@ -90,6 +90,32 @@ func apply_point_order(point_order: Array[Resource]) -> int:
 	return 0 if _apply_topology(point_order) else -1
 
 
+func swap_points(from_index: int, to_index: int) -> bool:
+	if (
+		from_index < 0
+		or to_index < 0
+		or from_index >= get_point_count()
+		or to_index >= get_point_count()
+	):
+		return false
+	if from_index == to_index:
+		return true
+	var point_order := get_points()
+	var point_states := curve.call(&"capture_point_states") as Array
+	var from_state := (point_states[from_index] as Dictionary).duplicate(true)
+	var to_state := (point_states[to_index] as Dictionary).duplicate(true)
+	var from_x := (from_state[&"position"] as Vector2).x
+	var to_x := (to_state[&"position"] as Vector2).x
+	_move_state_horizontally(from_state, to_x)
+	_move_state_horizontally(to_state, from_x)
+	var from_point := point_order[from_index]
+	point_order[from_index] = point_order[to_index]
+	point_order[to_index] = from_point
+	point_states[from_index] = to_state
+	point_states[to_index] = from_state
+	return bool(curve.call(&"apply_point_topology_snapshot", point_order, point_states))
+
+
 func sample(offset: float) -> float:
 	return float(curve.call(&"sample", offset))
 
@@ -180,6 +206,7 @@ func capture_snapshot() -> Variant:
 	return {
 		SNAPSHOT_POINT_ORDER: get_points(),
 		SNAPSHOT_POINT_STATES: curve.call(&"capture_point_states"),
+		SNAPSHOT_LIVE_STATE: curve.call(&"get_editor_state_snapshot"),
 	}
 
 
@@ -286,3 +313,16 @@ func _is_valid_order_or_endpoint_takeover(
 
 func _is_native_point(point: Resource) -> bool:
 	return point != null and point.get_class() == &"NativeEasingCurvePoint"
+
+
+func _move_state_horizontally(state: Dictionary, target_x: float) -> void:
+	var position := state[&"position"] as Vector2
+	var delta_x := target_x - position.x
+	position.x = target_x
+	state[&"position"] = position
+	var left_control := state[&"left_control_point"] as Vector2
+	left_control.x += delta_x
+	state[&"left_control_point"] = left_control
+	var right_control := state[&"right_control_point"] as Vector2
+	right_control.x += delta_x
+	state[&"right_control_point"] = right_control

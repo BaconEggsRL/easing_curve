@@ -106,6 +106,18 @@ func apply_point_order(point_order: Array[Resource]) -> int:
 	)
 
 
+func swap_points(from_index: int, to_index: int) -> bool:
+	if (
+		from_index < 0
+		or to_index < 0
+		or from_index >= get_point_count()
+		or to_index >= get_point_count()
+	):
+		return false
+	(curve as EasingCurve).swap_points(from_index, to_index)
+	return true
+
+
 func sample(offset: float) -> float:
 	return (curve as EasingCurve).sample(offset)
 

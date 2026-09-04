@@ -586,14 +586,43 @@ func _commit_backend_snapshot_action(
 	if editor_undo_redo == null:
 		_publish_backend_change()
 		return
+	var resource := get_curve()
+	var native_live_edit: bool = (
+		editor_undo_redo is EditorUndoRedoManager
+		and get_backend_id() == &"native"
+		and resource != null
+		and resource.has_method(&"_apply_live_editor_snapshot")
+		and before is Dictionary
+		and after is Dictionary
+		and before.has(&"live_state")
+		and after.has(&"live_state")
+	)
 	var selected_before_id := selected_before.get_instance_id() if selected_before != null else 0
 	var selected_after_id := selected_after.get_instance_id() if selected_after != null else 0
-	editor_undo_redo.create_action(action_name)
+	if native_live_edit:
+		editor_undo_redo.create_action(
+			action_name,
+			UndoRedo.MERGE_DISABLE,
+			resource,
+		)
+	else:
+		editor_undo_redo.create_action(action_name)
 	if editor_undo_redo is EditorUndoRedoManager:
 		editor_undo_redo.add_do_method(self, &"_apply_backend_snapshot_and_selection", after, selected_after_id)
 		editor_undo_redo.add_do_method(self, &"_publish_backend_change")
 		editor_undo_redo.add_undo_method(self, &"_apply_backend_snapshot_and_selection", before, selected_before_id)
 		editor_undo_redo.add_undo_method(self, &"_publish_backend_change")
+		if native_live_edit:
+			editor_undo_redo.add_do_method(
+				resource,
+				&"_apply_live_editor_snapshot",
+				(after[&"live_state"] as Dictionary).duplicate(true),
+			)
+			editor_undo_redo.add_undo_method(
+				resource,
+				&"_apply_live_editor_snapshot",
+				(before[&"live_state"] as Dictionary).duplicate(true),
+			)
 	else:
 		editor_undo_redo.add_do_method(
 			Callable(self, &"_apply_backend_snapshot_and_selection").bind(after, selected_after_id),
@@ -603,8 +632,9 @@ func _commit_backend_snapshot_action(
 		)
 		editor_undo_redo.add_do_method(Callable(self, &"_publish_backend_change"))
 		editor_undo_redo.add_undo_method(Callable(self, &"_publish_backend_change"))
-	editor_undo_redo.commit_action(false)
-	_publish_backend_change()
+	editor_undo_redo.commit_action(native_live_edit)
+	if not native_live_edit:
+		_publish_backend_change()
 
 
 func _publish_backend_change() -> void:
@@ -825,10 +855,7 @@ func _reorder_selected_point(to_index: int) -> void:
 	if selected_point == null or to_index < 0 or to_index >= _point_count():
 		return
 	var before := _duplicate_snapshot(_backend.capture_snapshot())
-	var point_order := _points()
-	point_order.remove_at(selected_index)
-	point_order.insert(to_index, selected_point)
-	if _backend.apply_point_order(point_order) < 0:
+	if not _backend.swap_points(selected_index, to_index):
 		return
 	selected_index = _backend.find_point(selected_point)
 	var after := _duplicate_snapshot(_backend.capture_snapshot())
@@ -1047,6 +1074,8 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_FOCUS_ENTER:
 		queue_redraw()
 	elif what == NOTIFICATION_FOCUS_EXIT:
+		if pending_add_point != null:
+			_cancel_pending_add()
 		queue_redraw()
 
 
@@ -1440,6 +1469,13 @@ func _apply_zoom_from_step():
 
 
 func _on_curve_changed() -> void:
+	if pending_add_point != null:
+		pending_add_point = null
+	if (
+		position_x_order_preview_point != null
+		and (_backend == null or _backend.find_point(position_x_order_preview_point) == -1)
+	):
+		position_x_order_preview_point = null
 	var point_count := _point_count()
 	if selected_index >= point_count:
 		selected_index = -1

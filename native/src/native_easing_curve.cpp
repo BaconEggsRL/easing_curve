@@ -1,5 +1,6 @@
 #include "native_easing_curve.h"
 
+#include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/callable_method_pointer.hpp>
 
@@ -85,7 +86,7 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("finish_point_edit"), &NativeEasingCurve::finish_point_edit);
 	ClassDB::bind_method(D_METHOD("get_editor_state_snapshot"), &NativeEasingCurve::get_editor_state_snapshot);
 	ClassDB::bind_method(D_METHOD("set_editor_state_snapshot", "snapshot"), &NativeEasingCurve::set_editor_state_snapshot);
-	ClassDB::bind_method(D_METHOD("_dont_undo_redo"), &NativeEasingCurve::_dont_undo_redo);
+	ClassDB::bind_method(D_METHOD("_apply_live_editor_snapshot", "snapshot"), &NativeEasingCurve::_apply_live_editor_snapshot);
 	ClassDB::bind_method(D_METHOD("is_builtin_bezier_preset"), &NativeEasingCurve::is_builtin_bezier_preset);
 	ClassDB::bind_method(D_METHOD("is_selected_preset_modified"), &NativeEasingCurve::is_selected_preset_modified);
 	ClassDB::bind_method(D_METHOD("reset_selected_preset"), &NativeEasingCurve::reset_selected_preset);
@@ -156,6 +157,29 @@ void NativeEasingCurve::_validate_property(PropertyInfo &p_property) const {
 	if (p_property.name == StringName("points") && is_builtin_bezier_preset() && !preset_override_active) {
 		p_property.usage = static_cast<PropertyUsageFlags>(p_property.usage & ~PROPERTY_USAGE_STORAGE);
 	}
+
+	Transition owning_transition = TRANS_CUSTOM;
+	bool is_transition_parameter = true;
+	if (p_property.name == StringName("constant_value")) {
+		owning_transition = TRANS_CONSTANT;
+	} else if (p_property.name == StringName("overshoot")) {
+		owning_transition = TRANS_BACK;
+	} else if (p_property.name == StringName("amplitude") || p_property.name == StringName("period")) {
+		owning_transition = TRANS_ELASTIC;
+	} else if (p_property.name == StringName("steps") || p_property.name == StringName("from_start") || p_property.name == StringName("y_offset")) {
+		owning_transition = TRANS_STEP;
+	} else if (p_property.name == StringName("power")) {
+		owning_transition = TRANS_POWER;
+	} else if (p_property.name == StringName("frequency") || p_property.name == StringName("decay")) {
+		owning_transition = TRANS_SPRING;
+	} else if (p_property.name == StringName("stiffness") || p_property.name == StringName("damping") || p_property.name == StringName("mass") || p_property.name == StringName("velocity")) {
+		owning_transition = TRANS_PHYSICS_SPRING;
+	} else {
+		is_transition_parameter = false;
+	}
+	if (is_transition_parameter && transition != owning_transition) {
+		p_property.usage = static_cast<PropertyUsageFlags>(p_property.usage & ~PROPERTY_USAGE_EDITOR);
+	}
 }
 
 NativeEasingCurve::NativeEasingCurve() {
@@ -172,6 +196,7 @@ void NativeEasingCurve::set_transition(Transition p_transition) {
 		return;
 	}
 	transition = p_transition;
+	notify_property_list_changed();
 	preset_override_active = false;
 	if (is_builtin_bezier_preset()) {
 		replace_points(build_selected_preset_points(), false);
@@ -678,8 +703,10 @@ Dictionary NativeEasingCurve::get_editor_state_snapshot() const {
 	return snapshot;
 }
 
-bool NativeEasingCurve::_dont_undo_redo() const {
-	return bool(get_meta(StringName("_easing_curve_publishing_editor_snapshot"), false));
+void NativeEasingCurve::_apply_live_editor_snapshot(const Dictionary &p_snapshot) {
+	if (!Engine::get_singleton()->is_editor_hint()) {
+		set_editor_state_snapshot(p_snapshot);
+	}
 }
 
 void NativeEasingCurve::set_editor_state_snapshot(const Dictionary &p_snapshot) {
@@ -713,11 +740,15 @@ void NativeEasingCurve::set_editor_state_snapshot(const Dictionary &p_snapshot) 
 		restored_points[index] = point;
 	}
 
+	const bool transition_changed = transition != next_transition;
 	transition = next_transition;
 	ease_type = next_ease;
 	preset_override_active = static_cast<bool>(override_value);
 	replace_points(restored_points, false);
 	update_sampling_mode();
+	if (transition_changed) {
+		notify_property_list_changed();
+	}
 	emit_points_changed();
 }
 

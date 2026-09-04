@@ -40,6 +40,7 @@ func _run() -> void:
 	_test_point_editor_state_contract()
 	_test_deferred_point_edit_transaction()
 	_test_resource_free_editor_snapshot()
+	_test_transition_parameter_visibility()
 	_test_editable_preset_geometry()
 	_test_modified_preset_round_trip()
 	_test_point_mode_differential()
@@ -438,11 +439,6 @@ func _test_deferred_point_edit_transaction() -> void:
 
 func _test_resource_free_editor_snapshot() -> void:
 	var curve := _new_native_curve(TRANS_CUSTOM, NativeEasingCurve.EASE_OUT)
-	_expect(not curve.call(&"_dont_undo_redo"), "Native curve bypasses Inspector Undo outside snapshot publication")
-	curve.set_meta(&"_easing_curve_publishing_editor_snapshot", true)
-	_expect(curve.call(&"_dont_undo_redo"), "Native snapshot publication did not bypass duplicate Inspector Undo")
-	curve.remove_meta(&"_easing_curve_publishing_editor_snapshot")
-	_expect(not curve.call(&"_dont_undo_redo"), "Native snapshot publication left Inspector Undo bypass active")
 	var snapshot: Dictionary = curve.call(&"get_editor_state_snapshot")
 	_expect(not _contains_object(snapshot), "Native editor snapshot contains a Resource")
 	var local_point := curve.call(&"get_point", 0) as Resource
@@ -451,11 +447,58 @@ func _test_resource_free_editor_snapshot() -> void:
 	var remote := ClassDB.instantiate(&"NativeEasingCurve") as Resource
 	var remote_publications := [0]
 	remote.changed.connect(func(): remote_publications[0] += 1)
-	remote.call(&"set_editor_state_snapshot", snapshot)
-	_expect(remote_publications[0] == 1, "editor snapshot amplified running-resource publication")
+	remote.call(&"_apply_live_editor_snapshot", snapshot)
+	_expect(remote_publications[0] == 1, "live editor snapshot amplified running-resource publication")
 	_expect(remote.get(&"transition") == curve.get(&"transition"), "editor snapshot lost transition")
 	_expect(remote.get(&"ease_type") == curve.get(&"ease_type"), "editor snapshot lost ease")
 	_expect(remote.call(&"capture_point_states") == curve.call(&"capture_point_states"), "editor snapshot lost point geometry")
+
+
+func _test_transition_parameter_visibility() -> void:
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_LINEAR, NativeEasingCurve.EASE_IN)
+	var parameter_owners := {
+		&"constant_value": NativeEasingCurve.TRANS_CONSTANT,
+		&"overshoot": NativeEasingCurve.TRANS_BACK,
+		&"amplitude": NativeEasingCurve.TRANS_ELASTIC,
+		&"period": NativeEasingCurve.TRANS_ELASTIC,
+		&"steps": NativeEasingCurve.TRANS_STEP,
+		&"from_start": NativeEasingCurve.TRANS_STEP,
+		&"y_offset": NativeEasingCurve.TRANS_STEP,
+		&"power": NativeEasingCurve.TRANS_POWER,
+		&"frequency": NativeEasingCurve.TRANS_SPRING,
+		&"decay": NativeEasingCurve.TRANS_SPRING,
+		&"stiffness": NativeEasingCurve.TRANS_PHYSICS_SPRING,
+		&"damping": NativeEasingCurve.TRANS_PHYSICS_SPRING,
+		&"mass": NativeEasingCurve.TRANS_PHYSICS_SPRING,
+		&"velocity": NativeEasingCurve.TRANS_PHYSICS_SPRING,
+	}
+	var parameter_transitions := [
+		NativeEasingCurve.TRANS_CONSTANT,
+		NativeEasingCurve.TRANS_BACK,
+		NativeEasingCurve.TRANS_ELASTIC,
+		NativeEasingCurve.TRANS_STEP,
+		NativeEasingCurve.TRANS_POWER,
+		NativeEasingCurve.TRANS_SPRING,
+		NativeEasingCurve.TRANS_PHYSICS_SPRING,
+	]
+	for transition: int in parameter_transitions:
+		curve.set(&"transition", transition)
+		for property_name: StringName in parameter_owners:
+			_expect(
+				_is_editor_property_visible(curve, property_name)
+				== (parameter_owners[property_name] == transition),
+				"Native transition %d has incorrect visibility for %s" % [transition, property_name],
+			)
+	curve.set(&"transition", NativeEasingCurve.TRANS_LINEAR)
+	_expect(_is_editor_property_visible(curve, &"reverse"), "Native Linear hid Reverse")
+	_expect(_is_editor_property_visible(curve, &"invert"), "Native Linear hid Invert")
+
+
+func _is_editor_property_visible(resource: Resource, property_name: StringName) -> bool:
+	for property: Dictionary in resource.get_property_list():
+		if property.get(&"name") == property_name:
+			return (int(property.get(&"usage", 0)) & PROPERTY_USAGE_EDITOR) != 0
+	return false
 
 
 func _test_editable_preset_geometry() -> void:

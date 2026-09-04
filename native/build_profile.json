@@ -1,5 +1,6 @@
 {
 	"enabled_classes": [
+		"Engine",
 		"InputEvent",
 		"Logger",
 		"Node",

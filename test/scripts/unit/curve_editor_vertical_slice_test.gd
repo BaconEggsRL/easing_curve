@@ -6,11 +6,6 @@ const CURVE_EDITOR := preload(
 const INSPECTOR_PLUGIN := preload(
 	"res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd"
 )
-const POINTS_EDITOR_PROPERTY := preload(
-	"res://addons/easing_curve/scripts/editor/inspector/points_editor_property.gd"
-)
-
-
 func _init() -> void:
 	call_deferred(&"_run")
 
@@ -22,6 +17,7 @@ func _run() -> void:
 	_test_native_add_delete_and_endpoint_topology()
 	_test_native_existing_point_endpoint_takeover()
 	_test_native_crossing_and_toolbar_reorder()
+	_test_native_point_list_swap_parity()
 	_test_native_inspector_path()
 	_finish("shared curve editor vertical slice")
 
@@ -80,23 +76,6 @@ func _test_native_inspector_path() -> void:
 	if not ClassDB.class_exists(&"NativeEasingCurve"):
 		return
 	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
-	var live_property := POINTS_EDITOR_PROPERTY.new() as EditorProperty
-	live_property.set_object_and_property(curve, &"_editor_state_snapshot")
-	var published_values: Array[Variant] = []
-	live_property.property_changed.connect(
-		func(property: StringName, value: Variant, _field: StringName, changing: bool) -> void:
-			if property == &"_editor_state_snapshot" and not changing:
-				published_values.append(value)
-	)
-	live_property.call(&"publish_current_value")
-	_expect(published_values.size() == 1, "Native EditorProperty did not explicitly publish its live-edit snapshot")
-	_expect(not curve.call(&"_dont_undo_redo"), "Native EditorProperty left Inspector Undo bypass active")
-	_expect(
-		published_values[0] is Dictionary
-		and not _variant_contains_resource(published_values[0]),
-		"Native live-edit publication crossed the boundary with Resource references",
-	)
-	live_property.free()
 	var inspector := INSPECTOR_PLUGIN.new()
 	_expect(inspector._can_handle(curve), "Inspector plugin rejected NativeEasingCurve")
 	var content := inspector.handle_easing_curve_editor(curve)
@@ -283,6 +262,11 @@ func _test_native_add_delete_and_endpoint_topology() -> void:
 	var cancelled_point := editor.get(&"pending_add_point") as Resource
 	_expect(cancelled_point != null, "Native pending add did not create a backend point")
 	_expect(curve.call(&"get_point_count") == 2, "Native pending add mutated topology before release")
+	editor.notification(Control.NOTIFICATION_FOCUS_EXIT)
+	_expect(editor.get(&"pending_add_point") == null, "Native focus exit retained a stale pending point")
+	editor._gui_input(_mouse_button(add_view, true))
+	cancelled_point = editor.get(&"pending_add_point") as Resource
+	_expect(cancelled_point != null, "Native pending add could not restart after focus exit")
 	editor._gui_input(_mouse_button(add_view, true, MOUSE_BUTTON_RIGHT))
 	_expect(editor.get(&"pending_add_point") == null, "Native RMB did not cancel pending add")
 	_expect(not history.has_undo(), "Native pending-add cancellation created Undo history")
@@ -330,9 +314,12 @@ func _test_native_add_delete_and_endpoint_topology() -> void:
 	var delete_view := editor.get_view_pos(delete_point.get(&"position"))
 	history.clear_history()
 	changes[0] = 0
+	editor.set_position_x_order_preview(delete_point)
 	editor._gui_input(_mouse_button(delete_view, true, MOUSE_BUTTON_RIGHT))
 	editor._gui_input(_mouse_button(delete_view, false, MOUSE_BUTTON_RIGHT))
 	_expect(curve.call(&"get_point_count") == 2, "Native RMB delete did not remove the point")
+	_expect(editor.get("position_x_order_preview_point") == null, "Native deletion retained a detached preview point")
+	_expect(not (editor.call(&"_get_display_points") as Array).has(delete_point), "Native graph retained a deleted point")
 	_expect(editor.selected_index == 1 and curve.call(&"get_point", 1) == selected_point, "Native RMB delete did not preserve shifted selection identity")
 	_expect(changes[0] == 1, "Native RMB delete published more than once")
 	_expect(not editor.is_right_delete_dragging, "Native RMB release retained stale drag state")
@@ -352,6 +339,63 @@ func _test_native_add_delete_and_endpoint_topology() -> void:
 	history.redo()
 	_expect(editor.selected_index == -1, "Selected-point delete Redo did not clear selection")
 	editor.queue_free()
+
+
+func _test_native_point_list_swap_parity() -> void:
+	if not ClassDB.class_exists(&"NativeEasingCurve"):
+		return
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	curve.set(&"transition", 100)
+	var first := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+	first.set(&"position", Vector2(0.25, 0.3))
+	first.set(&"left_control_point", Vector2(0.15, 0.2))
+	first.set(&"right_control_point", Vector2(0.35, 0.4))
+	first.call(&"set_locked", &"left_control_point", true)
+	first.call(&"set_locked", &"right_control_point", true)
+	var middle := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+	middle.set(&"position", Vector2(0.5, 0.5))
+	var last := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+	last.set(&"position", Vector2(0.75, 0.7))
+	last.set(&"left_control_point", Vector2(0.65, 0.6))
+	last.set(&"right_control_point", Vector2(0.85, 0.8))
+	curve.call(&"insert_point", 1, first)
+	curve.call(&"insert_point", 2, middle)
+	curve.call(&"insert_point", 3, last)
+	var editor := CURVE_EDITOR.new() as EasingCurveEditor
+	var history := UndoRedo.new()
+	editor.editor_undo_redo = history
+	editor.set_curve(curve)
+	root.add_child(editor)
+	var first_state := first.call(&"capture_state") as Dictionary
+	var last_state := last.call(&"capture_state") as Dictionary
+	editor.move_point_from_list(1, 3)
+	_expect(curve.call(&"get_point", 1) == last, "Native list swap did not move the target resource to the source slot")
+	_expect(curve.call(&"get_point", 2) == middle, "Native list swap shifted an unrelated point")
+	_expect(curve.call(&"get_point", 3) == first, "Native list swap lost the dragged resource")
+	_expect(editor.get_selected_point_resource() == first, "Native list swap lost selection identity")
+	_expect(_state_was_horizontally_translated(first, first_state, 0.75), "Native list swap did not translate the dragged point and handles")
+	_expect(_state_was_horizontally_translated(last, last_state, 0.25), "Native list swap did not translate the target point and handles")
+	history.undo()
+	_expect(curve.call(&"get_point", 1) == first and curve.call(&"get_point", 3) == last, "Native list-swap Undo lost point identity")
+	_expect(first.call(&"capture_state") == first_state and last.call(&"capture_state") == last_state, "Native list-swap Undo lost point state")
+	history.redo()
+	_expect(curve.call(&"get_point", 3) == first and editor.get_selected_point_resource() == first, "Native list-swap Redo lost point identity or selection")
+	editor.queue_free()
+
+
+func _state_was_horizontally_translated(
+	point: Resource,
+	original: Dictionary,
+	target_x: float,
+) -> bool:
+	var current := point.call(&"capture_state") as Dictionary
+	var delta_x := target_x - (original[&"position"] as Vector2).x
+	for property_name: StringName in [&"position", &"left_control_point", &"right_control_point"]:
+		var expected := original[property_name] as Vector2
+		expected.x += delta_x
+		if not (current[property_name] as Vector2).is_equal_approx(expected):
+			return false
+	return true
 
 
 func _test_native_crossing_and_toolbar_reorder() -> void:
@@ -476,17 +520,3 @@ func _find_drag_handle(node: Node) -> EasingCurveDragHandle:
 		if result != null:
 			return result
 	return null
-
-
-func _variant_contains_resource(value: Variant) -> bool:
-	if value is Resource:
-		return true
-	if value is Array:
-		for item in value:
-			if _variant_contains_resource(item):
-				return true
-	if value is Dictionary:
-		for key in value:
-			if _variant_contains_resource(key) or _variant_contains_resource(value[key]):
-				return true
-	return false

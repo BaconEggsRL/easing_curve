@@ -18,6 +18,7 @@ const POINT_ORDER_EPSILON := 0.000001
 
 const SNAPSHOT_POINT_ORDER := &"point_order"
 const SNAPSHOT_POINT_STATES := &"point_states"
+const SNAPSHOT_LIVE_STATE := &"live_state"
 
 var curve: Resource
 
@@ -110,6 +111,10 @@ func get_ordered_points(active_point: Resource = null) -> Array[Resource]:
 
 func apply_point_order(_point_order: Array[Resource]) -> int:
 	return -1
+
+
+func swap_points(_from_index: int, _to_index: int) -> bool:
+	return false
 
 
 func sample(offset: float) -> float:

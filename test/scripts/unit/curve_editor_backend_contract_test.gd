@@ -157,6 +157,31 @@ func _test_topology_contract(curve: Resource, backend: RefCounted, context: Stri
 	)
 	_expect(publication[&"count"] == 1, "%s snapshot restoration published more than once" % context)
 
+	var left_point: Resource = backend.get_point(0)
+	var right_point: Resource = backend.get_point(2)
+	var left_position := left_point.get(&"position") as Vector2
+	var left_control := left_point.get(&"right_control_point") as Vector2
+	var right_position := right_point.get(&"position") as Vector2
+	var right_control := right_point.get(&"left_control_point") as Vector2
+	publication[&"count"] = 0
+	_expect(backend.swap_points(0, 2), "%s point swap failed" % context)
+	_expect(
+		backend.get_points() == [right_point, midpoint, left_point],
+		"%s point swap shifted rather than exchanged resources" % context,
+	)
+	_expect(
+		(left_point.get(&"position") as Vector2).is_equal_approx(Vector2(right_position.x, left_position.y))
+		and (left_point.get(&"right_control_point") as Vector2).is_equal_approx(left_control + Vector2(right_position.x - left_position.x, 0.0)),
+		"%s point swap did not translate the first point and handle" % context,
+	)
+	_expect(
+		(right_point.get(&"position") as Vector2).is_equal_approx(Vector2(left_position.x, right_position.y))
+		and (right_point.get(&"left_control_point") as Vector2).is_equal_approx(right_control + Vector2(left_position.x - right_position.x, 0.0)),
+		"%s point swap did not translate the second point and handle" % context,
+	)
+	_expect(publication[&"count"] >= 1, "%s point swap did not publish" % context)
+	_expect(backend.apply_snapshot(inserted_snapshot), "%s point-swap restoration failed" % context)
+
 	var reversed: Array[Resource] = backend.get_points()
 	reversed.reverse()
 	publication[&"count"] = 0
