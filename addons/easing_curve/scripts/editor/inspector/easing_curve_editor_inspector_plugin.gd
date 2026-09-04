@@ -18,7 +18,9 @@ const PointEditTransactionController = preload(
 const DeferredParameterEditorProperty = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/deferred_parameter_editor_property.gd"
 )
-const NATIVE_DEFERRED_FUNCTION_PARAMETERS := [
+const NATIVE_DEFERRED_PARAMETERS := [
+	&"constant_value",
+	&"overshoot",
 	&"amplitude",
 	&"period",
 	&"steps",
@@ -1560,7 +1562,7 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 		or (
 			native_backend != null
 			and native_backend.get_backend_id() == &"native"
-			and StringName(name) in NATIVE_DEFERRED_FUNCTION_PARAMETERS
+			and StringName(name) in NATIVE_DEFERRED_PARAMETERS
 		)
 	)
 	if uses_deferred_parameter_editor:

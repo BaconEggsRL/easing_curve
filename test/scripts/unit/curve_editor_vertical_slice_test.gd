@@ -603,8 +603,42 @@ func _test_native_inspector_path() -> void:
 
 
 func _test_native_deferred_parameter_editor() -> void:
+	await _test_native_deferred_parameter_case(
+		NativeEasingCurve.TRANS_BOUNCE,
+		&"bounce_damping",
+		60.0,
+		45.0,
+		37.5,
+		false,
+	)
+	await _test_native_deferred_parameter_case(
+		NativeEasingCurve.TRANS_CONSTANT,
+		&"constant_value",
+		0.25,
+		0.75,
+		0.4,
+		true,
+	)
+	await _test_native_deferred_parameter_case(
+		NativeEasingCurve.TRANS_BACK,
+		&"overshoot",
+		2.1,
+		3.2,
+		1.4,
+		true,
+	)
+
+
+func _test_native_deferred_parameter_case(
+		transition: int,
+		property_name: StringName,
+		preview_value: float,
+		final_value: float,
+		typed_value: float,
+		expects_point_publication: bool,
+) -> void:
 	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
-	curve.set(&"transition", NativeEasingCurve.TRANS_BOUNCE)
+	curve.set(&"transition", transition)
 	var native_editor := EditorProperty.new()
 	var input := EditorSpinSlider.new()
 	input.min_value = 0.0
@@ -613,31 +647,47 @@ func _test_native_deferred_parameter_editor() -> void:
 	native_editor.add_child(input)
 	var property_editor := DEFERRED_PARAMETER_EDITOR_PROPERTY.new() as EditorProperty
 	_expect(
-		property_editor.call(&"setup", native_editor, &"bounce_damping", null, null),
-		"Native Bounce Damping did not create a deferred slider editor",
+		property_editor.call(&"setup", native_editor, property_name, null, null),
+		"Native %s did not create a deferred slider editor" % property_name,
 	)
-	property_editor.set_object_and_property(curve, &"bounce_damping")
+	property_editor.set_object_and_property(curve, property_name)
 	root.add_child(property_editor)
 	var applied_edits := [0]
+	var curve_publications := [0]
+	var point_publications := [0]
 	property_editor.property_changed.connect(
 		func(property: StringName, value: Variant, _field: StringName, _changing: bool) -> void:
 			applied_edits[0] += 1
 			curve.set(property, value)
 	)
+	curve.changed.connect(func() -> void: curve_publications[0] += 1)
+	curve.connect(&"points_changed", func(_points: Array) -> void: point_publications[0] += 1)
 
 	input.grabbed.emit()
-	input.value = 60.0
-	input.value = 45.0
-	_expect(is_equal_approx(curve.get(&"bounce_damping"), 45.0), "Native function drag did not update its local preview value")
-	_expect(applied_edits[0] == 0, "Native function drag published through the Inspector before release")
+	input.value = preview_value
+	input.value = final_value
+	_expect(is_equal_approx(curve.get(property_name), final_value), "Native parameter drag did not update its local preview value")
+	_expect(applied_edits[0] == 0, "Native parameter drag published through the Inspector before release")
+	_expect(curve_publications[0] == 0, "Native parameter drag published a Resource change before release")
+	_expect(point_publications[0] == 0, "Native Bézier parameter drag published point geometry before release")
 	input.ungrabbed.emit()
 	await process_frame
-	_expect(applied_edits[0] == 1, "Native function drag did not publish exactly once on release")
-	_expect(is_equal_approx(curve.get(&"bounce_damping"), 45.0), "Native function drag release lost its final value")
+	_expect(applied_edits[0] == 1, "Native parameter drag did not publish exactly once on release")
+	_expect(curve_publications[0] == 1, "Native parameter drag did not publish one Resource change on release")
+	_expect(
+		point_publications[0] == int(expects_point_publication),
+		"Native parameter drag published the wrong number of point changes on release",
+	)
+	_expect(is_equal_approx(curve.get(property_name), final_value), "Native parameter drag release lost its final value")
 
-	input.value = 37.5
-	_expect(applied_edits[0] == 2, "Native typed function value did not publish immediately")
-	_expect(is_equal_approx(curve.get(&"bounce_damping"), 37.5), "Native typed function value was not applied")
+	input.value = typed_value
+	_expect(applied_edits[0] == 2, "Native typed parameter value did not publish immediately")
+	_expect(curve_publications[0] == 2, "Native typed parameter value did not publish one Resource change")
+	_expect(
+		point_publications[0] == int(expects_point_publication) * 2,
+		"Native typed parameter value published the wrong number of point changes",
+	)
+	_expect(is_equal_approx(curve.get(property_name), typed_value), "Native typed parameter value was not applied")
 	property_editor.free()
 
 

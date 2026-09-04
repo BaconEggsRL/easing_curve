@@ -114,7 +114,7 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
-The Native smoke suite currently contains 1,020 checks. The runtime benchmark runs
+The Native smoke suite currently contains 1,030 checks. The runtime benchmark runs
 in an isolated project containing only this addon and
 the benchmark script. It reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
@@ -199,9 +199,10 @@ clipboard, and cross-copy behavior as Legacy. Deferred value-edit completion is
 resolved by curve and point identity rather than retaining row controls, so an
 Inspector rebuild, topology action, or resource switch cannot replay a stale UI
 callback or merge unrelated Undo transactions.
-Native numeric function-property sliders use the same deferred transaction
-boundary: motion previews locally, then publishes one Inspector/live-scene update
-on release. Directly entered values still publish immediately.
+Native numeric parameter sliders use the same deferred transaction boundary,
+including the Constant and Back parameters that regenerate Bézier preset geometry:
+motion previews locally, then publishes one Inspector/live-scene update on release.
+Directly entered values still publish immediately.
 Clean presets continue on the analytic sampler; only Custom and modified preset
 geometry use compiled segments. Pending additions and point-list drags render
 directly from backend point state, stale pending/detached previews are discarded,

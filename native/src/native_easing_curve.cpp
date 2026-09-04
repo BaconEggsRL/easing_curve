@@ -282,9 +282,9 @@ void NativeEasingCurve::set_constant_value(double p_value) {
 	constant_value = value;
 	if (transition == TRANS_CONSTANT && !preset_override_active) {
 		replace_points(build_selected_preset_points(), false);
-		emit_points_changed();
+		publish_parameter_change(true);
 	} else {
-		emit_changed();
+		publish_parameter_change();
 	}
 }
 
@@ -301,9 +301,9 @@ void NativeEasingCurve::set_overshoot(double p_overshoot) {
 	overshoot = value;
 	if (transition == TRANS_BACK && !preset_override_active) {
 		replace_points(build_selected_preset_points(), false);
-		emit_points_changed();
+		publish_parameter_change(true);
 	} else {
-		emit_changed();
+		publish_parameter_change();
 	}
 }
 
@@ -734,6 +734,7 @@ void NativeEasingCurve::begin_parameter_edit() {
 	if (parameter_edit_depth == 0) {
 		parameter_edit_before = capture_parameter_state();
 		parameter_edit_changed = false;
+		parameter_edit_points_changed = false;
 	}
 	++parameter_edit_depth;
 }
@@ -745,12 +746,19 @@ void NativeEasingCurve::finish_parameter_edit() {
 	--parameter_edit_depth;
 	if (parameter_edit_depth == 0 && parameter_edit_changed) {
 		const bool state_changed = parameter_edit_before != capture_parameter_state();
+		const bool points_changed = parameter_edit_points_changed;
 		parameter_edit_changed = false;
+		parameter_edit_points_changed = false;
 		parameter_edit_before.clear();
 		if (state_changed) {
-			emit_changed();
+			if (points_changed) {
+				emit_points_changed();
+			} else {
+				emit_changed();
+			}
 		}
 	} else if (parameter_edit_depth == 0) {
+		parameter_edit_points_changed = false;
 		parameter_edit_before.clear();
 	}
 }
@@ -762,6 +770,7 @@ void NativeEasingCurve::cancel_parameter_edit() {
 	--parameter_edit_depth;
 	if (parameter_edit_depth == 0) {
 		parameter_edit_changed = false;
+		parameter_edit_points_changed = false;
 		parameter_edit_before.clear();
 	}
 }
@@ -1000,16 +1009,23 @@ void NativeEasingCurve::publish_point_change() {
 	emit_points_changed();
 }
 
-void NativeEasingCurve::publish_parameter_change() {
+void NativeEasingCurve::publish_parameter_change(bool p_points_changed) {
 	if (parameter_edit_depth > 0) {
 		parameter_edit_changed = true;
+		parameter_edit_points_changed = parameter_edit_points_changed || p_points_changed;
 		return;
 	}
-	emit_changed();
+	if (p_points_changed) {
+		emit_points_changed();
+	} else {
+		emit_changed();
+	}
 }
 
 Dictionary NativeEasingCurve::capture_parameter_state() const {
 	Dictionary state;
+	state[StringName("constant_value")] = constant_value;
+	state[StringName("overshoot")] = overshoot;
 	state[StringName("amplitude")] = amplitude;
 	state[StringName("period")] = period;
 	state[StringName("steps")] = steps;

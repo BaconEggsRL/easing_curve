@@ -105,6 +105,7 @@ private:
 	Dictionary point_edit_before;
 	int64_t parameter_edit_depth = 0;
 	bool parameter_edit_changed = false;
+	bool parameter_edit_points_changed = false;
 	Dictionary parameter_edit_before;
 	bool preset_override_active = false;
 	bool use_compiled_points = false;
@@ -113,7 +114,7 @@ private:
 	void disconnect_points();
 	void emit_points_changed();
 	void publish_point_change();
-	void publish_parameter_change();
+	void publish_parameter_change(bool p_points_changed = false);
 	Dictionary capture_parameter_state() const;
 	void compile_segments();
 	void on_point_changed();

@@ -470,6 +470,28 @@ func _test_deferred_parameter_edit_transaction() -> void:
 	curve.call(&"finish_parameter_edit")
 	_expect(changes[0] == 1, "Unbalanced Native parameter finish published a change")
 
+	var bezier_cases := [
+		[NativeEasingCurve.TRANS_CONSTANT, &"constant_value", 0.25],
+		[NativeEasingCurve.TRANS_BACK, &"overshoot", 2.8],
+	]
+	for case in bezier_cases:
+		var preset := _new_native_curve(int(case[0]), NativeEasingCurve.EASE_OUT)
+		var property_name := StringName(case[1])
+		var value := float(case[2])
+		var preset_changes := [0]
+		var point_changes := [0]
+		preset.changed.connect(func() -> void: preset_changes[0] += 1)
+		preset.connect(&"points_changed", func(_points: Array) -> void: point_changes[0] += 1)
+		var preset_before_sample: float = preset.call(&"sample", 0.6)
+		preset.call(&"begin_parameter_edit")
+		preset.set(property_name, value)
+		_expect(preset_changes[0] == 0, "Native Bézier parameter drag published before release")
+		_expect(point_changes[0] == 0, "Native Bézier parameter drag published point geometry before release")
+		_expect(not is_equal_approx(preset_before_sample, preset.call(&"sample", 0.6)), "Native Bézier parameter drag did not update its local geometry")
+		preset.call(&"finish_parameter_edit")
+		_expect(preset_changes[0] == 1, "Native Bézier parameter drag did not publish one curve change on release")
+		_expect(point_changes[0] == 1, "Native Bézier parameter drag did not publish one point change on release")
+
 
 func _test_resource_free_editor_snapshot() -> void:
 	var curve := _new_native_curve(TRANS_CUSTOM, NativeEasingCurve.EASE_OUT)
