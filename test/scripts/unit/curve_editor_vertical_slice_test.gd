@@ -59,6 +59,22 @@ func _test_default_new_point_handle_modes() -> void:
 	var legacy_option := legacy_controls.get_node("NewPointHandleMode") as OptionButton
 	var native_option := native_controls.get_node("NewPointHandleMode") as OptionButton
 	_expect(legacy_option != null and native_option != null, "Shared Add Point controls omitted the handle-mode dropdown")
+	_expect(
+		legacy_controls.size_flags_horizontal == Control.SIZE_SHRINK_CENTER,
+		"Shared Add Point controls did not remain content-sized",
+	)
+	_expect(
+		legacy_option.fit_to_longest_item,
+		"New-point handle dropdown did not reserve its longest item width",
+	)
+	_expect(
+		legacy_option.size_flags_horizontal == Control.SIZE_SHRINK_CENTER,
+		"New-point handle dropdown expanded beyond its content width",
+	)
+	_expect(
+		legacy_controls.get_child_count() == 2,
+		"Shared Add Point controls included an unexpected standalone label",
+	)
 	_expect(_find_button(legacy_controls, "Add Point") != null, "Legacy controls omitted Add Point beside the dropdown")
 	_expect(_find_button(native_controls, "Add Point") != null, "Native controls omitted Add Point beside the dropdown")
 

@@ -448,16 +448,14 @@ func _create_point_add_controls() -> Control:
 	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	row.add_theme_constant_override(&"separation", _compact_separation())
 
-	var label := Label.new()
-	label.text = "New point handles"
-	row.add_child(label)
-
 	var handle_mode := OptionButton.new()
 	handle_mode.name = &"NewPointHandleMode"
 	handle_mode.tooltip_text = (
 		"Default handle mode for points created by graph click or Add Point"
 	)
 	_configure_compact_option(handle_mode)
+	handle_mode.fit_to_longest_item = true
+	handle_mode.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	handle_mode.add_item("Free", EasingCurvePoint.HandleMode.FREE)
 	handle_mode.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
 	handle_mode.add_item("Balanced", EasingCurvePoint.HandleMode.BALANCED)
