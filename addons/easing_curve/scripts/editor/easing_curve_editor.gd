@@ -154,6 +154,9 @@ func _ready() -> void:
 	# Inspector ScrollContainer follow the graph when a point or handle is
 	# clicked, producing a small and distracting vertical scroll jump.
 	focus_mode = Control.FOCUS_NONE
+	# Let unmodified wheel events continue to the Inspector ScrollContainer.
+	# Intentional graph zoom is accepted explicitly in _handle_wheel().
+	mouse_force_pass_scroll_events = true
 	clip_contents = true
 
 	if Engine.is_editor_hint():
@@ -420,6 +423,8 @@ func _handle_read_only_point_button(event: InputEventMouseButton) -> void:
 
 
 func _handle_wheel(event: InputEventMouseButton) -> bool:
+	if not event.is_command_or_control_pressed():
+		return false
 	if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 		_zoom_at_view_pos(1, event.position)
 		accept_event()

@@ -495,6 +495,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 **Deferred editor polish:** Native force-linear and lock state remain available in the selected-point graph toolbar. Duplicating those controls in each Native point-list row is intentionally deferred to a later feature update.
 
+A future shared graph-zoom lock may add a control near the zoom strip. Its default locked mode would keep plain wheel input available to the Inspector; unlocked mode would allow plain-wheel graph zoom. Ctrl/Cmd+wheel over the graph and unmodified wheel input over the slider track would continue to zoom in either mode. The control and its persistence policy are deferred beyond this tranche.
+
 **Goal:** Make Native resources first-class in the shared editor.
 
 **Implementation:**

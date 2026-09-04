@@ -21,6 +21,7 @@ func _run() -> void:
 	await _test_automatic_autofit_suppresses_intermediate_render()
 	await _test_folded_curve_editor_defers_autofit_until_expand()
 	_test_zoom_behavioral_invariants()
+	await _test_zoom_slider_wheel_scope()
 	_test_bezier_draw_clipping_and_tessellation()
 	_test_pending_add_cancel_and_no_op_release()
 	_test_modifier_capable_drag_baseline()
@@ -59,12 +60,18 @@ func _button(
 	position: Vector2,
 	pressed: bool,
 	shift_pressed := false,
+	command_or_control_pressed := false,
 ) -> InputEventMouseButton:
 	var event := InputEventMouseButton.new()
 	event.button_index = button
 	event.position = position
 	event.pressed = pressed
 	event.shift_pressed = shift_pressed
+	if command_or_control_pressed:
+		if OS.get_name() == "macOS":
+			event.meta_pressed = true
+		else:
+			event.ctrl_pressed = true
 	return event
 
 
@@ -206,7 +213,7 @@ func _test_view_state_update_ownership() -> void:
 
 	var zoom_step_before := editor._zoom_step
 	var zoom_anchor := Vector2(220.0, 140.0)
-	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, zoom_anchor, true))
+	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, zoom_anchor, true, false, true))
 	var expected_step := mini(zoom_step_before + 1, EasingCurve.ZOOM_STEPS)
 	var expected_zoom := editor.step_to_zoom(expected_step)
 	var view_state := _view_state(curve)
@@ -602,9 +609,27 @@ func _test_zoom_behavioral_invariants() -> void:
 
 	editor.update_view_transform()
 	var wheel_anchor := Vector2(137.0, 113.0)
+	var plain_step := editor._zoom_step
+	var plain_pan := editor.pan_offset
+	var plain_state := _view_state(curve).duplicate(true)
+	editor.selected_index = 1
+	editor.dragging_point = 1
+	editor.dragging_control = EasingCurveEditor.ControlIndex.RIGHT
+	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, wheel_anchor, true))
+	_expect(editor._zoom_step == plain_step, "Plain graph wheel input unexpectedly changed zoom")
+	_expect(editor.pan_offset == plain_pan, "Plain graph wheel input unexpectedly changed pan")
+	_expect(_view_state(curve) == plain_state, "Plain graph wheel input unexpectedly changed view-state metadata")
+	_expect(
+		editor.selected_index == 1
+		and editor.dragging_point == 1
+		and editor.dragging_control == EasingCurveEditor.ControlIndex.RIGHT,
+		"Plain graph wheel input changed selection or active drag state",
+	)
+	editor.dragging_point = -1
+	editor.dragging_control = EasingCurveEditor.ControlIndex.NONE
 	var world_before := editor.get_world_pos(wheel_anchor)
 	var wheel_step_before := editor._zoom_step
-	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, wheel_anchor, true))
+	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, wheel_anchor, true, false, true))
 	var expected_wheel_step := mini(wheel_step_before + 1, EasingCurve.ZOOM_STEPS)
 	var wheel_zoom := editor.step_to_zoom(expected_wheel_step)
 	_expect(editor._zoom_step == expected_wheel_step, "Wheel zoom did not advance exactly one zoom step")
@@ -658,6 +683,50 @@ func _test_zoom_behavioral_invariants() -> void:
 
 	editor._slider.free()
 	editor.free()
+
+
+func _test_zoom_slider_wheel_scope() -> void:
+	var zoom_controls := ZOOM_SLIDER.instantiate() as EasingCurveZoomSliderContainer
+	get_root().add_child(zoom_controls)
+	await process_frame
+	var slider := zoom_controls.slider
+	var initial_value := slider.value
+	zoom_controls._on_slider_gui_input(
+		_button(MOUSE_BUTTON_WHEEL_UP, slider.size * 0.5, true)
+	)
+	_expect(
+		is_equal_approx(slider.value, initial_value + slider.step),
+		"Unmodified wheel input over the zoom slider did not advance one step",
+	)
+
+	slider.value = slider.max_value
+	zoom_controls._on_slider_gui_input(
+		_button(MOUSE_BUTTON_WHEEL_UP, slider.size * 0.5, true)
+	)
+	_expect(
+		is_equal_approx(slider.value, slider.max_value),
+		"Wheel input over the zoom slider exceeded its maximum",
+	)
+	slider.value = slider.min_value
+	zoom_controls._on_slider_gui_input(
+		_button(MOUSE_BUTTON_WHEEL_DOWN, slider.size * 0.5, true)
+	)
+	_expect(
+		is_equal_approx(slider.value, slider.min_value),
+		"Wheel input over the zoom slider exceeded its minimum",
+	)
+
+	var slider_wheel_handler := Callable(zoom_controls, &"_on_slider_gui_input")
+	_expect(
+		not zoom_controls.zoom_icon.gui_input.is_connected(slider_wheel_handler),
+		"Zoom icon unexpectedly routes wheel input to the slider",
+	)
+	_expect(
+		not zoom_controls.autofit_btn.gui_input.is_connected(slider_wheel_handler),
+		"Autofit button unexpectedly routes wheel input to the slider",
+	)
+	zoom_controls.queue_free()
+	await process_frame
 
 
 func _test_bezier_draw_clipping_and_tessellation() -> void:
@@ -1235,7 +1304,7 @@ func _test_axis_constraint_view_and_order_geometry() -> void:
 		"Shift constraint did not preserve view-space axis behavior under zoom and pan",
 	)
 	var zoom_step_before_wheel := zoom_editor._zoom_step
-	zoom_editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, zoom_target_view, true, true))
+	zoom_editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, zoom_target_view, true, true, true))
 	_expect(
 		zoom_editor.dragging_point == 1
 		and zoom_editor._zoom_step == mini(zoom_step_before_wheel + 1, EasingCurve.ZOOM_STEPS),
@@ -1498,7 +1567,9 @@ func _test_axis_constraint_request_and_input_boundaries() -> void:
 	_expect(navigation_editor.pan_offset == pan_before + Vector2(25.0, 15.0) and not navigation_editor.is_panning, "Shift changed MMB pan semantics")
 	var zoom_before := navigation_editor._zoom_step
 	navigation_editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, Vector2(200.0, 150.0), true, true))
-	_expect(navigation_editor._zoom_step == mini(zoom_before + 1, EasingCurve.ZOOM_STEPS), "Shift changed wheel zoom semantics")
+	_expect(navigation_editor._zoom_step == zoom_before, "Shift-only wheel input unexpectedly zoomed the graph")
+	navigation_editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, Vector2(200.0, 150.0), true, true, true))
+	_expect(navigation_editor._zoom_step == mini(zoom_before + 1, EasingCurve.ZOOM_STEPS), "Shift+Ctrl/Cmd wheel did not zoom the graph")
 	var hover_view := navigation_editor.get_view_pos(navigation_fixture.curve.points[1].position)
 	navigation_editor._gui_input(_motion(hover_view, 0, true))
 	_expect(navigation_editor.hovered_index == 1, "Shift changed ordinary graph hover detection")
@@ -1742,8 +1813,11 @@ func _test_zoom_and_pan_interactions() -> void:
 	editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_view, true))
 	var zoom_before := editor._zoom_step
 	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, point_view, true))
-	_expect(editor.dragging_point != -1, "Zoom during a point drag canceled the active drag")
-	_expect(editor._zoom_step != zoom_before, "Zoom during a point drag did not update the view")
+	_expect(editor.dragging_point != -1, "Plain wheel input during a point drag canceled the active drag")
+	_expect(editor._zoom_step == zoom_before, "Plain wheel input unexpectedly zoomed during a point drag")
+	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, point_view, true, false, true))
+	_expect(editor.dragging_point != -1, "Modified zoom during a point drag canceled the active drag")
+	_expect(editor._zoom_step != zoom_before, "Modified zoom during a point drag did not update the view")
 	editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_view, false))
 
 	get_root().add_child(editor)

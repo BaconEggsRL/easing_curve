@@ -9,12 +9,16 @@ const INSPECTOR_PLUGIN := preload(
 const CURVE_EDITOR_SETTINGS := preload(
 	"res://addons/easing_curve/scripts/editor/curve_editor_settings.gd"
 )
+const ZOOM_SLIDER := preload(
+	"res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.tscn"
+)
 func _init() -> void:
 	call_deferred(&"_run")
 
 
 func _run() -> void:
 	await _test_default_new_point_handle_modes()
+	await _test_shared_wheel_zoom_routing()
 	_test_legacy_selection_path()
 	_test_native_selection_and_point_options()
 	_test_native_bezier_transform_preview()
@@ -143,6 +147,106 @@ func _test_default_new_point_handle_modes() -> void:
 		)
 
 	settings.set_setting(setting_name, original_value)
+
+
+func _test_shared_wheel_zoom_routing() -> void:
+	for backend_id: StringName in [&"legacy", &"native"]:
+		if backend_id == &"native" and not ClassDB.class_exists(&"NativeEasingCurve"):
+			continue
+		var curve := _make_handle_mode_curve(backend_id)
+		var editor := CURVE_EDITOR.new() as EasingCurveEditor
+		editor._slider = ZOOM_SLIDER.instantiate()
+		editor.set_curve(curve)
+		editor.size = Vector2(520.0, 260.0)
+		root.add_child(editor)
+		await process_frame
+		editor.update_view_transform()
+		_expect(
+			editor.mouse_force_pass_scroll_events,
+			"%s graph does not pass unhandled wheel input to the Inspector" % backend_id,
+		)
+
+		var anchor := Vector2(173.0, 121.0)
+		var step_before := editor._zoom_step
+		var pan_before := editor.pan_offset
+		editor.selected_index = 0
+		editor.dragging_point = 0
+		editor.dragging_control = EasingCurveEditor.ControlIndex.RIGHT
+		var plain_wheel := _mouse_button(
+			anchor,
+			true,
+			MOUSE_BUTTON_WHEEL_UP,
+		)
+		_expect(
+			not bool(editor.call(&"_handle_wheel", plain_wheel)),
+			"%s graph consumed plain wheel input" % backend_id,
+		)
+		_expect(
+			editor._zoom_step == step_before and editor.pan_offset == pan_before,
+			"%s graph changed zoom or pan for plain wheel input" % backend_id,
+		)
+		_expect(
+			editor.selected_index == 0
+			and editor.dragging_point == 0
+			and editor.dragging_control == EasingCurveEditor.ControlIndex.RIGHT,
+			"%s graph changed selection or active drag state for plain wheel input"
+			% backend_id,
+		)
+
+		var world_before := editor.get_world_pos(anchor)
+		var modified_wheel := _mouse_button(
+			anchor,
+			true,
+			MOUSE_BUTTON_WHEEL_UP,
+			true,
+		)
+		_expect(
+			bool(editor.call(&"_handle_wheel", modified_wheel)),
+			"%s graph did not consume Ctrl/Cmd+wheel" % backend_id,
+		)
+		_expect(
+			editor._zoom_step == mini(step_before + 1, EasingCurve.ZOOM_STEPS),
+			"%s graph Ctrl/Cmd+wheel did not advance exactly one zoom step"
+			% backend_id,
+		)
+		_expect(
+			editor.get_world_pos(anchor).is_equal_approx(world_before),
+			"%s graph Ctrl/Cmd+wheel did not preserve the point below the cursor"
+			% backend_id,
+		)
+		_expect(
+			editor.selected_index == 0
+			and editor.dragging_point == 0
+			and editor.dragging_control == EasingCurveEditor.ControlIndex.RIGHT,
+			"%s graph Ctrl/Cmd+wheel changed selection or active drag state"
+			% backend_id,
+		)
+
+		editor._zoom_step = EasingCurve.ZOOM_STEPS
+		editor.call(&"_apply_zoom_from_step")
+		_expect(
+			bool(editor.call(&"_handle_wheel", modified_wheel))
+			and editor._zoom_step == EasingCurve.ZOOM_STEPS,
+			"%s graph did not consume modified wheel input at maximum zoom"
+			% backend_id,
+		)
+		editor._zoom_step = 0
+		editor.call(&"_apply_zoom_from_step")
+		var modified_wheel_down := _mouse_button(
+			anchor,
+			true,
+			MOUSE_BUTTON_WHEEL_DOWN,
+			true,
+		)
+		_expect(
+			bool(editor.call(&"_handle_wheel", modified_wheel_down))
+			and editor._zoom_step == 0,
+			"%s graph did not consume modified wheel input at minimum zoom"
+			% backend_id,
+		)
+		editor._slider.free()
+		editor.queue_free()
+		await process_frame
 
 
 func _test_handle_mode_creation_case(
@@ -860,11 +964,17 @@ func _mouse_button(
 	position: Vector2,
 	pressed: bool,
 	button_index: MouseButton = MOUSE_BUTTON_LEFT,
+	command_or_control_pressed := false,
 ) -> InputEventMouseButton:
 	var event := InputEventMouseButton.new()
 	event.button_index = button_index
 	event.position = position
 	event.pressed = pressed
+	if command_or_control_pressed:
+		if OS.get_name() == "macOS":
+			event.meta_pressed = true
+		else:
+			event.ctrl_pressed = true
 	return event
 
 

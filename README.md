@@ -154,7 +154,7 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 * **Zoom and Pan**
   * Zoom and pan can be used to see points outside the grid box. The grid box represents an x_range and y_range of 0 to 1.
-  * Use the zoom slider or scroll wheel to adjust the zoom level. The arrow box to the right of the zoom slider will reset the zoom.
+  * Use the zoom slider (drag it or scroll over its track), or hold Ctrl/Cmd while scrolling over the graph, to adjust the zoom level. Plain scrolling over the graph scrolls the Inspector. The arrow box to the right of the zoom slider will reset the zoom.
   * Click and drag with the middle mouse button to pan the curve editor. The arrow box to the right of the zoom slider will reset the pan.
 
 * **Reordering the Points List**
