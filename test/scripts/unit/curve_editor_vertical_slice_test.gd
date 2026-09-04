@@ -9,6 +9,9 @@ const INSPECTOR_PLUGIN := preload(
 const CURVE_EDITOR_SETTINGS := preload(
 	"res://addons/easing_curve/scripts/editor/curve_editor_settings.gd"
 )
+const DEFERRED_PARAMETER_EDITOR_PROPERTY := preload(
+	"res://addons/easing_curve/scripts/editor/inspector/deferred_parameter_editor_property.gd"
+)
 const ZOOM_SLIDER := preload(
 	"res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.tscn"
 )
@@ -28,6 +31,7 @@ func _run() -> void:
 	_test_native_crossing_and_toolbar_reorder()
 	_test_native_point_list_swap_parity()
 	await _test_native_inspector_path()
+	await _test_native_deferred_parameter_editor()
 	await _test_native_property_clipboard_and_lifecycle()
 	_finish("shared curve editor vertical slice")
 
@@ -595,7 +599,46 @@ func _test_native_inspector_path() -> void:
 				add_button.pressed.emit()
 				_expect(curve.call(&"get_point_count") == before_count + 1, "Native point-list Add did not use the shared backend")
 		await process_frame
-		content.free()
+	content.free()
+
+
+func _test_native_deferred_parameter_editor() -> void:
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	curve.set(&"transition", NativeEasingCurve.TRANS_BOUNCE)
+	var native_editor := EditorProperty.new()
+	var input := EditorSpinSlider.new()
+	input.min_value = 0.0
+	input.max_value = 100.0
+	input.step = 0.01
+	native_editor.add_child(input)
+	var property_editor := DEFERRED_PARAMETER_EDITOR_PROPERTY.new() as EditorProperty
+	_expect(
+		property_editor.call(&"setup", native_editor, &"bounce_damping", null, null),
+		"Native Bounce Damping did not create a deferred slider editor",
+	)
+	property_editor.set_object_and_property(curve, &"bounce_damping")
+	root.add_child(property_editor)
+	var applied_edits := [0]
+	property_editor.property_changed.connect(
+		func(property: StringName, value: Variant, _field: StringName, _changing: bool) -> void:
+			applied_edits[0] += 1
+			curve.set(property, value)
+	)
+
+	input.grabbed.emit()
+	input.value = 60.0
+	input.value = 45.0
+	_expect(is_equal_approx(curve.get(&"bounce_damping"), 45.0), "Native function drag did not update its local preview value")
+	_expect(applied_edits[0] == 0, "Native function drag published through the Inspector before release")
+	input.ungrabbed.emit()
+	await process_frame
+	_expect(applied_edits[0] == 1, "Native function drag did not publish exactly once on release")
+	_expect(is_equal_approx(curve.get(&"bounce_damping"), 45.0), "Native function drag release lost its final value")
+
+	input.value = 37.5
+	_expect(applied_edits[0] == 2, "Native typed function value did not publish immediately")
+	_expect(is_equal_approx(curve.get(&"bounce_damping"), 37.5), "Native typed function value was not applied")
+	property_editor.free()
 
 
 func _test_native_property_clipboard_and_lifecycle() -> void:

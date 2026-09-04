@@ -85,11 +85,11 @@ IDs are frozen independently:
 | 107 | CSS Linear |
 | 108 | CSS Cubic Bézier |
 
-Constant, Step, Power, Physics Spring, parameterized Back/Elastic/Spring, and
+Constant, Step, Power, Physics Spring, parameterized Back/Elastic/Bounce/Spring, and
 reverse/invert are currently native. Arbitrary Callables can be explicitly
 baked into piecewise-linear Native Bézier points; sampling never retains or
-invokes the Callable. Jitter, Irregular, extended Bounce, and
-the CSS modes remain reserved until their compiled representations land.
+invokes the Callable. Jitter, Irregular, and the CSS modes remain reserved until
+their compiled representations land.
 Unsupported reserved IDs are rejected rather than silently sampling as linear.
 
 `points` returns an isolated typed-array container. Point resources remain
@@ -114,7 +114,7 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
-The Native smoke suite currently contains 972 checks. The runtime benchmark runs
+The Native smoke suite currently contains 1,020 checks. The runtime benchmark runs
 in an isolated project containing only this addon and
 the benchmark script. It reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
@@ -130,23 +130,25 @@ points and is intentionally outside the retained historical baseline.
 Tween is used only as a benchmark and numerical oracle. No Native sampling path
 calls Tween, GDScript, or a Callable.
 
-### Retained runtime performance evidence
+### Runtime performance evidence
 
-The historical benchmark was not rerun for the editor-only default-handle
-change. These are the retained isolated release-library results:
+The historical absolute baseline remains deliberately unpromoted. The retained
+release-library results below are supplemented by the current three-run extended-
+Bounce comparison; the current run did not evaluate or replace the absolute file.
 
 | Workload | Iterations | Native | Comparator | Native advantage |
 |---|---:|---:|---:|---:|
 | 48 standard Transition/Ease cases | 200,000 | 5.183–8.957 ms | Tween: 9.330–31.636 ms | 1.8–4.0× |
 | Deterministic functions | 50,000 | 1.248–2.279 ms | Legacy: 86.340–153.226 ms | 62.7–104.2× |
+| Extended Bounce (6 bounces, 42.5 decay) | 50,000 | 1.741 ms | Legacy: 135.744 ms | 78.0× |
 | Custom curves, 2/9/65 points | 50,000 | 1.543–2.776 ms | Legacy: 83.491–246.812 ms | 42.3–134.2× |
 | 65-point random sampling | 50,000 | 2.776 ms | Legacy: 246.812 ms | 88.9× |
 | 65-point mutation and sampling | 4,000 | 30.032 ms | Legacy: 325.832 ms | 10.8× |
 | 65-point deep copies | 500 | 113.880 ms | Legacy: 11,345.662 ms | 99.6× |
 
-All 63 relative comparisons pass. Eight of the 27 retained Native-only absolute
-cases exceed their old timing plus the noise allowance, so the historical file
-remains unchanged pending a quiet reference-host run.
+All 64 current relative comparisons pass. Eight of the 27 retained Native-only
+absolute cases exceed their old timing plus the noise allowance, so the
+historical file remains unchanged pending a quiet reference-host run.
 
 ### Large-curve characterization
 
@@ -197,6 +199,9 @@ clipboard, and cross-copy behavior as Legacy. Deferred value-edit completion is
 resolved by curve and point identity rather than retaining row controls, so an
 Inspector rebuild, topology action, or resource switch cannot replay a stale UI
 callback or merge unrelated Undo transactions.
+Native numeric function-property sliders use the same deferred transaction
+boundary: motion previews locally, then publishes one Inspector/live-scene update
+on release. Directly entered values still publish immediately.
 Clean presets continue on the analytic sampler; only Custom and modified preset
 geometry use compiled segments. Pending additions and point-list drags render
 directly from backend point state, stale pending/detached previews are discarded,
@@ -228,7 +233,7 @@ is used for serialized Native resources.
 
 - Run the corrected Windows-test and Web browser-runtime jobs in GitHub Actions
   and retain the debug/release Web artifacts.
-- Finish generated, CSS, and extended Bounce representations.
+- Finish generated and CSS representations.
 - Manually confirm the new-point preference persists across an editor restart
   and that changing it alone does not restart a running scene.
 - Add optional, non-destructive bidirectional conversion.

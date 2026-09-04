@@ -18,6 +18,21 @@ const PointEditTransactionController = preload(
 const DeferredParameterEditorProperty = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/deferred_parameter_editor_property.gd"
 )
+const NATIVE_DEFERRED_FUNCTION_PARAMETERS := [
+	&"amplitude",
+	&"period",
+	&"steps",
+	&"y_offset",
+	&"power",
+	&"num_bounces",
+	&"bounce_damping",
+	&"frequency",
+	&"decay",
+	&"stiffness",
+	&"damping",
+	&"mass",
+	&"velocity",
+]
 const GenerateFunctionEditorProperty = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/generate_function_editor_property.gd"
 )
@@ -1540,12 +1555,15 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 			property_editor.setup(easing_curve_editor, editor_undo_redo)
 			add_custom_control(property_editor)
 		return true
-	if (
-		object is EasingCurve
-		and EasingCurve.is_deferred_parameter(
-			StringName(name)
+	var uses_deferred_parameter_editor: bool = (
+		(object is EasingCurve and EasingCurve.is_deferred_parameter(StringName(name)))
+		or (
+			native_backend != null
+			and native_backend.get_backend_id() == &"native"
+			and StringName(name) in NATIVE_DEFERRED_FUNCTION_PARAMETERS
 		)
-	):
+	)
+	if uses_deferred_parameter_editor:
 		_instantiating_default_property = true
 		var native_editor := EditorInspector.instantiate_property_editor(
 			object,

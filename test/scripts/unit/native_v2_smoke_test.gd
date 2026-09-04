@@ -39,6 +39,7 @@ func _run() -> void:
 	_test_point_ownership_and_change_propagation()
 	_test_point_editor_state_contract()
 	_test_deferred_point_edit_transaction()
+	_test_deferred_parameter_edit_transaction()
 	_test_resource_free_editor_snapshot()
 	_test_transition_parameter_visibility()
 	_test_editable_preset_geometry()
@@ -149,6 +150,16 @@ func _test_invalid_property_contract() -> void:
 	curve.set(&"period", 0.5)
 	curve.set(&"period", NAN)
 	_expect(is_equal_approx(curve.get(&"period"), 0.5), "non-finite period was accepted")
+	curve.set(&"num_bounces", 0)
+	_expect(curve.get(&"num_bounces") == 1, "bounce count minimum is not 1")
+	curve.set(&"num_bounces", 30)
+	_expect(curve.get(&"num_bounces") == 20, "bounce count maximum is not 20")
+	curve.set(&"bounce_damping", -10.0)
+	_expect(is_zero_approx(curve.get(&"bounce_damping")), "bounce damping minimum is not 0")
+	curve.set(&"bounce_damping", 125.0)
+	_expect(is_equal_approx(curve.get(&"bounce_damping"), 100.0), "bounce damping maximum is not 100")
+	curve.set(&"bounce_damping", NAN)
+	_expect(is_equal_approx(curve.get(&"bounce_damping"), 100.0), "non-finite bounce damping was accepted")
 	_expect(is_equal_approx(curve.call(&"sample", NAN), 0.0), "non-finite sample input is not deterministic")
 	_expect(is_equal_approx(curve.call(&"sample", INF), 0.0), "infinite sample input is not deterministic")
 
@@ -190,6 +201,7 @@ func _test_extended_transition_parity() -> void:
 		[NativeEasingCurve.TRANS_POWER, EasingCurve.TRANS.POWER, {&"power": 3.25}],
 		[NativeEasingCurve.TRANS_BACK, EasingCurve.TRANS.BACK, {&"overshoot": 2.4}],
 		[NativeEasingCurve.TRANS_ELASTIC, EasingCurve.TRANS.ELASTIC, {&"amplitude": 1.7, &"period": 0.42}],
+		[NativeEasingCurve.TRANS_BOUNCE, EasingCurve.TRANS.BOUNCE, {&"num_bounces": 6, &"bounce_damping": 42.5}],
 		[NativeEasingCurve.TRANS_SPRING, EasingCurve.TRANS.SPRING, {&"frequency": 3.4, &"decay": 3.1}],
 		[NativeEasingCurve.TRANS_PHYSICS_SPRING, EasingCurve.TRANS.PHYSICS_SPRING, {&"stiffness": 180.0, &"damping": 14.0, &"mass": 1.8, &"velocity": -0.75}],
 	]
@@ -437,6 +449,28 @@ func _test_deferred_point_edit_transaction() -> void:
 	_expect(changes[&"curve"] == 0 and changes[&"points"] == 0, "canceled point transaction published")
 
 
+func _test_deferred_parameter_edit_transaction() -> void:
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_BOUNCE, NativeEasingCurve.EASE_OUT)
+	var changes := [0]
+	curve.changed.connect(func() -> void: changes[0] += 1)
+	var before_sample: float = curve.call(&"sample", 0.6)
+	curve.call(&"begin_parameter_edit")
+	curve.set(&"num_bounces", 6)
+	curve.set(&"bounce_damping", 42.5)
+	_expect(changes[0] == 0, "Native parameter drag published before release")
+	_expect(not is_equal_approx(before_sample, curve.call(&"sample", 0.6)), "Native parameter drag did not update the local preview")
+	curve.call(&"finish_parameter_edit")
+	_expect(changes[0] == 1, "Native parameter drag did not publish exactly once on release")
+
+	curve.call(&"begin_parameter_edit")
+	curve.set(&"num_bounces", 7)
+	curve.set(&"num_bounces", 6)
+	curve.call(&"finish_parameter_edit")
+	_expect(changes[0] == 1, "No-op Native parameter drag published a change")
+	curve.call(&"finish_parameter_edit")
+	_expect(changes[0] == 1, "Unbalanced Native parameter finish published a change")
+
+
 func _test_resource_free_editor_snapshot() -> void:
 	var curve := _new_native_curve(TRANS_CUSTOM, NativeEasingCurve.EASE_OUT)
 	var snapshot: Dictionary = curve.call(&"get_editor_state_snapshot")
@@ -465,6 +499,8 @@ func _test_transition_parameter_visibility() -> void:
 		&"from_start": NativeEasingCurve.TRANS_STEP,
 		&"y_offset": NativeEasingCurve.TRANS_STEP,
 		&"power": NativeEasingCurve.TRANS_POWER,
+		&"num_bounces": NativeEasingCurve.TRANS_BOUNCE,
+		&"bounce_damping": NativeEasingCurve.TRANS_BOUNCE,
 		&"frequency": NativeEasingCurve.TRANS_SPRING,
 		&"decay": NativeEasingCurve.TRANS_SPRING,
 		&"stiffness": NativeEasingCurve.TRANS_PHYSICS_SPRING,
@@ -478,6 +514,7 @@ func _test_transition_parameter_visibility() -> void:
 		NativeEasingCurve.TRANS_ELASTIC,
 		NativeEasingCurve.TRANS_STEP,
 		NativeEasingCurve.TRANS_POWER,
+		NativeEasingCurve.TRANS_BOUNCE,
 		NativeEasingCurve.TRANS_SPRING,
 		NativeEasingCurve.TRANS_PHYSICS_SPRING,
 	]
@@ -645,6 +682,8 @@ func _expect_native_point_matches_legacy(
 
 func _test_deep_runtime_copy() -> void:
 	var source := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
+	source.set(&"num_bounces", 8)
+	source.set(&"bounce_damping", 31.25)
 	source.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
 	var source_points: Array = source.get(&"points")
 	(source_points[0] as Resource).set(&"handle_mode", NativeEasingCurvePoint.HANDLE_LINKED)
@@ -671,6 +710,8 @@ func _test_deep_runtime_copy() -> void:
 		runtime.get(&"format_version") == source.get(&"format_version"),
 		"runtime copy lost the resource format version",
 	)
+	_expect(runtime.get(&"num_bounces") == 8, "runtime copy lost the Native bounce count")
+	_expect(is_equal_approx(runtime.get(&"bounce_damping"), 31.25), "runtime copy lost Native bounce damping")
 
 	var runtime_notifications := {&"count": 0}
 	runtime.connect(&"points_changed", func(_points: Array) -> void: runtime_notifications[&"count"] += 1)
@@ -686,6 +727,8 @@ func _test_deep_runtime_copy() -> void:
 
 func _test_resource_round_trip() -> void:
 	var curve := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
+	curve.set(&"num_bounces", 5)
+	curve.set(&"bounce_damping", 62.5)
 	curve.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
 	var authored_point := curve.call(&"get_point", 0) as Resource
 	authored_point.set(&"handle_mode", NativeEasingCurvePoint.HANDLE_LINKED)
@@ -708,6 +751,8 @@ func _test_resource_round_trip() -> void:
 			"native curve format version changed after save/load",
 		)
 		_expect(not loaded.call(&"is_format_supported"), "future native format version was accepted")
+		_expect(loaded.get(&"num_bounces") == 5, "Native bounce count changed after save/load")
+		_expect(is_equal_approx(loaded.get(&"bounce_damping"), 62.5), "Native bounce damping changed after save/load")
 		_expect(not is_finite(loaded.call(&"sample", 0.37)), "future native format sampled silently")
 		var loaded_point := loaded.call(&"get_point", 0) as Resource
 		_expect(

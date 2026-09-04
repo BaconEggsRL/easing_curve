@@ -44,16 +44,16 @@ const LEGACY_POINT_METHODS := [
 	"set_position", "set_right_control_point", "set_right_force_linear", "supports_control_state",
 ]
 const NATIVE_CURVE_METHODS := [
-	"_apply_live_editor_snapshot", "add_point", "apply_point_states", "apply_point_topology_snapshot", "bake_callable", "begin_point_edit", "capture_point_states", "clear_points",
-	"create_runtime_copy", "cubic_bezier", "get_amplitude", "get_constant_value", "get_damping",
+	"_apply_live_editor_snapshot", "add_point", "apply_point_states", "apply_point_topology_snapshot", "bake_callable", "begin_parameter_edit", "begin_point_edit", "cancel_parameter_edit", "capture_point_states", "clear_points",
+	"create_runtime_copy", "cubic_bezier", "get_amplitude", "get_bounce_damping", "get_constant_value", "get_damping",
 	"get_decay", "get_ease_type", "get_editor_state_snapshot", "get_format_status", "get_format_version", "get_frequency",
-	"get_mass", "get_overshoot", "get_period", "get_point", "get_point_count", "get_points",
+	"get_mass", "get_num_bounces", "get_overshoot", "get_period", "get_point", "get_point_count", "get_points",
 	"get_power", "get_steps", "get_stiffness", "get_transition", "get_velocity", "get_y_offset",
 	"insert_point", "is_builtin_bezier_preset", "is_format_supported", "is_from_start", "is_invert", "is_preset_override_active", "is_reverse", "is_selected_preset_modified",
-	"remove_point", "sample", "set_amplitude", "set_constant_value", "set_damping", "set_decay",
+	"remove_point", "sample", "set_amplitude", "set_bounce_damping", "set_constant_value", "set_damping", "set_decay",
 	"reset_selected_preset", "set_ease_type", "set_editor_state_snapshot", "set_format_version", "set_frequency", "set_from_start", "set_invert",
-	"set_mass", "set_overshoot", "set_period", "set_point", "set_points", "set_power",
-	"set_preset_override_active", "set_reverse", "set_steps", "set_stiffness", "set_transition", "set_velocity", "set_y_offset", "finish_point_edit",
+	"set_mass", "set_num_bounces", "set_overshoot", "set_period", "set_point", "set_points", "set_power",
+	"set_preset_override_active", "set_reverse", "set_steps", "set_stiffness", "set_transition", "set_velocity", "set_y_offset", "finish_parameter_edit", "finish_point_edit",
 ]
 const NATIVE_POINT_METHODS := [
 	"apply_state", "capture_state", "get_handle_mode", "get_left_control_point", "get_locks",
@@ -108,6 +108,7 @@ const LEGACY_POINT_PROPERTIES := {
 const NATIVE_CURVE_PROPERTIES := {
 	"_editor_state_snapshot": TYPE_DICTIONARY,
 	"amplitude": TYPE_FLOAT,
+	"bounce_damping": TYPE_FLOAT,
 	"constant_value": TYPE_FLOAT,
 	"damping": TYPE_FLOAT,
 	"decay": TYPE_FLOAT,
@@ -117,6 +118,7 @@ const NATIVE_CURVE_PROPERTIES := {
 	"from_start": TYPE_BOOL,
 	"invert": TYPE_BOOL,
 	"mass": TYPE_FLOAT,
+	"num_bounces": TYPE_INT,
 	"overshoot": TYPE_FLOAT,
 	"period": TYPE_FLOAT,
 	"points": TYPE_ARRAY,

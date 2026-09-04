@@ -10,6 +10,7 @@ var input: EditorSpinSlider
 var property_name: StringName
 var curve_editor: EasingCurveEditor
 var drag_original_snapshot: Dictionary
+var drag_original_value: Variant
 var undo_redo: Object
 
 
@@ -61,7 +62,7 @@ func setup(
 
 
 func _update_property() -> void:
-	var object := get_edited_object() as EasingCurve
+	var object := get_edited_object() as Resource
 	if object != null and input != null:
 		input.set_value_no_signal(float(object.get(property_name)))
 
@@ -69,12 +70,16 @@ func _update_property() -> void:
 func _on_grabbed() -> void:
 	if input.has_meta(DRAGGING_META):
 		return
-	var object := get_edited_object() as EasingCurve
+	var object := get_edited_object() as Resource
 	if object == null:
 		return
 	input.set_meta(DRAGGING_META, true)
-	drag_original_snapshot = EASING_CURVE_EDITOR_UNDO.capture_state(object)
-	object._begin_editor_parameter_edit()
+	if _is_native_curve(object):
+		drag_original_value = object.get(property_name)
+		object.call(&"begin_parameter_edit")
+	else:
+		drag_original_snapshot = EASING_CURVE_EDITOR_UNDO.capture_state(object as EasingCurve)
+		(object as EasingCurve)._begin_editor_parameter_edit()
 
 
 func _on_ungrabbed() -> void:
@@ -88,14 +93,16 @@ func _on_value_focus_entered() -> void:
 
 
 func _on_value_changed(value: float) -> void:
-	var object := get_edited_object() as EasingCurve
+	var object := get_edited_object() as Resource
 	if object == null:
 		return
 	var property_value: Variant = int(value) if object.get(property_name) is int else value
 	if input.has_meta(DRAGGING_META):
 		object.set(property_name, property_value)
+	elif _is_native_curve(object):
+		emit_changed(property_name, property_value)
 	else:
-		_commit_value(object, property_value)
+		_commit_value(object as EasingCurve, property_value)
 	_queue_curve_redraw()
 
 
@@ -107,18 +114,23 @@ func _commit_drag() -> void:
 	if not input.has_meta(DRAGGING_META):
 		return
 	input.remove_meta(DRAGGING_META)
-	var object := get_edited_object() as EasingCurve
+	var object := get_edited_object() as Resource
 	if object == null:
 		return
+	if _is_native_curve(object):
+		_commit_native_drag(object)
+		_queue_curve_redraw()
+		return
 
-	var final_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(object)
+	var legacy_curve := object as EasingCurve
+	var final_snapshot := EASING_CURVE_EDITOR_UNDO.capture_state(legacy_curve)
 	if final_snapshot == drag_original_snapshot:
-		object._cancel_editor_parameter_edit()
+		legacy_curve._cancel_editor_parameter_edit()
 	else:
-		object._finish_editor_parameter_edit()
+		legacy_curve._finish_editor_parameter_edit()
 		EASING_CURVE_EDITOR_UNDO.commit_applied_action(
 			undo_redo,
-			object,
+			legacy_curve,
 			"Change Easing Curve %s" % String(property_name).capitalize(),
 			EasingCurveEditorUndo.ActionContext.new(
 				drag_original_snapshot,
@@ -127,6 +139,16 @@ func _commit_drag() -> void:
 			self,
 		)
 	_queue_curve_redraw()
+
+
+func _commit_native_drag(object: Resource) -> void:
+	var final_value := object.get(property_name)
+	# Restore before emitting the final EditorProperty change so Godot captures
+	# the actual pre-drag value for Undo and live-debug publication.
+	object.set(property_name, drag_original_value)
+	object.call(&"cancel_parameter_edit")
+	if final_value != drag_original_value:
+		emit_changed(property_name, final_value)
 
 
 func _commit_value(object: EasingCurve, value: Variant, action_name := "") -> void:
@@ -145,3 +167,7 @@ func _commit_value(object: EasingCurve, value: Variant, action_name := "") -> vo
 func _queue_curve_redraw() -> void:
 	if is_instance_valid(curve_editor):
 		curve_editor.queue_redraw()
+
+
+func _is_native_curve(object: Resource) -> bool:
+	return object != null and object.get_class() == &"NativeEasingCurve"

@@ -83,6 +83,8 @@ private:
 	bool from_start = false;
 	double y_offset = 0.0;
 	double power = 2.0;
+	int64_t num_bounces = 3;
+	double bounce_damping = 75.0;
 	double frequency = 2.5;
 	double decay = 2.2;
 	double stiffness = 100.0;
@@ -101,6 +103,9 @@ private:
 	int64_t point_edit_depth = 0;
 	bool point_edit_changed = false;
 	Dictionary point_edit_before;
+	int64_t parameter_edit_depth = 0;
+	bool parameter_edit_changed = false;
+	Dictionary parameter_edit_before;
 	bool preset_override_active = false;
 	bool use_compiled_points = false;
 
@@ -108,6 +113,8 @@ private:
 	void disconnect_points();
 	void emit_points_changed();
 	void publish_point_change();
+	void publish_parameter_change();
+	Dictionary capture_parameter_state() const;
 	void compile_segments();
 	void on_point_changed();
 	TypedArray<NativeEasingCurvePoint> duplicate_points() const;
@@ -129,7 +136,7 @@ private:
 	double sample_elastic_in_out(double p_offset) const;
 	double sample_back_in_out(double p_offset) const;
 	static double sample_expo_in_out(double p_offset);
-	static double sample_bounce_out(double p_offset);
+	double sample_bounce_out(double p_offset) const;
 	double sample_spring_out(double p_offset) const;
 	double sample_physics_spring_out(double p_offset) const;
 	double sample_step(double p_offset) const;
@@ -169,6 +176,10 @@ public:
 	double get_y_offset() const;
 	void set_power(double p_power);
 	double get_power() const;
+	void set_num_bounces(int64_t p_num_bounces);
+	int64_t get_num_bounces() const;
+	void set_bounce_damping(double p_bounce_damping);
+	double get_bounce_damping() const;
 	void set_frequency(double p_frequency);
 	double get_frequency() const;
 	void set_decay(double p_decay);
@@ -204,6 +215,9 @@ public:
 	bool apply_point_topology_snapshot(const Array &p_point_order, const Array &p_point_states);
 	void begin_point_edit();
 	void finish_point_edit();
+	void begin_parameter_edit();
+	void finish_parameter_edit();
+	void cancel_parameter_edit();
 	Dictionary get_editor_state_snapshot() const;
 	void set_editor_state_snapshot(const Dictionary &p_snapshot);
 	void _apply_live_editor_snapshot(const Dictionary &p_snapshot);

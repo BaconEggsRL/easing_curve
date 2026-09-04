@@ -40,7 +40,7 @@ Architecture:
 | Branch | `native-v2-spike` at `d4030ea` plus the current NATIVE-08 closeout worktree |
 | Plan tracking | This file is the mutable source of truth for migration status and manual evidence |
 | Automated tests | All 23 suites pass under Godot 4.7.1 |
-| Native smoke tests | 972 checks pass, including deferred/no-op publication, resource-free live snapshots, transition-specific parameter visibility, canonical preset geometry, direct point assignment, modified sampling, migration, and save normalization |
+| Native smoke tests | 1,020 checks pass, including deferred/no-op publication, resource-free live snapshots, transition-specific parameter visibility, extended Bounce, function-parameter transactions, canonical preset geometry, direct point assignment, modified sampling, migration, and save normalization |
 | Dual public API contract | Reflection fixtures freeze intended methods, properties, signals, enum/constant IDs, and Native format status across both resource APIs; 143 checks pass |
 | Legacy runtime tests | 1,380 checks pass |
 | Serialization tests | 902 checks pass |
@@ -48,7 +48,7 @@ Architecture:
 | Native ABI | `godot-cpp` is pinned to `godot-4.4.1-stable`; one release DLL loads under Godot 4.4.1, 4.5.1, 4.6.1, and 4.7.1 |
 | Legacy fallback | Complete legacy addon loads, samples, and serializes in an isolated project with no Native manifest or binary |
 | Native standard set | All 12 Godot Tween transitions implemented directly in C++ |
-| Native deterministic modes | Constant, Step, Power, Physics Spring, parameterized Back/Elastic/Spring, reverse, and invert are implemented directly in C++ |
+| Native deterministic modes | Constant, Step, Power, Physics Spring, parameterized Back/Elastic/Bounce/Spring, reverse, and invert are implemented directly in C++ |
 | Native Callable policy | Explicit point baking is implemented; no Native sampling path invokes a Callable |
 | Native custom solver | Compiled segments, sorting, monotonic controls, Newton/binary fallback, duplicate-X handling, and locality cache implemented |
 | Ownership | Isolated point-array containers, indexed topology mutation, point identity preservation, and deep runtime duplication are implemented |
@@ -59,21 +59,22 @@ Architecture:
 | Native performance | All 12 standard transitions across all four ease modes beat Tween in the expanded 48-case comparison; the retained run measured approximately 1.8–4.0× faster |
 | Function performance | Native deterministic function modes are approximately 62.7–104.2× faster than legacy |
 | Custom performance | Native custom Bézier is approximately 42.3–134.2× faster than legacy across 2-, 9-, and 65-point workloads |
-| Performance regression gate | The retained isolated release gate passed all 63 relative comparisons. Eight of 27 historical Native-only cases exceeded their combined noise envelopes; the baseline remains deliberately unpromoted pending a quiet reference-host run |
-| Editor boundary | The shared boundary covers graph and Inspector point-list geometry/topology, identity-based point/property selection, cross-backend clipboard operations, deferred drag transactions, lifecycle-safe row rebuilds, resource-free live publication, editable preset geometry, modified/reset state, and save normalization. The sampling hot path retains one cached analytic/compiled decision |
+| Performance regression gate | The current isolated release gate passes all 64 relative comparisons, including extended Bounce at 1.741 ms Native versus 135.744 ms Legacy for 50,000 samples. Eight of 27 retained historical Native-only cases exceeded their combined noise envelopes; the baseline remains deliberately unpromoted pending a quiet reference-host run |
+| Editor boundary | The shared boundary covers graph and Inspector point-list geometry/topology, identity-based point/property selection, cross-backend clipboard operations, deferred point and numeric function-parameter drag transactions, lifecycle-safe row rebuilds, resource-free live publication, editable preset geometry, modified/reset state, and save normalization. The sampling hot path retains one cached analytic/compiled decision |
 | Editor boundary performance | The benchmark covers ten adapter/direct cases, two signal cases, and four 65-point topology cases. The latest Native add/remove/reorder/snapshot run measured 27,847/11,110/19,026/14,509 µs versus legacy 90,130/50,271/68,427/68,070 µs; every topology gate passed its combined MAD envelope |
 | Native Web export | Non-threaded debug (352,271 bytes) and release (348,383 bytes) WASM libraries build and export. A prior isolated browser run proved built-in/custom load, sample, and deep-copy behavior; the current local browser rerun is blocked by Chrome crashpad/IPC sandbox access and awaits hosted confirmation |
 | Build automation | Pinned Windows/Web build jobs retain their artifacts. A Windows job downloads the release artifact and runs all 23 suites. Both Windows consumers now copy setup-Godot's resolved command to a validated temporary `.exe`; the latest hosted attempt failed in setup-Godot with an infrastructure CRC error before checkout, so corrected-job evidence remains pending |
 | Manual smoke test | 2026-09-04: reported graph/list selection, live restart, stale-point, preset/function preview, and conditional-metadata issues are resolved with no further functional complaints. Persistence/no-restart behavior for the new default-handle selector still needs a visible editor restart check |
 | Legacy status | Existing `EasingCurve` remains functional and comprehensively tested |
 
-Retained release-runtime evidence (the historical suite was not rerun for this
-editor-only closeout):
+Release-runtime evidence (the retained historical cases are supplemented by the
+current extended-Bounce comparison; the absolute baseline was not evaluated):
 
 | Workload | Native | Comparator | Advantage |
 |---|---:|---:|---:|
 | 48 standard cases, 200,000 iterations | 5.183–8.957 ms | Tween 9.330–31.636 ms | 1.8–4.0× |
 | Deterministic functions, 50,000 | 1.248–2.279 ms | Legacy 86.340–153.226 ms | 62.7–104.2× |
+| Extended Bounce (6 bounces, 42.5 decay), 50,000 | 1.741 ms | Legacy 135.744 ms | 78.0× |
 | Custom 2/9/65 points, 50,000 | 1.543–2.776 ms | Legacy 83.491–246.812 ms | 42.3–134.2× |
 | 65-point mutation/sample, 4,000 | 30.032 ms | Legacy 325.832 ms | 10.8× |
 | 65-point deep copies, 500 | 113.880 ms | Legacy 11,345.662 ms | 99.6× |
@@ -90,14 +91,14 @@ are linear batch estimates, not measured frame thresholds.
 - Point parity and shared graph/list topology coverage are complete for the MVP scope.
 - Windows debug and release binaries build locally; exact hosted artifact validation remains pending.
 - Web build and browser runtime are locally verified; the updated GitHub Actions job and its retained artifacts still need an actual hosted run.
-- Native runtime benchmarks cover 63 cases, including every standard transition/ease pair. The isolated three-run relative gate is green, but the retained absolute baseline is not stable enough to promote.
+- Native runtime benchmarks cover 64 cases, including every standard transition/ease pair and extended Bounce. The isolated three-run relative gate is green, but the retained absolute baseline is not stable enough to promote.
 - Editor benchmarks cover adapter reads, snapshots, mutation-plus-recompile, transaction-shaped gestures, signal publication, 65-point topology, and shared-editor crossing at 9–129 points. The new default-handle preference still needs its visible restart-persistence check.
 - The production Inspector and Curve Editor can display/select both resource types and edit Native point options, graph topology, point-list topology, and the ten Bézier-backed presets. Hosted live-debug and visible-editor confirmation remain.
 
 ### Missing
 
 - Verified Windows debug artifact and editor hot-reload workflow.
-- Generated Jitter/Irregular modes, CSS modes, and extended Bounce parameters.
+- Generated Jitter/Irregular modes and CSS modes.
 - Manual visible-editor restart-persistence certification for the new default-handle preference.
 - Explicit optional conversion between resource types.
 - Exact-ZIP allowlist packaging, checksums, metadata, and clean-project tests.
@@ -214,7 +215,7 @@ Legacy must not depend on Native classes or binaries.
 | Step | Complete | Complete | Differential/manual verification | Yes |
 | Back parameters | Complete | Overshoot implemented | Complete remaining metadata and edge cases | Yes |
 | Elastic parameters | Complete | Amplitude/period implemented | Complete remaining metadata and edge cases | Yes |
-| Bounce parameters | Complete | Standard only | Extended form | Yes |
+| Bounce parameters | Complete | Count/decay implemented | Differential/manual verification | Yes |
 | Spring parameters | Complete | Frequency/decay implemented | Complete remaining metadata and edge cases | Yes |
 | Physics Spring | Complete | Complete | Differential/manual verification | Yes |
 | Jitter/Irregular | Complete | Missing | Generated Native data | Yes |
@@ -392,7 +393,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-03 — Expand performance baselines
 
-**Status:** **In progress.** Runtime coverage is expanded from 27 to 63 cases: all 12 standard transitions exercise In, Out, In-Out, and Out-In, alongside deterministic functions, 2/9/65-point access patterns, mutation, and duplication. The runner creates an isolated project with no unrelated plugins or autoloads and evaluates the median of three release-library runs. The retained post-NATIVE-08 evidence passes all 63 relative comparisons, including all 48 standard Native pairs versus Tween and every comparable Native function/custom mode versus GDScript. The retained absolute reference exceeds its noise envelope in 8 of 27 cases (`back_out`, `bounce_out`, `circ_out`, `cubic_out`, `elastic_out`, `expo_out`, `quad_out`, and `spring_out`), so the baseline remains deliberately unpromoted pending a quiet reference-host run. The editor benchmark's four 65-point topology workloads pass every combined-MAD gate. The separate 65–1,025-point runtime characterization is outside the historical baseline.
+**Status:** **In progress.** Runtime coverage is expanded from 27 to 64 cases: all 12 standard transitions exercise In, Out, In-Out, and Out-In, alongside deterministic functions including extended Bounce, 2/9/65-point access patterns, mutation, and duplication. The runner creates an isolated project with no unrelated plugins or autoloads and evaluates the median of three release-library runs. The current evidence passes all 64 relative comparisons, including all 48 standard Native pairs versus Tween and every comparable Native function/custom mode versus GDScript. Extended Bounce measured 1.741 ms Native versus 135.744 ms Legacy for 50,000 samples. The retained absolute reference exceeds its noise envelope in 8 of 27 cases (`back_out`, `bounce_out`, `circ_out`, `cubic_out`, `elastic_out`, `expo_out`, `quad_out`, and `spring_out`), so the baseline remains deliberately unpromoted pending a quiet reference-host run. The editor benchmark's four 65-point topology workloads pass every combined-MAD gate. The separate 65–1,025-point runtime characterization is outside the historical baseline.
 
 **Goal:** Establish regression gates for both implementations.
 
@@ -432,7 +433,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-05 — Complete deterministic Native transitions
 
-**Status:** **In progress.** Constant, Power, Step, Physics Spring, parameterized Back/Elastic/Spring, and reverse/invert are implemented and differentially tested. Extended Bounce, complete metadata, and remaining edge cases are outstanding.
+**Status:** **Verified.** Constant, Power, Step, Physics Spring, parameterized Back/Elastic/Bounce/Spring, and reverse/invert are implemented and differentially tested. Bounce count/decay preserve the exact standard path at their defaults and use the generalized deterministic equation otherwise. Numeric function-parameter slider edits preview locally and publish once on release; directly entered values publish immediately. The 64-case relative performance gate passes, including extended Bounce at approximately 78.0× the Legacy throughput.
 
 **Goal:** Port all equation-based modes.
 
@@ -491,7 +492,7 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-08 — Add full Native editor support
 
-**Status:** **In progress — feature-complete, certification pending.** Constant, Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, and Back expose canonical Bézier geometry in the shared graph/list editor. Editing preserves Transition/Ease identity, enables compiled geometry through a cached sampling-mode flag, displays modified/reset state, and persists overrides. Transition-specific metadata is conditionally visible for Constant, Back, Elastic, Step, Power, Spring, and Physics Spring, matching the legacy Inspector policy. Clean presets remain analytic and omit redundant points on save. Format v3 records modified presets while v2 standard resources retain analytic behavior and v2 Custom points remain usable. The shared **New point handles** control applies a persistent editor-only Free/Linear/Balanced/Mirrored/Linked default to both graph and list additions without touching resources or sampling. Compact Native property cells now match Legacy copy/paste and property-path behavior, including keyboard shortcuts and compatible cross-backend values. Deferred point-list completion is owned by the Inspector and resolved from curve/point identity, preventing freed-row callbacks and separating pending value edits from topology actions. Automated correctness, round-trip, normalization, relative performance, scaling, clipboard, and lifecycle coverage pass; its visible restart-persistence check, hosted CI, and a repeatable quiet-host absolute baseline remain.
+**Status:** **In progress — feature-complete, certification pending.** Constant, Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, and Back expose canonical Bézier geometry in the shared graph/list editor. Editing preserves Transition/Ease identity, enables compiled geometry through a cached sampling-mode flag, displays modified/reset state, and persists overrides. Transition-specific metadata is conditionally visible for Constant, Back, Elastic, Bounce, Step, Power, Spring, and Physics Spring, matching the legacy Inspector policy. Numeric function-property slider motion previews locally and defers its Inspector/live-scene publication until release, while directly entered values publish immediately. Clean presets remain analytic and omit redundant points on save. Format v3 records modified presets while v2 standard resources retain analytic behavior and v2 Custom points remain usable. The shared **New point handles** control applies a persistent editor-only Free/Linear/Balanced/Mirrored/Linked default to both graph and list additions without touching resources or sampling. Compact Native property cells now match Legacy copy/paste and property-path behavior, including keyboard shortcuts and compatible cross-backend values. Deferred point-list completion is owned by the Inspector and resolved from curve/point identity, preventing freed-row callbacks and separating pending value edits from topology actions. Automated correctness, round-trip, normalization, relative performance, scaling, clipboard, and lifecycle coverage pass; its visible restart-persistence check, hosted CI, and a repeatable quiet-host absolute baseline remain.
 
 **Deferred editor polish:** Native force-linear and lock state remain available in the selected-point graph toolbar. Duplicating those controls in each Native point-list row is intentionally deferred to a later feature update.
 

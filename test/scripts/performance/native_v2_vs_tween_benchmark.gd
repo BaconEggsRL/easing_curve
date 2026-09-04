@@ -36,6 +36,7 @@ const FUNCTION_CASES := [
 	["constant", NativeEasingCurve.TRANS_CONSTANT, EasingCurve.TRANS.CONSTANT, {&"constant_value": 0.37}],
 	["step", NativeEasingCurve.TRANS_STEP, EasingCurve.TRANS.STEP, {&"steps": 7, &"from_start": true, &"y_offset": 0.08}],
 	["power", NativeEasingCurve.TRANS_POWER, EasingCurve.TRANS.POWER, {&"power": 3.25}],
+	["bounce", NativeEasingCurve.TRANS_BOUNCE, EasingCurve.TRANS.BOUNCE, {&"num_bounces": 6, &"bounce_damping": 42.5}],
 	["physics_spring", NativeEasingCurve.TRANS_PHYSICS_SPRING, EasingCurve.TRANS.PHYSICS_SPRING, {&"stiffness": 180.0, &"damping": 14.0, &"mass": 1.8, &"velocity": -0.75}],
 ]
 
