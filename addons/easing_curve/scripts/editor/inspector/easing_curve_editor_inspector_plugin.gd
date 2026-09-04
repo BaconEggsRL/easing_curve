@@ -438,8 +438,82 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 		Callable(self, "_create_handle_mode_property"),
 		Callable(self, "_move_point"),
 		Callable(self, "_on_remove_btn_pressed"),
-		Callable(self, "_on_add_point_btn_pressed"),
+		Callable(self, "_create_point_add_controls"),
 	)
+
+
+func _create_point_add_controls() -> Control:
+	var row := HBoxContainer.new()
+	row.name = &"PointAddControls"
+	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	row.add_theme_constant_override(&"separation", _compact_separation())
+
+	var label := Label.new()
+	label.text = "New point handles"
+	row.add_child(label)
+
+	var handle_mode := OptionButton.new()
+	handle_mode.name = &"NewPointHandleMode"
+	handle_mode.tooltip_text = (
+		"Default handle mode for points created by graph click or Add Point"
+	)
+	_configure_compact_option(handle_mode)
+	handle_mode.add_item("Free", EasingCurvePoint.HandleMode.FREE)
+	handle_mode.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
+	handle_mode.add_item("Balanced", EasingCurvePoint.HandleMode.BALANCED)
+	handle_mode.add_item("Mirrored", EasingCurvePoint.HandleMode.MIRRORED)
+	handle_mode.add_item("Linked", EasingCurvePoint.HandleMode.LINKED)
+	_sync_new_point_handle_mode_option(
+		easing_curve_editor.get_default_new_point_handle_mode(),
+		handle_mode,
+	)
+	handle_mode.item_selected.connect(
+		func(index: int) -> void:
+			easing_curve_editor.set_default_new_point_handle_mode(
+				handle_mode.get_item_id(index)
+			)
+	)
+	var sync_callback := func(value: int) -> void:
+		_sync_new_point_handle_mode_option(value, handle_mode)
+	easing_curve_editor.default_new_point_handle_mode_changed.connect(sync_callback)
+	row.tree_exiting.connect(
+		_disconnect_new_point_handle_mode_option.bind(
+			easing_curve_editor,
+			sync_callback,
+		)
+	)
+	row.add_child(handle_mode)
+
+	var add_button := Button.new()
+	add_button.name = &"AddPoint"
+	add_button.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_ADD)
+	add_button.text = "Add Point"
+	add_button.pressed.connect(_on_add_point_btn_pressed)
+	row.add_child(add_button)
+	return row
+
+
+func _sync_new_point_handle_mode_option(
+	handle_mode: int,
+	option: OptionButton,
+) -> void:
+	if not is_instance_valid(option):
+		return
+	for index in range(option.item_count):
+		if option.get_item_id(index) == handle_mode:
+			option.select(index)
+			return
+
+
+func _disconnect_new_point_handle_mode_option(
+	editor: EasingCurveEditor,
+	callback: Callable,
+) -> void:
+	if (
+		is_instance_valid(editor)
+		and editor.default_new_point_handle_mode_changed.is_connected(callback)
+	):
+		editor.default_new_point_handle_mode_changed.disconnect(callback)
 
 
 static func _get_normal_point_property_definitions(
@@ -634,7 +708,10 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 	return null
 
 
-func _handle_native_curve_editor(object: Resource) -> Control:
+func _handle_native_curve_editor(
+	object: Resource,
+	editor_override: EasingCurveEditor = null,
+) -> Control:
 	var root := VBoxContainer.new()
 	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", _compact_separation())
@@ -652,7 +729,11 @@ func _handle_native_curve_editor(object: Resource) -> Control:
 	preset_row.add_child(preset_reset)
 	content.add_child(preset_row)
 
-	easing_curve_editor = EasingCurveEditor.new()
+	easing_curve_editor = (
+		editor_override
+		if is_instance_valid(editor_override)
+		else EasingCurveEditor.new()
+	)
 	easing_curve_editor.editor_undo_redo = editor_undo_redo
 	easing_curve_editor.set_curve(object)
 	preset_reset.pressed.connect(easing_curve_editor.reset_native_preset)
@@ -766,12 +847,7 @@ func _build_native_point_list(object: Resource) -> void:
 		var panel := _create_native_point_panel(points[index], index, points.size())
 		_native_points_content.add_child(panel)
 		_native_points_content.call(&"enable_drop_forwarding", panel)
-	var add_button := Button.new()
-	add_button.text = "Add Point"
-	add_button.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_ADD)
-	add_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	add_button.pressed.connect(easing_curve_editor.add_point_from_list)
-	_native_points_content.add_child(add_button)
+	_native_points_content.add_child(_create_point_add_controls())
 	_native_point_identity_signature = _get_native_point_identity_signature(points)
 
 
@@ -1902,50 +1978,17 @@ func _create_vector2_axis_row(
 
 
 func _on_add_point_btn_pressed() -> void:
-	var has_left_endpoint := false
-	var has_right_endpoint := false
-	for point in curve.points:
-		if point == null:
-			continue
-		has_left_endpoint = has_left_endpoint or EasingCurve.is_left_endpoint_x(
-			point.position.x
-		)
-		has_right_endpoint = has_right_endpoint or EasingCurve.is_right_endpoint_x(
-			point.position.x
-		)
-
-	if not has_left_endpoint:
-		_add_points_list_point(EasingCurvePoint.new(Vector2(0.0, 0.0)))
+	if not is_instance_valid(easing_curve_editor):
 		return
-
-	if not has_right_endpoint:
-		_add_points_list_point(EasingCurvePoint.new(Vector2(1.0, 1.0)))
+	if easing_curve_editor.get_backend_id() != &"legacy":
+		easing_curve_editor.add_point_from_list()
 		return
-
-	var largest_gap := -1.0
-	var new_x := 0.0
-	for i in range(curve.points.size() - 1):
-		var left_point := curve.points[i]
-		var right_point := curve.points[i + 1]
-		if left_point == null or right_point == null:
-			continue
-		var gap := right_point.position.x - left_point.position.x
-		if gap > largest_gap:
-			largest_gap = gap
-			new_x = (left_point.position.x + right_point.position.x) * 0.5
-
-	var new_point := EasingCurvePoint.new(Vector2(new_x, curve.sample(new_x)))
-	new_point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
-	_add_points_list_point(new_point)
-
-
-func _add_points_list_point(point: EasingCurvePoint) -> void:
+	var point := easing_curve_editor.create_point_for_list() as EasingCurvePoint
+	if point == null:
+		return
 	_point_list_controller.request_selection_refresh_preservation()
-	_add_point(
-		point,
-		_capture_point_selection_state(),
-		true,
-	)
+	_add_point(point, _capture_point_selection_state(), true)
+
 
 func _create_foldable_section(
 	title: String,

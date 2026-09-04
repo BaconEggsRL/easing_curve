@@ -68,16 +68,17 @@ jobs:
       - name: Run all Windows test suites against the release library
         shell: pwsh
         run: |
-          $godotLinkPath = (Get-Command godot -ErrorAction Stop).Source
-          $godotLink = Get-Item -LiteralPath $godotLinkPath -Force
-          $godotTarget = @($godotLink.Target)[0]
-          if ([string]::IsNullOrWhiteSpace($godotTarget)) {
-            $godotTarget = $godotLinkPath
-          } elseif (-not [IO.Path]::IsPathRooted($godotTarget)) {
-            $godotTarget = Join-Path $godotLink.DirectoryName $godotTarget
+          $godotCommand = (Get-Command godot -ErrorAction Stop).Source
+          $godotExe = Join-Path $env:RUNNER_TEMP "easing-curve-godot.exe"
+          Copy-Item -LiteralPath $godotCommand -Destination $godotExe -Force
+          if (-not (Test-Path -LiteralPath $godotExe -PathType Leaf)) {
+            throw "Godot executable copy was not created: $godotExe"
           }
-          $godotPath = (Resolve-Path -LiteralPath $godotTarget).Path
-          ./test/runners/run_all_tests.ps1 --run -GodotPath $godotPath
+          & $godotExe --version
+          if ($LASTEXITCODE -ne 0) {
+            throw "Copied Godot executable validation failed with exit code $LASTEXITCODE."
+          }
+          ./test/runners/run_all_tests.ps1 --run -GodotPath $godotExe
 
   web-runtime:
     needs: [windows, windows-tests, web]
@@ -103,13 +104,14 @@ jobs:
       - name: Export and run Native Web debug and release fixtures
         shell: pwsh
         run: |
-          $godotLinkPath = (Get-Command godot -ErrorAction Stop).Source
-          $godotLink = Get-Item -LiteralPath $godotLinkPath -Force
-          $godotTarget = @($godotLink.Target)[0]
-          if ([string]::IsNullOrWhiteSpace($godotTarget)) {
-            $godotTarget = $godotLinkPath
-          } elseif (-not [IO.Path]::IsPathRooted($godotTarget)) {
-            $godotTarget = Join-Path $godotLink.DirectoryName $godotTarget
+          $godotCommand = (Get-Command godot -ErrorAction Stop).Source
+          $godotExe = Join-Path $env:RUNNER_TEMP "easing-curve-godot.exe"
+          Copy-Item -LiteralPath $godotCommand -Destination $godotExe -Force
+          if (-not (Test-Path -LiteralPath $godotExe -PathType Leaf)) {
+            throw "Godot executable copy was not created: $godotExe"
           }
-          $godotPath = (Resolve-Path -LiteralPath $godotTarget).Path
-          ./test/runners/run_native_web_export_test.ps1 -SkipBuild -GodotPath $godotPath
+          & $godotExe --version
+          if ($LASTEXITCODE -ne 0) {
+            throw "Copied Godot executable validation failed with exit code $LASTEXITCODE."
+          }
+          ./test/runners/run_native_web_export_test.ps1 -SkipBuild -GodotPath $godotExe

@@ -8,6 +8,10 @@ func _init() -> void:
 	if not EDITOR_HOST.require_inspector_host("easing_curve_points_list_add_editor_test.gd"):
 		quit(1)
 		return
+	call_deferred(&"_run")
+
+
+func _run() -> void:
 	_test_points_list_add_preserves_endpoints()
 	_test_points_list_remove_button_undo_redo()
 	_test_constructed_points_list_routes_add_and_remove()
@@ -95,10 +99,7 @@ func _test_constructed_points_list_routes_add_and_remove() -> void:
 
 	var refreshed_list := EDITOR_DRIVER.create_points_list(inspector, curve)
 	var add_button: Button
-	for child in refreshed_list.get_children():
-		if child is Button and child.text == "Add Point":
-			add_button = child
-			break
+	add_button = _find_button(refreshed_list, "Add Point")
 	_expect(add_button != null, "Constructed Bezier point list did not create its Add Point control")
 	if add_button != null:
 		add_button.pressed.emit()
@@ -196,7 +197,7 @@ func _test_interior_point_adds() -> void:
 	_expect(curve.points.size() == 3, "First interior Add did not increase the point count")
 	_expect(curve.points[0].position == Vector2.ZERO and curve.points[2].position == Vector2.ONE, "First interior Add changed an endpoint")
 	_expect(curve.points[1].position.x == 0.5 and is_equal_approx(curve.points[1].position.y, first_y), "First interior Add did not sample the midpoint")
-	_expect(curve.points[1].handle_mode == EasingCurvePoint.HandleMode.LINEAR, "First interior Add did not use Linear handle mode")
+	_expect(curve.points[1].handle_mode == EasingCurvePoint.HandleMode.FREE, "First interior Add did not use the default Free handle mode")
 	_expect_selected_point(inspector, editor, curve, 1, "First interior Add")
 	EDITOR_DRIVER.rebuild_for_curve(inspector, curve)
 	_expect_selected_point(inspector, editor, curve, 1, "First interior Add refresh")
@@ -206,7 +207,7 @@ func _test_interior_point_adds() -> void:
 
 	_expect(curve.points.size() == 4, "Second interior Add did not increase the point count")
 	_expect(curve.points[1].position.x == 0.25 and is_equal_approx(curve.points[1].position.y, second_y), "Second interior Add did not choose the leftmost largest gap")
-	_expect(curve.points[1].handle_mode == EasingCurvePoint.HandleMode.LINEAR, "Second interior Add did not use Linear handle mode")
+	_expect(curve.points[1].handle_mode == EasingCurvePoint.HandleMode.FREE, "Second interior Add did not use the default Free handle mode")
 	_expect_selected_point(inspector, editor, curve, 1, "Second interior Add")
 
 	var third_y := curve.sample(0.75)
@@ -215,7 +216,7 @@ func _test_interior_point_adds() -> void:
 	var after := EDITOR_UNDO.capture_state(curve)
 	_expect(curve.points.size() == 5, "Repeated interior Add did not increase the point count")
 	_expect(curve.points[3].position.x == 0.75 and is_equal_approx(curve.points[3].position.y, third_y), "Third interior Add did not choose the largest remaining gap")
-	_expect(curve.points[1].handle_mode == EasingCurvePoint.HandleMode.LINEAR and curve.points[2].handle_mode == EasingCurvePoint.HandleMode.LINEAR and curve.points[3].handle_mode == EasingCurvePoint.HandleMode.LINEAR, "Repeated interior Adds did not keep Linear handle mode")
+	_expect(curve.points[1].handle_mode == EasingCurvePoint.HandleMode.FREE and curve.points[2].handle_mode == EasingCurvePoint.HandleMode.FREE and curve.points[3].handle_mode == EasingCurvePoint.HandleMode.FREE, "Repeated interior Adds did not keep the default Free handle mode")
 	_expect(curve.points[0].position == Vector2.ZERO and curve.points[4].position == Vector2.ONE, "Repeated interior Adds changed an endpoint")
 	_expect_selected_point(inspector, editor, curve, 3, "Third interior Add")
 	_expect(_is_ordered_by_x(curve.points), "Repeated interior Adds did not keep point order")
@@ -281,6 +282,16 @@ func _is_ordered_by_x(points: Array[EasingCurvePoint]) -> bool:
 		if points[i - 1].position.x > points[i].position.x:
 			return false
 	return true
+
+
+func _find_button(node: Node, text: String) -> Button:
+	if node is Button and node.text == text:
+		return node
+	for child in node.get_children():
+		var result := _find_button(child, text)
+		if result != null:
+			return result
+	return null
 
 
 func _expect_selected_point(

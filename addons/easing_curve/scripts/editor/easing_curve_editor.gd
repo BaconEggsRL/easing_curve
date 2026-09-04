@@ -15,6 +15,9 @@ const BEZIER_SOLVER = preload(
 const BackendFactory := preload(
 	"res://addons/easing_curve/scripts/editor/backend/curve_editor_backend_factory.gd"
 )
+const CurveEditorSettings := preload(
+	"res://addons/easing_curve/scripts/editor/curve_editor_settings.gd"
+)
 
 var use_pending_add := true
 # True: hide the point-selection toolbar in Function mode and reclaim its height.
@@ -34,6 +37,7 @@ signal point_move_up_requested(index: int)
 signal point_move_down_requested(index: int)
 signal point_edit_finished(point_order: Array[EasingCurvePoint])
 signal point_selection_changed(point: Resource)
+signal default_new_point_handle_mode_changed(handle_mode: int)
 signal slider_changed
 signal zoom_changed
 signal pan_changed
@@ -141,6 +145,7 @@ var _backend_point_edit_active := false
 var _backend_point_edit_before: Variant
 var _backend_point_edit_action_name := "Edit Easing Curve Point"
 var _backend_point_edit_selected_before: Resource
+var _default_new_point_handle_mode := EasingCurvePoint.HandleMode.FREE
 
 
 func _ready() -> void:
@@ -150,6 +155,13 @@ func _ready() -> void:
 
 	if Engine.is_editor_hint():
 		_editor_scale = EditorInterface.get_editor_scale()
+		CurveEditorSettings.setup()
+		var settings := EditorInterface.get_editor_settings()
+		if not settings.settings_changed.is_connected(
+			_on_editor_settings_changed
+		):
+			settings.settings_changed.connect(_on_editor_settings_changed)
+		_sync_default_new_point_handle_mode()
 	update_minimum_size()
 
 	if _backend == null:
@@ -157,6 +169,37 @@ func _ready() -> void:
 
 	_create_point_toolbar()
 	_update_point_toolbar()
+
+
+func _exit_tree() -> void:
+	if not Engine.is_editor_hint():
+		return
+	var settings := EditorInterface.get_editor_settings()
+	if settings == null:
+		return
+	if settings.settings_changed.is_connected(_on_editor_settings_changed):
+		settings.settings_changed.disconnect(_on_editor_settings_changed)
+
+
+func get_default_new_point_handle_mode() -> int:
+	return _default_new_point_handle_mode
+
+
+func set_default_new_point_handle_mode(handle_mode: int) -> void:
+	CurveEditorSettings.set_default_new_point_handle_mode(handle_mode)
+	_sync_default_new_point_handle_mode()
+
+
+func _on_editor_settings_changed() -> void:
+	_sync_default_new_point_handle_mode()
+
+
+func _sync_default_new_point_handle_mode() -> void:
+	var current := CurveEditorSettings.get_default_new_point_handle_mode()
+	if current == _default_new_point_handle_mode:
+		return
+	_default_new_point_handle_mode = current
+	default_new_point_handle_mode_changed.emit(current)
 
 
 # =========================
@@ -445,13 +488,13 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 	var value_range := _value_range()
 	var clamped_pos := world_pos.clamp(Vector2(0, value_range.x), Vector2(1.0, value_range.y))
 	if use_pending_add:
-		pending_add_point = _backend.create_point(clamped_pos)
+		pending_add_point = _create_point_with_default_handle_mode(clamped_pos)
 		if pending_add_point == null:
 			return
 		queue_redraw()
 		accept_event()
 		return
-	var new_point: Resource = _backend.create_point(clamped_pos)
+	var new_point := _create_point_with_default_handle_mode(clamped_pos)
 	if new_point == null:
 		return
 	selected_index = _request_point_add(new_point)
@@ -670,6 +713,15 @@ func finish_point_list_edit(point: Resource, property_name: StringName) -> void:
 
 
 func add_point_from_list() -> Resource:
+	var point := create_point_for_list()
+	if point == null:
+		return null
+	_request_point_add(point)
+	selected_index = _backend.find_point(point)
+	return point
+
+
+func create_point_for_list() -> Resource:
 	if _backend == null:
 		return null
 	var points := _points()
@@ -690,11 +742,18 @@ func add_point_from_list() -> Resource:
 				largest_gap = gap
 				position.x = (left.x + right.x) * 0.5
 		position.y = _backend.sample(position.x)
+	var point := _create_point_with_default_handle_mode(position)
+	return point
+
+
+func _create_point_with_default_handle_mode(position: Vector2) -> Resource:
+	if _backend == null:
+		return null
 	var point: Resource = _backend.create_point(position)
 	if point == null:
 		return null
-	_request_point_add(point)
-	selected_index = _backend.find_point(point)
+	if bool(_backend.get_capabilities().get(&"handle_modes", false)):
+		point.set(&"handle_mode", get_default_new_point_handle_mode())
 	return point
 
 

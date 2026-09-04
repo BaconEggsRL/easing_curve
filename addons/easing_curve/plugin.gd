@@ -19,6 +19,9 @@ const EasingCurveUpdateChecker = preload(
 const CurveEditorBackendFactory = preload(
 	"res://addons/easing_curve/scripts/editor/backend/curve_editor_backend_factory.gd"
 )
+const CurveEditorSettings = preload(
+	"res://addons/easing_curve/scripts/editor/curve_editor_settings.gd"
+)
 
 const PLUGIN_CONFIG_PATH := "res://addons/easing_curve/plugin.cfg"
 const UPDATE_CHECKS_ENABLE_MENU := "Easing Curve: Enable Update Checks"
@@ -45,6 +48,7 @@ func _on_editor_settings_changed() -> void:
 
 func _enter_tree() -> void:
 	resource_saved.connect(_on_resource_saved)
+	CurveEditorSettings.setup()
 
 	easing_curve_editor_inspector_plugin = EasingCurveEditorInspectorPlugin.new()
 	if easing_curve_editor_inspector_plugin:

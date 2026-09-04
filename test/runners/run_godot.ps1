@@ -131,11 +131,14 @@ if (-not $hasLogFile) {
 }
 
 $previousAppData = $env:APPDATA
+$previousLocalAppData = $env:LOCALAPPDATA
 $exitCode = -1
 try {
 	# Keep Godot user:// writes inside the repository so sandboxed test runs
-	# do not depend on write access to the real Windows roaming AppData folder.
+	# do not depend on write access to the real Windows AppData folders.
 	$env:APPDATA = $AppDataDirectory
+	$env:LOCALAPPDATA = Join-Path $AppDataDirectory "Local"
+	New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA | Out-Null
 
 	Write-Host "Godot executable ($godotPathSource): $Godot"
 	$godotVersion = (& $Godot --version | Out-String).Trim()
@@ -158,6 +161,11 @@ try {
 		Remove-Item Env:APPDATA -ErrorAction SilentlyContinue
 	} else {
 		$env:APPDATA = $previousAppData
+	}
+	if ($null -eq $previousLocalAppData) {
+		Remove-Item Env:LOCALAPPDATA -ErrorAction SilentlyContinue
+	} else {
+		$env:LOCALAPPDATA = $previousLocalAppData
 	}
 }
 

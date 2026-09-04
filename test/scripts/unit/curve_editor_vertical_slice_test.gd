@@ -6,11 +6,15 @@ const CURVE_EDITOR := preload(
 const INSPECTOR_PLUGIN := preload(
 	"res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd"
 )
+const CURVE_EDITOR_SETTINGS := preload(
+	"res://addons/easing_curve/scripts/editor/curve_editor_settings.gd"
+)
 func _init() -> void:
 	call_deferred(&"_run")
 
 
 func _run() -> void:
+	await _test_default_new_point_handle_modes()
 	_test_legacy_selection_path()
 	_test_native_selection_and_point_options()
 	_test_native_bezier_transform_preview()
@@ -21,6 +25,219 @@ func _run() -> void:
 	_test_native_point_list_swap_parity()
 	_test_native_inspector_path()
 	_finish("shared curve editor vertical slice")
+
+
+func _test_default_new_point_handle_modes() -> void:
+	CURVE_EDITOR_SETTINGS.setup()
+	var settings := EditorInterface.get_editor_settings()
+	var setting_name: String = (
+		CURVE_EDITOR_SETTINGS.DEFAULT_NEW_POINT_HANDLE_MODE_SETTING
+	)
+	_expect(settings.has_setting(setting_name), "Default new-point handle setting was not registered")
+	var original_value := int(settings.get_setting(setting_name))
+
+	var legacy_curve := _make_handle_mode_curve(&"legacy")
+	var native_curve := _make_handle_mode_curve(&"native")
+	var legacy_editor := CURVE_EDITOR.new() as EasingCurveEditor
+	var native_editor := CURVE_EDITOR.new() as EasingCurveEditor
+	legacy_editor.set_curve(legacy_curve)
+	native_editor.set_curve(native_curve)
+	legacy_editor.size = Vector2(520.0, 260.0)
+	native_editor.size = Vector2(520.0, 260.0)
+	root.add_child(legacy_editor)
+	root.add_child(native_editor)
+	await process_frame
+
+	var legacy_inspector := INSPECTOR_PLUGIN.new()
+	var native_inspector := INSPECTOR_PLUGIN.new()
+	legacy_inspector.set("easing_curve_editor", legacy_editor)
+	native_inspector.set("easing_curve_editor", native_editor)
+	var legacy_controls := legacy_inspector.call("_create_point_add_controls") as Control
+	var native_controls := native_inspector.call("_create_point_add_controls") as Control
+	root.add_child(legacy_controls)
+	root.add_child(native_controls)
+	var legacy_option := legacy_controls.get_node("NewPointHandleMode") as OptionButton
+	var native_option := native_controls.get_node("NewPointHandleMode") as OptionButton
+	_expect(legacy_option != null and native_option != null, "Shared Add Point controls omitted the handle-mode dropdown")
+	_expect(_find_button(legacy_controls, "Add Point") != null, "Legacy controls omitted Add Point beside the dropdown")
+	_expect(_find_button(native_controls, "Add Point") != null, "Native controls omitted Add Point beside the dropdown")
+
+	var legacy_changes := [0]
+	var native_changes := [0]
+	legacy_curve.changed.connect(func() -> void: legacy_changes[0] += 1)
+	native_curve.changed.connect(func() -> void: native_changes[0] += 1)
+	var mirrored_index := _option_index_for_id(
+		legacy_option,
+		EasingCurvePoint.HandleMode.MIRRORED,
+	)
+	legacy_option.item_selected.emit(mirrored_index)
+	await process_frame
+	_expect(
+		_selected_option_id(native_option) == EasingCurvePoint.HandleMode.MIRRORED,
+		"Open Native Inspector did not synchronize an external preference change",
+	)
+	_expect(
+		legacy_changes[0] == 0 and native_changes[0] == 0,
+		"Changing the editor preference dirtied a curve resource",
+	)
+	_expect(
+		int(settings.get_setting(setting_name)) == EasingCurvePoint.HandleMode.MIRRORED,
+		"EditorSettings did not retain the selected handle mode",
+	)
+
+	settings.set_setting(setting_name, 999)
+	_expect(
+		CURVE_EDITOR_SETTINGS.get_default_new_point_handle_mode()
+		== EasingCurvePoint.HandleMode.FREE,
+		"Invalid stored handle mode did not fall back to Free",
+	)
+	legacy_editor.call("_sync_default_new_point_handle_mode")
+	native_editor.call("_sync_default_new_point_handle_mode")
+	_expect(
+		legacy_editor.get_default_new_point_handle_mode()
+		== EasingCurvePoint.HandleMode.FREE,
+		"Legacy editor did not adopt the invalid-value fallback",
+	)
+	_expect(
+		native_editor.get_default_new_point_handle_mode()
+		== EasingCurvePoint.HandleMode.FREE,
+		"Native editor did not adopt the invalid-value fallback",
+	)
+
+	legacy_controls.queue_free()
+	native_controls.queue_free()
+	legacy_editor.queue_free()
+	native_editor.queue_free()
+	await process_frame
+
+	for backend_id: StringName in [&"legacy", &"native"]:
+		for handle_mode: int in range(
+			EasingCurvePoint.HandleMode.FREE,
+			EasingCurvePoint.HandleMode.LINKED + 1,
+		):
+			await _test_handle_mode_creation_case(backend_id, handle_mode)
+
+	for resource: Resource in [legacy_curve, native_curve]:
+		var property_names: Array[StringName] = []
+		for property: Dictionary in resource.get_property_list():
+			property_names.append(property[&"name"])
+		_expect(
+			not property_names.has(StringName(setting_name)),
+			"Editor-only handle preference leaked into a saved curve contract",
+		)
+
+	settings.set_setting(setting_name, original_value)
+
+
+func _test_handle_mode_creation_case(
+	backend_id: StringName,
+	handle_mode: int,
+) -> void:
+	var curve := _make_handle_mode_curve(backend_id)
+	var editor := CURVE_EDITOR.new() as EasingCurveEditor
+	var history := UndoRedo.new()
+	editor.editor_undo_redo = history
+	editor.size = Vector2(520.0, 260.0)
+	editor.set_curve(curve)
+	root.add_child(editor)
+	await process_frame
+	editor.set_default_new_point_handle_mode(handle_mode)
+
+	var publications := [0]
+	curve.changed.connect(func() -> void: publications[0] += 1)
+	var list_point := editor.add_point_from_list()
+	_expect(list_point != null, "%s Add Point did not create a point" % backend_id)
+	_expect(
+		int(list_point.get(&"handle_mode")) == handle_mode,
+		"%s Add Point ignored handle mode %d" % [backend_id, handle_mode],
+	)
+	_expect(
+		editor.call(&"_selected_point_resource") == list_point,
+		"%s Add Point did not select the created resource" % backend_id,
+	)
+
+	var before_pending_count := _curve_point_count(curve)
+	var pending_position := Vector2(0.25, 0.8)
+	var pending_view := editor.get_view_pos(pending_position)
+	editor._gui_input(_mouse_button(pending_view, true))
+	var pending := editor.get("pending_add_point") as Resource
+	_expect(pending != null, "%s graph click did not create a pending point" % backend_id)
+	if pending != null:
+		_expect(
+			int(pending.get(&"handle_mode")) == handle_mode,
+			"%s pending graph point ignored handle mode %d" % [backend_id, handle_mode],
+		)
+	_expect(
+		_curve_point_count(curve) == before_pending_count,
+		"%s pending graph point attached before release" % backend_id,
+	)
+	editor._gui_input(_mouse_motion(editor.get_view_pos(Vector2(0.3, 0.75))))
+	var publications_before_commit: int = publications[0]
+	editor._gui_input(_mouse_button(editor.get_view_pos(Vector2(0.3, 0.75)), false))
+	_expect(
+		_curve_point_count(curve) == before_pending_count + 1,
+		"%s graph release did not commit one point" % backend_id,
+	)
+	_expect(
+		publications[0] == publications_before_commit + 1,
+		"%s graph addition did not publish exactly once" % backend_id,
+	)
+	var graph_point := editor.call(&"_selected_point_resource") as Resource
+	_expect(graph_point == pending, "%s graph addition lost point identity" % backend_id)
+	_expect(history.has_undo(), "%s graph addition did not create Undo history" % backend_id)
+	history.undo()
+	_expect(_curve_point_index(curve, graph_point) == -1, "%s graph-add Undo retained the point" % backend_id)
+	history.redo()
+	_expect(
+		_curve_point_index(curve, graph_point) >= 0
+		and editor.call(&"_selected_point_resource") == graph_point,
+		"%s graph-add Redo lost point identity or selection" % backend_id,
+	)
+
+	editor._gui_input(_mouse_button(editor.get_view_pos(Vector2(0.7, 0.2)), true))
+	_expect(editor.get("pending_add_point") != null, "%s cancellation fixture did not start" % backend_id)
+	editor._gui_input(_mouse_button(editor.get_view_pos(Vector2(0.7, 0.2)), true, MOUSE_BUTTON_RIGHT))
+	_expect(editor.get("pending_add_point") == null, "%s RMB did not cancel pending addition" % backend_id)
+
+	history.clear_history(false)
+	history.free()
+	editor.queue_free()
+	await process_frame
+
+
+func _make_handle_mode_curve(backend_id: StringName) -> Resource:
+	if backend_id == &"native":
+		var native_curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+		native_curve.set(&"transition", 100)
+		return native_curve
+	var legacy_curve := EasingCurve.new()
+	legacy_curve.trans_type = EasingCurve.TRANS.CUSTOM
+	legacy_curve.points = [
+		EasingCurvePoint.new(Vector2.ZERO),
+		EasingCurvePoint.new(Vector2.ONE),
+	]
+	return legacy_curve
+
+
+func _curve_point_count(curve: Resource) -> int:
+	return curve.points.size() if curve is EasingCurve else int(curve.call(&"get_point_count"))
+
+
+func _curve_point_index(curve: Resource, point: Resource) -> int:
+	if curve is EasingCurve:
+		return curve.points.find(point)
+	return (curve.call(&"get_points") as Array).find(point)
+
+
+func _option_index_for_id(option: OptionButton, item_id: int) -> int:
+	for index in range(option.item_count):
+		if option.get_item_id(index) == item_id:
+			return index
+	return -1
+
+
+func _selected_option_id(option: OptionButton) -> int:
+	return option.get_item_id(option.selected)
 
 
 func _test_legacy_selection_path() -> void:

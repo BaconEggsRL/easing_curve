@@ -14,7 +14,10 @@ function Resolve-ProjectRoot {
 
 function Invoke-GodotRunner {
     param([string[]]$Arguments)
-    $runnerArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $godotRunner)
+    $runnerArguments = @(
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $godotRunner,
+        "-AppDataDirectory", $isolatedAppData
+    )
     if (-not [string]::IsNullOrWhiteSpace($GodotPath)) { $runnerArguments += @("-GodotPath", $GodotPath) }
     $runnerArguments += $Arguments
     $previousErrorActionPreference = $ErrorActionPreference
@@ -34,6 +37,7 @@ $powerShellExecutable = (Get-Process -Id $PID).Path
 $tempBase = Join-Path $projectRoot "test\_temp\point-scaling"
 $tempProject = Join-Path $tempBase ([guid]::NewGuid().ToString("N"))
 $isolatedTemp = Join-Path $tempProject "test\_temp"
+$isolatedAppData = Join-Path $tempProject "appdata"
 $bootstrapLog = Join-Path $isolatedTemp "bootstrap.log"
 $benchmarkLog = Join-Path $isolatedTemp "point_scaling.log"
 $outputLog = Join-Path $projectRoot "test\_temp\point_scaling_current.log"
@@ -72,7 +76,7 @@ if ($bootstrapExit -ne 0) { Write-Warning "Bootstrap returned $bootstrapExit; ca
 $previousScaling = $env:EASING_CURVE_POINT_SCALING_ONLY
 try {
     $env:EASING_CURVE_POINT_SCALING_ONLY = "1"
-    Write-Host "Running crossing point-count scaling benchmark (9..65 points, burst=1 and 4)..."
+    Write-Host "Running Legacy/Native crossing scaling benchmark (9..129 points, burst=1 and 4)..."
     $benchmarkExit = Invoke-GodotRunner @(
         "--editor",
         "--path", $tempProject,
@@ -86,14 +90,17 @@ try {
 $benchmarkText = if (Test-Path -LiteralPath $benchmarkLog) { Get-Content -Raw -LiteralPath $benchmarkLog } else { "" }
 [IO.File]::WriteAllText($outputLog, $benchmarkText, [Text.UTF8Encoding]::new($false))
 $hasScalingMarker = $benchmarkText -match 'INTERACTION_POINT_SCALING\|enabled=true'
-$updateToDrawRows = [regex]::Matches($benchmarkText, '(?m)^INTERACTION_BENCH\|[^\r\n]+\|crossing\|(?:9|13|17|25|33|49|65)\|(?:1|4)\|update_to_draw\|').Count
-$countRows = [regex]::Matches($benchmarkText, '(?m)^INTERACTION_COUNTS\|[^\r\n]+\|crossing\|(?:9|13|17|25|33|49|65)\|(?:1|4)\|').Count
+$pointPattern = '(?:9|13|17|25|33|49|65|97|129)'
+$updateToDrawRows = [regex]::Matches($benchmarkText, "(?m)^INTERACTION_BENCH\|[^\r\n]+\|crossing\|$pointPattern\|(?:1|4)\|update_to_draw\|").Count
+$countRows = [regex]::Matches($benchmarkText, "(?m)^INTERACTION_COUNTS\|[^\r\n]+\|crossing\|$pointPattern\|(?:1|4)\|").Count
+$backendUpdateRows = [regex]::Matches($benchmarkText, "(?m)^INTERACTION_BACKEND_BENCH\|[^\r\n]+\|(?:legacy|native)\|crossing\|$pointPattern\|(?:1|4)\|update_to_draw\|").Count
+$backendCountRows = [regex]::Matches($benchmarkText, "(?m)^INTERACTION_BACKEND_COUNTS\|[^\r\n]+\|(?:legacy|native)\|crossing\|$pointPattern\|(?:1|4)\|").Count
 $hasScriptFailure = $benchmarkText -match '(?m)^(?:SCRIPT ERROR:|.*CrashHandlerException)'
-$completeResults = $hasScalingMarker -and $updateToDrawRows -eq 14 -and $countRows -eq 14 -and -not $hasScriptFailure
+$completeResults = $hasScalingMarker -and $updateToDrawRows -eq 18 -and $countRows -eq 18 -and $backendUpdateRows -eq 36 -and $backendCountRows -eq 36 -and -not $hasScriptFailure
 
 if (-not $completeResults) {
     if ($benchmarkText) { Write-Host $benchmarkText.TrimEnd() }
-    Write-Host ("POINT_SCALING_INCOMPLETE|exit={0}|update_to_draw_rows={1}|count_rows={2}|script_failure={3}" -f $benchmarkExit, $updateToDrawRows, $countRows, $hasScriptFailure) -ForegroundColor Yellow
+    Write-Host ("POINT_SCALING_INCOMPLETE|exit={0}|legacy_update_rows={1}|legacy_count_rows={2}|backend_update_rows={3}|backend_count_rows={4}|script_failure={5}" -f $benchmarkExit, $updateToDrawRows, $countRows, $backendUpdateRows, $backendCountRows, $hasScriptFailure) -ForegroundColor Yellow
     Write-Host "Preserved failed benchmark project: $tempProject" -ForegroundColor Yellow
     exit 1
 }
@@ -101,8 +108,61 @@ if ($benchmarkExit -ne 0) {
     Write-Warning "Benchmark process returned $benchmarkExit after producing the complete semantic result set; treating this as the established standalone Editor-host teardown artifact."
 }
 
-$benchmarkText -split "`r?`n" | Where-Object { $_ -match '^INTERACTION_BENCH\|.*\|crossing\|' } | ForEach-Object { Write-Host $_ }
-Write-Host ("POINT_SCALING_PASS|update_to_draw_rows={0}|count_rows={1}" -f $updateToDrawRows, $countRows)
+$measurements = @{}
+$benchmarkText -split "`r?`n" |
+    Where-Object { $_ -match '^INTERACTION_BACKEND_BENCH\|' } |
+    ForEach-Object {
+        $fields = $_ -split '\|'
+        if ($fields.Count -ge 12 -and $fields[3] -eq 'crossing' -and $fields[6] -eq 'update_to_draw') {
+            $key = "{0}|{1}|{2}" -f $fields[2], $fields[4], $fields[5]
+            $measurements[$key] = [pscustomobject]@{
+                Backend = $fields[2]
+                PointCount = [int]$fields[4]
+                BurstSize = [int]$fields[5]
+                P99 = [double]::Parse($fields[9], [Globalization.CultureInfo]::InvariantCulture)
+                Maximum = [double]::Parse($fields[10], [Globalization.CultureInfo]::InvariantCulture)
+                Mad = [double]::Parse($fields[11], [Globalization.CultureInfo]::InvariantCulture)
+            }
+        }
+    }
+
+$gateFailures = @()
+foreach ($pointCount in @(9, 13, 17, 25, 33)) {
+    $legacy = $measurements["legacy|$pointCount|1"]
+    $native = $measurements["native|$pointCount|1"]
+    if ($null -eq $legacy -or $null -eq $native) {
+        $gateFailures += "Missing burst=1 comparison at $pointCount points."
+        continue
+    }
+    if ($native.P99 -ge 16667.0) {
+        $gateFailures += "Native $pointCount-point p99 $($native.P99) us exceeded 16,667 us."
+    }
+    $allowance = [Math]::Max($legacy.P99 * 0.03, [Math]::Max(3.0 * $legacy.Mad, 3.0 * $native.Mad))
+    if ($native.P99 -gt $legacy.P99 + $allowance) {
+        $gateFailures += "Native $pointCount-point p99 $($native.P99) us exceeded Legacy $($legacy.P99) us plus $([Math]::Round($allowance, 1)) us allowance."
+    }
+}
+
+foreach ($backend in @('legacy', 'native')) {
+    $firstOverBudget = $null
+    foreach ($pointCount in @(9, 13, 17, 25, 33, 49, 65, 97, 129)) {
+        $measurement = $measurements["$backend|$pointCount|1"]
+        if ($null -ne $measurement -and $measurement.P99 -ge 16667.0) {
+            $firstOverBudget = $pointCount
+            break
+        }
+    }
+    $displayValue = if ($null -eq $firstOverBudget) { 'none_through_129' } else { [string]$firstOverBudget }
+    Write-Host "POINT_SCALING_FIRST_OVER_60HZ|backend=$backend|points=$displayValue"
+}
+
+$benchmarkText -split "`r?`n" | Where-Object { $_ -match '^INTERACTION_BACKEND_BENCH\|.*\|crossing\|.*\|(update_to_draw|graph_draw_cpu|commit_to_draw)\|' } | ForEach-Object { Write-Host $_ }
+if ($gateFailures.Count -gt 0) {
+    $gateFailures | ForEach-Object { Write-Host "POINT_SCALING_GATE_FAIL|$_" -ForegroundColor Red }
+    Write-Host "Preserved failed benchmark project: $tempProject" -ForegroundColor Yellow
+    exit 1
+}
+Write-Host ("POINT_SCALING_PASS|legacy_rows={0}|backend_rows={1}|gated_points=9,13,17,25,33" -f $updateToDrawRows, $backendUpdateRows)
 Write-Host "Point-scaling benchmark log: $outputLog"
 Remove-Item -LiteralPath $tempProject -Recurse -Force -ErrorAction SilentlyContinue
 if ((Test-Path -LiteralPath $tempBase -PathType Container) -and -not (Get-ChildItem -LiteralPath $tempBase -Force | Select-Object -First 1)) { Remove-Item -LiteralPath $tempBase -Force -ErrorAction SilentlyContinue }

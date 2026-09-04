@@ -107,6 +107,8 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_godot.ps1 --headless --path . --script test/scripts/unit/native_public_contract_test.gd
 ./test/runners/run_native_runtime_benchmark.ps1
 ./test/runners/run_curve_editor_backend_benchmark.ps1
+./test/runners/run_point_scaling_benchmark.ps1
+./test/runners/run_native_point_scaling_benchmark.ps1
 ./test/runners/run_native_release_export_test.ps1
 ./native/validate_native_manifest.ps1 -Platform all
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
@@ -121,9 +123,60 @@ deep runtime duplication. By default it evaluates the median of three release-
 library runs. The editor-backend benchmark compares adapter and direct costs for
 preview sampling, 65-point reads, snapshots, mutation-plus-recompile, and
 transaction-shaped gestures, then reports curve-change signals and 65-point
-add/remove/reorder/snapshot topology workloads for each backend.
+add/remove/reorder/snapshot topology workloads for each backend. The interaction
+scaling benchmark drives the shared Legacy and Native editors at 9 through 129
+points. The separate runtime-scaling characterization measures 65 through 1,025
+points and is intentionally outside the retained historical baseline.
 Tween is used only as a benchmark and numerical oracle. No Native sampling path
 calls Tween, GDScript, or a Callable.
+
+### Retained runtime performance evidence
+
+The historical benchmark was not rerun for the editor-only default-handle
+change. These are the retained isolated release-library results:
+
+| Workload | Iterations | Native | Comparator | Native advantage |
+|---|---:|---:|---:|---:|
+| 48 standard Transition/Ease cases | 200,000 | 5.183–8.957 ms | Tween: 9.330–31.636 ms | 1.8–4.0× |
+| Deterministic functions | 50,000 | 1.248–2.279 ms | Legacy: 86.340–153.226 ms | 62.7–104.2× |
+| Custom curves, 2/9/65 points | 50,000 | 1.543–2.776 ms | Legacy: 83.491–246.812 ms | 42.3–134.2× |
+| 65-point random sampling | 50,000 | 2.776 ms | Legacy: 246.812 ms | 88.9× |
+| 65-point mutation and sampling | 4,000 | 30.032 ms | Legacy: 325.832 ms | 10.8× |
+| 65-point deep copies | 500 | 113.880 ms | Legacy: 11,345.662 ms | 99.6× |
+
+All 63 relative comparisons pass. Eight of the 27 retained Native-only absolute
+cases exceed their old timing plus the noise allowance, so the historical file
+remains unchanged pending a quiet reference-host run.
+
+### Large-curve characterization
+
+The generalized shared-editor benchmark measures one-event point crossings;
+times below are update-to-draw p99 in milliseconds. Four-event bursts remain in
+the raw benchmark output as diagnostics.
+
+| Points | Legacy p99 | Native p99 |
+|---:|---:|---:|
+| 9 | 1.092 | 0.985 |
+| 13 | 1.255 | 1.206 |
+| 17 | 1.789 | 1.244 |
+| 25 | 1.845 | 1.716 |
+| 33 | 2.057 | 2.113 |
+| 49 | 3.079 | 2.977 |
+| 65 | 3.679 | 3.654 |
+| 97 | 5.591 | 5.661 |
+| 129 | 8.421 | 7.468 |
+
+Neither backend crosses 16.667 ms through 129 points in this level-2 shared-
+editor harness, and Native passes the 9–33 point p99/noise gates. An older
+Legacy-only end-to-end editor run measured 15.562 ms p99 at 49 points and
+20.845 ms at 65 points; its dock/render scope differs, so it remains useful
+historical context rather than a direct comparison with this harness.
+
+The new runtime-scaling characterization shows Native random sampling retaining
+about 219,000–297,000 samples per 16.667 ms across 65–1,025 points. At 65 points
+it estimates about 297,000 Native samples versus 3,120 Legacy samples per frame.
+These values are linear estimates from 50,000-sample batches, not measured frame
+thresholds.
 
 ## Shared editor status
 
@@ -143,6 +196,10 @@ geometry use compiled segments. Pending additions and point-list drags render
 directly from backend point state, stale pending/detached previews are discarded,
 Autofit includes visible handles, transition parameters are shown only for their
 owning preset, and point-list controls rebuild only when point identity/order changes.
+The editor-only **New point handles** selector beside **Add Point** chooses Free,
+Linear, Balanced, Mirrored, or Linked for both graph-click and list additions in
+both backends. Open inspectors share the preference. It does not modify existing
+points, curve resources, Undo history, live publication, or runtime sampling.
 
 ## Manual smoke-test status — 2026-09-04
 
@@ -150,12 +207,12 @@ owning preset, and point-list controls rebuild only when point identity/order ch
 |---|---|---|
 | Standard transition parity | Pass with observation | Circ, Cubic, Elastic, Expo, Quart, and Quint showed slight start jitter relative to Tween. Legacy showed the same behavior, so this is recorded as a harness/timing investigation rather than a Native release blocker. |
 | Deterministic modes and transforms | Pass | No follow-up from this run. |
-| Custom editing and ownership | Graph and point-list paths automated; manual check pending | Native selection, handle modes, force-linear, locks, deferred drags, add/delete/crossing/reorder, endpoint takeover, detached-point disconnection, exact identity restoration, one-action Undo/Redo, and one live publication per commit are covered. |
-| Preset editing and persistence | Automated pass; manual check pending | Constant, Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, and Back use canonical legacy geometry, retain Transition/Ease identity while edited, show modified/reset state, save overrides, and normalize clean saves. |
+| Custom editing and ownership | Pass for reported workflows; new selector restart check pending | The reported graph/list selection, live restart, preset/function preview, topology, and stale-point issues are resolved. Automated coverage includes deferred drags, endpoint takeover, detached-point disconnection, identity-preserving Undo/Redo, one publication per commit, and all five new-point handle defaults. |
+| Preset editing and persistence | Pass for reported workflows; full restart persistence check pending | Constant, Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, and Back use canonical legacy geometry, retain Transition/Ease identity while edited, show modified/reset state, save overrides, and normalize clean saves. |
 | Save, reload, and coexistence | Automated pass | Modified Native presets and Custom curves round-trip; clean presets omit redundant geometry; both public APIs continue to work independently. |
 | Native resource preview/icon | Pass | Generated Native Inspector previews and the `Curve.svg` FileSystem class icon both passed manual verification. |
 | Match Tween timing probe | Deferred | The probe remains available for a later jitter investigation. |
-| Web export with Native resource | Prior automated pass; local rerun limited | Both local exports succeeded, but Chrome could not start in the current sandbox because crashpad access was denied. The latest hosted build produced Windows and Web artifacts; its dependent browser-runtime job failed before Godot launch on an extensionless setup symlink. The workflow fix is implemented locally but still needs a hosted run. |
+| Web export with Native resource | Prior automated pass; local rerun limited | Both local exports succeeded, but Chrome could not start in the current sandbox because crashpad access was denied. The latest hosted attempt hit a Windows setup-Godot CRC infrastructure failure before checkout. The repository-side extensionless-link fix now copies the resolved executable to a validated `.exe` path and still needs a hosted run. |
 
 The original Web failure was caused by the absent wasm32 library. The validated
 manifest now loads the matching non-threaded extension; no legacy substitution
@@ -166,8 +223,8 @@ is used for serialized Native resources.
 - Run the corrected Windows-test and Web browser-runtime jobs in GitHub Actions
   and retain the debug/release Web artifacts.
 - Finish generated, CSS, and extended Bounce representations.
-- Complete visible-editor smoke testing for deferred live updates, point-list
-  synchronization, editable presets, reset, and save normalization.
+- Manually confirm the new-point preference persists across an editor restart
+  and that changing it alone does not restart a running scene.
 - Add optional, non-destructive bidirectional conversion.
 - Build the exact dual-API release archive.
 - Add remaining platforms before any legacy deprecation proposal.

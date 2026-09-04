@@ -27,6 +27,8 @@ const POINT_SCALING_CASES := [
 	[33, 1], [33, 4],
 	[49, 1], [49, 4],
 	[65, 1], [65, 4],
+	[97, 1], [97, 4],
+	[129, 1], [129, 4],
 ]
 const ORDINARY_EVENTS_PER_TRIAL := 48
 const CROSSING_EVENTS_PER_DIRECTION := 48
@@ -80,7 +82,7 @@ class SignalCounters extends RefCounted:
 	) -> void:
 		property_change_requested += 1
 
-	func on_graph_point_changed(_i: int, _point: EasingCurvePoint) -> void:
+	func on_graph_point_changed(_i: int, _point: Resource) -> void:
 		graph_point_changed += 1
 
 	func on_edit_finished(_point_order: Array[EasingCurvePoint]) -> void:
@@ -125,11 +127,13 @@ func _run() -> void:
 	if OS.get_environment("EASING_CURVE_POINT_SCALING_ONLY") == "1":
 		print("INTERACTION_POINT_SCALING|enabled=true|frame_budget_us=16667")
 		for case_value in POINT_SCALING_CASES:
-			await _benchmark_crossing(
-				version,
-				int(case_value[0]),
-				int(case_value[1]),
-			)
+			for backend_id: StringName in [&"legacy", &"native"]:
+				await _benchmark_crossing(
+					version,
+					int(case_value[0]),
+					int(case_value[1]),
+					backend_id,
+				)
 		for _frame in range(3):
 			await process_frame
 		quit()
@@ -291,13 +295,14 @@ func _benchmark_crossing(
 	version: String,
 	point_count: int,
 	burst_size: int,
+	backend_id: StringName = &"legacy",
 ) -> void:
-	var fixture := await _create_fixture(point_count)
-	var curve: EasingCurve = fixture[&"curve"]
+	var fixture := await _create_fixture(point_count, backend_id)
+	var curve: Resource = fixture[&"curve"]
 	var editor: MeasuredCurveEditor = fixture[&"editor"]
 	var host: Control = fixture[&"host"]
 	var counters: SignalCounters = fixture[&"counters"]
-	var dragged_point := curve.points[1]
+	var dragged_point: Resource = _curve_points(curve)[1]
 
 	var event_cpu: Array[float] = []
 	var burst_cpu: Array[float] = []
@@ -309,8 +314,9 @@ func _benchmark_crossing(
 	var measured_event_count := 0
 
 	for trial in range(WARMUP_TRIALS + CROSSING_MEASURED_TRIALS):
-		var start_index := curve.points.find(dragged_point)
-		var start_world := dragged_point.position
+		var points := _curve_points(curve)
+		var start_index := points.find(dragged_point)
+		var start_world: Vector2 = dragged_point.get(&"position")
 		await _begin_drag(editor, start_world, start_index)
 		counters.reset()
 
@@ -343,14 +349,20 @@ func _benchmark_crossing(
 			draw_cpu,
 		)
 		var preview_distance := absi(
-			EasingCurve.build_ordered_points_with_endpoint_takeover(
-				curve.points,
-				dragged_point,
-			).find(dragged_point) - start_index
+			(editor.call(&"_get_ordered_points") as Array).find(dragged_point)
+			- start_index
 		)
 		if measured:
-			print("INTERACTION_CROSS_DISTANCE|%s|%d|%d|%d" % [
+			if backend_id == &"legacy":
+				print("INTERACTION_CROSS_DISTANCE|%s|%d|%d|%d" % [
+					version,
+					point_count,
+					burst_size,
+					preview_distance,
+				])
+			print("INTERACTION_BACKEND_CROSS_DISTANCE|%s|%s|%d|%d|%d" % [
 				version,
+				backend_id,
 				point_count,
 				burst_size,
 				preview_distance,
@@ -366,20 +378,21 @@ func _benchmark_crossing(
 			draw_cpu,
 		)
 
-		var commit_sample := await _finish_drag(editor, editor.get_view_pos(dragged_point.position))
+		var point_position: Vector2 = dragged_point.get(&"position")
+		var commit_sample := await _finish_drag(editor, editor.get_view_pos(point_position))
 		if measured:
 			commit_cpu.append(commit_sample[&"cpu_usec"])
 			commit_to_draw.append(commit_sample[&"to_draw_usec"])
 			measured_event_count += first_positions.size() + second_positions.size()
 			_accumulate_counts(total_counts, counters.as_dictionary())
 
-	_report_workload(version, "crossing", point_count, burst_size, "event_cpu", event_cpu)
-	_report_workload(version, "crossing", point_count, burst_size, "burst_cpu", burst_cpu)
-	_report_workload(version, "crossing", point_count, burst_size, "update_to_draw", to_draw)
-	_report_workload(version, "crossing", point_count, burst_size, "graph_draw_cpu", draw_cpu)
-	_report_workload(version, "crossing", point_count, burst_size, "commit_cpu", commit_cpu)
-	_report_workload(version, "crossing", point_count, burst_size, "commit_to_draw", commit_to_draw)
-	_report_counts(version, "crossing", point_count, burst_size, total_counts, measured_event_count)
+	_report_workload(version, "crossing", point_count, burst_size, "event_cpu", event_cpu, backend_id)
+	_report_workload(version, "crossing", point_count, burst_size, "burst_cpu", burst_cpu, backend_id)
+	_report_workload(version, "crossing", point_count, burst_size, "update_to_draw", to_draw, backend_id)
+	_report_workload(version, "crossing", point_count, burst_size, "graph_draw_cpu", draw_cpu, backend_id)
+	_report_workload(version, "crossing", point_count, burst_size, "commit_cpu", commit_cpu, backend_id)
+	_report_workload(version, "crossing", point_count, burst_size, "commit_to_draw", commit_to_draw, backend_id)
+	_report_counts(version, "crossing", point_count, burst_size, total_counts, measured_event_count, backend_id)
 
 	host.free()
 	await process_frame
@@ -460,8 +473,11 @@ func _finish_drag(
 	}
 
 
-func _create_fixture(point_count: int) -> Dictionary:
-	var curve := _make_curve(point_count)
+func _create_fixture(
+	point_count: int,
+	backend_id: StringName = &"legacy",
+) -> Dictionary:
+	var curve := _make_curve(point_count, backend_id)
 	var inspector := INSPECTOR_PLUGIN.new()
 	var editor := MeasuredCurveEditor.new()
 	var host := VBoxContainer.new()
@@ -471,30 +487,39 @@ func _create_fixture(point_count: int) -> Dictionary:
 	host.size = Vector2(820.0, 900.0)
 	get_root().add_child(host)
 
-	inspector.set(&"curve", curve)
-	inspector.set(&"easing_curve_editor", editor)
 	editor.custom_minimum_size = EDITOR_SIZE
 	editor.size = EDITOR_SIZE
 	editor.set_curve(curve)
-	editor.point_property_change_requested.connect(
-		Callable(inspector, &"_apply_point_property_change")
-	)
-	editor.point_edit_finished.connect(
-		Callable(inspector, &"_commit_point_edit")
-	)
-	editor.point_changed.connect(
-		Callable(inspector, &"_on_curve_editor_point_changed")
-	)
+	if backend_id == &"legacy":
+		inspector.set(&"curve", curve)
+		inspector.set(&"easing_curve_editor", editor)
+		editor.point_property_change_requested.connect(
+			Callable(inspector, &"_apply_point_property_change")
+		)
+		editor.point_edit_finished.connect(
+			Callable(inspector, &"_commit_point_edit")
+		)
+		editor.point_changed.connect(
+			Callable(inspector, &"_on_curve_editor_point_changed")
+		)
+	else:
+		inspector.call(&"_parse_begin", curve)
 
 	curve.changed.connect(counters.on_curve_changed)
-	editor.point_property_change_requested.connect(counters.on_property_change_requested)
+	if backend_id == &"legacy":
+		editor.point_property_change_requested.connect(counters.on_property_change_requested)
 	editor.point_changed.connect(counters.on_graph_point_changed)
 	editor.point_edit_finished.connect(counters.on_edit_finished)
-	for point in curve.points:
+	for point in _curve_points(curve):
 		point.changed.connect(counters.on_point_resource_changed)
 
-	host.add_child(editor)
-	host.add_child(inspector.call(&"handle_points", curve) as Control)
+	if backend_id == &"legacy":
+		host.add_child(editor)
+		host.add_child(inspector.call(&"handle_points", curve) as Control)
+	else:
+		host.add_child(
+			inspector.call(&"_handle_native_curve_editor", curve, editor) as Control
+		)
 	await process_frame
 	editor.queue_redraw()
 	await _wait_for_draw(editor, editor.draw_count)
@@ -544,19 +569,40 @@ func _wait_for_draw(editor: MeasuredCurveEditor, previous_count: int) -> bool:
 	return editor.draw_count > previous_count
 
 
-func _make_curve(point_count: int) -> EasingCurve:
-	var curve := EasingCurve.new()
-	curve.trans_type = EasingCurve.TRANS.CUSTOM
-	var point_values: Array[EasingCurvePoint] = []
+func _make_curve(
+	point_count: int,
+	backend_id: StringName = &"legacy",
+) -> Resource:
+	var point_values: Array = []
 	for index in range(point_count):
 		var x := float(index) / float(point_count - 1)
 		var y := 0.15 + 0.7 * x
-		var point := EasingCurvePoint.new(Vector2(x, y))
-		point.left_control_point = Vector2(maxf(0.0, x - 0.01), y - 0.08)
-		point.right_control_point = Vector2(minf(1.0, x + 0.01), y + 0.08)
+		var point: Resource
+		if backend_id == &"native":
+			point = ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+			point.set(&"position", Vector2(x, y))
+			point.set(&"left_control_point", Vector2(maxf(0.0, x - 0.01), y - 0.08))
+			point.set(&"right_control_point", Vector2(minf(1.0, x + 0.01), y + 0.08))
+		else:
+			point = EasingCurvePoint.new(Vector2(x, y))
+			point.set(&"left_control_point", Vector2(maxf(0.0, x - 0.01), y - 0.08))
+			point.set(&"right_control_point", Vector2(minf(1.0, x + 0.01), y + 0.08))
 		point_values.append(point)
-	curve.points = point_values
-	return curve
+	if backend_id == &"native":
+		var native_curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+		native_curve.set(&"transition", 100)
+		native_curve.set(&"points", point_values)
+		return native_curve
+	var legacy_curve := EasingCurve.new()
+	legacy_curve.trans_type = EasingCurve.TRANS.CUSTOM
+	var legacy_points: Array[EasingCurvePoint] = []
+	legacy_points.assign(point_values)
+	legacy_curve.points = legacy_points
+	return legacy_curve
+
+
+func _curve_points(curve: Resource) -> Array:
+	return curve.points if curve is EasingCurve else curve.get(&"points")
 
 
 func _mouse_button(
@@ -578,6 +624,7 @@ func _report_workload(
 	burst_size: int,
 	metric: String,
 	samples: Array[float],
+	backend_id: StringName = &"legacy",
 ) -> void:
 	if samples.is_empty():
 		return
@@ -587,12 +634,31 @@ func _report_workload(
 	var p95 := _percentile(sorted, 0.95)
 	var p99 := _percentile(sorted, 0.99)
 	var maximum: float = float(sorted[sorted.size() - 1])
+	var mad := _median_absolute_deviation(sorted, p50)
 	var over_8 := _count_over(sorted, 8333.0)
 	var over_16 := _count_over(sorted, 16667.0)
 	var over_25 := _count_over(sorted, 25000.0)
 	var over_33 := _count_over(sorted, 33333.0)
-	print("INTERACTION_BENCH|%s|%s|%d|%d|%s|%.1f|%.1f|%.1f|%.1f|%d|%d|%d|%d|%d" % [
+	if backend_id == &"legacy":
+		print("INTERACTION_BENCH|%s|%s|%d|%d|%s|%.1f|%.1f|%.1f|%.1f|%d|%d|%d|%d|%d" % [
+			version,
+			workload,
+			point_count,
+			burst_size,
+			metric,
+			p50,
+			p95,
+			p99,
+			maximum,
+			sorted.size(),
+			over_8,
+			over_16,
+			over_25,
+			over_33,
+		])
+	print("INTERACTION_BACKEND_BENCH|%s|%s|%s|%d|%d|%s|%.1f|%.1f|%.1f|%.1f|%.1f|%d|%d|%d|%d|%d" % [
 		version,
+		backend_id,
 		workload,
 		point_count,
 		burst_size,
@@ -601,6 +667,7 @@ func _report_workload(
 		p95,
 		p99,
 		maximum,
+		mad,
 		sorted.size(),
 		over_8,
 		over_16,
@@ -631,19 +698,33 @@ func _report_counts(
 	burst_size: int,
 	counts: Dictionary,
 	event_count: int,
+	backend_id: StringName = &"legacy",
 ) -> void:
 	var divisor := maxf(1.0, float(event_count))
-	print("INTERACTION_COUNTS|%s|%s|%d|%d|%d|%.4f|%.4f|%.4f|%.4f|%.4f" % [
-		version,
-		workload,
-		point_count,
-		burst_size,
-		event_count,
+	var values := [
 		float(counts[&"curve_changed"]) / divisor,
 		float(counts[&"point_resource_changed"]) / divisor,
 		float(counts[&"property_change_requested"]) / divisor,
 		float(counts[&"graph_point_changed"]) / divisor,
 		float(counts[&"edit_finished"]) / divisor,
+	]
+	if backend_id == &"legacy":
+		print("INTERACTION_COUNTS|%s|%s|%d|%d|%d|%.4f|%.4f|%.4f|%.4f|%.4f" % [
+			version,
+			workload,
+			point_count,
+			burst_size,
+			event_count,
+			values[0], values[1], values[2], values[3], values[4],
+		])
+	print("INTERACTION_BACKEND_COUNTS|%s|%s|%s|%d|%d|%d|%.4f|%.4f|%.4f|%.4f|%.4f" % [
+		version,
+		backend_id,
+		workload,
+		point_count,
+		burst_size,
+		event_count,
+		values[0], values[1], values[2], values[3], values[4],
 	])
 
 
@@ -660,6 +741,14 @@ func _percentile(samples: Array[float], percentile: float) -> float:
 		return 0.0
 	var index := ceili(percentile * samples.size()) - 1
 	return samples[clampi(index, 0, samples.size() - 1)]
+
+
+func _median_absolute_deviation(samples: Array[float], median: float) -> float:
+	var deviations: Array[float] = []
+	for sample in samples:
+		deviations.append(absf(sample - median))
+	deviations.sort()
+	return _percentile(deviations, 0.50)
 
 
 func _plugin_version() -> String:

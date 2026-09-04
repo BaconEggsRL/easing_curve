@@ -39,7 +39,7 @@ func build_point_list(
 	create_handle_mode_property: Callable,
 	move_point: Callable,
 	remove_point: Callable,
-	add_point: Callable,
+	create_add_controls: Callable,
 ) -> VBoxContainer:
 	var point_list := PointsListContainer.new()
 	point_list.point_swap_requested.connect(move_point)
@@ -108,14 +108,7 @@ func build_point_list(
 		point_list.enable_drop_forwarding(point_panel)
 
 	if curve.curve_mode == EasingCurve.CurveMode.BEZIER:
-		var add_point_btn := Button.new()
-		add_point_btn.icon = EDITOR_THEME_CACHE.get_icon(
-			EDITOR_THEME_CACHE.ICON_ADD
-		)
-		add_point_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		add_point_btn.text = "Add Point"
-		add_point_btn.pressed.connect(add_point)
-		point_list.add_child(add_point_btn)
+		point_list.add_child(create_add_controls.call())
 
 	return point_list
 

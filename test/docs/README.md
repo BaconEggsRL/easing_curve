@@ -5,18 +5,20 @@
 ## Automated suites
 
 `test/runners/run_all_tests.ps1` is the sole source of truth for the explicit
-automated-suite manifest. It currently registers 20 suites: ten headless and
-ten Editor-host. Their entrypoint scripts and `.uid` sidecars live under
+automated-suite manifest. It currently registers 23 suites: 12 headless and
+11 Editor-host. Their entrypoint scripts and `.uid` sidecars live under
 `test/scripts/`. Do not infer an automated suite or its mode from its filename.
 
 ### Headless suites
 
 - `css_linear_test.gd`
+- `curve_editor_backend_contract_test.gd`
 - `easing_curve_editor_rmb_delete_test.gd`
 - `easing_curve_manual_reorder_test.gd`
 - `easing_curve_transform_test.gd`
 - `easing_curve_v105_regression_test.gd`
 - `native_v2_smoke_test.gd`
+- `native_public_contract_test.gd`
 - `runtime_curve_updates_test.gd`
 - `serialization_transition_contract_test.gd`
 - `test_scene_curve_backend_test.gd`
@@ -35,6 +37,7 @@ The following suites require an Editor-host launch:
 - `easing_curve_point_state_characterization_test.gd`
 - `easing_curve_selection_refresh_characterization_test.gd`
 - `easing_curve_editor_gesture_characterization_test.gd`
+- `curve_editor_vertical_slice_test.gd`
 - `editor_undo_redo_test.gd`
 
 Run an Editor-dependent test with:
@@ -60,8 +63,8 @@ a generated project under `test/_temp/runner` containing only the Easing Curve
 addon, test scripts, and test presets. The generated project enables only the
 Easing Curve plugin, so root-project development plugins and autoloads cannot
 affect product-test startup. An Editor import pass initializes its script-class
-cache, then the runner starts the 10 compatible suites with `--headless` and adds
-`--editor` only for the 10 suites that require an Editor/Inspector host.
+ cache, then the runner starts the 12 compatible suites with `--headless` and adds
+`--editor` only for the 11 suites that require an Editor/Inspector host.
 
 Only after that command exits successfully with every suite passing, immediately
 run:
@@ -77,8 +80,8 @@ missing PASS marker, script error, or any other unexpected result; retain those
 artifacts for debugging. If tests are rerun while investigating a problem, run
 cleanup only after the final full suite passes.
 
-The PowerShell runner creates a separate process and isolated `APPDATA`
-directory for every suite, and writes each child log under
+The PowerShell runner creates a separate process and isolated `APPDATA` and
+`LOCALAPPDATA` directories for every suite, and writes each child log under
 `test/_temp/runner`. A suite fails if it times out, exits unsuccessfully, lacks
 a PASS marker, or logs a script error. Each suite has a 60-second timeout; the
 runner terminates timed-out process trees and continues with the remaining
@@ -113,14 +116,14 @@ responses. It does not invoke real `git push`, tag mutation, or `gh` commands.
 
 ## Test-asset ownership
 
-Only the 20 scripts under `test/scripts/unit/` in the explicit runner manifest
+Only the 23 scripts under `test/scripts/unit/` in the explicit runner manifest
 above are release-gating automated suites. The following assets are
 intentionally documented by their observed repository role; none is registered
 by `test/runners/run_all_tests.ps1`.
 
 ### Shared automated-test harness and fixtures
 
-- `editor_host_test_harness.gd` is preloaded by the ten Editor-host suites to
+- `editor_host_test_harness.gd` is preloaded by the 11 Editor-host suites to
   require an Editor/Inspector host and create their Inspector contexts.
 - `presets/legacy_pre_flat_triangle.tres` and
   `presets/legacy_flat_without_force_linear.tres` are serialization fixtures
