@@ -106,10 +106,11 @@ static func is_terminal_diagnosis(state: int) -> bool:
 	)
 
 
-## True when the dock should consider the server unsuitable for client
-## health checks (incompatible tool surface). Currently just INCOMPATIBLE
-## — FOREIGN_PORT is transitional and may resolve to READY if the
-## foreign occupant turns out to speak our handshake.
+## True when the dock should skip interpreting client health (incompatible
+## tool surface). This must NOT block Configure writes — those take an
+## explicit url and the live plugin version (#916). Currently just
+## INCOMPATIBLE — FOREIGN_PORT is transitional and may resolve to READY
+## if the foreign occupant turns out to speak our handshake.
 static func blocks_client_health(state: int) -> bool:
 	return state == INCOMPATIBLE
 

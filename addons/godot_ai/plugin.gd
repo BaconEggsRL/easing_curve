@@ -406,6 +406,7 @@ func _enter_tree() -> void:
 	_dispatcher.register_lazy("game_command", "editor", &"game_command")
 	_dispatcher.register_lazy("get_project_setting", "project", &"get_project_setting")
 	_dispatcher.register_lazy("set_project_setting", "project", &"set_project_setting")
+	_dispatcher.register_lazy("set_main_scene", "project", &"set_main_scene")
 	_dispatcher.register_lazy("run_project", "project", &"run_project")
 	_dispatcher.register_lazy("stop_project", "project", &"stop_project")
 	_dispatcher.register_lazy("search_filesystem", "project", &"search_filesystem")
@@ -622,6 +623,10 @@ func _exit_tree() -> void:
 	if _headless_disabled:
 		_server_started_this_session = false
 		_headless_disabled = false
+		## `_lifecycle` is built in _init(), before the headless guard in
+		## _enter_tree() runs, so it exists even on this path — null it here
+		## too (the full teardown below is skipped).
+		_lifecycle = null
 		return
 
 	if _custom_tool_registry != null:
@@ -679,6 +684,12 @@ func _exit_tree() -> void:
 	## same-session disable/enable cycle) to adopt. Explicit stops (dock
 	## Restart, update reload) still kill via _stop_server.
 	_lifecycle.teardown_for_editor_exit()
+	## Match the nulling every sibling field gets above. `_lifecycle` was built
+	## as ServerLifecycleManager.new(self), so it holds the plugin back —
+	## leaving the field set keeps the manager and its scripts alive past
+	## plugin teardown (surfaces as leaked ObjectDB instances / "resource still
+	## in use" for server_lifecycle.gd + server_version_check.gd at editor exit).
+	_lifecycle = null
 	## Symmetric with prepare_for_update_reload: the static guard persists
 	## across disable/enable within a single editor session, so the re-enabled
 	## plugin instance's _start_server would short-circuit and never respawn.
@@ -1019,6 +1030,11 @@ static func _project_status_payload(parsed: Dictionary) -> Dictionary:
 		## skew. Older servers omit it; treat the missing field as "".
 		"package_path": str(parsed.get("package_path", "")),
 	}
+	## #913: live server telemetry state. Absent on older backends so the
+	## dock can tell "too old to publish" from an explicit false.
+	var telemetry_enabled: Variant = parsed.get("telemetry_enabled")
+	if telemetry_enabled is bool:
+		projected["telemetry_enabled"] = telemetry_enabled
 	## #824: advisory attach-lease count, consumed by teardown to decide
 	## detach-vs-kill. Absent stays absent rather than defaulting to 0, so
 	## `ServerLifecycleManager.active_lease_count` keeps distinguishing "backend

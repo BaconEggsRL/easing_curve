@@ -1548,12 +1548,33 @@ func _load_telemetry_setting() -> void:
 		)
 	else:
 		_telemetry_toggle.disabled = false
-		_telemetry_toggle.tooltip_text = ""
+		_telemetry_toggle.tooltip_text = _live_telemetry_tooltip(enabled)
 
 
 func _on_telemetry_toggled(pressed: bool) -> void:
 	_telemetry_pending_enabled = pressed
+	if _telemetry_toggle != null:
+		_telemetry_toggle.tooltip_text = _live_telemetry_tooltip(pressed)
 	_refresh_tools_ui_state()
+
+
+## Report the running server's telemetry state, not just this editor's
+## checkbox. Apply & Restart injects opt-out into a server this plugin
+## spawns; it cannot change the environment of an adopted process (#913).
+func _live_telemetry_tooltip(local_enabled: bool) -> String:
+	if _plugin == null or not _plugin.has_method("_probe_live_server_status"):
+		return ""
+	var live: Dictionary = _plugin._probe_live_server_status(ClientConfigurator.http_port())
+	if not (live.get("telemetry_enabled") is bool):
+		return ""
+	var server_enabled: bool = live.get("telemetry_enabled")
+	if server_enabled == local_enabled:
+		return "Running server telemetry is %s." % ("on" if server_enabled else "off")
+	return (
+		"This editor wants telemetry %s, but the running server still has it %s. "
+		+ "Opt-out only reaches a server this plugin spawned. Stop that process "
+		+ "or set GODOT_AI_DISABLE_TELEMETRY in its environment."
+	) % ["on" if local_enabled else "off", "on" if server_enabled else "off"]
 
 
 # --- Dev mode persistence ---
@@ -2123,10 +2144,9 @@ func _on_install_uv() -> void:
 # --- Client section ---
 
 func _on_configure_client(client_id: String) -> void:
-	if _server_blocks_client_health():
-		_apply_row_status(client_id, Client.Status.ERROR, _server_blocked_client_message())
-		_refresh_clients_summary()
-		return
+	## Configure writes an explicit url + live plugin version; it does not
+	## need a healthy occupant. INCOMPATIBLE only suppresses status
+	## interpretation (#916).
 	_dispatch_client_action(client_id, "configure")
 
 
@@ -2291,10 +2311,6 @@ func _apply_client_action_result(client_id: String, action: String, result: Dict
 	_client_action_names.erase(client_id)
 	_clear_client_action_phase(client_id)
 	_finalize_action_buttons(client_id)
-	if _server_blocks_client_health():
-		_apply_row_status(client_id, Client.Status.ERROR, _server_blocked_client_message())
-		_refresh_clients_summary()
-		return
 
 	var success_status := Client.Status.NOT_CONFIGURED if action == "remove" else Client.Status.CONFIGURED
 	if result.get("status") == "ok":
@@ -2458,12 +2474,14 @@ func _on_refresh_clients_pressed() -> void:
 
 
 func _on_configure_all_clients() -> void:
-	if _server_blocks_client_health():
-		for client_id in _client_rows:
-			_apply_row_status(String(client_id), Client.Status.ERROR, _server_blocked_client_message())
-		_refresh_clients_summary()
-		return
-	if ClientRefreshStateScript.should_disable_client_actions(_refresh_state):
+	## Per-row Configure already bypasses the RUNNING gate. INCOMPATIBLE
+	## skips health interpretation (#916), so Configure all must do the same
+	## even if a status sweep is still in flight — `_set_incompatible_server`
+	## does not reset `_refresh_state`.
+	if (
+		ClientRefreshStateScript.should_disable_client_actions(_refresh_state)
+		and not _server_blocks_client_health()
+	):
 		return
 	for client_id in _client_rows:
 		var status: Client.Status = _client_rows[client_id].get("status", Client.Status.NOT_CONFIGURED)
@@ -3064,7 +3082,10 @@ func _refresh_clients_summary() -> void:
 		)
 	_clients_summary_label.text = text
 	if _client_configure_all_btn != null:
-		_client_configure_all_btn.disabled = ClientRefreshStateScript.should_disable_client_actions(_refresh_state)
+		_client_configure_all_btn.disabled = (
+			ClientRefreshStateScript.should_disable_client_actions(_refresh_state)
+			and not _server_blocks_client_health()
+		)
 	if _client_empty_cta_btn != null:
 		_client_empty_cta_btn.visible = configured == 0 and _client_status_refresh_has_completed()
 	_refresh_drift_banner(mismatched_ids)
@@ -3140,9 +3161,7 @@ func _refresh_all_client_statuses() -> void:
 	## refresh: it bypasses focus-in cooldown but still runs probes off the editor
 	## main thread.
 	if _server_blocks_client_health():
-		for client_id in _client_rows:
-			_apply_row_status(String(client_id), Client.Status.ERROR, _server_blocked_client_message())
-		_refresh_clients_summary()
+		## Skip interpretation — do not paint every row ERROR (#916).
 		return
 	_request_client_status_refresh(true)
 
@@ -3251,9 +3270,7 @@ func _perform_initial_client_status_refresh() -> void:
 		return
 
 	if _server_blocks_client_health():
-		for client_id in _client_rows:
-			_apply_row_status(String(client_id), Client.Status.ERROR, _server_blocked_client_message())
-		_refresh_clients_summary()
+		## Skip interpretation — do not paint every row ERROR (#916).
 		return
 
 	_warm_strategy_bytecode()
@@ -3338,9 +3355,7 @@ func _request_client_status_refresh(force: bool = false) -> bool:
 	## when a refresh is requested. The existing UI remains visible until the
 	## background worker's result is applied on the main thread.
 	if _server_blocks_client_health():
-		for client_id in _client_rows:
-			_apply_row_status(String(client_id), Client.Status.ERROR, _server_blocked_client_message())
-		_refresh_clients_summary()
+		## Skip interpretation — do not paint every row ERROR (#916).
 		return false
 	if _is_self_update_in_progress():
 		## Self-update is overwriting plugin scripts on disk; spawning a worker
@@ -3511,8 +3526,7 @@ func _apply_client_status_refresh_results(results: Dictionary, generation: int) 
 		_client_status_refresh_thread.wait_to_finish()
 		_client_status_refresh_thread = null
 	if _server_blocks_client_health():
-		for client_id in _client_rows:
-			_apply_row_status(String(client_id), Client.Status.ERROR, _server_blocked_client_message())
+		## Skip interpretation — do not paint every row ERROR (#916).
 		_finalize_completed_refresh()
 		return
 
@@ -3624,9 +3638,9 @@ func _maybe_auto_repin_after_update() -> void:
 	if not _pending_post_update_repin:
 		return
 	## While the server is INCOMPATIBLE (post-update stale-occupant recovery
-	## still in flight) every row reads ERROR, not CONFIGURED_MISMATCH — a
-	## consume here would see an empty mismatch list and drop the repin on
-	## the floor. Stay pending for the sweep that lands after recovery.
+	## still in flight) health interpretation is skipped (#916), so this
+	## sweep cannot observe CONFIGURED_MISMATCH. Consuming here would drop
+	## the repin on the floor. Stay pending for the sweep after recovery.
 	if _server_blocks_client_health():
 		return
 	if ClientRefreshStateScript.should_disable_client_actions(_refresh_state):

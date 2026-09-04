@@ -18,10 +18,12 @@ const RUN_READY_WAIT_SEC := 3.0
 ##     settings_set key="autoload/Boot" value="*res://../../evil.gd"
 ##
 ## would land arbitrary code on the next project open, and a `project.godot`
-## diff is easy to miss in review. Autoloads have a validated route of their
-## own (`autoload_handler.add_autoload`, which runs the path through
-## `McpPathValidator`); the rest are refused outright because there is no
-## legitimate agent workflow for repointing the engine's startup execution.
+## diff is easy to miss in review. Blocked keys that DO have a legitimate agent
+## workflow get a narrow validated op of their own instead of an exception
+## carved into this list — `autoload_handler.add_autoload` for `autoload/`,
+## `set_main_scene` below for the main scene — so the denylist stays a flat set
+## of keys with no escape hatches to reason about. The rest are refused
+## outright.
 ##
 ## Deliberately NARROW. A denylist that over-blocks turns settings_set into a
 ## tool agents can't use, so only keys that actually carry code (or a command
@@ -45,6 +47,20 @@ const STARTUP_EXECUTION_KEYS_EXACT: Array[String] = [
 	"editor/run/main_run_args",             ## command line for the run
 ]
 
+## ProjectSettings key that names the scene the game boots into.
+const MAIN_SCENE_KEY := "application/run/main_scene"
+
+## Validated routes for blocked keys, appended to the refusal. `settings_get`
+## on a blocked key works, so an agent can read the value it needs to change
+## and then be refused the write — without a pointer it reads that asymmetry as
+## "this workflow is closed" and hands a non-bootable project back to the user
+## (#915). Keyed by the lowercased exact entry above.
+const STARTUP_EXECUTION_KEY_ALTERNATIVES := {
+	"application/run/main_scene":
+		"Use project_manage(op='set_main_scene', params={'path': 'res://<scene>.tscn'}), "
+		+ "which accepts only an existing PackedScene inside the project.",
+}
+
 
 ## Returns "" when `key` may be written via set_project_setting, or a
 ## human-readable refusal reason otherwise. Static so it is unit-testable
@@ -64,10 +80,14 @@ static func startup_execution_key_refusal(key: String) -> String:
 			)
 	for exact in STARTUP_EXECUTION_KEYS_EXACT:
 		if lowered == exact:
-			return (
+			var message := (
 				"Refusing to set '%s' — this key controls what the engine loads " % key
 				+ "or executes at project startup."
 			)
+			var alternative := str(STARTUP_EXECUTION_KEY_ALTERNATIVES.get(exact, ""))
+			if not alternative.is_empty():
+				message += " " + alternative
+			return message
 	return ""
 
 var _connection: McpConnection
@@ -138,6 +158,69 @@ func set_project_setting(params: Dictionary) -> Dictionary:
 			"value": NodeHandler._serialize_value(value),
 			"old_value": NodeHandler._serialize_value(old_value),
 			"type": type_string(typeof(value)),
+			"undoable": false,
+			"reason": "ProjectSettings changes are saved to disk",
+		}
+	}
+
+
+## The validated route to `application/run/main_scene`, which
+## `set_project_setting` refuses (STARTUP_EXECUTION_KEYS_EXACT) because a
+## generic setter has no way to tell a scene path from an arbitrary payload.
+## Without it an agent can create every scene, script, node and resource for a
+## new project and still not make it bootable: `project_run(mode="main")` has
+## nothing to launch, and the last step — pure mechanical configuration — has
+## to be finished by hand in the editor (#915).
+##
+## The blocklist's intent survives because the value can only ever name a scene
+## the project already contains: the path is confined under `res://` by
+## `McpPathValidator`, must resolve through `ResourceLoader`, and must load as
+## a `PackedScene`. No new startup-execution surface is opened.
+func set_main_scene(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var path_err = McpPathValidator.path_error(path, "path")
+	if path_err != null:
+		return path_err
+
+	if not ResourceLoader.exists(path):
+		return ErrorCodes.make(ErrorCodes.RESOURCE_NOT_FOUND, "Scene not found: %s" % path)
+	## Load rather than trusting `ResourceLoader.exists(path, "PackedScene")`:
+	## the type hint there comes from the loader's guess for the extension, so a
+	## `.tscn` that fails to parse would still pass it. A main scene that cannot
+	## load is a project that cannot boot, so pay for the real load here instead
+	## of surfacing the failure as a mystified `project_run`.
+	var resource := ResourceLoader.load(path)
+	if resource == null:
+		return ErrorCodes.make(
+			ErrorCodes.RESOURCE_NOT_FOUND,
+			"Failed to load scene (it may be corrupt or have a broken dependency): %s" % path
+		)
+	if not (resource is PackedScene):
+		return ErrorCodes.make(
+			ErrorCodes.WRONG_TYPE,
+			"path must be a PackedScene, got %s: %s" % [resource.get_class(), path]
+		)
+
+	var had_setting := ProjectSettings.has_setting(MAIN_SCENE_KEY)
+	var old_value = ProjectSettings.get_setting(MAIN_SCENE_KEY) if had_setting else null
+	ProjectSettings.set_setting(MAIN_SCENE_KEY, path)
+	var err := ProjectSettings.save()
+	if err != OK:
+		if had_setting:
+			ProjectSettings.set_setting(MAIN_SCENE_KEY, old_value)
+		else:
+			ProjectSettings.clear(MAIN_SCENE_KEY)
+		return ErrorCodes.make(
+			ErrorCodes.INTERNAL_ERROR,
+			"Failed to save project settings while setting the main scene: %s (error %d)"
+			% [error_string(err), err]
+		)
+
+	return {
+		"data": {
+			"key": MAIN_SCENE_KEY,
+			"path": path,
+			"old_value": NodeHandler._serialize_value(old_value),
 			"undoable": false,
 			"reason": "ProjectSettings changes are saved to disk",
 		}
