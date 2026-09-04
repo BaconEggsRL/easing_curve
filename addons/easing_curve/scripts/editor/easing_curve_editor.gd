@@ -235,6 +235,7 @@ func _handle_pending_add_motion(event: InputEventMouseMotion) -> void:
 	var world_pos := get_world_pos(event.position)
 	if not world_pos.is_finite():
 		return
+	world_pos = _backend.display_to_curve_position(world_pos)
 	var value_range := _value_range()
 	var clamped_pos := world_pos.clamp(
 		Vector2(0, value_range.x),
@@ -294,6 +295,7 @@ func _handle_drag_motion(event: InputEventMouseMotion) -> void:
 	var world_pos = get_world_pos(event.position)
 	if not world_pos.is_finite():
 		return
+	world_pos = _backend.display_to_curve_position(world_pos)
 	if dragging_control == ControlIndex.NONE and _backend.is_point_property_locked(dragging_point, &"position"):
 		return
 	if dragging_control == ControlIndex.LEFT and _backend.is_point_property_locked(dragging_point, &"left_control_point"):
@@ -439,6 +441,7 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 	var world_pos := get_world_pos(event.position)
 	if not world_pos.is_finite():
 		return
+	world_pos = _backend.display_to_curve_position(world_pos)
 	var value_range := _value_range()
 	var clamped_pos := world_pos.clamp(Vector2(0, value_range.x), Vector2(1.0, value_range.y))
 	if use_pending_add:
@@ -492,7 +495,7 @@ func _handle_left_released() -> void:
 	var dragged_point: Resource
 	if finish_point_edit and dragging_control == ControlIndex.NONE:
 		dragged_point = _point(dragging_point)
-		point_order = _get_display_points()
+		point_order = _get_ordered_points()
 		if _curve == null:
 			_backend.apply_point_order(point_order)
 		selected_index = _backend.find_point(dragged_point)
@@ -523,8 +526,10 @@ func _request_point_property_change(index: int, property_name: StringName, value
 		_backend.begin_point_edit()
 
 	var before: Variant
+	var selected_before: Resource
 	if not changing and not _backend_point_edit_active:
 		before = _duplicate_snapshot(_backend.capture_snapshot())
+		selected_before = _selected_point_resource()
 	if not _backend.apply_point_property(index, property_name, value, changing):
 		return
 	if property_name == &"position":
@@ -550,6 +555,8 @@ func _request_point_property_change(index: int, property_name: StringName, value
 		_point_edit_action_name(property_name),
 		before,
 		after,
+		selected_before,
+		_selected_point_resource(),
 	)
 
 
@@ -823,9 +830,9 @@ func _request_point_move_up() -> void:
 		if _curve != null:
 			point_move_up_requested.emit(selected_index)
 		else:
-			_reorder_selected_point(wrapi(selected_index - 1, 0, _point_count()))
+			_reorder_selected_point(_get_display_neighbor_index(-1))
 	else:
-		selected_index = wrapi(selected_index - 1, 0, _point_count())
+		selected_index = _get_display_neighbor_index(-1)
 
 
 func _request_point_move_down() -> void:
@@ -835,9 +842,9 @@ func _request_point_move_down() -> void:
 		if _curve != null:
 			point_move_down_requested.emit(selected_index)
 		else:
-			_reorder_selected_point(wrapi(selected_index + 1, 0, _point_count()))
+			_reorder_selected_point(_get_display_neighbor_index(1))
 	else:
-		selected_index = wrapi(selected_index + 1, 0, _point_count())
+		selected_index = _get_display_neighbor_index(1)
 
 
 func _can_use_point_move_buttons() -> bool:
@@ -848,6 +855,18 @@ func _can_use_point_move_buttons() -> bool:
 		and selected_index < _point_count()
 		and _point_count() >= 2
 	)
+
+
+func _get_display_neighbor_index(offset: int) -> int:
+	var selected_point := _selected_point_resource()
+	var display_points := _get_display_points()
+	var display_index := display_points.find(selected_point)
+	if display_index == -1:
+		return selected_index
+	var neighbor: Resource = display_points[
+		wrapi(display_index + offset, 0, display_points.size())
+	]
+	return _backend.find_point(neighbor)
 
 
 func _reorder_selected_point(to_index: int) -> void:
@@ -886,7 +905,9 @@ func _try_remove_point_at(view_pos: Vector2) -> bool:
 
 	var point := _point(point_idx)
 	_right_delete_requires_exit = true
-	_right_delete_blocked_position = get_view_pos(point.position)
+	_right_delete_blocked_position = get_view_pos(
+		_backend.curve_to_display_position(point.get(&"position") as Vector2)
+	)
 	_store_right_delete_drag_state()
 
 	_request_point_remove(point)
@@ -1005,7 +1026,7 @@ func _draw():
 	# --- Draw points and control points ---
 	for i in range(display_points.size()):
 		var p: Resource = display_points[i]
-		var pos_view = get_view_pos(p.position)
+		var pos_view = get_view_pos(_backend.curve_to_display_position(p.position))
 
 		var is_selected: bool = p == pending_add_point or (
 			selected_point != null and p == selected_point
@@ -1026,11 +1047,14 @@ func _draw():
 		# ----- Control Points -----
 		# LEFT
 		if i != 0:
-			var left_view = get_view_pos(p.left_control_point)
+			var left_view = get_view_pos(
+				_backend.get_display_control_point(p, EasingCurvePoint.ControlSide.LEFT)
+			)
 
 			var left_hovered = (
 				is_hovered and
-				hovered_control_index == ControlIndex.LEFT
+				hovered_control_index
+				== _backend.display_control_side_to_curve(ControlIndex.LEFT)
 			)
 
 			var left_alpha = 1.0 if left_hovered else alpha
@@ -1049,11 +1073,14 @@ func _draw():
 
 		# RIGHT
 		if i != display_points.size() - 1:
-			var right_view = get_view_pos(p.right_control_point)
+			var right_view = get_view_pos(
+				_backend.get_display_control_point(p, EasingCurvePoint.ControlSide.RIGHT)
+			)
 
 			var right_hovered = (
 				is_hovered and
-				hovered_control_index == ControlIndex.RIGHT
+				hovered_control_index
+				== _backend.display_control_side_to_curve(ControlIndex.RIGHT)
 			)
 
 			var right_alpha = 1.0 if right_hovered else alpha
@@ -1292,13 +1319,14 @@ func get_point_at(pos: Vector2) -> int:
 
 	var closest_idx = -1
 	var closest_dist_squared: float = point_radius * point_radius * 4
-	for i in range(_point_count()):
-		var p := _point(i)
-		var view_p = get_view_pos(p.position)
+	for point in _get_display_points():
+		var view_p = get_view_pos(
+			_backend.curve_to_display_position(point.get(&"position") as Vector2)
+		)
 		var dist_sq = view_p.distance_squared_to(pos)
 		if dist_sq < closest_dist_squared:
 			closest_dist_squared = dist_sq
-			closest_idx = i
+			closest_idx = _backend.find_point(point)
 	return closest_idx if closest_dist_squared < point_radius * point_radius else -1
 
 
@@ -1310,26 +1338,50 @@ func get_control_at(pos: Vector2) -> Array: # [point_index, ControlIndex]
 	if _backend == null:
 		return [-1, ControlIndex.NONE]
 
-	for i in range(_point_count()):
-		var p := _point(i)
+	var display_points := _get_display_points()
+	for display_index in range(display_points.size()):
+		var point: Resource = display_points[display_index]
+		var point_index: int = _backend.find_point(point)
 
 		# LEFT (only if not first and not locked)
 		if (
-			i != 0
-			and not _backend.is_point_control_force_linear(i, EasingCurvePoint.ControlSide.LEFT)
+			display_index != 0
+			and not _backend.is_point_control_force_linear(
+				point_index,
+				_backend.display_control_side_to_curve(EasingCurvePoint.ControlSide.LEFT),
+			)
 		):
-			var left_view = get_view_pos(p.left_control_point)
+			var left_view = get_view_pos(
+				_backend.get_display_control_point(
+					point,
+					EasingCurvePoint.ControlSide.LEFT,
+				)
+			)
 			if left_view.distance_squared_to(pos) < control_hover_radius * control_hover_radius:
-				return [i, ControlIndex.LEFT]
+				return [
+					point_index,
+					_backend.display_control_side_to_curve(ControlIndex.LEFT),
+				]
 
 		# RIGHT (only if not last and not locked)
 		if (
-			i != _point_count() - 1
-			and not _backend.is_point_control_force_linear(i, EasingCurvePoint.ControlSide.RIGHT)
+			display_index != display_points.size() - 1
+			and not _backend.is_point_control_force_linear(
+				point_index,
+				_backend.display_control_side_to_curve(EasingCurvePoint.ControlSide.RIGHT),
+			)
 		):
-			var right_view = get_view_pos(p.right_control_point)
+			var right_view = get_view_pos(
+				_backend.get_display_control_point(
+					point,
+					EasingCurvePoint.ControlSide.RIGHT,
+				)
+			)
 			if right_view.distance_squared_to(pos) < control_hover_radius * control_hover_radius:
-				return [i, ControlIndex.RIGHT]
+				return [
+					point_index,
+					_backend.display_control_side_to_curve(ControlIndex.RIGHT),
+				]
 
 	return [-1, ControlIndex.NONE]
 
@@ -1416,15 +1468,26 @@ func _get_autofit_world_bounds() -> Rect2:
 	var display_points := _get_display_points()
 	for i in range(display_points.size()):
 		var point: Resource = display_points[i]
-		min_bound = min_bound.min(point.position)
-		max_bound = max_bound.max(point.position)
+		var position: Vector2 = _backend.curve_to_display_position(
+			point.get(&"position") as Vector2
+		)
+		min_bound = min_bound.min(position)
+		max_bound = max_bound.max(position)
 
 		if i > 0:
-			min_bound = min_bound.min(point.left_control_point)
-			max_bound = max_bound.max(point.left_control_point)
+			var left_control: Vector2 = _backend.get_display_control_point(
+				point,
+				EasingCurvePoint.ControlSide.LEFT,
+			)
+			min_bound = min_bound.min(left_control)
+			max_bound = max_bound.max(left_control)
 		if i < display_points.size() - 1:
-			min_bound = min_bound.min(point.right_control_point)
-			max_bound = max_bound.max(point.right_control_point)
+			var right_control: Vector2 = _backend.get_display_control_point(
+				point,
+				EasingCurvePoint.ControlSide.RIGHT,
+			)
+			min_bound = min_bound.min(right_control)
+			max_bound = max_bound.max(right_control)
 
 	for i in range(display_points.size() - 1):
 		var controls := _get_effective_segment_controls(
@@ -1521,6 +1584,15 @@ func _get_display_points() -> Array[Resource]:
 			active_point = _point(dragging_point)
 		else:
 			active_point = position_x_order_preview_point
+	return _backend.get_display_points(active_point)
+
+
+func _get_ordered_points() -> Array[Resource]:
+	if _backend == null:
+		return []
+	var active_point: Resource
+	if dragging_point != -1 and dragging_control == ControlIndex.NONE:
+		active_point = _point(dragging_point)
 	return _backend.get_ordered_points(active_point)
 
 
@@ -1535,7 +1607,9 @@ func clear_position_x_order_preview() -> void:
 
 
 func _draw_bezier_curve(point_list: Array[Resource]) -> void:
-	var fallback_y := EasingCurve.get_bezier_fallback_value(0.0)
+	var fallback_y: float = _backend.curve_to_display_position(
+		Vector2(0.0, EasingCurve.get_bezier_fallback_value(0.0))
+	).y
 	if point_list.size() < 2:
 		draw_line(
 			get_view_pos(Vector2(0.0, fallback_y)),
@@ -1547,17 +1621,23 @@ func _draw_bezier_curve(point_list: Array[Resource]) -> void:
 
 	var first_point: Resource = point_list.front()
 	var last_point: Resource = point_list.back()
+	var first_position: Vector2 = _backend.curve_to_display_position(
+		first_point.get(&"position") as Vector2
+	)
+	var last_position: Vector2 = _backend.curve_to_display_position(
+		last_point.get(&"position") as Vector2
+	)
 
-	if not EasingCurve.is_left_endpoint_x(first_point.position.x):
+	if not EasingCurve.is_left_endpoint_x(first_position.x):
 		draw_line(
 			get_view_pos(Vector2(0.0, fallback_y)),
-			get_view_pos(Vector2(first_point.position.x, fallback_y)),
+			get_view_pos(Vector2(first_position.x, fallback_y)),
 			LINE_COLOR,
 			2,
 		)
 		draw_line(
-			get_view_pos(Vector2(first_point.position.x, fallback_y)),
-			get_view_pos(first_point.position),
+			get_view_pos(Vector2(first_position.x, fallback_y)),
+			get_view_pos(first_position),
 			LINE_COLOR,
 			2,
 		)
@@ -1571,15 +1651,15 @@ func _draw_bezier_curve(point_list: Array[Resource]) -> void:
 			visible_x_bounds.y,
 		)
 
-	if not EasingCurve.is_right_endpoint_x(last_point.position.x):
+	if not EasingCurve.is_right_endpoint_x(last_position.x):
 		draw_line(
-			get_view_pos(last_point.position),
-			get_view_pos(Vector2(last_point.position.x, fallback_y)),
+			get_view_pos(last_position),
+			get_view_pos(Vector2(last_position.x, fallback_y)),
 			LINE_COLOR,
 			2,
 		)
 		draw_line(
-			get_view_pos(Vector2(last_point.position.x, fallback_y)),
+			get_view_pos(Vector2(last_position.x, fallback_y)),
 			get_view_pos(Vector2(1.0, fallback_y)),
 			LINE_COLOR,
 			2,
@@ -1600,8 +1680,12 @@ func _draw_bezier_segment(
 		visible_min_x: float,
 		visible_max_x: float,
 ) -> void:
-	var a_position: Vector2 = a.get(&"position")
-	var b_position: Vector2 = b.get(&"position")
+	var a_position: Vector2 = _backend.curve_to_display_position(
+		a.get(&"position") as Vector2
+	)
+	var b_position: Vector2 = _backend.curve_to_display_position(
+		b.get(&"position") as Vector2
+	)
 	var segment_width := b_position.x - a_position.x
 	if absf(segment_width) <= EasingCurve.SEGMENT_X_EPSILON:
 		if a_position.x >= visible_min_x and a_position.x <= visible_max_x:
@@ -1726,8 +1810,12 @@ func _bezier_world_position(
 		in_control: Vector2,
 		t: float,
 ) -> Vector2:
-	var a_position: Vector2 = a.get(&"position")
-	var b_position: Vector2 = b.get(&"position")
+	var a_position: Vector2 = _backend.curve_to_display_position(
+		a.get(&"position") as Vector2
+	)
+	var b_position: Vector2 = _backend.curve_to_display_position(
+		b.get(&"position") as Vector2
+	)
 	return Vector2(
 		BEZIER_SOLVER.bezier_interpolate(
 			a_position.x,
@@ -1753,8 +1841,12 @@ func _bezier_world_derivative(
 		in_control: Vector2,
 		t: float,
 ) -> Vector2:
-	var a_position: Vector2 = a.get(&"position")
-	var b_position: Vector2 = b.get(&"position")
+	var a_position: Vector2 = _backend.curve_to_display_position(
+		a.get(&"position") as Vector2
+	)
+	var b_position: Vector2 = _backend.curve_to_display_position(
+		b.get(&"position") as Vector2
+	)
 	return Vector2(
 		BEZIER_SOLVER.bezier_derivative(
 			a_position.x,
@@ -1774,20 +1866,30 @@ func _bezier_world_derivative(
 
 
 func _get_effective_segment_controls(a: Resource, b: Resource) -> Array[Vector2]:
-	var a_position: Vector2 = a.get(&"position")
-	var b_position: Vector2 = b.get(&"position")
-	var out_control: Vector2 = a.get(&"right_control_point")
-	var in_control: Vector2 = b.get(&"left_control_point")
+	var a_position: Vector2 = _backend.curve_to_display_position(
+		a.get(&"position") as Vector2
+	)
+	var b_position: Vector2 = _backend.curve_to_display_position(
+		b.get(&"position") as Vector2
+	)
+	var out_control: Vector2 = _backend.get_display_control_point(
+		a,
+		EasingCurvePoint.ControlSide.RIGHT,
+	)
+	var in_control: Vector2 = _backend.get_display_control_point(
+		b,
+		EasingCurvePoint.ControlSide.LEFT,
+	)
 	var min_x := minf(a_position.x, b_position.x)
 	var max_x := maxf(a_position.x, b_position.x)
 	out_control.x = clampf(out_control.x, min_x, max_x)
 	in_control.x = clampf(in_control.x, min_x, max_x)
-	var increasing := b_position.x >= a_position.x
+	var increasing: bool = b_position.x >= a_position.x
 	if (
 		(increasing and out_control.x > in_control.x)
 		or (not increasing and out_control.x < in_control.x)
 	):
-		var shared_x := (out_control.x + in_control.x) * 0.5
+		var shared_x: float = (out_control.x + in_control.x) * 0.5
 		out_control.x = shared_x
 		in_control.x = shared_x
 	return [out_control, in_control]
@@ -2196,7 +2298,10 @@ func _get_point_toolbar_control_state(
 	point_index: int,
 	side: EasingCurvePoint.ControlSide,
 ) -> EasingCurvePoint.ControlState:
-	return _backend.get_point_control_state(point_index, side)
+	return _backend.get_point_control_state(
+		point_index,
+		_backend.display_control_side_to_curve(side),
+	)
 
 
 func _on_point_toolbar_handle_mode_selected(index: int) -> void:
@@ -2231,9 +2336,10 @@ func _on_point_toolbar_control_state_selected(
 	):
 		return
 
+	var curve_side: int = _backend.display_control_side_to_curve(side)
 	var property_name := (
 		&"left_control_state"
-		if side == EasingCurvePoint.ControlSide.LEFT
+		if curve_side == EasingCurvePoint.ControlSide.LEFT
 		else &"right_control_state"
 	)
 	var option := (

@@ -109,6 +109,31 @@ func get_ordered_points(active_point: Resource = null) -> Array[Resource]:
 	return _sort_points_by_x(result)
 
 
+func get_display_points(active_point: Resource = null) -> Array[Resource]:
+	return get_ordered_points(active_point)
+
+
+func curve_to_display_position(position: Vector2) -> Vector2:
+	return position
+
+
+func display_to_curve_position(position: Vector2) -> Vector2:
+	return position
+
+
+func get_display_control_point(point: Resource, side: int) -> Vector2:
+	var property_name := (
+		&"left_control_point"
+		if side == CONTROL_SIDE_LEFT
+		else &"right_control_point"
+	)
+	return curve_to_display_position(point.get(property_name) as Vector2)
+
+
+func display_control_side_to_curve(side: int) -> int:
+	return side
+
+
 func apply_point_order(_point_order: Array[Resource]) -> int:
 	return -1
 

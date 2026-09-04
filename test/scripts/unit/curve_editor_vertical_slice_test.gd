@@ -13,6 +13,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_legacy_selection_path()
 	_test_native_selection_and_point_options()
+	_test_native_bezier_transform_preview()
 	_test_native_geometry_gestures()
 	_test_native_add_delete_and_endpoint_topology()
 	_test_native_existing_point_endpoint_takeover()
@@ -67,8 +68,104 @@ func _test_native_selection_and_point_options() -> void:
 	_expect(not point.get(&"right_force_linear"), "Native lock did not clear Force Linear")
 	_expect(change_count[0] == 2, "Native locking amplified curve change signals")
 
+	var history := UndoRedo.new()
+	editor.editor_undo_redo = history
+	editor.call(
+		&"_on_point_toolbar_handle_mode_selected",
+		EasingCurvePoint.HandleMode.MIRRORED,
+	)
+	_expect(
+		editor.call(&"_selected_point_resource") == point,
+		"Native Handle Mode change cleared the selected point",
+	)
+	var handle_mode_option := editor.get("_point_handle_mode") as OptionButton
+	_expect(
+		handle_mode_option != null and handle_mode_option.self_modulate.a > 0.0,
+		"Native Handle Mode change hid the selected-point toolbar",
+	)
+	history.undo()
+	_expect(
+		editor.call(&"_selected_point_resource") == point,
+		"Native Handle Mode Undo cleared the selected point",
+	)
+	history.redo()
+	_expect(
+		editor.call(&"_selected_point_resource") == point,
+		"Native Handle Mode Redo cleared the selected point",
+	)
+
 	curve.set(&"transition", 0)
 	_expect(not editor.call(&"_is_point_toolbar_hidden"), "Native editable preset hid point options")
+	editor.queue_free()
+
+
+func _test_native_bezier_transform_preview() -> void:
+	if not ClassDB.class_exists(&"NativeEasingCurve"):
+		return
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	curve.set(&"transition", 100)
+	var first := curve.call(&"get_point", 0) as Resource
+	var last := curve.call(&"get_point", 1) as Resource
+	first.set(&"right_control_point", Vector2(0.2, 0.4))
+	last.set(&"position", Vector2(1.0, 0.8))
+	last.set(&"left_control_point", Vector2(0.7, 0.6))
+
+	var editor := CURVE_EDITOR.new() as EasingCurveEditor
+	editor.set_curve(curve)
+	editor.size = Vector2(520.0, 260.0)
+	root.add_child(editor)
+	editor.update_view_transform()
+
+	curve.set(&"reverse", true)
+	curve.set(&"invert", true)
+	var display_points := editor.call(&"_get_display_points") as Array
+	_expect(
+		display_points == [last, first],
+		"Native Reverse preview did not reverse displayed point order",
+	)
+	editor.select_point(last)
+	editor.call(&"_request_point_move_down")
+	_expect(
+		editor.call(&"_selected_point_resource") == first,
+		"Native Reverse preview navigation did not follow displayed point order",
+	)
+	var backend := editor.get("_backend") as RefCounted
+	_expect(
+		(backend.call(&"curve_to_display_position", last.get(&"position")) as Vector2).is_equal_approx(Vector2(0.0, 0.2)),
+		"Native Reverse/Invert preview did not transform point geometry",
+	)
+	_expect(
+		(backend.call(&"get_display_control_point", last, EasingCurvePoint.ControlSide.RIGHT) as Vector2).is_equal_approx(Vector2(0.3, 0.4)),
+		"Native Reverse/Invert preview did not swap and transform handles",
+	)
+	var displayed_last_control := Vector2(0.3, 0.4)
+	var control_hit := editor.get_control_at(
+		editor.get_view_pos(displayed_last_control)
+	)
+	_expect(
+		control_hit == [1, EasingCurveEditor.ControlIndex.LEFT],
+		"Native transformed handle hit-testing did not map back to the stored side",
+	)
+	var transformed_first := backend.call(
+		&"curve_to_display_position",
+		first.get(&"position"),
+	) as Vector2
+	_expect(
+		editor.get_point_at(editor.get_view_pos(transformed_first)) == 0,
+		"Native transformed preview hit-testing lost point identity",
+	)
+	var drag_target := Vector2(0.8, 0.75)
+	editor._gui_input(_mouse_button(editor.get_view_pos(transformed_first), true))
+	editor._gui_input(_mouse_motion(editor.get_view_pos(drag_target)))
+	editor._gui_input(_mouse_button(editor.get_view_pos(drag_target), false))
+	_expect(
+		(first.get(&"position") as Vector2).is_equal_approx(Vector2(0.2, 0.25)),
+		"Native transformed point drag did not map back to stored coordinates",
+	)
+	_expect(
+		editor.call(&"_selected_point_resource") == first,
+		"Native transformed point drag lost selection identity",
+	)
 	editor.queue_free()
 
 

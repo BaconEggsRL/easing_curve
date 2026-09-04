@@ -56,6 +56,41 @@ func get_points() -> Array[Resource]:
 	return result
 
 
+func get_display_points(active_point: Resource = null) -> Array[Resource]:
+	var result := get_ordered_points(active_point)
+	if bool(curve.get(&"reverse")):
+		result.reverse()
+	return result
+
+
+func curve_to_display_position(position: Vector2) -> Vector2:
+	if bool(curve.get(&"reverse")):
+		position.x = 1.0 - position.x
+	if bool(curve.get(&"invert")):
+		position.y = 1.0 - position.y
+	return position
+
+
+func display_to_curve_position(position: Vector2) -> Vector2:
+	return curve_to_display_position(position)
+
+
+func get_display_control_point(point: Resource, side: int) -> Vector2:
+	var curve_side := display_control_side_to_curve(side)
+	var property_name := (
+		&"left_control_point"
+		if curve_side == CONTROL_SIDE_LEFT
+		else &"right_control_point"
+	)
+	return curve_to_display_position(point.get(property_name) as Vector2)
+
+
+func display_control_side_to_curve(side: int) -> int:
+	if not bool(curve.get(&"reverse")):
+		return side
+	return CONTROL_SIDE_RIGHT if side == CONTROL_SIDE_LEFT else CONTROL_SIDE_LEFT
+
+
 func create_point(position: Vector2) -> Resource:
 	var point := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
 	if point == null:
