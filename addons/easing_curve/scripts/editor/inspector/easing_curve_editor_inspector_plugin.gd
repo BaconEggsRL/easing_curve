@@ -41,6 +41,7 @@ const PointsListContainer = PointListController.PointsListContainer
 ## Vector2 slider step
 const SLIDER_INPUT_STEP = 0.001
 const DRAGGING_META := &"_easing_curve_dragging"
+const VALUE_EDITING_META := &"_easing_curve_value_editing"
 const POSITION_X_EDITING_META := &"_easing_curve_position_x_editing"
 # modified preset indicator
 const SHOW_MODIFIED_ASTERISK := true
@@ -118,6 +119,56 @@ const TRANSITION_PRESENTATION := [
 		"name": "Custom",
 		"items": [
 			{"transition": EasingCurve.TRANS.CUSTOM},
+		],
+	},
+]
+
+const NATIVE_TRANSITION_PRESENTATION := [
+	{
+		"name": "Basic",
+		"items": [
+			{"transition": 0, "label": "Linear"},
+			{"transition": 101, "label": "Constant"},
+		],
+	},
+	{
+		"name": "Polynomial",
+		"items": [
+			{"transition": 4, "label": "Quad"},
+			{"transition": 7, "label": "Cubic"},
+			{"transition": 3, "label": "Quart"},
+			{"transition": 2, "label": "Quint"},
+			{"transition": 105, "label": "Power"},
+		],
+	},
+	{
+		"name": "Smooth",
+		"items": [
+			{"transition": 1, "label": "Sine"},
+			{"transition": 8, "label": "Circ"},
+			{"transition": 5, "label": "Expo"},
+		],
+	},
+	{
+		"name": "Springy",
+		"items": [
+			{"transition": 10, "label": "Back"},
+			{"transition": 6, "label": "Elastic"},
+			{"transition": 9, "label": "Bounce"},
+			{"transition": 11, "label": "Spring"},
+			{"transition": 106, "label": "Physics Spring"},
+		],
+	},
+	{
+		"name": "Discrete",
+		"items": [
+			{"transition": 104, "label": "Step"},
+		],
+	},
+	{
+		"name": "Custom",
+		"items": [
+			{"transition": 100, "label": "Custom"},
 		],
 	},
 ]
@@ -713,19 +764,41 @@ func _handle_native_curve_editor(
 	var root := VBoxContainer.new()
 	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", _compact_separation())
+	var backend := BackendFactory.create(object)
+
+	# Mirror the legacy resource header instead of showing Native's internal
+	# modified-state label. The asterisk lives in the selected Trans item and
+	# the reset action keeps its reserved trailing slot.
+	var toolbar := GridContainer.new()
+	toolbar.name = &"CurvePresetToolbar"
+	toolbar.columns = 3
+	toolbar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	toolbar.add_theme_constant_override("h_separation", _compact_separation())
+	toolbar.add_theme_constant_override("v_separation", _compact_separation())
+	var ease_reset := _create_reserved_reset_button("Reset Ease to In")
+	var preset_reset := _create_reserved_reset_button("Restore selected preset geometry")
+	var native_ease_option := _create_option(EasingCurve.EASE, int(object.get(&"ease_type")))
+	native_ease_option.name = &"CurveEase"
+	var native_trans_option := _create_native_transition_option(
+		int(object.get(&"transition")),
+		backend.get_transition_ids() if backend != null else PackedInt32Array(),
+	)
+	native_trans_option.name = &"CurveTransition"
+	toolbar.add_child(_create_option_label("Ease"))
+	toolbar.add_child(native_ease_option)
+	toolbar.add_child(ease_reset)
+	toolbar.add_child(_create_option_label("Trans"))
+	toolbar.add_child(native_trans_option)
+	toolbar.add_child(preset_reset)
+	root.add_child(toolbar)
+
+	var toolbar_gap := Control.new()
+	toolbar_gap.custom_minimum_size.y = _compact_separation()
+	root.add_child(toolbar_gap)
 
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", _compact_separation())
-
-	var preset_row := HBoxContainer.new()
-	preset_row.add_theme_constant_override("separation", _compact_separation())
-	var preset_status := Label.new()
-	preset_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var preset_reset := _create_reserved_reset_button("Restore selected preset geometry")
-	preset_row.add_child(preset_status)
-	preset_row.add_child(preset_reset)
-	content.add_child(preset_row)
 
 	easing_curve_editor = (
 		editor_override
@@ -735,6 +808,23 @@ func _handle_native_curve_editor(
 	easing_curve_editor.editor_undo_redo = editor_undo_redo
 	easing_curve_editor.set_curve(object)
 	preset_reset.pressed.connect(easing_curve_editor.reset_native_preset)
+	ease_reset.pressed.connect(
+		easing_curve_editor.edit_curve_property.bind(&"ease_type", EasingCurve.EASE.IN)
+	)
+	native_ease_option.item_selected.connect(
+		func(index: int) -> void:
+			easing_curve_editor.edit_curve_property(
+				&"ease_type",
+				native_ease_option.get_item_id(index),
+			)
+	)
+	native_trans_option.item_selected.connect(
+		func(index: int) -> void:
+			easing_curve_editor.edit_curve_property(
+				&"transition",
+				native_trans_option.get_item_id(index),
+			)
+	)
 	content.add_child(easing_curve_editor)
 	easing_curve_editor.resized.connect(easing_curve_editor.update_minimum_size)
 
@@ -774,24 +864,42 @@ func _handle_native_curve_editor(
 
 	var changed_callback := _on_native_curve_changed.bind(
 		object,
-		preset_status,
+		native_ease_option,
+		native_trans_option,
+		ease_reset,
 		preset_reset,
 		native_points_section,
 	)
 	object.changed.connect(changed_callback)
 	root.tree_exiting.connect(_disconnect_native_curve_changed.bind(object, changed_callback))
-	_update_native_preset_status(object, preset_status, preset_reset, native_points_section)
+	_update_native_preset_state_ui(
+		object,
+		native_ease_option,
+		native_trans_option,
+		ease_reset,
+		preset_reset,
+		native_points_section,
+	)
 	_queue_autofit_curve_editor()
 	return root
 
 
 func _on_native_curve_changed(
 	object: Resource,
-	preset_status: Label,
+	ease_control: OptionButton,
+	trans_control: OptionButton,
+	ease_reset: Button,
 	preset_reset: Button,
 	points_section: Control,
 ) -> void:
-	_update_native_preset_status(object, preset_status, preset_reset, points_section)
+	_update_native_preset_state_ui(
+		object,
+		ease_control,
+		trans_control,
+		ease_reset,
+		preset_reset,
+		points_section,
+	)
 	var backend := BackendFactory.create(object)
 	var identity_signature := (
 		_get_native_point_identity_signature(backend.get_points())
@@ -808,18 +916,40 @@ func _disconnect_native_curve_changed(object: Resource, callback: Callable) -> v
 		object.changed.disconnect(callback)
 
 
-func _update_native_preset_status(
+func _update_native_preset_state_ui(
 	object: Resource,
-	status: Label,
+	ease_control: OptionButton,
+	trans_control: OptionButton,
+	ease_reset: Button,
 	reset_button: Button,
 	points_section: Control,
 ) -> void:
-	if object == null or not is_instance_valid(status) or not is_instance_valid(reset_button) or not is_instance_valid(points_section):
+	if (
+		object == null
+		or not is_instance_valid(ease_control)
+		or not is_instance_valid(trans_control)
+		or not is_instance_valid(ease_reset)
+		or not is_instance_valid(reset_button)
+		or not is_instance_valid(points_section)
+	):
 		return
 	var modified := bool(object.call(&"is_selected_preset_modified"))
 	var backend := BackendFactory.create(object)
-	status.text = "Preset geometry modified *" if modified else "Preset geometry"
-	status.visible = bool(object.call(&"is_builtin_bezier_preset"))
+	var transition := int(object.get(&"transition"))
+	var ease_type := int(object.get(&"ease_type"))
+	var ease_index := ease_control.get_item_index(ease_type)
+	if ease_index >= 0:
+		ease_control.select(ease_index)
+	var trans_index := trans_control.get_item_index(transition)
+	if trans_index >= 0:
+		trans_control.select(trans_index)
+	var ease_available := _native_transition_supports_ease(transition) and not modified
+	ease_control.disabled = not ease_available
+	_set_preset_reset_button_available(
+		ease_reset,
+		ease_available and ease_type != EasingCurve.EASE.IN,
+	)
+	_set_native_transition_display(trans_control, transition, modified)
 	points_section.visible = backend != null and backend.is_point_graph()
 	_set_preset_reset_button_available(reset_button, modified)
 
@@ -957,6 +1087,12 @@ func _add_native_vector_property(
 		input.ungrabbed.connect(
 			_on_native_input_ungrabbed.bind(input, point, property_name)
 		)
+		input.value_focus_entered.connect(
+			_on_native_input_value_focus_entered.bind(input, point, property_name)
+		)
+		input.value_focus_exited.connect(
+			_on_native_input_value_focus_exited.bind(input, point, property_name)
+		)
 		input.focus_entered.connect(easing_curve_editor.select_point_resource.bind(point))
 		input.value_changed.connect(
 			_on_native_vector_value_changed.bind(
@@ -988,6 +1124,29 @@ func _on_native_input_ungrabbed(
 	easing_curve_editor.finish_point_list_edit(point, property_name)
 
 
+func _on_native_input_value_focus_entered(
+	input: EditorSpinSlider,
+	point: Resource,
+	property_name: StringName,
+) -> void:
+	if input.has_meta(DRAGGING_META):
+		input.remove_meta(DRAGGING_META)
+		easing_curve_editor.finish_point_list_edit(point, property_name)
+	input.set_meta(VALUE_EDITING_META, true)
+	easing_curve_editor.select_point_resource(point)
+
+
+func _on_native_input_value_focus_exited(
+	input: EditorSpinSlider,
+	point: Resource,
+	property_name: StringName,
+) -> void:
+	if not input.has_meta(VALUE_EDITING_META):
+		return
+	input.remove_meta(VALUE_EDITING_META)
+	easing_curve_editor.finish_point_list_edit.call_deferred(point, property_name)
+
+
 func _on_native_vector_value_changed(
 	value: float,
 	point: Resource,
@@ -995,7 +1154,10 @@ func _on_native_vector_value_changed(
 	axis: int,
 	input: EditorSpinSlider,
 ) -> void:
-	var points: Array = _native_curve.get(&"points")
+	var native_curve := easing_curve_editor.get_curve()
+	if native_curve == null:
+		return
+	var points: Array = native_curve.get(&"points")
 	var current_index: int = points.find(point)
 	if current_index < 0:
 		return
@@ -1005,7 +1167,7 @@ func _on_native_vector_value_changed(
 		current_index,
 		property_name,
 		vector,
-		input.has_meta(DRAGGING_META),
+		input.has_meta(DRAGGING_META) or input.has_meta(VALUE_EDITING_META),
 	)
 
 
@@ -1036,7 +1198,10 @@ func _add_native_handle_mode_property(
 	option.focus_entered.connect(easing_curve_editor.select_point_resource.bind(point))
 	option.item_selected.connect(
 		func(mode: int):
-			var points: Array = _native_curve.get(&"points")
+			var native_curve := easing_curve_editor.get_curve()
+			if native_curve == null:
+				return
+			var points: Array = native_curve.get(&"points")
 			var current_index: int = points.find(point)
 			if current_index >= 0:
 				easing_curve_editor.select_point_resource(point)
@@ -1090,7 +1255,7 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 			)
 			add_property_editor(name, native_property, false, "")
 			return true
-		if name in ["points", "preset_override_active"]:
+		if name in ["transition", "ease_type", "points", "preset_override_active"]:
 			return true
 	if object is EasingCurve and name == "easing_curve_editor":
 		curve = object
@@ -1230,6 +1395,7 @@ func _on_x_input_value_changed(value: float, point: EasingCurvePoint, x_input: E
 		edit_property_name,
 		v,
 		x_input.has_meta(DRAGGING_META)
+			or x_input.has_meta(VALUE_EDITING_META)
 			or x_input.has_meta(POSITION_X_EDITING_META),
 		point if edit_property_name == &"position" else null,
 	)
@@ -1251,7 +1417,7 @@ func _on_y_input_value_changed(value: float, point: EasingCurvePoint, y_input: E
 		i,
 		edit_property_name,
 		v,
-		y_input.has_meta(DRAGGING_META),
+		y_input.has_meta(DRAGGING_META) or y_input.has_meta(VALUE_EDITING_META),
 		point if edit_property_name == &"position" else null,
 	)
 	_update_point_reset_btn(reset_btn, i, edit_property_name) # show reset if different
@@ -2051,6 +2217,7 @@ func _connect_point_input_drag_signals(input: EditorSpinSlider) -> void:
 	input.grabbed.connect(_on_point_input_grabbed.bind(input))
 	input.ungrabbed.connect(_on_point_input_ungrabbed.bind(input))
 	input.value_focus_entered.connect(_on_point_input_focus_entered.bind(input))
+	input.value_focus_exited.connect(_on_point_input_focus_exited.bind(input))
 
 
 func _on_point_input_grabbed(input: EditorSpinSlider) -> void:
@@ -2067,6 +2234,14 @@ func _on_point_input_focus_entered(input: EditorSpinSlider) -> void:
 	if input.has_meta(DRAGGING_META):
 		input.remove_meta(DRAGGING_META)
 		_commit_point_edit()
+	input.set_meta(VALUE_EDITING_META, true)
+
+
+func _on_point_input_focus_exited(input: EditorSpinSlider) -> void:
+	if not input.has_meta(VALUE_EDITING_META):
+		return
+	input.remove_meta(VALUE_EDITING_META)
+	_commit_point_edit.call_deferred()
 
 
 func _on_position_x_input_focus_entered(input: EditorSpinSlider) -> void:
@@ -2448,6 +2623,10 @@ static func _transition_supports_ease(transition: EasingCurve.TRANS) -> bool:
 	return EasingCurve.transition_supports_ease(transition)
 
 
+static func _native_transition_supports_ease(transition: int) -> bool:
+	return transition not in [0, 100, 101, 104]
+
+
 static func _set_transition_display(
 	trans_control: OptionButton,
 	selected_transition: EasingCurve.TRANS,
@@ -2475,6 +2654,23 @@ static func _set_transition_display(
 			display += " *"
 
 		trans_control.set_item_text(i, display)
+
+
+static func _set_native_transition_display(
+	trans_control: OptionButton,
+	selected_transition: int,
+	modified: bool,
+) -> void:
+	for group: Dictionary in NATIVE_TRANSITION_PRESENTATION:
+		for item: Dictionary in group["items"]:
+			var transition := int(item["transition"])
+			var item_index := trans_control.get_item_index(transition)
+			if item_index < 0:
+				continue
+			var display := String(item["label"])
+			if SHOW_MODIFIED_ASTERISK and transition == selected_transition and modified:
+				display += " *"
+			trans_control.set_item_text(item_index, display)
 
 
 static func _set_preset_reset_button_available(reset_control: Button, available: bool) -> void:
@@ -2518,6 +2714,27 @@ static func _create_transition_option(
 
 			option.add_item(display, transition)
 
+	option.select(option.get_item_index(selected_value))
+	return option
+
+
+static func _create_native_transition_option(
+	selected_value: int,
+	allowed_transition_ids: PackedInt32Array,
+) -> OptionButton:
+	var option := OptionButton.new()
+	_configure_compact_option(option)
+	var popup := option.get_popup()
+	for group: Dictionary in NATIVE_TRANSITION_PRESENTATION:
+		var group_items: Array[Dictionary] = []
+		for item: Dictionary in group["items"]:
+			if allowed_transition_ids.has(int(item["transition"])):
+				group_items.append(item)
+		if group_items.is_empty():
+			continue
+		popup.add_separator(String(group["name"]))
+		for item: Dictionary in group_items:
+			option.add_item(String(item["label"]), int(item["transition"]))
 	option.select(option.get_item_index(selected_value))
 	return option
 

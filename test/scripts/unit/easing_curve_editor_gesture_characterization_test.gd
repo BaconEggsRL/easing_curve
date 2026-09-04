@@ -1625,6 +1625,35 @@ func _test_inspector_input_transaction_finish_boundaries() -> void:
 		"Position X focus completion left a stale graph-order preview",
 	)
 
+	var typed_input := EditorSpinSlider.new()
+	inspector.call("_connect_point_input_drag_signals", typed_input)
+	var publications := [0]
+	curve.changed.connect(func() -> void: publications[0] += 1)
+	var publications_before: int = publications[0]
+	typed_input.emit_signal(&"value_focus_entered")
+	inspector.call(
+		"_on_y_input_value_changed",
+		0.71,
+		point,
+		typed_input,
+		reset_btn,
+		"right_control_point",
+	)
+	_expect(
+		bool(EDITOR_DRIVER.point_edit_transaction_state(inspector)["active"]),
+		"Typed Legacy point value did not begin an accepted-value transaction",
+	)
+	_expect(
+		publications[0] == publications_before,
+		"Typed Legacy point value published before entry was accepted",
+	)
+	typed_input.emit_signal(&"value_focus_exited")
+	await process_frame
+	_expect(
+		publications[0] == publications_before + 1,
+		"Typed Legacy point value did not publish once after entry was accepted",
+	)
+
 	point.handle_mode = EasingCurvePoint.HandleMode.LINEAR
 	var linear_input := EditorSpinSlider.new()
 	inspector.call("_on_linear_control_x_input_focus_entered", linear_input, point)

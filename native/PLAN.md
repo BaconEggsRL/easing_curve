@@ -493,6 +493,8 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 **Status:** **In progress — feature-complete, certification pending.** Constant, Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, and Back expose canonical Bézier geometry in the shared graph/list editor. Editing preserves Transition/Ease identity, enables compiled geometry through a cached sampling-mode flag, displays modified/reset state, and persists overrides. Transition-specific metadata is conditionally visible for Constant, Back, Elastic, Step, Power, Spring, and Physics Spring, matching the legacy Inspector policy. Clean presets remain analytic and omit redundant points on save. Format v3 records modified presets while v2 standard resources retain analytic behavior and v2 Custom points remain usable. The shared **New point handles** control applies a persistent editor-only Free/Linear/Balanced/Mirrored/Linked default to both graph and list additions without touching resources or sampling. Automated correctness, round-trip, normalization, relative performance, and scaling coverage pass; its visible restart-persistence check, hosted CI, and a repeatable quiet-host absolute baseline remain.
 
+**Deferred editor polish:** Native force-linear and lock state remain available in the selected-point graph toolbar. Duplicating those controls in each Native point-list row is intentionally deferred to a later feature update.
+
 **Goal:** Make Native resources first-class in the shared editor.
 
 **Implementation:**

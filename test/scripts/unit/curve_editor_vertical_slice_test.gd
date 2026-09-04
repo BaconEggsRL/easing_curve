@@ -23,7 +23,7 @@ func _run() -> void:
 	_test_native_existing_point_endpoint_takeover()
 	_test_native_crossing_and_toolbar_reorder()
 	_test_native_point_list_swap_parity()
-	_test_native_inspector_path()
+	await _test_native_inspector_path()
 	_finish("shared curve editor vertical slice")
 
 
@@ -261,6 +261,10 @@ func _test_legacy_selection_path() -> void:
 	var editor := CURVE_EDITOR.new() as EasingCurveEditor
 	editor.set_curve(curve)
 	root.add_child(editor)
+	_expect(
+		editor.focus_mode == Control.FOCUS_NONE,
+		"Curve graph still takes focus and can scroll the Inspector on handle clicks",
+	)
 	_expect(editor.get_backend_id() == &"legacy", "Curve Editor did not select the legacy backend")
 	_expect(editor.select_point(curve.points[0]), "Curve Editor could not select a legacy point")
 	_expect(editor.selected_index == 0, "legacy point selection index changed")
@@ -412,6 +416,27 @@ func _test_native_inspector_path() -> void:
 	_expect(content != null, "Inspector plugin did not build the Native Curve Editor")
 	if content != null:
 		root.add_child(content)
+		var preset_toolbar := content.find_child("CurvePresetToolbar", true, false)
+		var ease_control := content.find_child("CurveEase", true, false) as OptionButton
+		var trans_control := content.find_child("CurveTransition", true, false) as OptionButton
+		_expect(
+			preset_toolbar != null and ease_control != null and trans_control != null,
+			"Native Inspector did not mirror the legacy Ease/Trans header",
+		)
+		_expect(
+			_find_label_starting_with(content, "Preset geometry") == null,
+			"Native Inspector retained the standalone preset-geometry label",
+		)
+		if trans_control != null:
+			var custom_index := trans_control.get_item_index(100)
+			var linear_index := trans_control.get_item_index(0)
+			_expect(
+				custom_index >= 0
+				and linear_index >= 0
+				and trans_control.get_item_text(custom_index) == "Custom"
+				and trans_control.get_item_text(linear_index) == "Linear",
+				"Native Trans dropdown used legacy transition IDs",
+			)
 		var editor := _find_curve_editor(content)
 		_expect(editor != null, "Native Inspector content omitted the shared Curve Editor")
 		if editor != null:
@@ -421,6 +446,24 @@ func _test_native_inspector_path() -> void:
 			_expect(_find_drag_handle(content) != null, "Native point list omitted the legacy drag handle")
 			var first_point := curve.call(&"get_point", 0) as Resource
 			var first_panel: Node = inspector.get("_native_points_content").get_child(0)
+			var position_inputs := first_panel.find_children("*", "EditorSpinSlider", true, false)
+			if not position_inputs.is_empty():
+				var typed_input := position_inputs[0] as EditorSpinSlider
+				var live_publications := [0]
+				editor.committed_change_publisher = func() -> void:
+					live_publications[0] += 1
+				typed_input.value_focus_entered.emit()
+				typed_input.value = 0.05
+				_expect(
+					live_publications[0] == 0,
+					"Native typed point value published before entry was accepted",
+				)
+				typed_input.value_focus_exited.emit()
+				await process_frame
+				_expect(
+					live_publications[0] == 1,
+					"Native typed point value did not publish one accepted edit",
+				)
 			var original_position: Vector2 = first_point.get(&"position")
 			var preview_position := original_position + Vector2(0.0, 0.2)
 			editor.edit_point_property(0, &"position", preview_position, true)
@@ -446,7 +489,17 @@ func _test_native_inspector_path() -> void:
 				var before_count: int = curve.call(&"get_point_count")
 				add_button.pressed.emit()
 				_expect(curve.call(&"get_point_count") == before_count + 1, "Native point-list Add did not use the shared backend")
+		await process_frame
 		content.queue_free()
+		await process_frame
+
+
+func _find_label_starting_with(root_control: Control, prefix: String) -> Label:
+	for node in root_control.find_children("*", "Label", true, false):
+		var label := node as Label
+		if label != null and label.text.begins_with(prefix):
+			return label
+	return null
 
 
 func _test_native_geometry_gestures() -> void:

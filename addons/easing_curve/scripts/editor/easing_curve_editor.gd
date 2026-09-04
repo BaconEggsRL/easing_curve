@@ -150,7 +150,10 @@ var _default_new_point_handle_mode := EasingCurvePoint.HandleMode.FREE
 
 func _ready() -> void:
 	custom_minimum_size = Vector2.ZERO
-	focus_mode = Control.FOCUS_ALL
+	# The graph has no keyboard actions. Taking mouse focus makes the outer
+	# Inspector ScrollContainer follow the graph when a point or handle is
+	# clicked, producing a small and distracting vertical scroll jump.
+	focus_mode = Control.FOCUS_NONE
 	clip_contents = true
 
 	if Engine.is_editor_hint():
@@ -699,6 +702,38 @@ func edit_point_property(
 	changing := false,
 ) -> void:
 	_request_point_property_change(index, property_name, value, changing)
+
+
+func edit_curve_property(property_name: StringName, value: Variant) -> void:
+	var resource := get_curve()
+	if _backend == null or resource == null or resource.get(property_name) == value:
+		return
+	var before := _duplicate_snapshot(_backend.capture_snapshot())
+	var selected_before := _selected_point_resource()
+	resource.set(property_name, value)
+	var selected_after := (
+		selected_before
+		if selected_before != null and _backend.find_point(selected_before) >= 0
+		else null
+	)
+	selected_index = (
+		_backend.find_point(selected_after)
+		if selected_after != null
+		else -1
+	)
+	var after := _duplicate_snapshot(_backend.capture_snapshot())
+	if before == after:
+		return
+	_commit_backend_snapshot_action(
+		"Change Easing Curve Ease"
+			if property_name == &"ease_type"
+			else "Change Easing Curve Transition",
+		before,
+		after,
+		selected_before,
+		selected_after,
+	)
+	queue_redraw()
 
 
 func finish_point_list_edit(point: Resource, property_name: StringName) -> void:
