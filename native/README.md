@@ -191,6 +191,12 @@ Godot's live debugger a method call it can replay in the running game and gives
 the owning scene the correct dirty history. Point-list reorder now matches legacy
 by exchanging the points' x positions and translating both handles. Point identity
 and selection survive reorder and Undo/Redo, and detached points are disconnected.
+Native point-property cells retain the compact list layout while supporting the
+same selection highlight, context menu, keyboard shortcuts, serialized system
+clipboard, and cross-copy behavior as Legacy. Deferred value-edit completion is
+resolved by curve and point identity rather than retaining row controls, so an
+Inspector rebuild, topology action, or resource switch cannot replay a stale UI
+callback or merge unrelated Undo transactions.
 Clean presets continue on the analytic sampler; only Custom and modified preset
 geometry use compiled segments. Pending additions and point-list drags render
 directly from backend point state, stale pending/detached previews are discarded,
@@ -207,7 +213,7 @@ points, curve resources, Undo history, live publication, or runtime sampling.
 |---|---|---|
 | Standard transition parity | Pass with observation | Circ, Cubic, Elastic, Expo, Quart, and Quint showed slight start jitter relative to Tween. Legacy showed the same behavior, so this is recorded as a harness/timing investigation rather than a Native release blocker. |
 | Deterministic modes and transforms | Pass | No follow-up from this run. |
-| Custom editing and ownership | Pass for reported workflows; new selector restart check pending | The reported graph/list selection, live restart, preset/function preview, topology, and stale-point issues are resolved. Automated coverage includes deferred drags, endpoint takeover, detached-point disconnection, identity-preserving Undo/Redo, one publication per commit, and all five new-point handle defaults. |
+| Custom editing and ownership | Pass for reported workflows; new selector restart check pending | The reported graph/list selection, live restart, preset/function preview, topology, and stale-point issues are resolved. Automated coverage includes deferred drags, endpoint takeover, detached-point disconnection, identity-preserving Undo/Redo, one publication per commit, all five new-point handle defaults, compact Native property selection/copy/paste, cross-backend clipboard values, and stale-row lifecycle cancellation. |
 | Preset editing and persistence | Pass for reported workflows; full restart persistence check pending | Constant, Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, and Back use canonical legacy geometry, retain Transition/Ease identity while edited, show modified/reset state, save overrides, and normalize clean saves. |
 | Save, reload, and coexistence | Automated pass | Modified Native presets and Custom curves round-trip; clean presets omit redundant geometry; both public APIs continue to work independently. |
 | Native resource preview/icon | Pass | Generated Native Inspector previews and the `Curve.svg` FileSystem class icon both passed manual verification. |

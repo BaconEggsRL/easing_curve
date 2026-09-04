@@ -28,6 +28,7 @@ func _run() -> void:
 	_test_native_crossing_and_toolbar_reorder()
 	_test_native_point_list_swap_parity()
 	await _test_native_inspector_path()
+	await _test_native_property_clipboard_and_lifecycle()
 	_finish("shared curve editor vertical slice")
 
 
@@ -594,8 +595,231 @@ func _test_native_inspector_path() -> void:
 				add_button.pressed.emit()
 				_expect(curve.call(&"get_point_count") == before_count + 1, "Native point-list Add did not use the shared backend")
 		await process_frame
-		content.queue_free()
+		content.free()
+
+
+func _test_native_property_clipboard_and_lifecycle() -> void:
+	if not ClassDB.class_exists(&"NativeEasingCurve"):
+		return
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	curve.set(&"transition", 100)
+	var point := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+	point.set(&"position", Vector2(0.5, 0.5))
+	point.set(&"left_control_point", Vector2(0.35, 0.45))
+	point.set(&"right_control_point", Vector2(0.65, 0.55))
+	_expect(bool(curve.call(&"insert_point", 1, point)), "Native clipboard fixture rejected its middle point")
+
+	var inspector := INSPECTOR_PLUGIN.new()
+	var content := inspector.handle_easing_curve_editor(curve)
+	root.add_child(content)
+	var editor := _find_curve_editor(content)
+	var history := UndoRedo.new()
+	editor.editor_undo_redo = history
+	var publications := [0]
+	editor.committed_change_publisher = func() -> void:
+		publications[0] += 1
+
+	for property_name: StringName in [
+		&"position",
+		&"handle_mode",
+		&"left_control_point",
+		&"right_control_point",
+	]:
+		var header := _find_native_property_header(content, point, property_name)
+		_expect(header != null, "Native point list omitted selectable %s" % property_name)
+		if header == null:
+			continue
+		header.gui_input.emit(_mouse_button(Vector2.ZERO, true))
+		_expect(
+			int(inspector.get("_point_list_controller").get("selected_point_resource_id"))
+			== point.get_instance_id(),
+			"Native %s selection did not retain point identity" % property_name,
+		)
+		_expect(
+			StringName(inspector.get("_point_list_controller").get("selected_point_property_name"))
+			== property_name,
+			"Native %s selection did not retain the property name" % property_name,
+		)
+		_expect(
+			inspector.get("_selected_point_property_header") == header,
+			"Native %s selection did not attach its property highlight" % property_name,
+		)
+		_expect(
+			editor.get_selected_point_resource() == point,
+			"Native %s selection did not synchronize the graph" % property_name,
+		)
+		var menu := _find_popup_menu(header)
+		_expect(
+			menu != null
+			and _popup_has_item(menu, "Copy Value")
+			and _popup_has_item(menu, "Paste Value")
+			and _popup_has_item(menu, "Copy Property Path"),
+			"Native %s property menu is incomplete" % property_name,
+		)
+
+	var points_section := content.get_child(content.get_child_count() - 1) as Control
+	var shortcut_focus := _find_button(points_section, "Add Point")
+	shortcut_focus.grab_focus()
+	var shortcut_counts := {&"copy": 0, &"paste": 0, &"path": 0}
+	points_section.set(&"copy_value_callback", func() -> void: shortcut_counts[&"copy"] += 1)
+	points_section.set(&"paste_value_callback", func() -> void: shortcut_counts[&"paste"] += 1)
+	points_section.set(&"copy_path_callback", func() -> void: shortcut_counts[&"path"] += 1)
+	points_section.set(&"can_paste_callback", func() -> bool: return true)
+	for shortcut in [
+		{&"key": KEY_C, &"shift": false, &"counter": &"copy"},
+		{&"key": KEY_V, &"shift": false, &"counter": &"paste"},
+		{&"key": KEY_C, &"shift": true, &"counter": &"path"},
+	]:
+		var event := InputEventKey.new()
+		event.pressed = true
+		event.ctrl_pressed = true
+		event.shift_pressed = shortcut[&"shift"]
+		event.keycode = shortcut[&"key"]
+		points_section.call(&"_input", event)
+		_expect(shortcut_counts[shortcut[&"counter"]] == 1, "Native Points shortcut did not route %s" % shortcut[&"counter"])
+	var command_copy := InputEventKey.new()
+	command_copy.pressed = true
+	command_copy.meta_pressed = true
+	command_copy.keycode = KEY_C
+	points_section.call(&"_input", command_copy)
+	_expect(shortcut_counts[&"copy"] == 2, "Native Points shortcut did not accept Cmd+C")
+
+	var handle_header := _find_native_property_header(content, point, &"handle_mode")
+	handle_header.gui_input.emit(_mouse_button(Vector2.ZERO, true))
+	var original_point := point
+	var original_mode := int(point.get(&"handle_mode"))
+	inspector.call(
+		"_apply_pasted_point_property_value",
+		1,
+		&"handle_mode",
+		EasingCurvePoint.HandleMode.BALANCED,
+	)
+	_expect(int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.BALANCED, "Native Handle Mode paste was not applied")
+	_expect(history.get_history_count() == 1, "Native paste did not create exactly one Undo action")
+	_expect(publications[0] == 1, "Native paste did not publish exactly once")
+	_expect(curve.call(&"get_point", 1) == original_point, "Native paste replaced point identity")
+	history.undo()
+	_expect(int(point.get(&"handle_mode")) == original_mode, "Native paste Undo did not restore the value")
+	history.redo()
+	_expect(int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.BALANCED, "Native paste Redo did not restore the value")
+
+	var history_before_invalid := history.get_history_count()
+	var publications_before_invalid: int = publications[0]
+	inspector.call("_apply_pasted_point_property_value", 1, &"handle_mode", 99)
+	inspector.call("_apply_pasted_point_property_value", 1, &"position", 0.25)
+	_expect(history.get_history_count() == history_before_invalid, "Invalid Native paste created Undo history")
+	_expect(publications[0] == publications_before_invalid, "Invalid Native paste published a change")
+
+	var clipboard_supported := DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD)
+	var original_clipboard := DisplayServer.clipboard_get() if clipboard_supported else ""
+	if clipboard_supported:
+		inspector.call("_copy_point_property_value", 1, &"handle_mode")
+		_expect(DisplayServer.clipboard_get() == var_to_str(EasingCurvePoint.HandleMode.BALANCED), "Native Copy Value changed the shared serialized format")
+
+		var legacy_curve := _make_handle_mode_curve(&"legacy") as EasingCurve
+		var legacy_inspector := INSPECTOR_PLUGIN.new()
+		var legacy_content := legacy_inspector.handle_easing_curve_editor(legacy_curve)
+		legacy_inspector.call("_paste_point_property_value", 1, &"handle_mode")
+		_expect(legacy_curve.points[1].handle_mode == EasingCurvePoint.HandleMode.BALANCED, "Native-to-Legacy clipboard paste failed")
+
+		legacy_curve.points[1].handle_mode = EasingCurvePoint.HandleMode.LINEAR
+		legacy_inspector.call("_copy_point_property_value", 1, &"handle_mode")
+		inspector.call("_paste_point_property_value", 1, &"handle_mode")
+		_expect(int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.LINEAR, "Legacy-to-Native clipboard paste failed")
+
+		editor.move_point_from_list(1, 2)
+		var current_index := (curve.call(&"get_points") as Array).find(point)
+		inspector.call("_copy_point_property_path", current_index, &"handle_mode")
+		_expect(DisplayServer.clipboard_get() == "points/%d/handle_mode" % current_index, "Native Copy Property Path retained a stale pre-reorder index")
+		DisplayServer.clipboard_set(original_clipboard)
+		legacy_content.free()
+
+	history.clear_history()
+	publications[0] = 0
+	var point_panel := inspector.get("_native_points_content").get_child(1) as Control
+	var inputs := point_panel.find_children("*", "EditorSpinSlider", true, false)
+	_expect(not inputs.is_empty(), "Native lifecycle fixture omitted its vector input")
+	if not inputs.is_empty():
+		var input := inputs[0] as EditorSpinSlider
+		input.grabbed.emit()
+		input.value = input.value + 0.05
+		input.ungrabbed.emit()
+		input.value_focus_entered.emit()
+		_expect(bool(editor.get("_backend_point_edit_active")), "Native focus handoff closed the edit before text entry")
+		_expect(publications[0] == 0, "Native focus handoff published before commit")
+		input.value_focus_exited.emit()
+		inspector.call("_refresh_native_point_list", curve)
 		await process_frame
+		_expect(not bool(editor.get("_backend_point_edit_active")), "Native deferred edit survived a point-list rebuild")
+		_expect(publications[0] == 1, "Native rebuilt-row edit did not publish exactly once")
+
+		point_panel = inspector.get("_native_points_content").get_child(1) as Control
+		inputs = point_panel.find_children("*", "EditorSpinSlider", true, false)
+		input = inputs[0] as EditorSpinSlider
+		input.value_focus_entered.emit()
+		input.value = input.value + 0.05
+		input.value_focus_exited.emit()
+		var add_button := _find_button(content, "Add Point")
+		var count_before_add: int = curve.call(&"get_point_count")
+		add_button.pressed.emit()
+		var publications_after_add: int = publications[0]
+		await process_frame
+		_expect(curve.call(&"get_point_count") == count_before_add + 1, "Queued Native edit blocked point addition")
+		_expect(publications_after_add == publications[0], "Stale Native deferred finish published after point addition")
+		_expect(not bool(editor.get("_backend_point_edit_active")), "Native topology action retained an active value transaction")
+
+	var disposal_panel := inspector.get("_native_points_content").get_child(1) as Control
+	var disposal_inputs := disposal_panel.find_children("*", "EditorSpinSlider", true, false)
+	_expect(not disposal_inputs.is_empty(), "Native disposal fixture omitted its vector input")
+	if not disposal_inputs.is_empty():
+		var disposal_input := disposal_inputs[0] as EditorSpinSlider
+		disposal_input.value_focus_entered.emit()
+		disposal_input.value = disposal_input.value + 0.05
+		disposal_input.value_focus_exited.emit()
+		var publications_before_disposal: int = publications[0]
+		var replacement_curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+		inspector.call("_parse_begin", replacement_curve)
+		content.free()
+		await process_frame
+		_expect(
+			publications[0] == publications_before_disposal + 1,
+			"Native editor disposal did not finish its active edit exactly once",
+		)
+	else:
+		content.free()
+
+	history.clear_history(false)
+	history.free()
+
+
+func _find_native_property_header(
+	parent: Control,
+	point: Resource,
+	property_name: StringName,
+) -> PanelContainer:
+	for node in parent.find_children("*", "PanelContainer", true, false):
+		var panel := node as PanelContainer
+		if (
+			panel.has_meta(&"point_resource_id")
+			and int(panel.get_meta(&"point_resource_id")) == point.get_instance_id()
+			and StringName(panel.get_meta(&"point_property_name")) == property_name
+		):
+			return panel
+	return null
+
+
+func _find_popup_menu(parent: Node) -> PopupMenu:
+	for child in parent.get_children():
+		if child is PopupMenu:
+			return child
+	return null
+
+
+func _popup_has_item(menu: PopupMenu, text: String) -> bool:
+	for index in range(menu.item_count):
+		if menu.get_item_text(index) == text:
+			return true
+	return false
 
 
 func _find_label_starting_with(root_control: Control, prefix: String) -> Label:

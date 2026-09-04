@@ -160,7 +160,8 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 * **Reordering the Points List**
   * Click the up or down arrows or drag a point in the points list to swap it with another point.
   * You can also use the drag handles to move a point anywhere in the points list.
-  * Select a property of any point and right click to copy / paste.
+  * Select a property of any Legacy or Native point and right click to copy its value, paste a compatible value, or copy its property path.
+  * Ctrl/Cmd+C, Ctrl/Cmd+V, and Ctrl/Cmd+Shift+C perform the same actions for the selected point property. Compatible values can be copied between Legacy and Native curves.
 
 **&nbsp;**
 

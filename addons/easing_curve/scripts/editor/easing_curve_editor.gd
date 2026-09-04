@@ -145,6 +145,9 @@ var _backend_point_edit_active := false
 var _backend_point_edit_before: Variant
 var _backend_point_edit_action_name := "Edit Easing Curve Point"
 var _backend_point_edit_selected_before: Resource
+var _backend_point_edit_point: Resource
+var _backend_point_edit_property := StringName()
+var _backend_point_edit_from_point_list := false
 var _default_new_point_handle_mode := EasingCurvePoint.HandleMode.FREE
 
 
@@ -178,6 +181,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	finish_active_point_edit()
 	if not Engine.is_editor_hint():
 		return
 	var settings := EditorInterface.get_editor_settings()
@@ -563,16 +567,40 @@ func _handle_left_released() -> void:
 	queue_redraw()
 
 
-func _request_point_property_change(index: int, property_name: StringName, value: Variant, changing: bool = false) -> void:
+func _request_point_property_change(
+	index: int,
+	property_name: StringName,
+	value: Variant,
+	changing: bool = false,
+	from_point_list: bool = false,
+) -> void:
 	if point_property_change_requested.has_connections():
 		point_property_change_requested.emit(index, property_name, value, changing)
 		return
 	if _backend == null:
 		return
+	var edited_point := _point(index)
+	if (
+		_backend_point_edit_active
+		and (
+			from_point_list != _backend_point_edit_from_point_list
+			or (
+				from_point_list
+				and (
+					edited_point != _backend_point_edit_point
+					or property_name != _backend_point_edit_property
+				)
+			)
+		)
+	):
+		finish_active_point_edit()
 	if changing and not _backend_point_edit_active:
 		_backend_point_edit_before = _duplicate_snapshot(_backend.capture_snapshot())
 		_backend_point_edit_action_name = _point_edit_action_name(property_name)
 		_backend_point_edit_selected_before = _selected_point_resource()
+		_backend_point_edit_point = edited_point
+		_backend_point_edit_property = property_name
+		_backend_point_edit_from_point_list = from_point_list
 		_backend_point_edit_active = true
 		_backend.begin_point_edit()
 
@@ -621,6 +649,9 @@ func _finish_backend_point_edit() -> void:
 	_backend_point_edit_action_name = "Edit Easing Curve Point"
 	var selected_before := _backend_point_edit_selected_before
 	_backend_point_edit_selected_before = null
+	_backend_point_edit_point = null
+	_backend_point_edit_property = StringName()
+	_backend_point_edit_from_point_list = false
 	_backend.finish_point_edit()
 	var after: Variant = _duplicate_snapshot(_backend.capture_snapshot())
 	if before == after:
@@ -706,13 +737,14 @@ func edit_point_property(
 	value: Variant,
 	changing := false,
 ) -> void:
-	_request_point_property_change(index, property_name, value, changing)
+	_request_point_property_change(index, property_name, value, changing, true)
 
 
 func edit_curve_property(property_name: StringName, value: Variant) -> void:
 	var resource := get_curve()
 	if _backend == null or resource == null or resource.get(property_name) == value:
 		return
+	finish_active_point_edit()
 	var before := _duplicate_snapshot(_backend.capture_snapshot())
 	var selected_before := _selected_point_resource()
 	resource.set(property_name, value)
@@ -744,10 +776,39 @@ func edit_curve_property(property_name: StringName, value: Variant) -> void:
 func finish_point_list_edit(point: Resource, property_name: StringName) -> void:
 	if not _backend_point_edit_active or point == null:
 		return
-	if property_name == &"position":
-		_backend.apply_point_order(_backend.get_ordered_points(point))
-		selected_index = _backend.find_point(point)
-		position_x_order_preview_point = null
+	if point != _backend_point_edit_point or property_name != _backend_point_edit_property:
+		return
+	finish_active_point_edit()
+
+
+func prepare_point_list_edit(
+	point: Resource,
+	property_name: StringName,
+) -> bool:
+	if not _backend_point_edit_active:
+		return false
+	if (
+		_backend_point_edit_from_point_list
+		and point == _backend_point_edit_point
+		and property_name == _backend_point_edit_property
+	):
+		return false
+	finish_active_point_edit()
+	return true
+
+
+func finish_active_point_edit() -> void:
+	if not _backend_point_edit_active:
+		return
+	var edited_point := _backend_point_edit_point
+	if (
+		_backend_point_edit_property == &"position"
+		and edited_point != null
+		and _backend.find_point(edited_point) >= 0
+	):
+		_backend.apply_point_order(_backend.get_ordered_points(edited_point))
+		selected_index = _backend.find_point(edited_point)
+	position_x_order_preview_point = null
 	_finish_backend_point_edit()
 	queue_redraw()
 
@@ -820,6 +881,7 @@ func reset_native_preset() -> void:
 	var resource := get_curve()
 	if _backend == null or resource == null or not resource.has_method(&"reset_selected_preset"):
 		return
+	finish_active_point_edit()
 	var before := _duplicate_snapshot(_backend.capture_snapshot())
 	var selected_before := _selected_point_resource()
 	resource.call(&"reset_selected_preset")
@@ -882,6 +944,7 @@ func _request_point_add(point: Resource) -> int:
 	if _curve != null and point is EasingCurvePoint and point_add_requested.has_connections():
 		point_add_requested.emit(point)
 		return _backend.find_point(point)
+	finish_active_point_edit()
 	var before := _duplicate_snapshot(_backend.capture_snapshot())
 	var selected_before := _selected_point_resource()
 	var result: int = _backend.add_point(point)
@@ -902,6 +965,7 @@ func _request_point_remove(point: Resource) -> bool:
 	if _curve != null and point is EasingCurvePoint and point_remove_requested.has_connections():
 		point_remove_requested.emit(point)
 		return true
+	finish_active_point_edit()
 	var index: int = _backend.find_point(point)
 	if index < 0:
 		return false
@@ -969,6 +1033,7 @@ func _get_display_neighbor_index(offset: int) -> int:
 
 
 func _reorder_selected_point(to_index: int) -> void:
+	finish_active_point_edit()
 	var selected_point := _selected_point_resource()
 	if selected_point == null or to_index < 0 or to_index >= _point_count():
 		return
@@ -1246,6 +1311,9 @@ func set_curve(resource: Resource) -> void:
 	_backend_point_edit_before = null
 	_backend_point_edit_action_name = "Edit Easing Curve Point"
 	_backend_point_edit_selected_before = null
+	_backend_point_edit_point = null
+	_backend_point_edit_property = StringName()
+	_backend_point_edit_from_point_list = false
 	var previous := get_curve()
 	if previous != null and previous.changed.is_connected(_on_curve_changed):
 		previous.changed.disconnect(_on_curve_changed)

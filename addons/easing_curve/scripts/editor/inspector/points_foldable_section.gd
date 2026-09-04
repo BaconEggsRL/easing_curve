@@ -77,19 +77,20 @@ func _input(event: InputEvent) -> void:
 	):
 		return
 
-	if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_C:
+	var command_or_control: bool = event.ctrl_pressed or event.meta_pressed
+	if command_or_control and event.shift_pressed and event.keycode == KEY_C:
 		if copy_path_callback.is_valid():
 			copy_path_callback.call()
 			get_viewport().set_input_as_handled()
 		return
 
-	if event.ctrl_pressed and not event.shift_pressed and event.keycode == KEY_C:
+	if command_or_control and not event.shift_pressed and event.keycode == KEY_C:
 		if copy_value_callback.is_valid():
 			copy_value_callback.call()
 			get_viewport().set_input_as_handled()
 		return
 
-	if event.ctrl_pressed and not event.shift_pressed and event.keycode == KEY_V:
+	if command_or_control and not event.shift_pressed and event.keycode == KEY_V:
 		if (
 			paste_value_callback.is_valid()
 			and can_paste_callback.is_valid()

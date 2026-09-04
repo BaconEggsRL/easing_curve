@@ -60,6 +60,8 @@ var _native_curve: Resource
 var _native_points_content: VBoxContainer
 var _native_points_refresh_queued := false
 var _native_point_identity_signature := PackedInt64Array()
+var _native_editor_generation := 0
+var _native_point_edit_finish_request_id := 0
 
 
 ## Inspector-only transition grouping, ordering, and presentation.
@@ -188,12 +190,21 @@ func _parse_begin(object: Object) -> void:
 	var resource := object as Resource
 	var backend := BackendFactory.create(resource)
 	if backend != null and backend.get_backend_id() == &"native":
+		if _native_curve != resource:
+			_cancel_pending_native_point_edit_finish()
+			_clear_point_property_selection()
+		else:
+			_point_list_controller.consume_selection_refresh_preservation()
 		curve = null
 		_native_curve = resource
 		return
 
 	if not object is EasingCurve:
 		return
+	if _native_curve != null:
+		_cancel_pending_native_point_edit_finish()
+		_clear_point_property_selection()
+	_native_curve = null
 
 	if _point_list_controller.consume_selection_refresh_preservation():
 		return
@@ -215,18 +226,24 @@ func _copy_point_property_value(
 	point_index: int,
 	property_name: StringName,
 ) -> void:
-	_point_property_clipboard.copy_value(curve, point_index, property_name)
+	var curve_resource := _point_list_curve_resource()
+	_point_property_clipboard.copy_point_value(
+		curve_resource,
+		_point_at(curve_resource, point_index),
+		property_name,
+	)
 
 
 func _paste_point_property_value(
 	point_index: int,
 	property_name: StringName,
 ) -> void:
-	_point_property_clipboard.paste_value(
-		curve,
-		point_index,
+	var curve_resource := _point_list_curve_resource()
+	_point_property_clipboard.paste_point_value(
+		curve_resource,
+		_point_at(curve_resource, point_index),
 		property_name,
-		Callable(self, "_apply_point_property_change"),
+		Callable(self, "_apply_editor_point_property_change"),
 	)
 
 
@@ -235,12 +252,13 @@ func _apply_pasted_point_property_value(
 	property_name: StringName,
 	value: Variant,
 ) -> void:
-	_point_property_clipboard.apply_value(
-		curve,
-		point_index,
+	var curve_resource := _point_list_curve_resource()
+	_point_property_clipboard.apply_point_value(
+		curve_resource,
+		_point_at(curve_resource, point_index),
 		property_name,
 		value,
-		Callable(self, "_apply_point_property_change"),
+		Callable(self, "_apply_editor_point_property_change"),
 	)
 
 
@@ -248,7 +266,12 @@ func _copy_point_property_path(
 	point_index: int,
 	property_name: StringName,
 ) -> void:
-	PointPropertyClipboardController.copy_path(point_index, property_name)
+	var curve_resource := _point_list_curve_resource()
+	PointPropertyClipboardController.copy_point_path(
+		curve_resource,
+		_point_at(curve_resource, point_index),
+		property_name,
+	)
 
 
 static func _is_point_property_value_compatible(
@@ -273,12 +296,42 @@ func _create_point_property_context_menu(
 	point_index: int,
 	property_name: StringName,
 ) -> PopupMenu:
-	return _point_property_clipboard.create_context_menu(
-		curve,
-		point_index,
+	var curve_resource := _point_list_curve_resource()
+	return _point_property_clipboard.create_point_context_menu(
+		curve_resource,
+		_point_at(curve_resource, point_index),
 		property_name,
-		Callable(self, "_apply_point_property_change"),
+		Callable(self, "_apply_editor_point_property_change"),
 	)
+
+
+func _point_list_curve_resource() -> Resource:
+	return _native_curve if is_instance_valid(_native_curve) else curve
+
+
+static func _point_at(curve_resource: Resource, point_index: int) -> Resource:
+	var backend := BackendFactory.create(curve_resource)
+	return backend.get_point(point_index) if backend != null else null
+
+
+func _apply_editor_point_property_change(
+	point_index: int,
+	property_name: StringName,
+	value: Variant,
+) -> void:
+	var curve_resource := _point_list_curve_resource()
+	var backend := BackendFactory.create(curve_resource)
+	if backend == null or point_index < 0 or point_index >= backend.get_point_count():
+		return
+	if backend.get_backend_id() == &"legacy":
+		_apply_point_property_change(point_index, property_name, value)
+		return
+	if not is_instance_valid(easing_curve_editor):
+		return
+	var point: Resource = backend.get_point(point_index)
+	_point_list_controller.request_selection_refresh_preservation()
+	easing_curve_editor.select_point_resource(point)
+	easing_curve_editor.edit_point_property(point_index, property_name, value)
 
 
 func _create_selectable_point_property_header(
@@ -402,6 +455,88 @@ func _create_selectable_point_property_header(
 	return property_header
 
 
+func _create_native_point_property_header(
+	point: Resource,
+	property_name: StringName,
+	label_text: String,
+) -> PanelContainer:
+	var property_header := PanelContainer.new()
+	property_header.focus_mode = Control.FOCUS_NONE
+	property_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	property_header.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	property_header.size_flags_stretch_ratio = POINT_PROPERTY_HEADER_RATIO
+	property_header.add_theme_stylebox_override(&"panel", StyleBoxEmpty.new())
+	property_header.set_meta(&"point_resource_id", point.get_instance_id())
+	property_header.set_meta(&"point_property_name", property_name)
+
+	var backend := BackendFactory.create(_native_curve)
+	var point_index: int = backend.find_point(point) if backend != null else -1
+	var property_path := _point_property_path(point_index, property_name)
+	property_header.tooltip_text = property_path
+
+	var property_context_menu := (
+		_point_property_clipboard.create_point_context_menu(
+			_native_curve,
+			point,
+			property_name,
+			Callable(self, "_apply_editor_point_property_change"),
+		)
+	)
+	property_header.add_child(property_context_menu)
+	property_header.gui_input.connect(
+		func(event: InputEvent) -> void:
+			if not event is InputEventMouseButton or not event.pressed:
+				return
+			if event.button_index not in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+				return
+			_select_native_point_property(property_header, point, property_name)
+			if event.button_index == MOUSE_BUTTON_RIGHT:
+				_point_property_clipboard.update_context_menu_paste_enabled(
+					property_context_menu,
+					property_name,
+				)
+				property_context_menu.position = DisplayServer.mouse_get_position()
+				property_context_menu.popup()
+				property_header.accept_event()
+	)
+
+	if (
+		_point_list_controller.selected_point_resource_id == point.get_instance_id()
+		and _point_list_controller.selected_point_property_name == property_name
+	):
+		_attach_selected_point_property_header(property_header)
+
+	var property_label := Label.new()
+	property_label.text = label_text
+	property_label.tooltip_text = property_path
+	property_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	property_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_configure_compact_label(property_label)
+	property_header.add_child(property_label)
+	return property_header
+
+
+func _select_native_point_property(
+	property_header: PanelContainer,
+	point: Resource,
+	property_name: StringName,
+) -> void:
+	var backend := BackendFactory.create(_native_curve)
+	var point_index: int = backend.find_point(point) if backend != null else -1
+	if point_index < 0:
+		return
+	if is_instance_valid(_selected_point_property_header):
+		_set_point_property_selected(_selected_point_property_header, false)
+	_point_list_controller.assign_logical_selection(
+		_native_curve,
+		point_index,
+		property_name,
+	)
+	_attach_selected_point_property_header(property_header)
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.select_point_resource(point)
+
+
 
 
 
@@ -461,13 +596,16 @@ func _capture_point_selection_state() -> Dictionary:
 	if is_instance_valid(easing_curve_editor):
 		graph_selected_index = easing_curve_editor.selected_index
 	return _point_list_controller.capture_selection(
-		curve,
+		_point_list_curve_resource(),
 		graph_selected_index,
 	)
 
 
 func _restore_point_selection_state(selection: Dictionary) -> void:
-	var point_index := _point_list_controller.restore_selection(curve, selection)
+	var point_index := _point_list_controller.restore_selection(
+		_point_list_curve_resource(),
+		selection,
+	)
 	if point_index == -1:
 		if is_instance_valid(_selected_point_property_header):
 			_set_point_property_selected(_selected_point_property_header, false)
@@ -761,6 +899,9 @@ func _handle_native_curve_editor(
 	object: Resource,
 	editor_override: EasingCurveEditor = null,
 ) -> Control:
+	_native_curve = object
+	_native_editor_generation += 1
+	_cancel_pending_native_point_edit_finish()
 	var root := VBoxContainer.new()
 	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", _compact_separation())
@@ -859,7 +1000,11 @@ func _handle_native_curve_editor(
 	)
 	_native_points_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_build_native_point_list(object)
-	var native_points_section := _create_foldable_section("Points", _native_points_content, object)
+	var native_points_section := _create_inspector_section(
+		"Points",
+		_native_points_content,
+		object,
+	)
 	root.add_child(native_points_section)
 
 	var changed_callback := _on_native_curve_changed.bind(
@@ -960,7 +1105,7 @@ func _refresh_native_point_list(object: Resource) -> void:
 		return
 	for child in _native_points_content.get_children():
 		_native_points_content.remove_child(child)
-		child.queue_free()
+		child.free()
 	_build_native_point_list(object)
 
 
@@ -982,7 +1127,8 @@ func _build_native_point_list(object: Resource) -> void:
 func _get_native_point_identity_signature(points: Array[Resource]) -> PackedInt64Array:
 	var signature := PackedInt64Array()
 	for point in points:
-		signature.append(point.get_instance_id())
+		if is_instance_valid(point):
+			signature.append(point.get_instance_id())
 	return signature
 
 
@@ -1065,11 +1211,15 @@ func _add_native_vector_property(
 	property_name: StringName,
 	label_text: String,
 ) -> void:
-	var label := Label.new()
-	label.text = label_text
-	grid.add_child(label)
+	var property_header := _create_native_point_property_header(
+		point,
+		property_name,
+		label_text,
+	)
+	grid.add_child(property_header)
 	var values := HBoxContainer.new()
 	values.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	values.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
 	grid.add_child(values)
 	var inputs: Array[EditorSpinSlider] = []
 	for axis in range(2):
@@ -1083,7 +1233,14 @@ func _add_native_vector_property(
 		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var value: Vector2 = point.get(property_name)
 		input.value = value[axis]
-		input.grabbed.connect(_on_native_input_grabbed.bind(input, point))
+		input.grabbed.connect(
+			_on_native_input_grabbed.bind(
+				input,
+				point,
+				property_name,
+				property_header,
+			)
+		)
 		input.ungrabbed.connect(
 			_on_native_input_ungrabbed.bind(input, point, property_name)
 		)
@@ -1093,7 +1250,13 @@ func _add_native_vector_property(
 		input.value_focus_exited.connect(
 			_on_native_input_value_focus_exited.bind(input, point, property_name)
 		)
-		input.focus_entered.connect(easing_curve_editor.select_point_resource.bind(point))
+		input.focus_entered.connect(
+			_select_native_point_property.bind(
+				property_header,
+				point,
+				property_name,
+			)
+		)
 		input.value_changed.connect(
 			_on_native_vector_value_changed.bind(
 				point,
@@ -1110,9 +1273,17 @@ func _add_native_vector_property(
 	values.tree_exiting.connect(_disconnect_native_point_callback.bind(point, changed_callback))
 
 
-func _on_native_input_grabbed(input: EditorSpinSlider, point: Resource) -> void:
+func _on_native_input_grabbed(
+	input: EditorSpinSlider,
+	point: Resource,
+	property_name: StringName,
+	property_header: PanelContainer,
+) -> void:
+	if easing_curve_editor.prepare_point_list_edit(point, property_name):
+		return
+	_cancel_pending_native_point_edit_finish()
 	input.set_meta(DRAGGING_META, true)
-	easing_curve_editor.select_point_resource(point)
+	_select_native_point_property(property_header, point, property_name)
 
 
 func _on_native_input_ungrabbed(
@@ -1120,8 +1291,9 @@ func _on_native_input_ungrabbed(
 	point: Resource,
 	property_name: StringName,
 ) -> void:
-	input.remove_meta(DRAGGING_META)
-	easing_curve_editor.finish_point_list_edit(point, property_name)
+	if input.has_meta(DRAGGING_META):
+		input.remove_meta(DRAGGING_META)
+	_queue_native_point_edit_finish(point, property_name)
 
 
 func _on_native_input_value_focus_entered(
@@ -1129,11 +1301,12 @@ func _on_native_input_value_focus_entered(
 	point: Resource,
 	property_name: StringName,
 ) -> void:
+	if easing_curve_editor.prepare_point_list_edit(point, property_name):
+		return
+	_cancel_pending_native_point_edit_finish()
 	if input.has_meta(DRAGGING_META):
 		input.remove_meta(DRAGGING_META)
-		easing_curve_editor.finish_point_list_edit(point, property_name)
 	input.set_meta(VALUE_EDITING_META, true)
-	easing_curve_editor.select_point_resource(point)
 
 
 func _on_native_input_value_focus_exited(
@@ -1144,7 +1317,60 @@ func _on_native_input_value_focus_exited(
 	if not input.has_meta(VALUE_EDITING_META):
 		return
 	input.remove_meta(VALUE_EDITING_META)
-	easing_curve_editor.finish_point_list_edit.call_deferred(point, property_name)
+	_queue_native_point_edit_finish(point, property_name)
+
+
+func _queue_native_point_edit_finish(
+	point: Resource,
+	property_name: StringName,
+) -> void:
+	if not is_instance_valid(easing_curve_editor) or not is_instance_valid(_native_curve):
+		return
+	_native_point_edit_finish_request_id += 1
+	_finish_native_point_edit_deferred.call_deferred(
+		_native_point_edit_finish_request_id,
+		_native_editor_generation,
+		_native_curve.get_instance_id(),
+		easing_curve_editor.get_instance_id(),
+		point.get_instance_id() if is_instance_valid(point) else 0,
+		property_name,
+	)
+
+
+func _cancel_pending_native_point_edit_finish() -> void:
+	_native_point_edit_finish_request_id += 1
+
+
+func _finish_native_point_edit_deferred(
+	request_id: int,
+	editor_generation: int,
+	curve_id: int,
+	editor_id: int,
+	point_id: int,
+	property_name: StringName,
+) -> void:
+	if (
+		request_id != _native_point_edit_finish_request_id
+		or editor_generation != _native_editor_generation
+		or not is_instance_valid(_native_curve)
+		or _native_curve.get_instance_id() != curve_id
+		or not is_instance_valid(easing_curve_editor)
+		or easing_curve_editor.get_instance_id() != editor_id
+	):
+		return
+	var backend := BackendFactory.create(_native_curve)
+	if backend == null:
+		return
+	var point: Resource
+	for index in range(backend.get_point_count()):
+		var candidate: Resource = backend.get_point(index)
+		if candidate.get_instance_id() == point_id:
+			point = candidate
+			break
+	if point != null:
+		easing_curve_editor.finish_point_list_edit(point, property_name)
+	else:
+		easing_curve_editor.finish_active_point_edit()
 
 
 func _on_native_vector_value_changed(
@@ -1154,6 +1380,12 @@ func _on_native_vector_value_changed(
 	axis: int,
 	input: EditorSpinSlider,
 ) -> void:
+	if (
+		not is_instance_valid(point)
+		or not is_instance_valid(input)
+		or not is_instance_valid(easing_curve_editor)
+	):
+		return
 	var native_curve := easing_curve_editor.get_curve()
 	if native_curve == null:
 		return
@@ -1176,6 +1408,8 @@ func _refresh_native_vector_inputs(
 	property_name: StringName,
 	inputs: Array[EditorSpinSlider],
 ) -> void:
+	if not is_instance_valid(point):
+		return
 	var value: Vector2 = point.get(property_name)
 	for axis in range(mini(2, inputs.size())):
 		if is_instance_valid(inputs[axis]):
@@ -1185,26 +1419,42 @@ func _refresh_native_vector_inputs(
 func _add_native_handle_mode_property(
 	grid: GridContainer,
 	point: Resource,
-	index: int,
+	_index: int,
 ) -> void:
-	var label := Label.new()
-	label.text = "Handle Mode"
-	grid.add_child(label)
+	var property_header := _create_native_point_property_header(
+		point,
+		&"handle_mode",
+		"Handle Mode",
+	)
+	grid.add_child(property_header)
 	var option := OptionButton.new()
 	_configure_compact_option(option)
+	option.size_flags_stretch_ratio = POINT_PROPERTY_VALUE_RATIO
 	for mode_name in ["Free", "Linear", "Balanced", "Mirrored", "Linked"]:
 		option.add_item(mode_name)
 	option.select(int(point.get(&"handle_mode")))
-	option.focus_entered.connect(easing_curve_editor.select_point_resource.bind(point))
+	option.focus_entered.connect(
+		_select_native_point_property.bind(
+			property_header,
+			point,
+			&"handle_mode",
+		)
+	)
 	option.item_selected.connect(
 		func(mode: int):
+			if not is_instance_valid(point) or not is_instance_valid(easing_curve_editor):
+				return
 			var native_curve := easing_curve_editor.get_curve()
 			if native_curve == null:
 				return
 			var points: Array = native_curve.get(&"points")
 			var current_index: int = points.find(point)
 			if current_index >= 0:
-				easing_curve_editor.select_point_resource(point)
+				_select_native_point_property(
+					property_header,
+					point,
+					&"handle_mode",
+				)
 				easing_curve_editor.edit_point_property(current_index, &"handle_mode", mode)
 	)
 	var changed_callback := func() -> void:
@@ -1216,7 +1466,7 @@ func _add_native_handle_mode_property(
 
 
 func _disconnect_native_point_callback(point: Resource, callback: Callable) -> void:
-	if point != null and point.changed.is_connected(callback):
+	if is_instance_valid(point) and point.changed.is_connected(callback):
 		point.changed.disconnect(callback)
 
 
@@ -1225,7 +1475,7 @@ func _update_native_point_panel_selection(
 	panel: PanelContainer,
 	point: Resource,
 ) -> void:
-	if is_instance_valid(panel):
+	if is_instance_valid(panel) and is_instance_valid(point):
 		panel.self_modulate = Color(0.72, 0.86, 1.0) if selected_point == point else Color.WHITE
 
 
@@ -2167,41 +2417,58 @@ func _create_foldable_section(
 func _create_inspector_section(
 	title: String,
 	content: Control,
-	curve: EasingCurve
+	curve_resource: Resource,
 ) -> Control:
 	var section := PointsFoldableSection.new()
 
 	section.copy_value_callback = func():
-		if _point_list_controller.selected_point_index >= 0:
+		var point_index := _selected_point_index_for_resource(curve_resource)
+		if point_index >= 0:
 			_copy_point_property_value(
-				_point_list_controller.selected_point_index,
+				point_index,
 				_point_list_controller.selected_point_property_name
 			)
 
 	section.paste_value_callback = func():
-		if _point_list_controller.selected_point_index >= 0:
+		var point_index := _selected_point_index_for_resource(curve_resource)
+		if point_index >= 0:
 			_paste_point_property_value(
-				_point_list_controller.selected_point_index,
+				point_index,
 				_point_list_controller.selected_point_property_name
 			)
 
 	section.copy_path_callback = func():
-		if _point_list_controller.selected_point_index >= 0:
+		var point_index := _selected_point_index_for_resource(curve_resource)
+		if point_index >= 0:
 			_copy_point_property_path(
-				_point_list_controller.selected_point_index,
+				point_index,
 				_point_list_controller.selected_point_property_name
 			)
 
 	section.can_paste_callback = func():
 		return (
-			_point_list_controller.selected_point_index >= 0
+			_selected_point_index_for_resource(curve_resource) >= 0
 			and _clipboard_has_compatible_point_property_value(
 				_point_list_controller.selected_point_property_name,
 			)
 		)
 
-	section.setup(title, content, curve)
+	section.setup(title, content, curve_resource)
 	return section
+
+
+func _selected_point_index_for_resource(curve_resource: Resource) -> int:
+	if curve_resource == null:
+		return -1
+	var backend := BackendFactory.create(curve_resource)
+	if backend == null:
+		return -1
+	var resource_id := _point_list_controller.selected_point_resource_id
+	for point_index in range(backend.get_point_count()):
+		if backend.get_point(point_index).get_instance_id() == resource_id:
+			_point_list_controller.selected_point_index = point_index
+			return point_index
+	return -1
 
 
 func _on_curve_editor_point_changed(_i: int, _new_point: EasingCurvePoint) -> void:
@@ -2539,7 +2806,12 @@ func _autofit_curve_editor(request_id: int = -1) -> void:
 		request_id = _request_autofit()
 	elif not _is_current_autofit_request(request_id):
 		return
+	_defer_autofit_frames(request_id, 2)
 
+
+func _defer_autofit_frames(request_id: int, frames_remaining: int) -> void:
+	if not _is_current_autofit_request(request_id):
+		return
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null:
 		_cancel_autofit(request_id)
@@ -2550,11 +2822,13 @@ func _autofit_curve_editor(request_id: int = -1) -> void:
 	# measuring the graph rect used by Autofit. The graph stays suppressed
 	# until the fitted view is ready, so no intermediate default-view frame
 	# is presented.
-	await tree.process_frame
-	await tree.process_frame
-
-	if not _is_current_autofit_request(request_id):
+	if frames_remaining > 0:
+		tree.process_frame.connect(
+			_defer_autofit_frames.bind(request_id, frames_remaining - 1),
+			CONNECT_ONE_SHOT,
+		)
 		return
+
 	if (
 		is_instance_valid(_curve_editor_section)
 		and _curve_editor_section.folded

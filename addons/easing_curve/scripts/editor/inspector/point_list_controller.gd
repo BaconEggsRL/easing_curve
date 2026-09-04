@@ -244,14 +244,15 @@ func consume_selection_refresh_preservation() -> bool:
 
 
 func assign_logical_selection(
-	curve: EasingCurve,
+	curve_resource: Resource,
 	point_index: int,
 	property_name: StringName,
 ) -> void:
+	var points := _get_resource_points(curve_resource)
 	selected_point_index = point_index
 	selected_point_resource_id = (
-		curve.points[point_index].get_instance_id()
-		if curve != null and point_index >= 0 and point_index < curve.points.size()
+		points[point_index].get_instance_id()
+		if point_index >= 0 and point_index < points.size()
 		else 0
 	)
 	selected_point_property_name = property_name
@@ -264,16 +265,17 @@ func clear_logical_selection() -> void:
 
 
 func capture_selection(
-	curve: EasingCurve,
+	curve_resource: Resource,
 	graph_selected_index: int,
 ) -> Dictionary:
-	if curve == null:
+	var points := _get_resource_points(curve_resource)
+	if points.is_empty():
 		return {"has_selection": false}
 
 	var point_index := -1
 	var property_name := StringName()
-	if selected_point_index >= 0 and selected_point_index < curve.points.size():
-		var selected_point := curve.points[selected_point_index]
+	if selected_point_index >= 0 and selected_point_index < points.size():
+		var selected_point := points[selected_point_index]
 		if (
 			selected_point_resource_id == 0
 			or selected_point.get_instance_id() == selected_point_resource_id
@@ -284,7 +286,7 @@ func capture_selection(
 	if (
 		point_index == -1
 		and graph_selected_index >= 0
-		and graph_selected_index < curve.points.size()
+		and graph_selected_index < points.size()
 	):
 		point_index = graph_selected_index
 
@@ -294,34 +296,48 @@ func capture_selection(
 	return {
 		"has_selection": true,
 		"point_index": point_index,
-		"point_resource_id": curve.points[point_index].get_instance_id(),
+		"point_resource_id": points[point_index].get_instance_id(),
 		"property_name": property_name,
 	}
 
 
-func restore_selection(curve: EasingCurve, selection: Dictionary) -> int:
-	if curve == null or not bool(selection.get("has_selection", false)):
+func restore_selection(curve_resource: Resource, selection: Dictionary) -> int:
+	var points := _get_resource_points(curve_resource)
+	if points.is_empty() or not bool(selection.get("has_selection", false)):
 		clear_logical_selection()
 		return -1
 
 	var point_index := int(selection.get("point_index", -1))
 	var point_resource_id := int(selection.get("point_resource_id", 0))
 	if point_resource_id != 0:
-		for i in range(curve.points.size()):
-			if curve.points[i].get_instance_id() == point_resource_id:
+		for i in range(points.size()):
+			if points[i].get_instance_id() == point_resource_id:
 				point_index = i
 				break
 
-	if point_index < 0 or point_index >= curve.points.size():
+	if point_index < 0 or point_index >= points.size():
 		clear_logical_selection()
 		return -1
 
 	assign_logical_selection(
-		curve,
+		curve_resource,
 		point_index,
 		StringName(selection.get("property_name", StringName())),
 	)
 	return point_index
+
+
+static func _get_resource_points(curve_resource: Resource) -> Array[Resource]:
+	if curve_resource == null:
+		return []
+	var points: Array[Resource] = []
+	var resource_points: Variant = curve_resource.get(&"points")
+	if not resource_points is Array:
+		return points
+	for point in resource_points:
+		if point is Resource:
+			points.append(point)
+	return points
 
 
 func clear_input_bindings() -> void:
