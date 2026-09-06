@@ -29,6 +29,9 @@ Examples:
 
 Legacy PowerShell-style names are also accepted:
   -Version, -v, -Mode, -ReleaseBranch, -Repository, -KeepSmokeProject
+
+Validate promotes plugin.cfg to the release version and builds/tests the archive.
+It is not a dry run. Commit other changes before Prepare; it stages only plugin.cfg.
 "@
 }
 
@@ -627,6 +630,7 @@ function Show-GitHubRelease {
 }
 
 function Invoke-PrepareCommit {
+    Assert-PrepareChanges
     Write-Step "Prepare release commit"
 
     if (Test-GitClean) {
@@ -653,12 +657,12 @@ function Invoke-PrepareCommit {
     Assert-LastExitCode "git status"
 
     Write-Host ""
-    $Answer = Read-Host "Stage all current release changes and commit? [y/N]"
+    $Answer = Read-Host "Stage plugin.cfg and commit the release version? [y/N]"
     if ($Answer -notmatch '^[Yy]$') {
         throw "Release commit cancelled."
     }
 
-    git add -A
+    git add -- addons/easing_curve/plugin.cfg
     Assert-LastExitCode "git add"
 
     git diff --cached --check
@@ -717,10 +721,11 @@ function Write-PostPublishSteps {
     Write-Host "Release workflow complete." -ForegroundColor Green
 }
 
-function Invoke-Publish {
-    Write-Step "Publish $Tag"
-
+function Assert-PublishPreflight {
     Assert-ReleaseBranchAndCleanTree -ModeName "Publish" -ActionName "publishing"
+    if ((Get-PluginVersion) -ne $Version) {
+        throw "Publish requires plugin.cfg version '$Version'; run Prepare first."
+    }
 
     $CurrentCommitMessage = (
         git log -1 --pretty=%s $ReleaseBranch
@@ -749,6 +754,21 @@ function Invoke-Publish {
     }
 
     Assert-GitHubCliAvailable -ModeName "Publish"
+}
+
+function Assert-PrepareChanges {
+    $Changes = @(git status --porcelain --untracked-files=all)
+    Assert-LastExitCode "git status"
+    foreach ($Change in $Changes) {
+        if ($Change -notmatch '^ M addons/easing_curve/plugin[.]cfg$|^M[ M] addons/easing_curve/plugin[.]cfg$') {
+            throw "Prepare accepts only plugin.cfg modifications. Commit other changes first: $Change"
+        }
+    }
+}
+
+function Invoke-Publish {
+    Write-Step "Publish $Tag"
+    Assert-PublishPreflight
 
     $ReleaseHead = (git rev-parse $ReleaseBranch).Trim()
     Assert-LastExitCode "git rev-parse"
@@ -908,6 +928,10 @@ try {
     Write-Host "Easing Curve v$Version release"
     Write-Host "Mode: $Mode"
 
+    # Reject invalid publishing/staging state before any source mutation or build.
+    if ($Mode -eq "Publish") { Assert-PublishPreflight }
+    if ($Mode -eq "Prepare") { Assert-PrepareChanges }
+
     # Safe to rerun: <version>-dev -> <version>, or leaves <version> unchanged.
     Set-PluginVersion
 
@@ -920,7 +944,7 @@ try {
     # Step 5.
     Invoke-Build
 
-    # The build syncs root README/LICENSE into the packaged addon.
+    # The build copies root README/LICENSE into archive staging, not tracked files.
     Invoke-DiffCheck
 
     # Step 6.

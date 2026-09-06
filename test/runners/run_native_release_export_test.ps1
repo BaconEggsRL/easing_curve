@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$GodotPath = "")
+param([string]$GodotPath = "", [switch]$SkipBuild)
 
 $ErrorActionPreference = "Stop"
 
@@ -79,14 +79,11 @@ $succeeded = $false
 
 try {
 	Write-Host "Building Windows x86_64 template-release GDExtension..."
-	Push-Location $nativeDirectory
-	try {
-		& scons platform=windows target=template_release arch=x86_64
+	if (-not $SkipBuild) {
+		& (Join-Path $nativeDirectory "build_native.ps1") -Platform windows -Target template_release
 		if ($LASTEXITCODE -ne 0) {
 			throw "Native release build failed with exit code $LASTEXITCODE."
 		}
-	} finally {
-		Pop-Location
 	}
 	if (-not (Test-Path -LiteralPath $releaseDll -PathType Leaf)) {
 		throw "Native release DLL was not produced: $releaseDll"
@@ -208,7 +205,7 @@ application/modify_resources=false
 	}
 
 	$dllInfo = Get-Item -LiteralPath $releaseDll
-	Write-Host "PASS: Windows release DLL built ($($dllInfo.Length) bytes) and exported Native resources loaded."
+	Write-Host "PASS: Windows release DLL validated ($($dllInfo.Length) bytes) and exported Native resources loaded."
 	$succeeded = $true
 } finally {
 	if ($succeeded) {

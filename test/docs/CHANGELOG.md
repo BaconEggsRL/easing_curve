@@ -38,6 +38,10 @@ current top entry.
 
 ### Fixed
 
+* Check Publish prerequisites before version changes or packaging, restrict
+  Prepare staging to the plugin version, and test Windows release exports in CI
+  against the already-built Native DLL.
+
 * Fixed Windows CI test initialization when Godot is supplied as a GUI executable
   without a console companion. The launcher now waits for Godot to finish before
   reading its exit code or cleaning up; required test gates remain enabled.

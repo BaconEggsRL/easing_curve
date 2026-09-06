@@ -86,6 +86,8 @@ $RequiredHelpers = @(
     "Assert-ReleaseTagTarget",
     "Show-GitHubRelease",
     "Get-NextDevelopmentVersion"
+    "Assert-PublishPreflight"
+    "Assert-PrepareChanges"
 )
 foreach ($HelperName in $RequiredHelpers) {
     Import-ReleaseFunctionDefinition -Name $HelperName
@@ -94,8 +96,7 @@ foreach ($HelperName in $RequiredHelpers) {
 $PublishText = (Get-ReleaseFunctionDefinition -Name "Invoke-Publish").Extent.Text
 $RepublishText = (Get-ReleaseFunctionDefinition -Name "Invoke-Republish").Extent.Text
 foreach ($RequiredCall in @(
-    "Assert-ReleaseBranchAndCleanTree",
-    "Assert-ReleaseRemoteCurrency",
+    "Assert-PublishPreflight",
     "New-ReleaseNotesFile",
     "Publish-NewReleaseGitRefs",
     "New-GitHubRelease",
@@ -135,10 +136,16 @@ $script:MockRemoteOnlyCount = "0"
 $script:MockTagType = "tag"
 $script:MockLocalTagCommit = "abc123"
 $script:MockRemoteTagCommit = "abc123"
+$script:MockStatus = @()
+$script:MockExistingTag = ""
+$script:MockExistingRemoteTag = ""
+$script:MockBranch = "master"
 function global:git {
     $global:LASTEXITCODE = 0
-    if ($args[0] -eq "branch") { return "master" }
-    if ($args[0] -eq "status") { return }
+    if ($args[0] -eq "branch") { return $script:MockBranch }
+    if ($args[0] -eq "status") { return $script:MockStatus }
+    if ($args[0] -eq "log") { return "Release v1.2.0" }
+    if ($args[0] -eq "tag") { return $script:MockExistingTag }
     if ($args[0] -eq "fetch") { return }
     if ($args[0] -eq "rev-list" -and $args[1] -eq "--right-only") {
         return $script:MockRemoteOnlyCount
@@ -146,6 +153,7 @@ function global:git {
     if ($args[0] -eq "cat-file") { return $script:MockTagType }
     if ($args[0] -eq "rev-list") { return $script:MockLocalTagCommit }
     if ($args[0] -eq "ls-remote") {
+        if ($args[1] -eq "--tags") { return $script:MockExistingRemoteTag }
         return "$($script:MockRemoteTagCommit)`trefs/tags/v-test^{}"
     }
     throw "Unexpected mocked git invocation: $args"
@@ -161,6 +169,38 @@ Assert-Throws {
     Assert-ReleaseRemoteCurrency -ActionName "publishing"
 } "Behind-origin validation did not reject a remote-only commit."
 $script:MockRemoteOnlyCount = "0"
+
+$Version = "1.2.0"
+$ReleaseCommitMessage = "Release v1.2.0"
+function Get-PluginVersion { return $script:MockVersion }
+function Assert-GitHubCliAvailable { }
+$script:MockVersion = "1.2.0"
+Assert-PublishPreflight
+$script:MockVersion = "1.2.0-dev"
+Assert-Throws { Assert-PublishPreflight } "Publish accepted a development version."
+$script:MockVersion = "1.2.0"
+$script:MockExistingTag = "v1.2.0"
+Assert-Throws { Assert-PublishPreflight } "Publish accepted an existing tag."
+$script:MockExistingTag = ""
+$script:MockExistingRemoteTag = "v1.2.0"
+Assert-Throws { Assert-PublishPreflight } "Publish accepted an existing remote tag."
+$script:MockExistingRemoteTag = ""
+$script:MockBranch = "dev"
+Assert-Throws { Assert-PublishPreflight } "Publish accepted the wrong branch."
+$script:MockBranch = "master"
+$script:MockStatus = @(" M README.md")
+Assert-Throws { Assert-PrepareChanges } "Prepare accepted unrelated changes."
+Assert-Throws { Assert-PublishPreflight } "Publish accepted a dirty tree."
+$script:MockStatus = @(" M addons/easing_curve/plugin.cfg")
+Assert-PrepareChanges
+$script:MockStatus = @("M  addons/easing_curve/plugin.cfg")
+Assert-PrepareChanges
+$script:MockStatus = @()
+$PrepareText = (Get-ReleaseFunctionDefinition -Name "Invoke-PrepareCommit").Extent.Text
+Assert-Contract ($PrepareText.Contains('git add -- addons/easing_curve/plugin.cfg') -and -not $PrepareText.Contains('git add -A')) "Prepare staging is not restricted."
+$MainText = $ReleaseAst.EndBlock.Extent.Text
+$PreflightIndex = $MainText.IndexOf('if ($Mode -eq "Publish") { Assert-PublishPreflight }')
+Assert-Contract ($PreflightIndex -ge 0 -and $PreflightIndex -lt $MainText.LastIndexOf('Set-PluginVersion')) "Publish preflight is missing or occurs after mutation."
 
 Assert-ReleaseTagTarget -ExpectedCommit "abc123"
 $script:MockTagType = "commit"

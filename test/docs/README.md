@@ -1,5 +1,24 @@
 # Development testing
 
+## Release procedure
+
+`release.ps1 --version 1.2.0 --mode Validate` promotes `plugin.cfg` and builds
+and tests the archive; it is not a dry run. Commit documentation and script
+changes before `--mode Prepare`, which accepts only plugin.cfg modifications.
+Publish requires a clean release branch, the exact release version/commit and
+an unused tag, checked before building and again before publication.
+
+Packaging copies the root README/LICENSE into archive staging without rewriting
+the tracked addon copies. For publication, use Native binaries downloaded from
+the successful CI run for the release commit and compare their SHA-256 hashes
+with that run's certified package. Publish rebuilds and validates the final ZIP.
+CI also runs `run_native_release_export_test.ps1 -SkipBuild` using its Windows
+artifact; omit `-SkipBuild` locally to rebuild through the pinned Native builder.
+
+The v1.2.0 manual parity checklist is user-reported completed. Its tested commit
+and archive hash were not supplied; this is distinct from automated certification
+of the final release package.
+
 ## Performance comparisons
 
 The [Godot Tween comparison](GODOT_TWEEN_BENCHMARK.md) runs the upstream
