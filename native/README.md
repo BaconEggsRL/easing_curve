@@ -208,11 +208,13 @@ Ease and Trans remain ungrouped above the custom **Curve Editor** foldout.
 The structural Native property-list groups are **Transition Parameters** and
 **Global Transform**, with the conditional **Points** section inserted between
 them at the serialized `points` field only for point-graph transitions. The
-transition-specific action row stays at the bottom of **Curve Editor**: point
-graphs show **New point handles** and **Add Point**, while Jitter and Irregular
-show **Generate**. The Points section therefore contains only the editable point
-array. Conversion actions are included inside Godot's built-in **Resource**
-section. Native numeric
+Jitter and Irregular keep **Generate** at the bottom of **Curve Editor**. Point
+graphs show **New point handles** and **Add Point** as the first row inside the
+**Points** section, immediately above the editable point array. Both controls
+shrink together in narrow Inspectors and stop expanding at their text-fitting
+widths in wide Inspectors. Conversion actions are the last item inside Godot's
+built-in **Resource** section, after **Name**.
+Native numeric
 parameter sliders use the same deferred transaction boundary,
 including the Constant and Back parameters that regenerate Bézier preset geometry:
 motion previews locally, then publishes one Inspector/live-scene update on release.

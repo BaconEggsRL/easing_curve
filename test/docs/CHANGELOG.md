@@ -35,9 +35,10 @@ current top entry.
   preventing the conversion control from being freed during signal emission.
 * Kept Native Ease and Trans ungrouped, removed the duplicate outer Curve Editor
   foldout, and suppressed the internal snapshot property's floating reset icon.
-* Moved point-add and generated-curve actions to the bottom of Curve Editor,
-  leaving Points focused on array rows, and placed conversion actions inside
-  Godot's built-in Resource section to avoid the trailing Inspector gap.
+* Kept generated-curve actions at the bottom of Curve Editor, moved point-add
+  actions to the top of Points, made both point-add controls shrink together
+  without expanding past their text-fitting widths, and placed conversion
+  actions after Name inside Godot's built-in Resource section.
 
 ### Compatibility
 

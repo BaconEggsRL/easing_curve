@@ -87,27 +87,110 @@ var _native_point_edit_finish_request_id := 0
 var _conversion_added := false
 
 
+class HorizontallyShrinkableOptionButton:
+	extends OptionButton
+
+	func _get_minimum_size() -> Vector2:
+		return Vector2.ZERO
+
+
+class HorizontallyShrinkableButton:
+	extends Button
+
+	func _get_minimum_size() -> Vector2:
+		return Vector2.ZERO
+
+
 class HorizontallyShrinkableControlSlot:
 	extends Control
+
+	var preferred_width := 0.0
+	var preferred_height := 0.0
 
 
 	func _init() -> void:
 		clip_contents = true
-		size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 
-	func set_content(content: Control) -> void:
+	func set_content(content: Control, preferred_size: Vector2) -> void:
+		preferred_width = preferred_size.x
+		preferred_height = preferred_size.y
 		add_child(content)
-		content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		content.minimum_size_changed.connect(update_minimum_size)
+		_fit_content(content)
 		update_minimum_size()
 
 
 	func _get_minimum_size() -> Vector2:
-		if get_child_count() == 0:
-			return Vector2.ZERO
-		var content := get_child(0) as Control
-		return Vector2(0.0, content.get_combined_minimum_size().y)
+		return Vector2(0.0, preferred_height)
+
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED and get_child_count() > 0:
+			_fit_content(get_child(0) as Control)
+
+
+	func _fit_content(content: Control) -> void:
+		content.position = Vector2.ZERO
+		content.size = size
+
+
+class CappedHorizontalControlRow:
+	extends Container
+
+	var separation := 0.0
+
+
+	func set_separation(value: float) -> void:
+		separation = value
+		queue_sort()
+		update_minimum_size()
+
+
+	func _get_minimum_size() -> Vector2:
+		var minimum_height := 0.0
+		for child: Control in _visible_control_children():
+			minimum_height = maxf(
+				minimum_height,
+				child.get_combined_minimum_size().y,
+			)
+		return Vector2(0.0, minimum_height)
+
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_SORT_CHILDREN:
+			_layout_children()
+
+
+	func _layout_children() -> void:
+		var controls := _visible_control_children()
+		if controls.is_empty():
+			return
+		var gaps_width := separation * maxf(0.0, controls.size() - 1.0)
+		var available_width := maxf(0.0, size.x - gaps_width)
+		var preferred_width := 0.0
+		for control: Control in controls:
+			preferred_width += float(control.get(&"preferred_width"))
+		var width_scale := 1.0
+		if preferred_width > 0.0:
+			width_scale = minf(1.0, available_width / preferred_width)
+		var offset_x := 0.0
+		for control: Control in controls:
+			var control_width := (
+				float(control.get(&"preferred_width")) * width_scale
+			)
+			fit_child_in_rect(
+				control,
+				Rect2(offset_x, 0.0, control_width, size.y),
+			)
+			offset_x += control_width + separation
+
+
+	func _visible_control_children() -> Array[Control]:
+		var controls: Array[Control] = []
+		for child: Node in get_children():
+			if child is Control and child.visible:
+				controls.append(child)
+		return controls
 
 
 ## Inspector-only transition grouping, ordering, and presentation.
@@ -687,23 +770,19 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 
 
 func _create_point_add_controls() -> Control:
-	var row := HBoxContainer.new()
+	var row := CappedHorizontalControlRow.new()
 	row.name = &"PointAddControls"
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override(&"separation", _compact_separation())
+	row.set_separation(_compact_separation())
 
-	var handle_mode := OptionButton.new()
+	var handle_mode := HorizontallyShrinkableOptionButton.new()
 	handle_mode.name = &"NewPointHandleMode"
 	handle_mode.tooltip_text = (
 		"Default handle mode for points created by graph click or Add Point"
 	)
 	_configure_compact_option(handle_mode)
 	handle_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	handle_mode.add_item("Free", EasingCurvePoint.HandleMode.FREE)
-	handle_mode.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
-	handle_mode.add_item("Balanced", EasingCurvePoint.HandleMode.BALANCED)
-	handle_mode.add_item("Mirrored", EasingCurvePoint.HandleMode.MIRRORED)
-	handle_mode.add_item("Linked", EasingCurvePoint.HandleMode.LINKED)
+	_add_new_point_handle_mode_items(handle_mode)
 	_sync_new_point_handle_mode_option(
 		easing_curve_editor.get_default_new_point_handle_mode(),
 		handle_mode,
@@ -725,22 +804,54 @@ func _create_point_add_controls() -> Control:
 	)
 	var handle_mode_slot := HorizontallyShrinkableControlSlot.new()
 	handle_mode_slot.name = &"NewPointHandleModeSlot"
-	handle_mode_slot.size_flags_stretch_ratio = 1.15
-	handle_mode_slot.set_content(handle_mode)
+	handle_mode_slot.set_content(
+		handle_mode,
+		_measure_new_point_handle_mode_size(),
+	)
 	row.add_child(handle_mode_slot)
 
-	var add_button := Button.new()
-	add_button.name = &"AddPoint"
-	add_button.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_ADD)
-	add_button.text = "Add Point"
-	add_button.clip_text = true
-	add_button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var add_button := HorizontallyShrinkableButton.new()
+	_configure_add_point_button(add_button)
 	add_button.pressed.connect(_on_add_point_btn_pressed)
 	var add_button_slot := HorizontallyShrinkableControlSlot.new()
 	add_button_slot.name = &"AddPointSlot"
-	add_button_slot.set_content(add_button)
+	add_button_slot.set_content(add_button, _measure_add_point_button_size())
 	row.add_child(add_button_slot)
 	return row
+
+
+func _add_new_point_handle_mode_items(option: OptionButton) -> void:
+	option.add_item("Free", EasingCurvePoint.HandleMode.FREE)
+	option.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
+	option.add_item("Balanced", EasingCurvePoint.HandleMode.BALANCED)
+	option.add_item("Mirrored", EasingCurvePoint.HandleMode.MIRRORED)
+	option.add_item("Linked", EasingCurvePoint.HandleMode.LINKED)
+
+
+func _measure_new_point_handle_mode_size() -> Vector2:
+	var measurement := OptionButton.new()
+	_configure_compact_option(measurement)
+	measurement.fit_to_longest_item = true
+	_add_new_point_handle_mode_items(measurement)
+	var preferred_size := measurement.get_combined_minimum_size()
+	measurement.free()
+	return preferred_size
+
+
+func _configure_add_point_button(button: Button) -> void:
+	button.name = &"AddPoint"
+	button.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_ADD)
+	button.text = "Add Point"
+	button.clip_text = true
+	button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+
+
+func _measure_add_point_button_size() -> Vector2:
+	var measurement := Button.new()
+	_configure_add_point_button(measurement)
+	var preferred_size := measurement.get_combined_minimum_size()
+	measurement.free()
+	return preferred_size
 
 
 func _sync_new_point_handle_mode_option(
@@ -940,7 +1051,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		easing_curve_editor.set_slider_value(
 			view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]
 		)
-		_add_curve_editor_transition_action(curve_editor_content, object)
+		_add_curve_editor_generate_action(curve_editor_content, object)
 		if _consume_initial_autofit_for_loaded_resource(object):
 			_queue_autofit_curve_editor()
 
@@ -1046,7 +1157,7 @@ func _handle_native_curve_editor(
 	zoom_row.add_child(zoom_slider_container)
 	easing_curve_editor.set_slider_container(zoom_slider_container)
 	easing_curve_editor.set_slider_value(EasingCurve.DEFAULT_SLIDER_VALUE)
-	_add_curve_editor_transition_action(content, object)
+	_add_curve_editor_generate_action(content, object)
 
 	_curve_editor_section = _create_foldable_section(
 		"Curve Editor",
@@ -1086,11 +1197,17 @@ func _handle_native_points(object: Resource) -> Control:
 	)
 	_native_points_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_build_native_point_list(object)
-	return _create_inspector_section(
-		"Points",
-		_native_points_content,
-		object,
-	)
+	return _create_points_section(_native_points_content, object)
+
+
+func _create_points_section(point_list: Control, object: Resource) -> Control:
+	var content := VBoxContainer.new()
+	content.name = &"PointsContent"
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override(&"separation", _compact_separation())
+	content.add_child(_create_point_add_controls())
+	content.add_child(point_list)
+	return _create_inspector_section("Points", content, object)
 
 
 func _on_native_curve_changed(
@@ -1181,12 +1298,9 @@ func _build_native_point_list(object: Resource) -> void:
 	_native_point_identity_signature = _get_native_point_identity_signature(points)
 
 
-func _add_curve_editor_transition_action(container: VBoxContainer, object: Resource) -> void:
+func _add_curve_editor_generate_action(container: VBoxContainer, object: Resource) -> void:
 	var backend := BackendFactory.create(object)
 	if backend == null:
-		return
-	if backend.is_point_graph():
-		container.add_child(_create_point_add_controls())
 		return
 	var transition := int(
 		object.get(&"transition")
@@ -1582,7 +1696,7 @@ func _can_handle(object: Object) -> bool:
 
 func _add_conversion_control(
 	object: Object,
-	inside_resource_group: bool = false,
+	attach_after_name: bool = false,
 ) -> void:
 	if _conversion_added:
 		return
@@ -1593,15 +1707,10 @@ func _add_conversion_control(
 	_conversion_added = true
 	var conversion_control := CurveConversionControl.new()
 	conversion_control.setup(resource)
-	if inside_resource_group:
-		add_custom_control(conversion_control)
+	if attach_after_name:
+		add_property_editor(&"resource_name", conversion_control, true, "")
 	else:
 		add_custom_control(_create_inspector_section("Conversion", conversion_control, resource))
-
-
-func _parse_group(object: Object, group: String) -> void:
-	if group == "Resource":
-		_add_conversion_control(object, true)
 
 
 func _parse_end(object: Object) -> void:
@@ -1609,6 +1718,9 @@ func _parse_end(object: Object) -> void:
 
 
 func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wide):
+	if name == "resource_name":
+		_add_conversion_control(object, true)
+
 	# Handle properties
 	var native_backend := BackendFactory.create(object as Resource)
 	if native_backend != null and native_backend.get_backend_id() == &"native":
@@ -1645,9 +1757,8 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 		curve = object
 		if object.curve_mode != object.CurveMode.BEZIER:
 			return true
-		var content = handle_points(object)
-		var section = _create_inspector_section("Points", content, object)
-		add_custom_control(section)
+		var point_list := handle_points(object)
+		add_custom_control(_create_points_section(point_list, object))
 		return true
 	if object is EasingCurve and name == EasingCurve.POINT_SNAPSHOT_PROPERTY:
 		return true

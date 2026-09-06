@@ -7,6 +7,7 @@ const CONVERTER := preload(
 const CONVERSION_RESULT := preload(
 	"res://addons/easing_curve/scripts/editor/backend/curve_conversion_result.gd"
 )
+const REPORT_FIELDS_PER_LINE := 3
 
 var _source: Resource
 var _converted_resource: Resource
@@ -62,7 +63,8 @@ func _convert(allow_callable_bake: bool) -> void:
 		outcome = "baked"
 	_dialog.ok_button_text = "Open Unsaved Copy"
 	_dialog.dialog_text = (
-		"A separate %s conversion is ready. The source resource was not changed.\n"
+		"A separate %s conversion is ready.\n"
+		+ "The source resource was not changed.\n"
 		+ "Review the unsaved copy before choosing a path and saving it.\n\n%s"
 	) % [outcome, _format_report(result)]
 	_dialog.popup_centered()
@@ -78,13 +80,13 @@ func _format_report(result: Dictionary) -> String:
 				names.append(String(field))
 		names.sort()
 		if not names.is_empty():
-			lines.append(
-				"%s (%d): %s" % [
-					String(field_outcome).capitalize(),
-					names.size(),
-					", ".join(names),
-				]
-			)
+			lines.append("%s (%d):" % [String(field_outcome).capitalize(), names.size()])
+			for first_index in range(0, names.size(), REPORT_FIELDS_PER_LINE):
+				var field_names := names.slice(
+					first_index,
+					mini(first_index + REPORT_FIELDS_PER_LINE, names.size()),
+				)
+				lines.append("  %s" % ", ".join(field_names))
 	var warnings: PackedStringArray = result.get(CONVERSION_RESULT.KEY_WARNINGS, PackedStringArray())
 	var errors: PackedStringArray = result.get(CONVERSION_RESULT.KEY_ERRORS, PackedStringArray())
 	for warning: String in warnings:

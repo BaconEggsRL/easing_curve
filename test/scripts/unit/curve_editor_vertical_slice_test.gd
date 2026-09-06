@@ -50,6 +50,7 @@ func _test_default_new_point_handle_modes() -> void:
 	)
 	_expect(settings.has_setting(setting_name), "Default new-point handle setting was not registered")
 	var original_value := int(settings.get_setting(setting_name))
+	settings.set_setting(setting_name, EasingCurvePoint.HandleMode.FREE)
 
 	var legacy_curve := _make_handle_mode_curve(&"legacy")
 	var native_curve := _make_handle_mode_curve(&"native")
@@ -95,9 +96,24 @@ func _test_default_new_point_handle_modes() -> void:
 	_expect(_find_button(legacy_controls, "Add Point") != null, "Legacy controls omitted Add Point beside the dropdown")
 	_expect(_find_button(native_controls, "Add Point") != null, "Native controls omitted Add Point beside the dropdown")
 	var add_button := _find_button(legacy_controls, "Add Point")
+	var handle_mode_slot := legacy_controls.find_child(
+		"NewPointHandleModeSlot",
+		true,
+		false,
+	) as Control
+	var add_button_slot := legacy_controls.find_child(
+		"AddPointSlot",
+		true,
+		false,
+	) as Control
 	var preferred_width := (
-		legacy_option.get_combined_minimum_size().x
-		+ add_button.get_combined_minimum_size().x
+		float(handle_mode_slot.get("preferred_width"))
+		+ float(add_button_slot.get("preferred_width"))
+	)
+	_expect(
+		float(handle_mode_slot.get("preferred_width"))
+			> legacy_option.get_combined_minimum_size().x,
+		"Handle-mode width cap did not preserve room for its longer choices",
 	)
 	_expect(
 		legacy_controls.get_combined_minimum_size().x < preferred_width,
@@ -105,14 +121,36 @@ func _test_default_new_point_handle_modes() -> void:
 	)
 	legacy_controls.size = Vector2(48.0, legacy_controls.get_combined_minimum_size().y)
 	await process_frame
-	var handle_mode_slot := legacy_controls.find_child(
-		"NewPointHandleModeSlot",
-		true,
-		false,
-	) as Control
 	_expect(
-		handle_mode_slot.size.x < legacy_option.get_combined_minimum_size().x,
+		handle_mode_slot.size.x < float(handle_mode_slot.get("preferred_width")),
 		"New-point handle dropdown slot did not shrink below its text width",
+	)
+	_expect(
+		add_button_slot.size.x < float(add_button_slot.get("preferred_width")),
+		"Add Point slot did not share the narrow-width shrink",
+	)
+	_expect(
+		is_equal_approx(legacy_option.size.x, handle_mode_slot.size.x),
+		(
+			"Handle-mode dropdown did not follow its shrunken slot "
+			+ "(dropdown %.2f/%.2f)"
+		) % [
+			legacy_option.size.x,
+			handle_mode_slot.size.x,
+		],
+	)
+	legacy_controls.size.x = preferred_width + 200.0
+	await process_frame
+	_expect(
+		is_equal_approx(
+			handle_mode_slot.size.x,
+			float(handle_mode_slot.get("preferred_width")),
+		)
+		and is_equal_approx(
+			add_button_slot.size.x,
+			float(add_button_slot.get("preferred_width")),
+		),
+		"Point action controls expanded beyond their text-fitting widths",
 	)
 
 	var legacy_changes := [0]
@@ -574,6 +612,29 @@ func _test_native_inspector_path() -> void:
 		conversion_opens_deferred,
 		"Conversion resource opening was not deferred past the confirmation signal",
 	)
+	var conversion_report := conversion_control.call(
+		"_format_report",
+		{
+			&"fields": {
+				&"amplitude": &"exact",
+				&"bounce_damping": &"exact",
+				&"constant_value": &"exact",
+				&"css_cubic_bezier": &"exact",
+				&"css_linear": &"exact",
+				&"damping": &"exact",
+				&"decay": &"exact",
+			},
+		},
+	) as String
+	_expect(
+		conversion_report == (
+			"Exact (7):\n"
+			+ "  amplitude, bounce_damping, constant_value\n"
+			+ "  css_cubic_bezier, css_linear, damping\n"
+			+ "  decay"
+		),
+		"Conversion report did not wrap field names into compact lines",
+	)
 	conversion_control.free()
 
 	var inspector := INSPECTOR_PLUGIN.new()
@@ -609,17 +670,16 @@ func _test_native_inspector_path() -> void:
 		_expect(editor != null, "Native Inspector content omitted the shared Curve Editor")
 		if editor != null:
 			_expect(editor.get_backend_id() == &"native", "Native Inspector used the wrong backend")
-			var add_button := _find_button(content, "Add Point")
-			_expect(add_button != null, "Native Curve Editor omitted its Add Point control")
-			var add_controls := content.find_child("PointAddControls", true, false)
 			_expect(
-				add_controls != null
-					and add_controls.get_index() == add_controls.get_parent().get_child_count() - 1,
-				"Native Add Point controls were not last in the Curve Editor section",
+				_find_button(content, "Add Point") == null,
+				"Native Curve Editor retained its Add Point control",
 			)
+			var add_button := _find_button(points_section, "Add Point")
+			_expect(add_button != null, "Native Points section omitted its Add Point control")
+			var add_controls := points_section.find_child("PointAddControls", true, false)
 			_expect(
-				_find_button(points_section, "Add Point") == null,
-				"Native Points section retained its Add Point control",
+				add_controls != null and add_controls.get_index() == 0,
+				"Native Add Point controls were not first in the Points section",
 			)
 			_expect(_find_drag_handle(points_section) != null, "Native point list omitted the legacy drag handle")
 			var first_point := curve.call(&"get_point", 0) as Resource
@@ -935,7 +995,7 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 		input.value_focus_entered.emit()
 		input.value = input.value + 0.05
 		input.value_focus_exited.emit()
-		var add_button := _find_button(content, "Add Point")
+		var add_button := _find_button(points_section, "Add Point")
 		var count_before_add: int = curve.call(&"get_point_count")
 		add_button.pressed.emit()
 		var publications_after_add: int = publications[0]
