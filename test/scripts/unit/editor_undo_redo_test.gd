@@ -964,7 +964,7 @@ func _test_native_generate_action() -> void:
 	editor.set_curve(curve)
 	var generate_editor := GENERATE_FUNCTION_EDITOR_PROPERTY.new() as EditorProperty
 	generate_editor.call(&"setup", editor, history)
-	generate_editor.set_object_and_property(curve, &"_editor_state_snapshot")
+	generate_editor.set_object_and_property(curve, &"randomness")
 	var before := (curve.call(&"get_editor_state_snapshot") as Dictionary).duplicate(true)
 	var generate_button := generate_editor.get("button") as Button
 	generate_button.pressed.emit()

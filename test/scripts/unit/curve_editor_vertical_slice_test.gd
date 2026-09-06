@@ -801,9 +801,22 @@ func _test_native_inspector_path() -> void:
 	) as EditorProperty
 	_expect(
 		generate_controls != null
-			and generate_controls.get_edited_property() == &"_editor_state_snapshot"
+			and generate_controls.get_edited_property() == &"randomness"
 			and _find_button(generate_controls, "Generate") != null,
 		"Native generated transition omitted its Transition Parameters action",
+	)
+	var generate_revert_update := {&"received": false, &"can_revert": true}
+	generate_controls.property_can_revert_changed.connect(
+		func(property_name: StringName, can_revert: bool) -> void:
+			if property_name == &"randomness":
+				generate_revert_update[&"received"] = true
+				generate_revert_update[&"can_revert"] = can_revert
+	)
+	generate_controls.call(&"_hide_property_chrome")
+	_expect(
+		generate_revert_update[&"received"]
+			and not generate_revert_update[&"can_revert"],
+		"Native Generate control did not suppress its floating revert arrow",
 	)
 	generate_controls.free()
 	generated_content.free()

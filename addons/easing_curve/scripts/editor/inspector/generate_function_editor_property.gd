@@ -50,6 +50,9 @@ func _hide_property_chrome() -> void:
 	name_split_ratio = 0.0
 	tooltip_text = ""
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var property_name := get_edited_property()
+	if not property_name.is_empty():
+		property_can_revert_changed.emit(property_name, false)
 
 
 func _on_pressed() -> void:

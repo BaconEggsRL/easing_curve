@@ -1342,12 +1342,7 @@ func _create_transition_generate_action(object: Resource) -> EditorProperty:
 	var generate_editor := GenerateFunctionEditorProperty.new()
 	generate_editor.name = &"GenerateControls"
 	generate_editor.setup(easing_curve_editor, editor_undo_redo)
-	generate_editor.set_object_and_property(
-		object,
-		&"_editor_state_snapshot"
-			if backend.get_backend_id() == &"native"
-			else &"generate_tool_button",
-	)
+	generate_editor.set_object_and_property(object, &"randomness")
 	return generate_editor
 
 
@@ -1747,10 +1742,6 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 
 	# Handle properties
 	var native_backend := BackendFactory.create(object as Resource)
-	if name == "num_points":
-		var generate_editor := _create_transition_generate_action(object as Resource)
-		if generate_editor != null:
-			add_custom_control(generate_editor)
 	if native_backend != null and native_backend.get_backend_id() == &"native":
 		if name == "_editor_state_snapshot":
 			var native_property := PointsEditorProperty.new()
@@ -1829,6 +1820,12 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 			property_editor.free()
 			return false
 		add_property_editor(name, property_editor)
+		if name == "randomness":
+			var generate_editor := _create_transition_generate_action(
+				object as Resource,
+			)
+			if generate_editor != null:
+				add_property_editor(name, generate_editor, true, "")
 		return true
 	return false
 
