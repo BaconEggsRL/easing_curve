@@ -116,10 +116,19 @@ func _test_default_new_point_handle_modes() -> void:
 		"Handle-mode width cap did not preserve room for its longer choices",
 	)
 	_expect(
+		float(add_button_slot.get("preferred_width"))
+			> add_button.get_combined_minimum_size().x,
+		"Add Point width cap did not preserve room for its clipped text",
+	)
+	_expect(
 		legacy_controls.get_combined_minimum_size().x < preferred_width,
 		"Point action controls still dictate the Inspector's minimum width",
 	)
-	legacy_controls.size = Vector2(48.0, legacy_controls.get_combined_minimum_size().y)
+	var row_separation := float(legacy_controls.get("separation"))
+	legacy_controls.size = Vector2(
+		(preferred_width + row_separation) * 0.65,
+		legacy_controls.get_combined_minimum_size().y,
+	)
 	await process_frame
 	_expect(
 		handle_mode_slot.size.x < float(handle_mode_slot.get("preferred_width")),
@@ -151,6 +160,17 @@ func _test_default_new_point_handle_modes() -> void:
 			float(add_button_slot.get("preferred_width")),
 		),
 		"Point action controls expanded beyond their text-fitting widths",
+	)
+	var expected_center_offset := (
+		legacy_controls.size.x - preferred_width - row_separation
+	) * 0.5
+	_expect(
+		is_equal_approx(handle_mode_slot.position.x, expected_center_offset),
+		"Point action controls were not centered at their capped width",
+	)
+	_expect(
+		is_equal_approx(add_button.size.x, add_button_slot.size.x),
+		"Add Point text control did not receive its available capped width",
 	)
 
 	var legacy_changes := [0]

@@ -173,7 +173,8 @@ class CappedHorizontalControlRow:
 		var width_scale := 1.0
 		if preferred_width > 0.0:
 			width_scale = minf(1.0, available_width / preferred_width)
-		var offset_x := 0.0
+		var content_width := preferred_width * width_scale + gaps_width
+		var offset_x := maxf(0.0, (size.x - content_width) * 0.5)
 		for control: Control in controls:
 			var control_width := (
 				float(control.get(&"preferred_width")) * width_scale
@@ -849,7 +850,30 @@ func _configure_add_point_button(button: Button) -> void:
 func _measure_add_point_button_size() -> Vector2:
 	var measurement := Button.new()
 	_configure_add_point_button(measurement)
+	measurement.clip_text = false
 	var preferred_size := measurement.get_combined_minimum_size()
+	var font := measurement.get_theme_font(&"font")
+	var font_size := measurement.get_theme_font_size(&"font_size")
+	var text_size := font.get_string_size(
+		measurement.text,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		font_size,
+	)
+	var content_width := text_size.x
+	if measurement.icon != null:
+		var icon_width := float(measurement.icon.get_width())
+		var icon_max_width := measurement.get_theme_constant(&"icon_max_width")
+		if icon_max_width > 0:
+			icon_width = minf(icon_width, icon_max_width)
+		content_width += (
+			icon_width + measurement.get_theme_constant(&"h_separation")
+		)
+	var normal_style := measurement.get_theme_stylebox(&"normal")
+	preferred_size.x = maxf(
+		preferred_size.x,
+		content_width + normal_style.get_minimum_size().x,
+	)
 	measurement.free()
 	return preferred_size
 
