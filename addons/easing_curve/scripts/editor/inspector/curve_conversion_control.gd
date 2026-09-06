@@ -14,15 +14,58 @@ var _converted_resource: Resource
 var _dialog: ConfirmationDialog
 
 
+class HorizontallyShrinkableButton:
+	extends Button
+
+	func _get_minimum_size() -> Vector2:
+		return Vector2.ZERO
+
+
+class CappedButtonRow:
+	extends Container
+
+	var preferred_width := 0.0
+	var preferred_height := 0.0
+
+
+	func set_button(button: Button, preferred_size: Vector2) -> void:
+		preferred_width = preferred_size.x
+		preferred_height = preferred_size.y
+		clip_contents = true
+		add_child(button)
+		update_minimum_size()
+
+
+	func _get_minimum_size() -> Vector2:
+		return Vector2(0.0, preferred_height)
+
+
+	func _notification(what: int) -> void:
+		if what != NOTIFICATION_SORT_CHILDREN or get_child_count() == 0:
+			return
+		var button := get_child(0) as Control
+		var button_width := minf(size.x, preferred_width)
+		fit_child_in_rect(
+			button,
+			Rect2(
+				maxf(0.0, (size.x - button_width) * 0.5),
+				0.0,
+				button_width,
+				size.y,
+			),
+		)
+
+
 func setup(source: Resource) -> void:
 	_source = source
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var is_native := source != null and source.get_class() == &"NativeEasingCurve"
-	var convert_button := Button.new()
+	var convert_button := HorizontallyShrinkableButton.new()
 	convert_button.text = "Convert to Legacy Copy" if is_native else "Convert to Native Copy"
 	convert_button.tooltip_text = "Create a separate unsaved resource; the source is never replaced."
+	convert_button.clip_text = true
 	convert_button.pressed.connect(_convert.bind(false))
-	add_child(convert_button)
+	add_child(_create_button_row(convert_button, &"ConvertButtonRow"))
 
 	if (
 		not is_native
@@ -30,17 +73,30 @@ func setup(source: Resource) -> void:
 		and source.curve_mode == EasingCurve.CurveMode.FUNCTION
 		and source.trans_type == EasingCurve.TRANS.CUSTOM
 	):
-		var bake_button := Button.new()
+		var bake_button := HorizontallyShrinkableButton.new()
 		bake_button.text = "Bake Callable to Native Copy"
 		bake_button.tooltip_text = "Explicitly bake the live Callable into 40 Native points."
+		bake_button.clip_text = true
 		bake_button.pressed.connect(_convert.bind(true))
-		add_child(bake_button)
+		add_child(_create_button_row(bake_button, &"BakeButtonRow"))
 
 	_dialog = ConfirmationDialog.new()
 	_dialog.title = "Easing Curve Conversion"
 	_dialog.ok_button_text = "Open Unsaved Copy"
 	_dialog.confirmed.connect(_open_converted_resource, CONNECT_DEFERRED)
 	add_child(_dialog)
+
+
+func _create_button_row(button: Button, row_name: StringName) -> CappedButtonRow:
+	var measurement := Button.new()
+	measurement.text = button.text
+	var preferred_size := measurement.get_combined_minimum_size()
+	measurement.free()
+	var row := CappedButtonRow.new()
+	row.name = row_name
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.set_button(button, preferred_size)
+	return row
 
 
 func _convert(allow_callable_bake: bool) -> void:

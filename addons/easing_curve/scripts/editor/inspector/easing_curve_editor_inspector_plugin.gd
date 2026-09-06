@@ -1075,7 +1075,6 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		easing_curve_editor.set_slider_value(
 			view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]
 		)
-		_add_curve_editor_generate_action(curve_editor_content, object)
 		if _consume_initial_autofit_for_loaded_resource(object):
 			_queue_autofit_curve_editor()
 
@@ -1181,7 +1180,6 @@ func _handle_native_curve_editor(
 	zoom_row.add_child(zoom_slider_container)
 	easing_curve_editor.set_slider_container(zoom_slider_container)
 	easing_curve_editor.set_slider_value(EasingCurve.DEFAULT_SLIDER_VALUE)
-	_add_curve_editor_generate_action(content, object)
 
 	_curve_editor_section = _create_foldable_section(
 		"Curve Editor",
@@ -1322,10 +1320,10 @@ func _build_native_point_list(object: Resource) -> void:
 	_native_point_identity_signature = _get_native_point_identity_signature(points)
 
 
-func _add_curve_editor_generate_action(container: VBoxContainer, object: Resource) -> void:
+func _create_transition_generate_action(object: Resource) -> EditorProperty:
 	var backend := BackendFactory.create(object)
 	if backend == null:
-		return
+		return null
 	var transition := int(
 		object.get(&"transition")
 		if backend.get_backend_id() == &"native"
@@ -1340,15 +1338,17 @@ func _add_curve_editor_generate_action(container: VBoxContainer, object: Resourc
 		])
 	)
 	if transition not in generated_transitions:
-		return
+		return null
 	var generate_editor := GenerateFunctionEditorProperty.new()
 	generate_editor.name = &"GenerateControls"
 	generate_editor.setup(easing_curve_editor, editor_undo_redo)
 	generate_editor.set_object_and_property(
 		object,
-		&"randomness" if backend.get_backend_id() == &"native" else &"generate_tool_button",
+		&"_editor_state_snapshot"
+			if backend.get_backend_id() == &"native"
+			else &"generate_tool_button",
 	)
-	container.add_child(generate_editor)
+	return generate_editor
 
 
 func _get_native_point_identity_signature(points: Array[Resource]) -> PackedInt64Array:
@@ -1747,6 +1747,10 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 
 	# Handle properties
 	var native_backend := BackendFactory.create(object as Resource)
+	if name == "num_points":
+		var generate_editor := _create_transition_generate_action(object as Resource)
+		if generate_editor != null:
+			add_custom_control(generate_editor)
 	if native_backend != null and native_backend.get_backend_id() == &"native":
 		if name == "_editor_state_snapshot":
 			var native_property := PointsEditorProperty.new()

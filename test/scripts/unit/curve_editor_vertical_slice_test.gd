@@ -623,6 +623,42 @@ func _test_native_inspector_path() -> void:
 
 	var conversion_control := CURVE_CONVERSION_CONTROL.new() as Control
 	conversion_control.call(&"setup", curve)
+	root.add_child(conversion_control)
+	var convert_row := conversion_control.find_child(
+		"ConvertButtonRow",
+		true,
+		false,
+	) as Control
+	var convert_button := _find_button(conversion_control, "Convert to Legacy Copy")
+	_expect(
+		convert_row != null and convert_button != null,
+		"Native conversion control omitted its capped Convert button row",
+	)
+	if convert_row != null and convert_button != null:
+		var preferred_width := float(convert_row.get("preferred_width"))
+		conversion_control.size = Vector2(preferred_width + 200.0, 60.0)
+		await process_frame
+		_expect(
+			is_equal_approx(convert_button.size.x, preferred_width),
+			"Convert button expanded beyond its text-fitting width",
+		)
+		_expect(
+			is_equal_approx(
+				convert_button.position.x,
+				(conversion_control.size.x - preferred_width) * 0.5,
+			),
+			"Convert button was not centered at its capped width",
+		)
+		conversion_control.size.x = preferred_width * 0.65
+		await process_frame
+		_expect(
+			convert_button.size.x < preferred_width,
+			"Convert button did not shrink below its text-fitting width",
+		)
+		_expect(
+			conversion_control.get_combined_minimum_size().x < preferred_width,
+			"Convert button still dictates the Inspector's minimum width",
+		)
 	var conversion_dialog := conversion_control.get("_dialog") as ConfirmationDialog
 	var conversion_opens_deferred := false
 	for connection: Dictionary in conversion_dialog.get_signal_connection_list(&"confirmed"):
@@ -756,11 +792,20 @@ func _test_native_inspector_path() -> void:
 	root.add_child(generated_content)
 	var generate_controls := generated_content.find_child("GenerateControls", true, false)
 	_expect(
-		generate_controls != null
-			and generate_controls.get_index() == generate_controls.get_parent().get_child_count() - 1
-			and _find_button(generate_controls, "Generate") != null,
-		"Native Generate control was not last in the Curve Editor section",
+		generate_controls == null,
+		"Native Generate control remained inside the Curve Editor section",
 	)
+	generate_controls = inspector.call(
+		"_create_transition_generate_action",
+		curve,
+	) as EditorProperty
+	_expect(
+		generate_controls != null
+			and generate_controls.get_edited_property() == &"_editor_state_snapshot"
+			and _find_button(generate_controls, "Generate") != null,
+		"Native generated transition omitted its Transition Parameters action",
+	)
+	generate_controls.free()
 	generated_content.free()
 
 

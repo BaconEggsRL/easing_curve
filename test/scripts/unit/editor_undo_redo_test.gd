@@ -2,6 +2,9 @@ extends "res://test/scripts/support/test_case.gd"
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
+const GENERATE_FUNCTION_EDITOR_PROPERTY = preload(
+	"res://addons/easing_curve/scripts/editor/inspector/generate_function_editor_property.gd"
+)
 const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
@@ -45,6 +48,7 @@ func _init() -> void:
 	_test_function_parameter_changes()
 	_test_parameter_reset()
 	_test_generate_action()
+	_test_native_generate_action()
 
 	_finish("editor Undo / Redo")
 
@@ -945,6 +949,42 @@ func _test_generate_action() -> void:
 	curve._finish_editor_parameter_edit()
 	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Generate Easing Curve", EasingCurveEditorUndo.ActionContext.new(before, after)), "Generate action was not committed")
 	_verify_single_action(history, curve, before, after, "Generate", 3)
+	_dispose_history(history)
+
+
+func _test_native_generate_action() -> void:
+	if not ClassDB.class_exists(&"NativeEasingCurve"):
+		return
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	curve.set(&"transition", 103)
+	curve.set(&"num_points", 8)
+	curve.set(&"randomness", 4.0)
+	var history := UndoRedo.new()
+	var editor := EasingCurveEditor.new()
+	editor.set_curve(curve)
+	var generate_editor := GENERATE_FUNCTION_EDITOR_PROPERTY.new() as EditorProperty
+	generate_editor.call(&"setup", editor, history)
+	generate_editor.set_object_and_property(curve, &"_editor_state_snapshot")
+	var before := (curve.call(&"get_editor_state_snapshot") as Dictionary).duplicate(true)
+	var generate_button := generate_editor.get("button") as Button
+	generate_button.pressed.emit()
+	var after := (curve.call(&"get_editor_state_snapshot") as Dictionary).duplicate(true)
+	_expect(before != after, "Native Generate did not create a new curve state")
+	_expect(history.has_undo(), "Native Generate did not register an Undo action")
+
+	# The action must remain valid after the Inspector controls are rebuilt.
+	generate_editor.free()
+	editor.free()
+	history.undo()
+	_expect(
+		curve.call(&"get_editor_state_snapshot") == before,
+		"Native Generate Undo did not restore the previous generated curve",
+	)
+	history.redo()
+	_expect(
+		curve.call(&"get_editor_state_snapshot") == after,
+		"Native Generate Redo did not restore the regenerated curve",
+	)
 	_dispose_history(history)
 
 

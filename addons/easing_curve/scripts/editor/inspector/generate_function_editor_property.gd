@@ -57,8 +57,7 @@ func _on_pressed() -> void:
 	if object == null:
 		return
 	if object.get_class() == &"NativeEasingCurve":
-		if is_instance_valid(curve_editor):
-			curve_editor.generate_native_irregular()
+		_generate_native_curve(object)
 		return
 	EASING_CURVE_EDITOR_UNDO.apply_parameter_action(
 		undo_redo,
@@ -69,3 +68,48 @@ func _on_pressed() -> void:
 	)
 	if is_instance_valid(curve_editor):
 		curve_editor.queue_redraw()
+
+
+func _generate_native_curve(object: Resource) -> void:
+	if (
+		not object.has_method(&"generate_irregular")
+		or not object.has_method(&"get_editor_state_snapshot")
+	):
+		return
+	var before := (object.call(&"get_editor_state_snapshot") as Dictionary).duplicate(true)
+	object.call(&"begin_parameter_edit")
+	object.call(&"generate_irregular")
+	var after := (object.call(&"get_editor_state_snapshot") as Dictionary).duplicate(true)
+	if before == after:
+		object.call(&"cancel_parameter_edit")
+		return
+	_commit_native_generate_action(object, before, after)
+	object.call(&"finish_parameter_edit")
+	if is_instance_valid(curve_editor):
+		curve_editor.queue_redraw()
+		if curve_editor.committed_change_publisher.is_valid():
+			curve_editor.committed_change_publisher.call()
+
+
+func _commit_native_generate_action(
+	object: Resource,
+	before: Dictionary,
+	after: Dictionary,
+) -> void:
+	if undo_redo == null:
+		return
+	if undo_redo is EditorUndoRedoManager:
+		undo_redo.create_action(
+			"Generate Easing Curve",
+			UndoRedo.MERGE_DISABLE,
+			object,
+		)
+	else:
+		undo_redo.create_action("Generate Easing Curve")
+	undo_redo.add_do_property(object, &"_editor_state_snapshot", after)
+	undo_redo.add_undo_property(object, &"_editor_state_snapshot", before)
+	if undo_redo is EditorUndoRedoManager:
+		undo_redo.add_do_method(object, &"_apply_live_editor_snapshot", after)
+		undo_redo.add_undo_method(object, &"_apply_live_editor_snapshot", before)
+	# Generate already applied the after state while parameter publication was muted.
+	undo_redo.commit_action(false)
