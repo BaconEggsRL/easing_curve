@@ -87,6 +87,29 @@ var _native_point_edit_finish_request_id := 0
 var _conversion_added := false
 
 
+class HorizontallyShrinkableControlSlot:
+	extends Control
+
+
+	func _init() -> void:
+		clip_contents = true
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+
+	func set_content(content: Control) -> void:
+		add_child(content)
+		content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		content.minimum_size_changed.connect(update_minimum_size)
+		update_minimum_size()
+
+
+	func _get_minimum_size() -> Vector2:
+		if get_child_count() == 0:
+			return Vector2.ZERO
+		var content := get_child(0) as Control
+		return Vector2(0.0, content.get_combined_minimum_size().y)
+
+
 ## Inspector-only transition grouping, ordering, and presentation.
 ## Runtime transition IDs, behavior, and metadata remain in EasingCurve.
 const TRANSITION_PRESENTATION := [
@@ -666,7 +689,7 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 func _create_point_add_controls() -> Control:
 	var row := HBoxContainer.new()
 	row.name = &"PointAddControls"
-	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override(&"separation", _compact_separation())
 
 	var handle_mode := OptionButton.new()
@@ -675,8 +698,7 @@ func _create_point_add_controls() -> Control:
 		"Default handle mode for points created by graph click or Add Point"
 	)
 	_configure_compact_option(handle_mode)
-	handle_mode.fit_to_longest_item = true
-	handle_mode.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	handle_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	handle_mode.add_item("Free", EasingCurvePoint.HandleMode.FREE)
 	handle_mode.add_item("Linear", EasingCurvePoint.HandleMode.LINEAR)
 	handle_mode.add_item("Balanced", EasingCurvePoint.HandleMode.BALANCED)
@@ -701,14 +723,23 @@ func _create_point_add_controls() -> Control:
 			sync_callback,
 		)
 	)
-	row.add_child(handle_mode)
+	var handle_mode_slot := HorizontallyShrinkableControlSlot.new()
+	handle_mode_slot.name = &"NewPointHandleModeSlot"
+	handle_mode_slot.size_flags_stretch_ratio = 1.15
+	handle_mode_slot.set_content(handle_mode)
+	row.add_child(handle_mode_slot)
 
 	var add_button := Button.new()
 	add_button.name = &"AddPoint"
 	add_button.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_ADD)
 	add_button.text = "Add Point"
+	add_button.clip_text = true
+	add_button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	add_button.pressed.connect(_on_add_point_btn_pressed)
-	row.add_child(add_button)
+	var add_button_slot := HorizontallyShrinkableControlSlot.new()
+	add_button_slot.name = &"AddPointSlot"
+	add_button_slot.set_content(add_button)
+	row.add_child(add_button_slot)
 	return row
 
 
@@ -1549,7 +1580,10 @@ func _can_handle(object: Object) -> bool:
 	)
 
 
-func _add_conversion_section(object: Object) -> void:
+func _add_conversion_control(
+	object: Object,
+	inside_resource_group: bool = false,
+) -> void:
 	if _conversion_added:
 		return
 	var resource := object as Resource
@@ -1559,16 +1593,19 @@ func _add_conversion_section(object: Object) -> void:
 	_conversion_added = true
 	var conversion_control := CurveConversionControl.new()
 	conversion_control.setup(resource)
-	add_custom_control(_create_inspector_section("Conversion", conversion_control, resource))
+	if inside_resource_group:
+		add_custom_control(conversion_control)
+	else:
+		add_custom_control(_create_inspector_section("Conversion", conversion_control, resource))
 
 
-func _parse_category(object: Object, category: String) -> void:
-	if category == "Resource":
-		_add_conversion_section(object)
+func _parse_group(object: Object, group: String) -> void:
+	if group == "Resource":
+		_add_conversion_control(object, true)
 
 
 func _parse_end(object: Object) -> void:
-	_add_conversion_section(object)
+	_add_conversion_control(object)
 
 
 func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wide):

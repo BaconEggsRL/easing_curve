@@ -211,7 +211,7 @@ them at the serialized `points` field only for point-graph transitions. The
 transition-specific action row stays at the bottom of **Curve Editor**: point
 graphs show **New point handles** and **Add Point**, while Jitter and Irregular
 show **Generate**. The Points section therefore contains only the editable point
-array. **Conversion** is inserted immediately above Godot's built-in **Resource**
+array. Conversion actions are included inside Godot's built-in **Resource**
 section. Native numeric
 parameter sliders use the same deferred transaction boundary,
 including the Constant and Back parameters that regenerate Bézier preset geometry:

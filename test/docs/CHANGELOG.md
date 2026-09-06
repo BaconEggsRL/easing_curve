@@ -36,7 +36,7 @@ current top entry.
 * Kept Native Ease and Trans ungrouped, removed the duplicate outer Curve Editor
   foldout, and suppressed the internal snapshot property's floating reset icon.
 * Moved point-add and generated-curve actions to the bottom of Curve Editor,
-  leaving Points focused on array rows, and placed Conversion immediately above
+  leaving Points focused on array rows, and placed conversion actions inside
   Godot's built-in Resource section to avoid the trailing Inspector gap.
 
 ### Compatibility

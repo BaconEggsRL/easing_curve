@@ -69,22 +69,24 @@ func _test_default_new_point_handle_modes() -> void:
 	native_inspector.set("easing_curve_editor", native_editor)
 	var legacy_controls := legacy_inspector.call("_create_point_add_controls") as Control
 	var native_controls := native_inspector.call("_create_point_add_controls") as Control
-	root.add_child(legacy_controls)
-	root.add_child(native_controls)
-	var legacy_option := legacy_controls.get_node("NewPointHandleMode") as OptionButton
-	var native_option := native_controls.get_node("NewPointHandleMode") as OptionButton
+	var controls_host := Control.new()
+	root.add_child(controls_host)
+	controls_host.add_child(legacy_controls)
+	controls_host.add_child(native_controls)
+	var legacy_option := legacy_controls.find_child("NewPointHandleMode", true, false) as OptionButton
+	var native_option := native_controls.find_child("NewPointHandleMode", true, false) as OptionButton
 	_expect(legacy_option != null and native_option != null, "Shared Add Point controls omitted the handle-mode dropdown")
 	_expect(
-		legacy_controls.size_flags_horizontal == Control.SIZE_SHRINK_CENTER,
-		"Shared Add Point controls did not remain content-sized",
+		legacy_controls.size_flags_horizontal == Control.SIZE_EXPAND_FILL,
+		"Shared Add Point controls did not fill the available Inspector width",
 	)
 	_expect(
-		legacy_option.fit_to_longest_item,
-		"New-point handle dropdown did not reserve its longest item width",
+		not legacy_option.fit_to_longest_item,
+		"New-point handle dropdown still reserves its longest item width",
 	)
 	_expect(
-		legacy_option.size_flags_horizontal == Control.SIZE_SHRINK_CENTER,
-		"New-point handle dropdown expanded beyond its content width",
+		legacy_option.size_flags_horizontal == Control.SIZE_EXPAND_FILL,
+		"New-point handle dropdown did not follow its responsive slot",
 	)
 	_expect(
 		legacy_controls.get_child_count() == 2,
@@ -92,6 +94,26 @@ func _test_default_new_point_handle_modes() -> void:
 	)
 	_expect(_find_button(legacy_controls, "Add Point") != null, "Legacy controls omitted Add Point beside the dropdown")
 	_expect(_find_button(native_controls, "Add Point") != null, "Native controls omitted Add Point beside the dropdown")
+	var add_button := _find_button(legacy_controls, "Add Point")
+	var preferred_width := (
+		legacy_option.get_combined_minimum_size().x
+		+ add_button.get_combined_minimum_size().x
+	)
+	_expect(
+		legacy_controls.get_combined_minimum_size().x < preferred_width,
+		"Point action controls still dictate the Inspector's minimum width",
+	)
+	legacy_controls.size = Vector2(48.0, legacy_controls.get_combined_minimum_size().y)
+	await process_frame
+	var handle_mode_slot := legacy_controls.find_child(
+		"NewPointHandleModeSlot",
+		true,
+		false,
+	) as Control
+	_expect(
+		handle_mode_slot.size.x < legacy_option.get_combined_minimum_size().x,
+		"New-point handle dropdown slot did not shrink below its text width",
+	)
 
 	var legacy_changes := [0]
 	var native_changes := [0]
