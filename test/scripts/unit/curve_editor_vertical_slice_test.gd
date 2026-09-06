@@ -313,6 +313,28 @@ func _test_default_new_point_handle_modes() -> void:
 		float(handle_mode_slot.get("preferred_width"))
 		+ float(add_button_slot.get("preferred_width"))
 	)
+	# Check rendered text and arrow space independently of OptionButton's size cache.
+	await process_frame
+	for controls: Control in [legacy_controls, native_controls]:
+		var option := controls.find_child("NewPointHandleMode", true, false) as OptionButton
+		var slot := controls.find_child("NewPointHandleModeSlot", true, false)
+		var font := option.get_theme_font(&"font")
+		var font_size := option.get_theme_font_size(&"font_size")
+		var text_width := 0.0
+		for index in option.item_count:
+			text_width = maxf(text_width, font.get_string_size(
+				option.get_item_text(index), HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size,
+			).x)
+		var required_option_width := (
+			text_width + option.get_theme_stylebox(&"normal").get_minimum_size().x
+			+ option.get_theme_icon(&"arrow").get_width()
+			+ maxi(0, option.get_theme_constant(&"h_separation"))
+		)
+		_expect(
+			float(slot.get("preferred_width")) >= required_option_width,
+			"New-point handle dropdown width %.2f must fit every label and arrow (%.2f)"
+				% [float(slot.get("preferred_width")), required_option_width],
+		)
 	_expect(
 		float(handle_mode_slot.get("preferred_width"))
 			> legacy_option.get_combined_minimum_size().x,

@@ -14,8 +14,12 @@ and the prioritized next implementation tranche.
 
 ## Build contract
 
-The `godot-cpp` submodule is pinned to `godot-4.4.1-stable`. The extension
-manifest accepts Godot 4.4 and later compatible engines. Build the supported
+The `godot-cpp` submodule is pinned to `godot-4.4.1-stable`. The effective Native
+minimum is **Godot 4.4.1**: although the manifest declares `4.4`, godot-cpp also
+checks the API patch version and rejects this DLL under 4.4.0. This build pin is
+separate from the GDScript plugin's minimum loading version. Supporting Native
+on 4.4.0 requires rebuilding against its API and validating that build.
+Build the supported
 Windows release library and both non-threaded Web variants from the repository
 root:
 

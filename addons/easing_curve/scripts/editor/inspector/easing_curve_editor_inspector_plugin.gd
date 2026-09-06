@@ -831,9 +831,10 @@ func _add_new_point_handle_mode_items(option: OptionButton) -> void:
 
 func _measure_new_point_handle_mode_size() -> Vector2:
 	var measurement := OptionButton.new()
-	_configure_compact_option(measurement)
-	measurement.fit_to_longest_item = true
+	measurement.fit_to_longest_item = false
 	_add_new_point_handle_mode_items(measurement)
+	# Godot 4.4–4.6 defer item sizing; toggle this after population to refresh now.
+	measurement.fit_to_longest_item = true
 	var preferred_size := measurement.get_combined_minimum_size()
 	measurement.free()
 	return preferred_size
