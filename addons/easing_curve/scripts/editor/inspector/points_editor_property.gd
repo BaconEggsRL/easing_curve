@@ -33,3 +33,6 @@ func _hide_property_chrome() -> void:
 	selectable = false
 	name_split_ratio = 0.0
 	tooltip_text = ""
+	var property_name := get_edited_property()
+	if not property_name.is_empty():
+		property_can_revert_changed.emit(property_name, false)

@@ -119,7 +119,7 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
-The Native smoke suite currently contains 1,785 checks. The runtime benchmark runs
+The Native smoke suite currently contains 1,789 checks. The runtime benchmark runs
 in an isolated project containing only this addon and
 the benchmark script. It reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
@@ -204,10 +204,15 @@ clipboard, and cross-copy behavior as Legacy. Deferred value-edit completion is
 resolved by curve and point identity rather than retaining row controls, so an
 Inspector rebuild, topology action, or resource switch cannot replay a stale UI
 callback or merge unrelated Undo transactions.
-The Native property list is grouped in this order: **Curve Editor**,
-**Transition Parameters**, active transition fields, **Points**, **Global
-Transform**, **Reverse**, and **Invert**. The Points section is created at the
-serialized `points` field only for point-graph transitions. Native numeric
+Ease and Trans remain ungrouped above the custom **Curve Editor** foldout.
+The structural Native property-list groups are **Transition Parameters** and
+**Global Transform**, with the conditional **Points** section inserted between
+them at the serialized `points` field only for point-graph transitions. The
+transition-specific action row stays at the bottom of **Curve Editor**: point
+graphs show **New point handles** and **Add Point**, while Jitter and Irregular
+show **Generate**. The Points section therefore contains only the editable point
+array. **Conversion** is inserted immediately above Godot's built-in **Resource**
+section. Native numeric
 parameter sliders use the same deferred transaction boundary,
 including the Constant and Back parameters that regenerate Bézier preset geometry:
 motion previews locally, then publishes one Inspector/live-scene update on release.

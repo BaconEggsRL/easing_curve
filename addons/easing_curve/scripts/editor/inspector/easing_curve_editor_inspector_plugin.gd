@@ -84,6 +84,7 @@ var _native_points_refresh_queued := false
 var _native_point_identity_signature := PackedInt64Array()
 var _native_editor_generation := 0
 var _native_point_edit_finish_request_id := 0
+var _conversion_added := false
 
 
 ## Inspector-only transition grouping, ordering, and presentation.
@@ -217,6 +218,7 @@ func _init() -> void:
 
 func _parse_begin(object: Object) -> void:
 	_point_list_controller.clear_input_bindings()
+	_conversion_added = false
 
 	var resource := object as Resource
 	var backend := BackendFactory.create(resource)
@@ -658,7 +660,6 @@ func handle_points(curve: EasingCurve) -> VBoxContainer:
 		Callable(self, "_create_handle_mode_property"),
 		Callable(self, "_move_point"),
 		Callable(self, "_on_remove_btn_pressed"),
-		Callable(self, "_create_point_add_controls"),
 	)
 
 
@@ -908,6 +909,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		easing_curve_editor.set_slider_value(
 			view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]
 		)
+		_add_curve_editor_transition_action(curve_editor_content, object)
 		if _consume_initial_autofit_for_loaded_resource(object):
 			_queue_autofit_curve_editor()
 
@@ -1013,6 +1015,7 @@ func _handle_native_curve_editor(
 	zoom_row.add_child(zoom_slider_container)
 	easing_curve_editor.set_slider_container(zoom_slider_container)
 	easing_curve_editor.set_slider_value(EasingCurve.DEFAULT_SLIDER_VALUE)
+	_add_curve_editor_transition_action(content, object)
 
 	_curve_editor_section = _create_foldable_section(
 		"Curve Editor",
@@ -1144,8 +1147,39 @@ func _build_native_point_list(object: Resource) -> void:
 		var panel := _create_native_point_panel(points[index], index, points.size())
 		_native_points_content.add_child(panel)
 		_native_points_content.call(&"enable_drop_forwarding", panel)
-	_native_points_content.add_child(_create_point_add_controls())
 	_native_point_identity_signature = _get_native_point_identity_signature(points)
+
+
+func _add_curve_editor_transition_action(container: VBoxContainer, object: Resource) -> void:
+	var backend := BackendFactory.create(object)
+	if backend == null:
+		return
+	if backend.is_point_graph():
+		container.add_child(_create_point_add_controls())
+		return
+	var transition := int(
+		object.get(&"transition")
+		if backend.get_backend_id() == &"native"
+		else object.get(&"trans_type")
+	)
+	var generated_transitions := (
+		PackedInt32Array([102, 103])
+		if backend.get_backend_id() == &"native"
+		else PackedInt32Array([
+			EasingCurve.TRANS.JITTER,
+			EasingCurve.TRANS.IRREGULAR,
+		])
+	)
+	if transition not in generated_transitions:
+		return
+	var generate_editor := GenerateFunctionEditorProperty.new()
+	generate_editor.name = &"GenerateControls"
+	generate_editor.setup(easing_curve_editor, editor_undo_redo)
+	generate_editor.set_object_and_property(
+		object,
+		&"randomness" if backend.get_backend_id() == &"native" else &"generate_tool_button",
+	)
+	container.add_child(generate_editor)
 
 
 func _get_native_point_identity_signature(points: Array[Resource]) -> PackedInt64Array:
@@ -1515,14 +1549,26 @@ func _can_handle(object: Object) -> bool:
 	)
 
 
-func _parse_end(object: Object) -> void:
+func _add_conversion_section(object: Object) -> void:
+	if _conversion_added:
+		return
 	var resource := object as Resource
 	var backend := BackendFactory.create(resource)
 	if backend == null or not bool(backend.get_capabilities().get(backend.CAP_CONVERSION, false)):
 		return
+	_conversion_added = true
 	var conversion_control := CurveConversionControl.new()
 	conversion_control.setup(resource)
 	add_custom_control(_create_inspector_section("Conversion", conversion_control, resource))
+
+
+func _parse_category(object: Object, category: String) -> void:
+	if category == "Resource":
+		_add_conversion_section(object)
+
+
+func _parse_end(object: Object) -> void:
+	_add_conversion_section(object)
 
 
 func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wide):
@@ -1573,10 +1619,6 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 	if object is EasingCurve and name == EasingCurve.FUNCTION_SNAPSHOT_PROPERTY:
 		return true
 	if object is EasingCurve and name == "generate_tool_button":
-		if EasingCurve.uses_generated_function_data(object.trans_type):
-			var property_editor := GenerateFunctionEditorProperty.new()
-			property_editor.setup(easing_curve_editor, editor_undo_redo)
-			add_custom_control(property_editor)
 		return true
 	var uses_deferred_parameter_editor: bool = (
 		(object is EasingCurve and EasingCurve.is_deferred_parameter(StringName(name)))
@@ -1611,14 +1653,6 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 			property_editor.free()
 			return false
 		add_property_editor(name, property_editor)
-		if (
-			native_backend != null
-			and native_backend.get_backend_id() == &"native"
-			and name == "randomness"
-		):
-			var generate_editor := GenerateFunctionEditorProperty.new()
-			generate_editor.setup(easing_curve_editor, editor_undo_redo)
-			add_custom_control(generate_editor)
 		return true
 	return false
 

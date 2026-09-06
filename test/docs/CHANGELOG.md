@@ -27,6 +27,18 @@ current top entry.
   Godot process instead of treating an unset PowerShell `$LASTEXITCODE` as a
   failed version probe.
 
+### Fixed
+
+* Fixed Native-to-Legacy point-lock conversion by normalizing Native lock data
+  into the legacy typed dictionary contract.
+* Deferred opening converted resources until the confirmation signal completes,
+  preventing the conversion control from being freed during signal emission.
+* Kept Native Ease and Trans ungrouped, removed the duplicate outer Curve Editor
+  foldout, and suppressed the internal snapshot property's floating reset icon.
+* Moved point-add and generated-curve actions to the bottom of Curve Editor,
+  leaving Points focused on array rows, and placed Conversion immediately above
+  Godot's built-in Resource section to avoid the trailing Inspector gap.
+
 ### Compatibility
 
 * Native binaries target Windows x86_64 and non-threaded Web. The legacy

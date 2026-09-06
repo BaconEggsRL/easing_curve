@@ -98,13 +98,18 @@ func _test_constructed_points_list_routes_add_and_remove() -> void:
 	point_list.free()
 
 	var refreshed_list := EDITOR_DRIVER.create_points_list(inspector, curve)
-	var add_button: Button
-	add_button = _find_button(refreshed_list, "Add Point")
-	_expect(add_button != null, "Constructed Bezier point list did not create its Add Point control")
+	_expect(
+		_find_button(refreshed_list, "Add Point") == null,
+		"Constructed point list retained the Curve Editor Add Point control",
+	)
+	var add_controls := inspector.call("_create_point_add_controls") as Control
+	var add_button := _find_button(add_controls, "Add Point")
+	_expect(add_button != null, "Curve Editor controls did not create Add Point")
 	if add_button != null:
 		add_button.pressed.emit()
-		_expect(curve.points.size() == 3, "Constructed Add Point control did not reach the Inspector mutation path")
-		_expect_selected_point(inspector, editor, curve, 1, "Constructed Add Point control")
+		_expect(curve.points.size() == 3, "Curve Editor Add Point did not reach the Inspector mutation path")
+		_expect_selected_point(inspector, editor, curve, 1, "Curve Editor Add Point")
+	add_controls.free()
 	refreshed_list.free()
 	editor.free()
 

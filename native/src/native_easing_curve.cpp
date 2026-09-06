@@ -119,7 +119,6 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("bake_callable", "callable", "resolution"), &NativeEasingCurve::bake_callable, DEFVAL(40));
 	ClassDB::bind_method(D_METHOD("sample", "offset"), &NativeEasingCurve::sample);
 
-	ADD_GROUP("Curve Editor", "");
 	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "_editor_state_snapshot", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_editor_state_snapshot", "get_editor_state_snapshot");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100,Constant:101,Jitter:102,Irregular:103,Step:104,Power:105,Physics Spring:106,CSS Linear:107,CSS Cubic Bezier:108"), "set_transition", "get_transition");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "ease_type", PROPERTY_HINT_ENUM, "In,Out,In Out,Out In"), "set_ease_type", "get_ease_type");

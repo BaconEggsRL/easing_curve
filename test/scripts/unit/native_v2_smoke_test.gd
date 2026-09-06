@@ -86,7 +86,11 @@ func _test_inspector_group_metadata() -> void:
 		visible_names.append(property_name)
 		usage_by_name[property_name] = usage
 
-	for group_name: String in ["Curve Editor", "Transition Parameters", "Global Transform"]:
+	_expect(
+		not visible_names.has("Curve Editor"),
+		"Native property metadata added an outer Curve Editor group around Ease/Trans",
+	)
+	for group_name: String in ["Transition Parameters", "Global Transform"]:
 		_expect(group_name in visible_names, "%s group is missing" % group_name)
 		_expect(
 			(int(usage_by_name.get(group_name, 0)) & PROPERTY_USAGE_GROUP) != 0,
@@ -94,7 +98,6 @@ func _test_inspector_group_metadata() -> void:
 		)
 
 	var ordered_names := [
-		"Curve Editor",
 		"Transition Parameters",
 		"overshoot",
 		"points",
@@ -417,6 +420,27 @@ func _test_bidirectional_conversion() -> void:
 	var baked := CURVE_CONVERTER.legacy_to_native(callable_curve, true, 64)
 	_expect(CONVERSION_RESULT.is_success(baked), "approved Callable conversion did not bake")
 	_expect(CONVERSION_RESULT.is_lossy(baked), "Callable bake was not classified as baked")
+
+	var native_custom := _new_native_curve(NativeEasingCurve.TRANS_CUSTOM, NativeEasingCurve.EASE_IN)
+	native_custom.call(&"cubic_bezier", 0.25, 0.1, 0.25, 1.0)
+	var native_point := native_custom.call(&"get_point", 0) as Resource
+	native_point.call(&"set_locked", &"position", true)
+	var custom_to_legacy := CURVE_CONVERTER.native_to_legacy(native_custom)
+	_expect(CONVERSION_RESULT.is_success(custom_to_legacy), "locked Native Custom conversion failed")
+	var legacy_custom := custom_to_legacy.get(CONVERSION_RESULT.KEY_RESOURCE) as EasingCurve
+	_expect(legacy_custom != null, "locked Native Custom conversion returned no legacy resource")
+	if legacy_custom != null:
+		_expect(legacy_custom.points[0].is_lock_active(&"position"), "Native-to-Legacy conversion lost point locks")
+		var custom_to_native := CURVE_CONVERTER.legacy_to_native(legacy_custom)
+		_expect(CONVERSION_RESULT.is_success(custom_to_native), "locked Legacy Custom conversion failed")
+		var native_round_trip := custom_to_native.get(CONVERSION_RESULT.KEY_RESOURCE) as Resource
+		_expect(native_round_trip != null, "locked Legacy Custom conversion returned no Native resource")
+		if native_round_trip != null:
+			var round_trip_point := native_round_trip.call(&"get_point", 0) as Resource
+			_expect(
+				round_trip_point.call(&"is_lock_active", &"position"),
+				"Legacy-to-Native conversion lost point locks",
+			)
 
 
 func _test_callable_baking() -> void:

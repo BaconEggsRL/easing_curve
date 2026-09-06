@@ -38,7 +38,7 @@ func setup(source: Resource) -> void:
 	_dialog = ConfirmationDialog.new()
 	_dialog.title = "Easing Curve Conversion"
 	_dialog.ok_button_text = "Open Unsaved Copy"
-	_dialog.confirmed.connect(_open_converted_resource)
+	_dialog.confirmed.connect(_open_converted_resource, CONNECT_DEFERRED)
 	add_child(_dialog)
 
 

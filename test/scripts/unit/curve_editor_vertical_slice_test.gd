@@ -12,6 +12,12 @@ const CURVE_EDITOR_SETTINGS := preload(
 const DEFERRED_PARAMETER_EDITOR_PROPERTY := preload(
 	"res://addons/easing_curve/scripts/editor/inspector/deferred_parameter_editor_property.gd"
 )
+const POINTS_EDITOR_PROPERTY := preload(
+	"res://addons/easing_curve/scripts/editor/inspector/points_editor_property.gd"
+)
+const CURVE_CONVERSION_CONTROL := preload(
+	"res://addons/easing_curve/scripts/editor/inspector/curve_conversion_control.gd"
+)
 const ZOOM_SLIDER := preload(
 	"res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.tscn"
 )
@@ -519,6 +525,35 @@ func _test_native_inspector_path() -> void:
 	if not ClassDB.class_exists(&"NativeEasingCurve"):
 		return
 	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	var snapshot_property := POINTS_EDITOR_PROPERTY.new() as EditorProperty
+	snapshot_property.set_object_and_property(curve, &"_editor_state_snapshot")
+	var revert_update := {&"received": false, &"can_revert": true}
+	snapshot_property.property_can_revert_changed.connect(
+		func(property_name: StringName, can_revert: bool) -> void:
+			if property_name == &"_editor_state_snapshot":
+				revert_update[&"received"] = true
+				revert_update[&"can_revert"] = can_revert
+	)
+	snapshot_property.call(&"set_content", Control.new())
+	_expect(
+		revert_update[&"received"] and not revert_update[&"can_revert"],
+		"Native snapshot bridge did not suppress its floating revert control",
+	)
+	snapshot_property.free()
+
+	var conversion_control := CURVE_CONVERSION_CONTROL.new() as Control
+	conversion_control.call(&"setup", curve)
+	var conversion_dialog := conversion_control.get("_dialog") as ConfirmationDialog
+	var conversion_opens_deferred := false
+	for connection: Dictionary in conversion_dialog.get_signal_connection_list(&"confirmed"):
+		if int(connection.get(&"flags", 0)) & CONNECT_DEFERRED:
+			conversion_opens_deferred = true
+	_expect(
+		conversion_opens_deferred,
+		"Conversion resource opening was not deferred past the confirmation signal",
+	)
+	conversion_control.free()
+
 	var inspector := INSPECTOR_PLUGIN.new()
 	_expect(inspector._can_handle(curve), "Inspector plugin rejected NativeEasingCurve")
 	var content := inspector.handle_easing_curve_editor(curve)
@@ -552,8 +587,18 @@ func _test_native_inspector_path() -> void:
 		_expect(editor != null, "Native Inspector content omitted the shared Curve Editor")
 		if editor != null:
 			_expect(editor.get_backend_id() == &"native", "Native Inspector used the wrong backend")
-			var add_button := _find_button(points_section, "Add Point")
-			_expect(add_button != null, "Native Inspector omitted the shared point-list Add control")
+			var add_button := _find_button(content, "Add Point")
+			_expect(add_button != null, "Native Curve Editor omitted its Add Point control")
+			var add_controls := content.find_child("PointAddControls", true, false)
+			_expect(
+				add_controls != null
+					and add_controls.get_index() == add_controls.get_parent().get_child_count() - 1,
+				"Native Add Point controls were not last in the Curve Editor section",
+			)
+			_expect(
+				_find_button(points_section, "Add Point") == null,
+				"Native Points section retained its Add Point control",
+			)
 			_expect(_find_drag_handle(points_section) != null, "Native point list omitted the legacy drag handle")
 			var first_point := curve.call(&"get_point", 0) as Resource
 			var first_panel: Node = inspector.get("_native_points_content").get_child(0)
@@ -603,6 +648,18 @@ func _test_native_inspector_path() -> void:
 		await process_frame
 		points_section.free()
 	content.free()
+
+	curve.set(&"transition", 102)
+	var generated_content := inspector.handle_easing_curve_editor(curve)
+	root.add_child(generated_content)
+	var generate_controls := generated_content.find_child("GenerateControls", true, false)
+	_expect(
+		generate_controls != null
+			and generate_controls.get_index() == generate_controls.get_parent().get_child_count() - 1
+			and _find_button(generate_controls, "Generate") != null,
+		"Native Generate control was not last in the Curve Editor section",
+	)
+	generated_content.free()
 
 
 func _test_native_deferred_parameter_editor() -> void:
@@ -755,7 +812,7 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 			"Native %s property menu is incomplete" % property_name,
 		)
 
-	var shortcut_focus := _find_button(points_section, "Add Point")
+	var shortcut_focus := points_section.find_children("*", "Button", true, false)[0] as Button
 	shortcut_focus.grab_focus()
 	var shortcut_counts := {&"copy": 0, &"paste": 0, &"path": 0}
 	points_section.set(&"copy_value_callback", func() -> void: shortcut_counts[&"copy"] += 1)
@@ -856,7 +913,7 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 		input.value_focus_entered.emit()
 		input.value = input.value + 0.05
 		input.value_focus_exited.emit()
-		var add_button := _find_button(points_section, "Add Point")
+		var add_button := _find_button(content, "Add Point")
 		var count_before_add: int = curve.call(&"get_point_count")
 		add_button.pressed.emit()
 		var publications_after_add: int = publications[0]

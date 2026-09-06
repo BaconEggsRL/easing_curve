@@ -1,16 +1,24 @@
 [gd_resource type="NativeEasingCurve" format=3 uid="uid://bt0q1y84n4vwv"]
 
-[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_5p28q"]
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_i6rtu"]
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_7o4us"]
+position = Vector2(0.2456241, 0.8044251)
+left_control_point = Vector2(0.2456241, 0.8044251)
+right_control_point = Vector2(0.2456241, 0.8044251)
 handle_mode = 1
 
-[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_i6rtu"]
-position = Vector2(0.45, 0.53)
-left_control_point = Vector2(0.45, 0.53)
-right_control_point = Vector2(0.45, 0.53)
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_dpv1i"]
+position = Vector2(0.58093786, 0.34938955)
+left_control_point = Vector2(0.58093786, 0.34938955)
+right_control_point = Vector2(0.58093786, 0.34938955)
 handle_mode = 1
-left_force_linear = true
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_mg3kh"]
+position = Vector2(1, 1)
+left_control_point = Vector2(1, 1)
+right_control_point = Vector2(1, 1)
 
 [resource]
-transition = 100
-ease_type = 2
-points = Array[NativeEasingCurvePoint]([SubResource("NativeEasingCurvePoint_5p28q"), SubResource("NativeEasingCurvePoint_i6rtu")])
+points = Array[NativeEasingCurvePoint]([SubResource("NativeEasingCurvePoint_i6rtu"), SubResource("NativeEasingCurvePoint_7o4us"), SubResource("NativeEasingCurvePoint_dpv1i"), SubResource("NativeEasingCurvePoint_mg3kh")])
+preset_override_active = true

@@ -235,6 +235,12 @@ static func _native_points_to_legacy(source_points: Array) -> Array[EasingCurveP
 		point.set_handle_mode(int(source_point.get(&"handle_mode")))
 		point.left_force_linear = bool(source_point.get(&"left_force_linear"))
 		point.right_force_linear = bool(source_point.get(&"right_force_linear"))
-		point.locked = (source_point.call(&"get_locks") as Dictionary).duplicate(true)
+		var source_locks := source_point.call(&"get_locks") as Dictionary
+		var locks: Dictionary[String, bool] = {
+			"position": bool(source_locks.get(&"position", false)),
+			"left_control_point": bool(source_locks.get(&"left_control_point", false)),
+			"right_control_point": bool(source_locks.get(&"right_control_point", false)),
+		}
+		point.set_locks(locks)
 		result.append(point)
 	return result

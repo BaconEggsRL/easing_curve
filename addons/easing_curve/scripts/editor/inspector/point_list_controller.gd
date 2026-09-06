@@ -39,7 +39,6 @@ func build_point_list(
 	create_handle_mode_property: Callable,
 	move_point: Callable,
 	remove_point: Callable,
-	create_add_controls: Callable,
 ) -> VBoxContainer:
 	var point_list := PointsListContainer.new()
 	point_list.point_swap_requested.connect(move_point)
@@ -106,9 +105,6 @@ func build_point_list(
 
 		point_list.add_child(point_panel)
 		point_list.enable_drop_forwarding(point_panel)
-
-	if curve.curve_mode == EasingCurve.CurveMode.BEZIER:
-		point_list.add_child(create_add_controls.call())
 
 	return point_list
 
