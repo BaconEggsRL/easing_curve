@@ -1,0 +1,45 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Godot Benchmarks"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.6")
+run/flush_stdout_on_print=true
+config/icon="res://icon.png"
+
+[autoload]
+
+Manager="*res://manager.gd"
+
+[debug]
+
+gdscript/warnings/standalone_expression=0
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/stretch/mode="viewport"
+window/vsync/vsync_mode=0
+
+[dotnet]
+
+project/assembly_name="Godot Benchmarks"
+
+[gui]
+
+theme/default_theme_scale=1.5
+
+[rendering]
+
+occlusion_culling/use_occlusion_culling=true
+environment/defaults/default_environment="uid://du1js6r1lrlb7"

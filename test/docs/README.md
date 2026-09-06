@@ -1,5 +1,14 @@
 # Development testing
 
+## Performance comparisons
+
+The [Godot Tween comparison](GODOT_TWEEN_BENCHMARK.md) runs the upstream
+100-property and 1000-method workloads with Tween, Native and Legacy curves.
+Run `./test/runners/run_godot_tween_comparison.ps1` for three rendered trials per
+case, or add `-ValidateOnly` for deterministic workload checks. JSON, CSV and
+Markdown reports include a local Tween baseline and pinned upstream provenance.
+These six performance cases are separate from the 23-suite correctness manifest.
+
 ## v1.2.0 parity coverage audit
 
 Audit baseline: `v1.1.0..ea7e2c6`, plus the release-preparation test/documentation
