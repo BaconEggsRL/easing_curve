@@ -308,7 +308,7 @@ func _on_curve_ease_selected(index: int) -> void:
 		if not _runtime_easing_curve:
 			return
 		_runtime_easing_curve.ease_type = ease_type
-	restart_runtime()
+	restart_runtime(false)
 
 
 func _on_curve_trans_selected(index: int) -> void:
@@ -321,7 +321,7 @@ func _on_curve_trans_selected(index: int) -> void:
 		if not _runtime_easing_curve:
 			return
 		_runtime_easing_curve.trans_type = transition
-	restart_runtime()
+	restart_runtime(false)
 
 
 func _on_tween_trans_selected(index: int) -> void:
@@ -338,7 +338,7 @@ func _on_tween_ease_selected(index: int) -> void:
 
 func _restart_running_tweens() -> void:
 	if is_node_ready() and not Engine.is_editor_hint():
-		restart_runtime()
+		restart_runtime(false)
 
 
 func _process(delta: float) -> void:
@@ -500,14 +500,17 @@ func reset_and_start() -> void:
 	start_tween(tween_tween, tween_end_marker, tween_node, false)
 
 
-func restart_runtime() -> void:
+func restart_runtime(refresh_curve := true) -> void:
 	if Engine.is_editor_hint():
 		return
 
 	kill_tweens()
 	reset_positions()
 	_reset_timing_probe()
-	_capture_runtime_curves()
+	if refresh_curve:
+		_capture_runtime_curves()
+	if match_tween_check_button.button_pressed:
+		_match_curve_to_tween()
 
 	start_tween(curve_tween, curve_end_marker, curve_node, true)
 	start_tween(tween_tween, tween_end_marker, tween_node, false)
@@ -723,7 +726,7 @@ func _on_restart_pressed() -> void:
 
 
 func _on_reverse_toggled(_enabled: bool) -> void:
-	restart_runtime()
+	restart_runtime(false)
 
 
 func _on_match_tween_toggled(enabled: bool) -> void:
@@ -733,7 +736,7 @@ func _on_match_tween_toggled(enabled: bool) -> void:
 	if enabled:
 		_match_curve_to_tween()
 
-	restart_runtime()
+	restart_runtime(false)
 
 
 func _match_curve_to_tween() -> void:

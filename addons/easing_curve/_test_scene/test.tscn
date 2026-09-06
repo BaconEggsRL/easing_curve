@@ -181,5 +181,3 @@ unique_name_in_owner = true
 layout_mode = 2
 
 [connection signal="pressed" from="VBoxContainer/RestartButton" to="." method="_on_restart_pressed"]
-[connection signal="pressed" from="VBoxContainer/ReverseCheckButton" to="." method="_on_restart_pressed"]
-[connection signal="pressed" from="VBoxContainer/MatchTweenCheckButton" to="." method="_on_restart_pressed"]
