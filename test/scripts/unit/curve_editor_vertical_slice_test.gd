@@ -32,6 +32,7 @@ func _run() -> void:
 		_finish("shared curve editor vertical slice")
 		return
 	await _test_native_transition_history_lifecycle()
+	await _test_mixed_resource_toolbar_isolation()
 	_test_transition_control_parity()
 	await _test_default_new_point_handle_modes()
 	await _test_shared_wheel_zoom_routing()
@@ -47,6 +48,63 @@ func _run() -> void:
 	await _test_native_deferred_parameter_editor()
 	await _test_native_property_clipboard_and_lifecycle()
 	_finish("shared curve editor vertical slice")
+
+
+func _test_mixed_resource_toolbar_isolation() -> void:
+	var plugin := EditorPlugin.new()
+	var manager := plugin.get_undo_redo()
+	for native_first: bool in [true, false]:
+		var fixture := preload("res://test/scripts/support/native_curve_parity_fixture.gd").new()
+		fixture.native_curve = ClassDB.instantiate(&"NativeEasingCurve") as Resource
+		fixture.legacy_curve = EasingCurve.new()
+		fixture.native_curve.set(&"transition", 6)
+		fixture.legacy_curve.set(&"trans_type", EasingCurve.TRANS.ELASTIC)
+		var inspector := INSPECTOR_PLUGIN.new()
+		inspector.editor_undo_redo = manager
+		var curves: Array[Resource] = [fixture.native_curve, fixture.legacy_curve]
+		if not native_first:
+			curves.reverse()
+		var contents: Array[Control] = []
+		var toolbars: Dictionary = {}
+		for resource: Resource in curves:
+			inspector._parse_begin(resource)
+			var content := inspector.handle_easing_curve_editor(resource)
+			root.add_child(content)
+			contents.append(content)
+			toolbars[resource] = content.get_child(0)
+		await process_frame
+		for resource: Resource in [fixture.native_curve, fixture.legacy_curve]:
+			var other := fixture.legacy_curve if resource == fixture.native_curve else fixture.native_curve
+			var other_state: Dictionary = other.call(&"get_editor_state_snapshot")
+			var toolbar := toolbars[resource] as GridContainer
+			var ease := toolbar.get_child(1) as OptionButton
+			var transition := toolbar.get_child(4) as OptionButton
+			# A later parse may clear Legacy state while both toolbars remain alive.
+			inspector._parse_begin(fixture.native_curve)
+			for ease_id: int in [2, 3, 1, 0, 1]:
+				var before: Dictionary = resource.call(&"get_editor_state_snapshot")
+				ease.item_selected.emit(ease.get_item_index(ease_id))
+				_expect(int(resource.get(&"ease_type")) == ease_id, "Mixed toolbar changed the wrong Ease resource")
+				_expect(other.call(&"get_editor_state_snapshot") == other_state, "Mixed toolbar leaked Ease to the other API")
+				var after: Dictionary = resource.call(&"get_editor_state_snapshot")
+				var history := manager.get_history_undo_redo(manager.get_object_history_id(resource))
+				_expect(history.undo(), "Mixed toolbar Ease edit has no Undo")
+				_expect(resource.call(&"get_editor_state_snapshot") == before, "Mixed toolbar Undo targeted the wrong resource")
+				_expect(history.redo(), "Mixed toolbar Ease edit has no Redo")
+				_expect(resource.call(&"get_editor_state_snapshot") == after, "Mixed toolbar Redo lost Ease state")
+				_expect(other.call(&"get_editor_state_snapshot") == other_state, "Mixed toolbar history changed the other API")
+			(toolbar.get_child(2) as Button).pressed.emit()
+			_expect(int(resource.get(&"ease_type")) == 0, "Mixed toolbar Ease reset targeted the wrong resource")
+			var quad_id := 4 if resource == fixture.native_curve else EasingCurve.TRANS.QUAD
+			transition.item_selected.emit(transition.get_item_index(quad_id))
+			_expect(int(resource.get(&"transition" if resource == fixture.native_curve else &"trans_type")) == quad_id, "Mixed toolbar transition targeted the wrong resource")
+			_expect(other.call(&"get_editor_state_snapshot") == other_state, "Mixed toolbar reset/transition changed the other API")
+			manager.clear_history()
+		await process_frame
+		for content: Control in contents:
+			content.free()
+		fixture.free()
+	plugin.free()
 
 
 func _test_native_transition_history_lifecycle() -> void:

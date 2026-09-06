@@ -38,6 +38,9 @@ current top entry.
 
 ### Fixed
 
+* Bound Ease/Trans toolbar callbacks to their owning resource/editor when Legacy
+  and Native inspectors coexist, preventing cross-resource changes and nil
+  `curve_mode` errors after switching between them.
 * Fixed Native transition Undo/Redo after the Inspector is rebuilt or another
   resource is selected. History restores transition/Ease settings and geometry
   through the retained backend instead of depending on a destroyed editor control.

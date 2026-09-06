@@ -74,6 +74,10 @@ Native dropdown/history restoration. Manual coverage is popup/focus/redraw.
    Ease becomes available again.
 3. Visit Custom, Linear, Constant, Step, Back, Power, Elastic, Bounce, Spring,
    Physics Spring, Jitter and Irregular. Inspect parameter rows and point editing.
+4. Keep both exported resource inspectors expanded. Set both to Elastic and edit
+   every Ease option on Native, then Legacy; repeat with reversed creation order.
+   Use Ease reset and switch Trans on each. The other resource must not change,
+   including through Undo/Redo; the console must not report nil `curve_mode`.
 
 Expected: no stale values or rows. Custom/Linear/Constant/Step/CSS do not offer
 Ease; clean ease-capable presets do. Points appear only for point-graph modes.

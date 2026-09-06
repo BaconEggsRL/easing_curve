@@ -1020,14 +1020,15 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		curve = object
 		_point_edit_transaction_controller.reset_point_edit()
 		# Connect ease/trans preset selected signals
-		ease_option.item_selected.connect(
+		var resource_ease_option := ease_option
+		resource_ease_option.item_selected.connect(
 			func(idx):
-				_emit_curve_property(&"ease_type", ease_option.get_item_id(idx))
+				_emit_curve_property(&"ease_type", resource_ease_option.get_item_id(idx), object)
 		)
 
 		trans_option.item_selected.connect(
 			func(idx):
-				_emit_curve_property(&"trans_type", trans_option.get_item_id(idx))
+				_emit_curve_property(&"trans_type", trans_option.get_item_id(idx), object)
 		)
 
 		ease_reset_button.pressed.connect(_on_reset_ease.bind(object))
@@ -1146,20 +1147,21 @@ func _handle_native_curve_editor(
 	)
 	easing_curve_editor.editor_undo_redo = editor_undo_redo
 	easing_curve_editor.set_curve(object)
+	var resource_editor := easing_curve_editor
 	preset_reset.pressed.connect(easing_curve_editor.reset_native_preset)
 	ease_reset.pressed.connect(
 		easing_curve_editor.edit_curve_property.bind(&"ease_type", EasingCurve.EASE.IN)
 	)
 	native_ease_option.item_selected.connect(
 		func(index: int) -> void:
-			easing_curve_editor.edit_curve_property(
+			resource_editor.edit_curve_property(
 				&"ease_type",
 				native_ease_option.get_item_id(index),
 			)
 	)
 	native_trans_option.item_selected.connect(
 		func(index: int) -> void:
-			easing_curve_editor.edit_curve_property(
+			resource_editor.edit_curve_property(
 				&"transition",
 				native_trans_option.get_item_id(index),
 			)
@@ -2970,19 +2972,22 @@ func _remove_point(point: EasingCurvePoint) -> void:
 		),
 	)
 
-func _emit_curve_property(property_name: StringName, value: Variant) -> void:
+func _emit_curve_property(property_name: StringName, value: Variant, object: EasingCurve) -> void:
+	if object == null:
+		return
 	if (
 		property_name == &"ease_type"
-		and curve.curve_mode == EasingCurve.CurveMode.BEZIER
-		and curve.is_selected_preset_modified()
+		and object.curve_mode == EasingCurve.CurveMode.BEZIER
+		and object.is_selected_preset_modified()
 	):
 		return
-	_queue_autofit_curve_editor()
+	if is_instance_valid(easing_curve_editor) and easing_curve_editor.get_curve() == object:
+		_queue_autofit_curve_editor()
 	var action_name := "Change Easing Curve Ease" if property_name == &"ease_type" else "Change Easing Curve Transition"
 	_point_edit_transaction_controller.apply_action(
-		curve,
+		object,
 		action_name,
-		func(): curve.set(property_name, value),
+		func(): object.set(property_name, value),
 	)
 
 
@@ -3106,7 +3111,7 @@ func _on_reset_selected_preset(object: EasingCurve) -> void:
 func _on_reset_ease(object: EasingCurve) -> void:
 	if object == null or object.ease_type == EasingCurve.EASE.IN:
 		return
-	_emit_curve_property(&"ease_type", EasingCurve.EASE.IN)
+	_emit_curve_property(&"ease_type", EasingCurve.EASE.IN, object)
 
 
 static func _update_preset_state_ui(

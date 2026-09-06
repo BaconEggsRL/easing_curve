@@ -22,6 +22,10 @@ a named test function or a historical PASS. Manual sign-off is maintained in
 
 ### Gaps closed for this candidate
 
+- Mixed-resource toolbar regression: both exported resource controls stay alive,
+  both creation orders and every Ease selection are exercised with the real
+  history manager. Ease reset/Trans changes must target only their own resource,
+  even after a Native parse clears the inspector's current Legacy reference.
 - Moved the real Editor undo-manager lifecycle regression out of the runtime-only
   backend suite into the registered Editor-host vertical slice. Previously the
   `Engine.is_editor_hint()` branch never ran in the default manifest.
@@ -40,8 +44,9 @@ a named test function or a historical PASS. Manual sign-off is maintained in
    does not claim end-to-end physical UI coverage. Future automated UI work should
    test those routes rather than add more plain UndoRedo-only tests.
 2. **P1, automatable follow-up:** extend real Editor-manager lifecycle coverage to
-   Ease changes, parameters, generation, transforms and multiple actions across
-   multiple scene histories. Existing fixtures cover portions with plain UndoRedo
+   parameters, generation, transforms and multiple actions across multiple scene
+   histories. Ease isolation now has real-manager mixed-resource coverage; other
+   existing fixtures cover portions with plain UndoRedo
    or direct mutation; that is not equivalent to the complete editor lifecycle.
 3. **P2, automatable follow-up:** expand Native/Legacy malformed CSS differential
    cases, parameter boundary combinations and conversion round trips. Preserve
@@ -115,6 +120,21 @@ remains `1.2.0-dev`; nothing was committed, tagged or published by this work.
 - Results and the archive hash were recorded before the required successful-run
   cleanup; transient logs/isolated fixtures are removed by `--cleanup`.
 - Manual P01–P09: **not performed; all sign-off boxes remain unchecked**.
+
+### Mixed Native / Legacy toolbar follow-up — 2026-09-06
+
+Source: `a0c1f3a` plus this inspector fix and regression. Keeping both exported
+resource toolbars alive reproduced cross-resource Ease changes and the exact nil
+`curve_mode` error before the fix (54/771 vertical-slice assertions failed).
+Callbacks now capture the owning control/editor and Legacy resource explicitly.
+
+After the fix: **771/771** focused Editor-host checks and **23/23** full suites
+passed, runner exit **0**, with no script errors or unexpected diagnostics.
+Both creation orders, every Ease mode, reset, transition changes and Undo/Redo
+are covered. Clipboard/layout skips remain as above. Results recorded before
+successful-run cleanup. The earlier export/archive evidence predates this addon
+change; rebuild/revalidate the candidate package before release. Visible manual
+sign-off remains outstanding.
 
 ---
 
