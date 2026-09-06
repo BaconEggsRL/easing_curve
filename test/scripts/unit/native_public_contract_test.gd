@@ -46,13 +46,15 @@ const LEGACY_POINT_METHODS := [
 const NATIVE_CURVE_METHODS := [
 	"_apply_live_editor_snapshot", "add_point", "apply_point_states", "apply_point_topology_snapshot", "bake_callable", "begin_parameter_edit", "begin_point_edit", "cancel_parameter_edit", "capture_point_states", "clear_points",
 	"create_runtime_copy", "cubic_bezier", "get_amplitude", "get_bounce_damping", "get_constant_value", "get_damping",
-	"get_decay", "get_ease_type", "get_editor_state_snapshot", "get_format_status", "get_format_version", "get_frequency",
-	"get_mass", "get_num_bounces", "get_overshoot", "get_period", "get_point", "get_point_count", "get_points",
+	"generate_irregular", "get_css_cubic_bezier", "get_css_cubic_bezier_controls", "get_css_linear", "get_css_linear_points",
+	"get_decay", "get_ease_type", "get_editor_state_snapshot", "get_format_status", "get_format_version", "get_frequency", "get_generated_points",
+	"get_mass", "get_num_bounces", "get_num_points", "get_overshoot", "get_period", "get_point", "get_point_count", "get_points", "get_randomness",
 	"get_power", "get_steps", "get_stiffness", "get_transition", "get_velocity", "get_y_offset",
 	"insert_point", "is_builtin_bezier_preset", "is_format_supported", "is_from_start", "is_invert", "is_preset_override_active", "is_reverse", "is_selected_preset_modified",
 	"remove_point", "sample", "set_amplitude", "set_bounce_damping", "set_constant_value", "set_damping", "set_decay",
 	"reset_selected_preset", "set_ease_type", "set_editor_state_snapshot", "set_format_version", "set_frequency", "set_from_start", "set_invert",
-	"set_mass", "set_num_bounces", "set_overshoot", "set_period", "set_point", "set_points", "set_power",
+	"set_css_cubic_bezier", "set_css_cubic_bezier_controls", "set_css_linear", "set_css_linear_points", "set_generated_points",
+	"set_mass", "set_num_bounces", "set_num_points", "set_overshoot", "set_period", "set_point", "set_points", "set_power", "set_randomness",
 	"set_preset_override_active", "set_reverse", "set_steps", "set_stiffness", "set_transition", "set_velocity", "set_y_offset", "finish_parameter_edit", "finish_point_edit",
 ]
 const NATIVE_POINT_METHODS := [
@@ -107,9 +109,14 @@ const LEGACY_POINT_PROPERTIES := {
 }
 const NATIVE_CURVE_PROPERTIES := {
 	"_editor_state_snapshot": TYPE_DICTIONARY,
+	"_css_cubic_bezier_controls": TYPE_PACKED_FLOAT64_ARRAY,
+	"_css_linear_points": TYPE_PACKED_VECTOR2_ARRAY,
+	"_generated_points": TYPE_PACKED_VECTOR2_ARRAY,
 	"amplitude": TYPE_FLOAT,
 	"bounce_damping": TYPE_FLOAT,
 	"constant_value": TYPE_FLOAT,
+	"css_cubic_bezier": TYPE_STRING,
+	"css_linear": TYPE_STRING,
 	"damping": TYPE_FLOAT,
 	"decay": TYPE_FLOAT,
 	"ease_type": TYPE_INT,
@@ -119,11 +126,13 @@ const NATIVE_CURVE_PROPERTIES := {
 	"invert": TYPE_BOOL,
 	"mass": TYPE_FLOAT,
 	"num_bounces": TYPE_INT,
+	"num_points": TYPE_INT,
 	"overshoot": TYPE_FLOAT,
 	"period": TYPE_FLOAT,
 	"points": TYPE_ARRAY,
 	"preset_override_active": TYPE_BOOL,
 	"power": TYPE_FLOAT,
+	"randomness": TYPE_FLOAT,
 	"reverse": TYPE_BOOL,
 	"steps": TYPE_INT,
 	"stiffness": TYPE_FLOAT,
@@ -404,6 +413,8 @@ func _native_method_names(native_class_name: StringName) -> PackedStringArray:
 func _native_properties(native_class_name: StringName) -> Dictionary:
 	var properties := {}
 	for property: Dictionary in ClassDB.class_get_property_list(native_class_name, true):
+		if int(property[&"type"]) == TYPE_NIL:
+			continue
 		properties[String(property[&"name"])] = int(property[&"type"])
 	return properties
 

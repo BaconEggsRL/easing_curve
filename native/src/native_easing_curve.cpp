@@ -3,6 +3,8 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/callable_method_pointer.hpp>
+#include <godot_cpp/variant/packed_string_array.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -19,9 +21,7 @@ constexpr int BINARY_ITERATIONS = 32;
 
 bool is_valid_transition(NativeEasingCurve::Transition p_transition) {
 	return (p_transition >= NativeEasingCurve::TRANS_LINEAR && p_transition <= NativeEasingCurve::TRANS_SPRING) ||
-			p_transition == NativeEasingCurve::TRANS_CUSTOM || p_transition == NativeEasingCurve::TRANS_CONSTANT ||
-			p_transition == NativeEasingCurve::TRANS_STEP || p_transition == NativeEasingCurve::TRANS_POWER ||
-			p_transition == NativeEasingCurve::TRANS_PHYSICS_SPRING;
+			(p_transition >= NativeEasingCurve::TRANS_CUSTOM && p_transition <= NativeEasingCurve::TRANS_CSS_CUBIC_BEZIER);
 }
 
 bool is_valid_ease_type(NativeEasingCurve::EaseType p_ease_type) {
@@ -42,6 +42,13 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_constant_value"), &NativeEasingCurve::get_constant_value);
 	ClassDB::bind_method(D_METHOD("set_overshoot", "overshoot"), &NativeEasingCurve::set_overshoot);
 	ClassDB::bind_method(D_METHOD("get_overshoot"), &NativeEasingCurve::get_overshoot);
+	ClassDB::bind_method(D_METHOD("set_num_points", "num_points"), &NativeEasingCurve::set_num_points);
+	ClassDB::bind_method(D_METHOD("get_num_points"), &NativeEasingCurve::get_num_points);
+	ClassDB::bind_method(D_METHOD("set_randomness", "randomness"), &NativeEasingCurve::set_randomness);
+	ClassDB::bind_method(D_METHOD("get_randomness"), &NativeEasingCurve::get_randomness);
+	ClassDB::bind_method(D_METHOD("generate_irregular"), &NativeEasingCurve::generate_irregular);
+	ClassDB::bind_method(D_METHOD("set_generated_points", "points"), &NativeEasingCurve::set_generated_points);
+	ClassDB::bind_method(D_METHOD("get_generated_points"), &NativeEasingCurve::get_generated_points);
 	ClassDB::bind_method(D_METHOD("set_steps", "steps"), &NativeEasingCurve::set_steps);
 	ClassDB::bind_method(D_METHOD("get_steps"), &NativeEasingCurve::get_steps);
 	ClassDB::bind_method(D_METHOD("set_from_start", "from_start"), &NativeEasingCurve::set_from_start);
@@ -66,6 +73,14 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_mass"), &NativeEasingCurve::get_mass);
 	ClassDB::bind_method(D_METHOD("set_velocity", "velocity"), &NativeEasingCurve::set_velocity);
 	ClassDB::bind_method(D_METHOD("get_velocity"), &NativeEasingCurve::get_velocity);
+	ClassDB::bind_method(D_METHOD("set_css_linear", "source"), &NativeEasingCurve::set_css_linear);
+	ClassDB::bind_method(D_METHOD("get_css_linear"), &NativeEasingCurve::get_css_linear);
+	ClassDB::bind_method(D_METHOD("set_css_linear_points", "points"), &NativeEasingCurve::set_css_linear_points);
+	ClassDB::bind_method(D_METHOD("get_css_linear_points"), &NativeEasingCurve::get_css_linear_points);
+	ClassDB::bind_method(D_METHOD("set_css_cubic_bezier", "source"), &NativeEasingCurve::set_css_cubic_bezier);
+	ClassDB::bind_method(D_METHOD("get_css_cubic_bezier"), &NativeEasingCurve::get_css_cubic_bezier);
+	ClassDB::bind_method(D_METHOD("set_css_cubic_bezier_controls", "controls"), &NativeEasingCurve::set_css_cubic_bezier_controls);
+	ClassDB::bind_method(D_METHOD("get_css_cubic_bezier_controls"), &NativeEasingCurve::get_css_cubic_bezier_controls);
 	ClassDB::bind_method(D_METHOD("set_reverse", "reverse"), &NativeEasingCurve::set_reverse);
 	ClassDB::bind_method(D_METHOD("is_reverse"), &NativeEasingCurve::is_reverse);
 	ClassDB::bind_method(D_METHOD("set_invert", "invert"), &NativeEasingCurve::set_invert);
@@ -104,13 +119,17 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("bake_callable", "callable", "resolution"), &NativeEasingCurve::bake_callable, DEFVAL(40));
 	ClassDB::bind_method(D_METHOD("sample", "offset"), &NativeEasingCurve::sample);
 
+	ADD_GROUP("Curve Editor", "");
 	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "_editor_state_snapshot", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_editor_state_snapshot", "get_editor_state_snapshot");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100,Constant:101,Step:104,Power:105,Physics Spring:106"), "set_transition", "get_transition");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100,Constant:101,Jitter:102,Irregular:103,Step:104,Power:105,Physics Spring:106,CSS Linear:107,CSS Cubic Bezier:108"), "set_transition", "get_transition");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "ease_type", PROPERTY_HINT_ENUM, "In,Out,In Out,Out In"), "set_ease_type", "get_ease_type");
+	ADD_GROUP("Transition Parameters", "");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "amplitude", PROPERTY_HINT_RANGE, "1.0,10.0,0.001,or_greater"), "set_amplitude", "get_amplitude");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "period", PROPERTY_HINT_RANGE, "0.01,2.0,0.001,or_greater"), "set_period", "get_period");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "constant_value", PROPERTY_HINT_RANGE, "0.0,1.0,0.001"), "set_constant_value", "get_constant_value");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "overshoot", PROPERTY_HINT_RANGE, "0.0,5.0,0.001"), "set_overshoot", "get_overshoot");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "num_points", PROPERTY_HINT_RANGE, "2,100,1,prefer_slider"), "set_num_points", "get_num_points");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "randomness", PROPERTY_HINT_RANGE, "0.0,4.0,0.001"), "set_randomness", "get_randomness");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "steps", PROPERTY_HINT_RANGE, "0,100,1"), "set_steps", "get_steps");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "from_start"), "set_from_start", "is_from_start");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "y_offset", PROPERTY_HINT_RANGE, "0.0,1.0,0.001"), "set_y_offset", "get_y_offset");
@@ -123,11 +142,18 @@ void NativeEasingCurve::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "damping", PROPERTY_HINT_RANGE, "0.0,100.0,0.1"), "set_damping", "get_damping");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mass", PROPERTY_HINT_RANGE, "0.000001,10.0,0.1"), "set_mass", "get_mass");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "velocity", PROPERTY_HINT_RANGE, "-30.0,30.0,0.1,or_less,or_greater"), "set_velocity", "get_velocity");
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "css_linear"), "set_css_linear", "get_css_linear");
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "css_cubic_bezier"), "set_css_cubic_bezier", "get_css_cubic_bezier");
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "points", PROPERTY_HINT_ARRAY_TYPE, "NativeEasingCurvePoint"), "set_points", "get_points");
+	ADD_GROUP("Global Transform", "");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "reverse"), "set_reverse", "is_reverse");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "invert"), "set_invert", "is_invert");
+	ADD_GROUP("", "");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "format_version", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_format_version", "get_format_version");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "preset_override_active", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_preset_override_active", "is_preset_override_active");
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "points", PROPERTY_HINT_ARRAY_TYPE, "NativeEasingCurvePoint"), "set_points", "get_points");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_VECTOR2_ARRAY, "_generated_points", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_generated_points", "get_generated_points");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_VECTOR2_ARRAY, "_css_linear_points", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_css_linear_points", "get_css_linear_points");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_FLOAT64_ARRAY, "_css_cubic_bezier_controls", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_css_cubic_bezier_controls", "get_css_cubic_bezier_controls");
 	ADD_SIGNAL(MethodInfo("points_changed", PropertyInfo(Variant::ARRAY, "points", PROPERTY_HINT_ARRAY_TYPE, "NativeEasingCurvePoint")));
 
 	BIND_CONSTANT(FORMAT_VERSION);
@@ -173,6 +199,11 @@ void NativeEasingCurve::_validate_property(PropertyInfo &p_property) const {
 		owning_transition = TRANS_CONSTANT;
 	} else if (p_property.name == StringName("overshoot")) {
 		owning_transition = TRANS_BACK;
+	} else if (p_property.name == StringName("num_points") || p_property.name == StringName("randomness")) {
+		if (transition != TRANS_JITTER && transition != TRANS_IRREGULAR) {
+			p_property.usage = static_cast<PropertyUsageFlags>(p_property.usage & ~PROPERTY_USAGE_EDITOR);
+		}
+		return;
 	} else if (p_property.name == StringName("amplitude") || p_property.name == StringName("period")) {
 		owning_transition = TRANS_ELASTIC;
 	} else if (p_property.name == StringName("steps") || p_property.name == StringName("from_start") || p_property.name == StringName("y_offset")) {
@@ -185,6 +216,10 @@ void NativeEasingCurve::_validate_property(PropertyInfo &p_property) const {
 		owning_transition = TRANS_SPRING;
 	} else if (p_property.name == StringName("stiffness") || p_property.name == StringName("damping") || p_property.name == StringName("mass") || p_property.name == StringName("velocity")) {
 		owning_transition = TRANS_PHYSICS_SPRING;
+	} else if (p_property.name == StringName("css_linear")) {
+		owning_transition = TRANS_CSS_LINEAR;
+	} else if (p_property.name == StringName("css_cubic_bezier")) {
+		owning_transition = TRANS_CSS_CUBIC_BEZIER;
 	} else {
 		is_transition_parameter = false;
 	}
@@ -194,6 +229,12 @@ void NativeEasingCurve::_validate_property(PropertyInfo &p_property) const {
 }
 
 NativeEasingCurve::NativeEasingCurve() {
+	css_linear_points.append(Vector2(0.0, 0.0));
+	css_linear_points.append(Vector2(1.0, 1.0));
+	css_cubic_bezier_controls.append(0.25);
+	css_cubic_bezier_controls.append(0.1);
+	css_cubic_bezier_controls.append(0.25);
+	css_cubic_bezier_controls.append(1.0);
 	replace_points(build_selected_preset_points(), false);
 	update_sampling_mode();
 }
@@ -209,6 +250,7 @@ void NativeEasingCurve::set_transition(Transition p_transition) {
 	transition = p_transition;
 	notify_property_list_changed();
 	preset_override_active = false;
+	ensure_generated_points();
 	if (is_builtin_bezier_preset()) {
 		replace_points(build_selected_preset_points(), false);
 		update_sampling_mode();
@@ -308,6 +350,84 @@ void NativeEasingCurve::set_overshoot(double p_overshoot) {
 }
 
 double NativeEasingCurve::get_overshoot() const { return overshoot; }
+
+void NativeEasingCurve::set_num_points(int64_t p_num_points) {
+	const int64_t value = std::clamp<int64_t>(p_num_points, 2, 100);
+	if (num_points == value) {
+		return;
+	}
+	num_points = value;
+	if (transition == TRANS_JITTER || transition == TRANS_IRREGULAR) {
+		generate_irregular();
+	} else {
+		publish_parameter_change();
+	}
+}
+
+int64_t NativeEasingCurve::get_num_points() const { return num_points; }
+
+void NativeEasingCurve::set_randomness(double p_randomness) {
+	if (!std::isfinite(p_randomness)) {
+		return;
+	}
+	const double value = std::clamp(p_randomness, 0.0, 4.0);
+	if (randomness == value) {
+		return;
+	}
+	randomness = value;
+	if (transition == TRANS_JITTER || transition == TRANS_IRREGULAR) {
+		generate_irregular();
+	} else {
+		publish_parameter_change();
+	}
+}
+
+double NativeEasingCurve::get_randomness() const { return randomness; }
+
+void NativeEasingCurve::generate_irregular() {
+	if (transition != TRANS_JITTER && transition != TRANS_IRREGULAR) {
+		return;
+	}
+	PackedVector2Array next_points;
+	if (transition == TRANS_IRREGULAR) {
+		const int64_t steps_count = std::max<int64_t>(num_points, 1);
+		for (int64_t index = 0; index <= steps_count; ++index) {
+			const double x = static_cast<double>(index) / static_cast<double>(steps_count);
+			double y = x;
+			if (index > 0 && index < steps_count) {
+				const double offset = (UtilityFunctions::randf() - 0.5) * randomness / static_cast<double>(steps_count);
+				y = std::clamp(x + offset, 0.0, 1.0);
+			}
+			next_points.append(Vector2(x, y));
+		}
+	} else if (num_points <= 2) {
+		next_points.append(Vector2(0.0, 0.0));
+		next_points.append(Vector2(1.0, 1.0));
+	} else {
+		for (int64_t index = 0; index < num_points; ++index) {
+			const double x = static_cast<double>(index) / static_cast<double>(num_points - 1);
+			double y = x;
+			if (index > 0 && index < num_points - 1) {
+				const double max_offset = std::min(x, 1.0 - x);
+				const double random_value = UtilityFunctions::randf() * 2.0 - 1.0;
+				y = std::clamp(x + random_value * max_offset * (randomness / 4.0), 0.0, 1.0);
+			}
+			next_points.append(Vector2(x, y));
+		}
+	}
+	generated_points = next_points;
+	publish_parameter_change();
+}
+
+void NativeEasingCurve::set_generated_points(const PackedVector2Array &p_points) {
+	if (generated_points == p_points) {
+		return;
+	}
+	generated_points = p_points;
+	publish_parameter_change();
+}
+
+PackedVector2Array NativeEasingCurve::get_generated_points() const { return generated_points; }
 
 void NativeEasingCurve::set_steps(int64_t p_steps) {
 	const int64_t value = std::clamp<int64_t>(p_steps, 0, 100);
@@ -462,6 +582,54 @@ void NativeEasingCurve::set_velocity(double p_velocity) {
 }
 
 double NativeEasingCurve::get_velocity() const { return velocity; }
+
+void NativeEasingCurve::set_css_linear(const String &p_source) {
+	if (css_linear == p_source) {
+		return;
+	}
+	css_linear = p_source;
+	PackedVector2Array parsed_points;
+	if (parse_css_linear(p_source, parsed_points)) {
+		css_linear_points = parsed_points;
+	}
+	publish_parameter_change();
+}
+
+String NativeEasingCurve::get_css_linear() const { return css_linear; }
+
+void NativeEasingCurve::set_css_linear_points(const PackedVector2Array &p_points) {
+	if (p_points.is_empty() || css_linear_points == p_points) {
+		return;
+	}
+	css_linear_points = p_points;
+	publish_parameter_change();
+}
+
+PackedVector2Array NativeEasingCurve::get_css_linear_points() const { return css_linear_points; }
+
+void NativeEasingCurve::set_css_cubic_bezier(const String &p_source) {
+	if (css_cubic_bezier == p_source) {
+		return;
+	}
+	css_cubic_bezier = p_source;
+	PackedFloat64Array parsed_controls;
+	if (parse_css_cubic_bezier(p_source, parsed_controls)) {
+		css_cubic_bezier_controls = parsed_controls;
+	}
+	publish_parameter_change();
+}
+
+String NativeEasingCurve::get_css_cubic_bezier() const { return css_cubic_bezier; }
+
+void NativeEasingCurve::set_css_cubic_bezier_controls(const PackedFloat64Array &p_controls) {
+	if (p_controls.size() != 4 || css_cubic_bezier_controls == p_controls) {
+		return;
+	}
+	css_cubic_bezier_controls = p_controls;
+	publish_parameter_change();
+}
+
+PackedFloat64Array NativeEasingCurve::get_css_cubic_bezier_controls() const { return css_cubic_bezier_controls; }
 
 void NativeEasingCurve::set_reverse(bool p_reverse) {
 	if (reverse == p_reverse) {
@@ -780,6 +948,7 @@ Dictionary NativeEasingCurve::get_editor_state_snapshot() const {
 	snapshot[StringName("transition")] = static_cast<int64_t>(transition);
 	snapshot[StringName("ease_type")] = static_cast<int64_t>(ease_type);
 	snapshot[StringName("preset_override_active")] = preset_override_active;
+	snapshot[StringName("generated_points")] = generated_points;
 	snapshot[StringName("point_states")] = capture_point_states();
 	return snapshot;
 }
@@ -797,8 +966,9 @@ void NativeEasingCurve::set_editor_state_snapshot(const Dictionary &p_snapshot) 
 	const Variant transition_value = p_snapshot.get(StringName("transition"), Variant());
 	const Variant ease_value = p_snapshot.get(StringName("ease_type"), Variant());
 	const Variant override_value = p_snapshot.get(StringName("preset_override_active"), Variant());
+	const Variant generated_value = p_snapshot.get(StringName("generated_points"), generated_points);
 	const Variant states_value = p_snapshot.get(StringName("point_states"), Variant());
-	if (transition_value.get_type() != Variant::INT || ease_value.get_type() != Variant::INT || override_value.get_type() != Variant::BOOL || states_value.get_type() != Variant::ARRAY) {
+	if (transition_value.get_type() != Variant::INT || ease_value.get_type() != Variant::INT || override_value.get_type() != Variant::BOOL || generated_value.get_type() != Variant::PACKED_VECTOR2_ARRAY || states_value.get_type() != Variant::ARRAY) {
 		return;
 	}
 	const Transition next_transition = static_cast<Transition>(static_cast<int64_t>(transition_value));
@@ -825,6 +995,7 @@ void NativeEasingCurve::set_editor_state_snapshot(const Dictionary &p_snapshot) 
 	transition = next_transition;
 	ease_type = next_ease;
 	preset_override_active = static_cast<bool>(override_value);
+	generated_points = generated_value;
 	replace_points(restored_points, false);
 	update_sampling_mode();
 	if (transition_changed) {
@@ -875,6 +1046,9 @@ Ref<NativeEasingCurve> NativeEasingCurve::create_runtime_copy() const {
 	runtime_copy->set_period(period);
 	runtime_copy->set_constant_value(constant_value);
 	runtime_copy->set_overshoot(overshoot);
+	runtime_copy->set_num_points(num_points);
+	runtime_copy->set_randomness(randomness);
+	runtime_copy->set_generated_points(generated_points);
 	runtime_copy->set_steps(steps);
 	runtime_copy->set_from_start(from_start);
 	runtime_copy->set_y_offset(y_offset);
@@ -887,6 +1061,10 @@ Ref<NativeEasingCurve> NativeEasingCurve::create_runtime_copy() const {
 	runtime_copy->set_damping(damping);
 	runtime_copy->set_mass(mass);
 	runtime_copy->set_velocity(velocity);
+	runtime_copy->set_css_linear(css_linear);
+	runtime_copy->set_css_linear_points(css_linear_points);
+	runtime_copy->set_css_cubic_bezier(css_cubic_bezier);
+	runtime_copy->set_css_cubic_bezier_controls(css_cubic_bezier_controls);
 	runtime_copy->set_reverse(reverse);
 	runtime_copy->set_invert(invert);
 	runtime_copy->set_points(duplicate_points());
@@ -1028,6 +1206,8 @@ Dictionary NativeEasingCurve::capture_parameter_state() const {
 	state[StringName("overshoot")] = overshoot;
 	state[StringName("amplitude")] = amplitude;
 	state[StringName("period")] = period;
+	state[StringName("num_points")] = num_points;
+	state[StringName("randomness")] = randomness;
 	state[StringName("steps")] = steps;
 	state[StringName("y_offset")] = y_offset;
 	state[StringName("power")] = power;
@@ -1039,6 +1219,8 @@ Dictionary NativeEasingCurve::capture_parameter_state() const {
 	state[StringName("damping")] = damping;
 	state[StringName("mass")] = mass;
 	state[StringName("velocity")] = velocity;
+	state[StringName("css_linear")] = css_linear;
+	state[StringName("css_cubic_bezier")] = css_cubic_bezier;
 	return state;
 }
 
@@ -1071,6 +1253,16 @@ TypedArray<NativeEasingCurvePoint> NativeEasingCurve::duplicate_points() const {
 
 void NativeEasingCurve::update_sampling_mode() {
 	use_compiled_points = transition == TRANS_CUSTOM || (is_builtin_bezier_preset() && preset_override_active);
+}
+
+void NativeEasingCurve::ensure_generated_points() {
+	if (transition != TRANS_JITTER && transition != TRANS_IRREGULAR) {
+		return;
+	}
+	const int64_t expected_size = transition == TRANS_IRREGULAR ? num_points + 1 : num_points;
+	if (generated_points.size() != expected_size) {
+		generate_irregular();
+	}
 }
 
 void NativeEasingCurve::update_preset_override_from_points() {
@@ -1285,6 +1477,12 @@ double NativeEasingCurve::sample_builtin(double p_offset) const {
 	if (transition == TRANS_STEP) {
 		return sample_step(p_offset);
 	}
+	if (transition == TRANS_CSS_LINEAR) {
+		return sample_css_linear(p_offset);
+	}
+	if (transition == TRANS_CSS_CUBIC_BEZIER) {
+		return sample_css_cubic_bezier(p_offset);
+	}
 	switch (ease_type) {
 		case EASE_IN:
 			return sample_transition_in(p_offset);
@@ -1339,10 +1537,15 @@ double NativeEasingCurve::sample_transition_in(double p_offset) const {
 			return std::pow(p_offset, power);
 		case TRANS_PHYSICS_SPRING:
 			return 1.0 - sample_physics_spring_out(1.0 - p_offset);
+		case TRANS_JITTER:
+		case TRANS_IRREGULAR:
+			return sample_generated(p_offset);
 		case TRANS_LINEAR:
 		case TRANS_CUSTOM:
 		case TRANS_CONSTANT:
 		case TRANS_STEP:
+		case TRANS_CSS_LINEAR:
+		case TRANS_CSS_CUBIC_BEZIER:
 			return p_offset;
 	}
 	return p_offset;
@@ -1388,10 +1591,15 @@ double NativeEasingCurve::sample_transition_out(double p_offset) const {
 			return 1.0 - std::pow(1.0 - p_offset, power);
 		case TRANS_PHYSICS_SPRING:
 			return sample_physics_spring_out(p_offset);
+		case TRANS_JITTER:
+		case TRANS_IRREGULAR:
+			return 1.0 - sample_generated(p_offset);
 		case TRANS_LINEAR:
 		case TRANS_CUSTOM:
 		case TRANS_CONSTANT:
 		case TRANS_STEP:
+		case TRANS_CSS_LINEAR:
+		case TRANS_CSS_CUBIC_BEZIER:
 			return p_offset;
 	}
 	return p_offset;
@@ -1559,6 +1767,188 @@ double NativeEasingCurve::sample_step(double p_offset) const {
 	}
 	const double stepped = (from_start ? std::ceil(p_offset * steps) : std::floor(p_offset * steps)) / steps;
 	return std::clamp(stepped + y_offset, 0.0, 1.0);
+}
+
+double NativeEasingCurve::sample_generated(double p_offset) const {
+	if (generated_points.size() < 2) {
+		return p_offset;
+	}
+	for (int64_t index = 0; index + 1 < generated_points.size(); ++index) {
+		const Vector2 start = generated_points[index];
+		const Vector2 end = generated_points[index + 1];
+		if (p_offset < start.x || p_offset > end.x) {
+			continue;
+		}
+		const double width = end.x - start.x;
+		if (std::abs(width) <= SEGMENT_X_EPSILON) {
+			return end.y;
+		}
+		const double weight = (p_offset - start.x) / width;
+		return start.y + (end.y - start.y) * weight;
+	}
+	return p_offset;
+}
+
+double NativeEasingCurve::sample_css_linear(double p_offset) const {
+	if (css_linear_points.is_empty()) {
+		return 0.0;
+	}
+	if (css_linear_points.size() == 1) {
+		return css_linear_points[0].y;
+	}
+	for (int64_t index = css_linear_points.size() - 1; index >= 0; --index) {
+		if (std::abs(p_offset - css_linear_points[index].x) <= SEGMENT_X_EPSILON) {
+			return css_linear_points[index].y;
+		}
+	}
+	Vector2 start;
+	Vector2 end;
+	if (p_offset < css_linear_points[0].x) {
+		start = css_linear_points[0];
+		end = css_linear_points[1];
+	} else if (p_offset > css_linear_points[css_linear_points.size() - 1].x) {
+		start = css_linear_points[css_linear_points.size() - 2];
+		end = css_linear_points[css_linear_points.size() - 1];
+	} else {
+		for (int64_t index = 0; index + 1 < css_linear_points.size(); ++index) {
+			if (css_linear_points[index].x < p_offset && p_offset < css_linear_points[index + 1].x) {
+				start = css_linear_points[index];
+				end = css_linear_points[index + 1];
+				break;
+			}
+		}
+	}
+	const double width = end.x - start.x;
+	if (std::abs(width) <= SEGMENT_X_EPSILON) {
+		return p_offset < css_linear_points[0].x ? start.y : end.y;
+	}
+	return start.y + (end.y - start.y) * ((p_offset - start.x) / width);
+}
+
+double NativeEasingCurve::sample_css_cubic_bezier(double p_offset) const {
+	if (css_cubic_bezier_controls.size() != 4) {
+		return p_offset;
+	}
+	if (p_offset <= 0.0 || p_offset >= 1.0) {
+		return p_offset;
+	}
+	const Segment segment = {
+		0.0,
+		css_cubic_bezier_controls[0],
+		css_cubic_bezier_controls[2],
+		1.0,
+		0.0,
+		css_cubic_bezier_controls[1],
+		css_cubic_bezier_controls[3],
+		1.0,
+	};
+	const double parameter = solve_monotonic_t(p_offset, segment);
+	return bezier(segment.y0, segment.y1, segment.y2, segment.y3, parameter);
+}
+
+bool NativeEasingCurve::parse_css_linear(const String &p_source, PackedVector2Array &r_points) {
+	String text = p_source.strip_edges();
+	if (!text.begins_with("linear(") || !text.ends_with(")")) {
+		return false;
+	}
+	text = text.substr(7, text.length() - 8);
+	const PackedStringArray entries = text.split(",", false);
+	if (entries.size() < 2) {
+		return false;
+	}
+	std::vector<double> outputs;
+	std::vector<double> positions;
+	const double unspecified = std::numeric_limits<double>::quiet_NaN();
+	for (int64_t entry_index = 0; entry_index < entries.size(); ++entry_index) {
+		const PackedStringArray parts = entries[entry_index].strip_edges().split(" ", false);
+		if (parts.is_empty() || !parts[0].is_valid_float()) {
+			return false;
+		}
+		const double output = parts[0].to_float();
+		std::vector<double> entry_positions;
+		for (int64_t part_index = 1; part_index < parts.size(); ++part_index) {
+			const String part = parts[part_index];
+			if (!part.ends_with("%")) {
+				return false;
+			}
+			const String number = part.substr(0, part.length() - 1);
+			if (!number.is_valid_float()) {
+				return false;
+			}
+			entry_positions.push_back(number.to_float() / 100.0);
+		}
+		if (entry_positions.size() > 2) {
+			return false;
+		}
+		outputs.push_back(output);
+		positions.push_back(entry_positions.empty() ? unspecified : entry_positions[0]);
+		if (entry_positions.size() == 2) {
+			outputs.push_back(output);
+			positions.push_back(entry_positions[1]);
+		}
+	}
+	if (std::isnan(positions.front())) {
+		positions.front() = 0.0;
+	}
+	if (std::isnan(positions.back())) {
+		positions.back() = 1.0;
+	}
+	double last_explicit = positions.front();
+	for (size_t index = 1; index < positions.size(); ++index) {
+		if (!std::isnan(positions[index])) {
+			positions[index] = std::max(positions[index], last_explicit);
+			last_explicit = positions[index];
+		}
+	}
+	for (size_t start = 0; start + 1 < positions.size();) {
+		size_t end = start + 1;
+		while (end < positions.size() && std::isnan(positions[end])) {
+			++end;
+		}
+		if (end >= positions.size()) {
+			break;
+		}
+		const size_t missing = end - start - 1;
+		for (size_t index = 1; index <= missing; ++index) {
+			positions[start + index] = positions[start] + (positions[end] - positions[start]) *
+					(static_cast<double>(index) / static_cast<double>(missing + 1));
+		}
+		start = end;
+	}
+	r_points.clear();
+	for (size_t index = 0; index < outputs.size(); ++index) {
+		r_points.append(Vector2(positions[index], outputs[index]));
+	}
+	return true;
+}
+
+bool NativeEasingCurve::parse_css_cubic_bezier(const String &p_source, PackedFloat64Array &r_controls) {
+	String text = p_source.strip_edges();
+	if (!text.to_lower().begins_with("cubic-bezier(") || !text.ends_with(")")) {
+		return false;
+	}
+	text = text.substr(13, text.length() - 14);
+	const PackedStringArray entries = text.split(",", true);
+	if (entries.size() != 4) {
+		return false;
+	}
+	PackedFloat64Array controls;
+	for (int64_t index = 0; index < entries.size(); ++index) {
+		const String token = entries[index].strip_edges();
+		if (!token.is_valid_float()) {
+			return false;
+		}
+		const double value = token.to_float();
+		if (!std::isfinite(value)) {
+			return false;
+		}
+		controls.append(value);
+	}
+	if (controls[0] < 0.0 || controls[0] > 1.0 || controls[2] < 0.0 || controls[2] > 1.0) {
+		return false;
+	}
+	r_controls = controls;
+	return true;
 }
 
 double NativeEasingCurve::sample_custom(double p_offset) {

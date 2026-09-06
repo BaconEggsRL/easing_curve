@@ -3,7 +3,7 @@ extends "res://addons/easing_curve/scripts/editor/backend/curve_editor_backend.g
 
 const IMPLEMENTED_TRANSITION_IDS := [
 	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-	100, 101, 104, 105, 106,
+	100, 101, 102, 103, 104, 105, 106, 107, 108,
 ]
 
 
@@ -27,7 +27,7 @@ func get_capabilities() -> Dictionary[StringName, bool]:
 		CAP_POINT_OPTIONS: true,
 		CAP_POINT_GEOMETRY: true,
 		CAP_POINT_TOPOLOGY: true,
-		CAP_CONVERSION: false,
+		CAP_CONVERSION: true,
 	}
 
 

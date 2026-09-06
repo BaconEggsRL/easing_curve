@@ -897,6 +897,25 @@ func reset_native_preset() -> void:
 	)
 
 
+func generate_native_irregular() -> void:
+	var resource := get_curve()
+	if (
+		_backend == null
+		or _backend.get_backend_id() != &"native"
+		or resource == null
+		or not resource.has_method(&"generate_irregular")
+	):
+		return
+	finish_active_point_edit()
+	var before := _duplicate_snapshot(_backend.capture_snapshot())
+	resource.call(&"generate_irregular")
+	var after := _duplicate_snapshot(_backend.capture_snapshot())
+	if before == after:
+		return
+	_commit_backend_snapshot_action("Generate Easing Curve", before, after)
+	queue_redraw()
+
+
 func _has_endpoint_at(x: float) -> bool:
 	for point in _points():
 		var position: Vector2 = point.get(&"position")

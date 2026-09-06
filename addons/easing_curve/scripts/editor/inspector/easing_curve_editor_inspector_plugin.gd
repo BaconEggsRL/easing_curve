@@ -23,6 +23,8 @@ const NATIVE_DEFERRED_PARAMETERS := [
 	&"overshoot",
 	&"amplitude",
 	&"period",
+	&"num_points",
+	&"randomness",
 	&"steps",
 	&"y_offset",
 	&"power",
@@ -43,6 +45,9 @@ const PointsEditorProperty = preload(
 )
 const PointsFoldableSection = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/points_foldable_section.gd"
+)
+const CurveConversionControl = preload(
+	"res://addons/easing_curve/scripts/editor/inspector/curve_conversion_control.gd"
 )
 const PointPropertyClipboardController = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/point_property_clipboard_controller.gd"
@@ -182,6 +187,15 @@ const NATIVE_TRANSITION_PRESENTATION := [
 		"name": "Discrete",
 		"items": [
 			{"transition": 104, "label": "Step"},
+			{"transition": 102, "label": "Jitter"},
+			{"transition": 103, "label": "Irregular"},
+		],
+	},
+	{
+		"name": "CSS",
+		"items": [
+			{"transition": 108, "label": "CSS Cubic Bézier"},
+			{"transition": 107, "label": "CSS Linear"},
 		],
 	},
 	{
@@ -710,7 +724,7 @@ func _sync_new_point_handle_mode_option(
 
 
 func _disconnect_new_point_handle_mode_option(
-	editor: EasingCurveEditor,
+	editor,
 	callback: Callable,
 ) -> void:
 	if (
@@ -1010,27 +1024,12 @@ func _handle_native_curve_editor(
 	)
 	root.add_child(_curve_editor_section)
 
-	_native_points_content = PointsListContainer.new()
-	_native_points_content.connect(
-		&"point_swap_requested",
-		easing_curve_editor.move_point_from_list,
-	)
-	_native_points_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_build_native_point_list(object)
-	var native_points_section := _create_inspector_section(
-		"Points",
-		_native_points_content,
-		object,
-	)
-	root.add_child(native_points_section)
-
 	var changed_callback := _on_native_curve_changed.bind(
 		object,
 		native_ease_option,
 		native_trans_option,
 		ease_reset,
 		preset_reset,
-		native_points_section,
 	)
 	object.changed.connect(changed_callback)
 	root.tree_exiting.connect(_disconnect_native_curve_changed.bind(object, changed_callback))
@@ -1040,10 +1039,24 @@ func _handle_native_curve_editor(
 		native_trans_option,
 		ease_reset,
 		preset_reset,
-		native_points_section,
 	)
 	_queue_autofit_curve_editor()
 	return root
+
+
+func _handle_native_points(object: Resource) -> Control:
+	_native_points_content = PointsListContainer.new()
+	_native_points_content.connect(
+		&"point_swap_requested",
+		easing_curve_editor.move_point_from_list,
+	)
+	_native_points_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_build_native_point_list(object)
+	return _create_inspector_section(
+		"Points",
+		_native_points_content,
+		object,
+	)
 
 
 func _on_native_curve_changed(
@@ -1052,7 +1065,6 @@ func _on_native_curve_changed(
 	trans_control: OptionButton,
 	ease_reset: Button,
 	preset_reset: Button,
-	points_section: Control,
 ) -> void:
 	_update_native_preset_state_ui(
 		object,
@@ -1060,7 +1072,6 @@ func _on_native_curve_changed(
 		trans_control,
 		ease_reset,
 		preset_reset,
-		points_section,
 	)
 	var backend := BackendFactory.create(object)
 	var identity_signature := (
@@ -1084,7 +1095,6 @@ func _update_native_preset_state_ui(
 	trans_control: OptionButton,
 	ease_reset: Button,
 	reset_button: Button,
-	points_section: Control,
 ) -> void:
 	if (
 		object == null
@@ -1092,11 +1102,9 @@ func _update_native_preset_state_ui(
 		or not is_instance_valid(trans_control)
 		or not is_instance_valid(ease_reset)
 		or not is_instance_valid(reset_button)
-		or not is_instance_valid(points_section)
 	):
 		return
 	var modified := bool(object.call(&"is_selected_preset_modified"))
-	var backend := BackendFactory.create(object)
 	var transition := int(object.get(&"transition"))
 	var ease_type := int(object.get(&"ease_type"))
 	var ease_index := ease_control.get_item_index(ease_type)
@@ -1112,7 +1120,6 @@ func _update_native_preset_state_ui(
 		ease_available and ease_type != EasingCurve.EASE.IN,
 	)
 	_set_native_transition_display(trans_control, transition, modified)
-	points_section.visible = backend != null and backend.is_point_graph()
 	_set_preset_reset_button_available(reset_button, modified)
 
 
@@ -1508,6 +1515,16 @@ func _can_handle(object: Object) -> bool:
 	)
 
 
+func _parse_end(object: Object) -> void:
+	var resource := object as Resource
+	var backend := BackendFactory.create(resource)
+	if backend == null or not bool(backend.get_capabilities().get(backend.CAP_CONVERSION, false)):
+		return
+	var conversion_control := CurveConversionControl.new()
+	conversion_control.setup(resource)
+	add_custom_control(_create_inspector_section("Conversion", conversion_control, resource))
+
+
 func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wide):
 	# Handle properties
 	var native_backend := BackendFactory.create(object as Resource)
@@ -1522,7 +1539,11 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 			)
 			add_property_editor(name, native_property, false, "")
 			return true
-		if name in ["transition", "ease_type", "points", "preset_override_active"]:
+		if name in ["transition", "ease_type", "preset_override_active"]:
+			return true
+		if name == "points":
+			if native_backend.is_point_graph():
+				add_custom_control(_handle_native_points(object))
 			return true
 	if object is EasingCurve and name == "easing_curve_editor":
 		curve = object
@@ -1590,6 +1611,14 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 			property_editor.free()
 			return false
 		add_property_editor(name, property_editor)
+		if (
+			native_backend != null
+			and native_backend.get_backend_id() == &"native"
+			and name == "randomness"
+		):
+			var generate_editor := GenerateFunctionEditorProperty.new()
+			generate_editor.setup(easing_curve_editor, editor_undo_redo)
+			add_custom_control(generate_editor)
 		return true
 	return false
 

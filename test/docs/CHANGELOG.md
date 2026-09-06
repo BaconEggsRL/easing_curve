@@ -3,6 +3,38 @@
 Release entries are ordered newest to oldest. Add future releases above the
 current top entry.
 
+## v1.2.0
+
+### Added
+
+* Added the supported `NativeEasingCurve` and `NativeEasingCurvePoint`
+  GDExtension APIs alongside the existing GDScript resources. The legacy API
+  remains fully supported and is not deprecated.
+* Added persistent Native Jitter and Irregular modes, Native CSS `linear()` and
+  `cubic-bezier()` parsing/sampling, and explicit Callable-to-points baking.
+* Added non-destructive Legacy-to-Native and Native-to-Legacy Inspector
+  conversion. Conversion creates an unsaved side-by-side resource and reports
+  exact, baked, approximated, and unsupported fields before confirmation.
+
+### Improved
+
+* Organized the Native Inspector in visible Curve Editor, Transition
+  Parameters, Points, and Global Transform sections. Points appear only for
+  point-graph transitions; Reverse and Invert remain stable serialized fields.
+* Added exact-package staging through an explicit allowlist, reproducible build
+  metadata, and SHA-256 hashes for the Native manifest and binaries.
+* Fixed Windows CI executable validation by checking an explicitly started
+  Godot process instead of treating an unset PowerShell `$LASTEXITCODE` as a
+  failed version probe.
+
+### Compatibility
+
+* Native binaries target Windows x86_64 and non-threaded Web. The legacy
+  resource remains the fallback on other platforms and in projects that do not
+  serialize Native resource types.
+* Windows editor sessions use the release Native DLL. Native Windows debug
+  builds and hot reload are outside the v1.2.0 support contract.
+
 ## v1.1.0
 
 ### Improved

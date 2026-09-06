@@ -8,6 +8,9 @@
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/callable.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/packed_float64_array.hpp>
+#include <godot_cpp/variant/packed_vector2_array.hpp>
+#include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/vector4.hpp>
 
@@ -79,6 +82,8 @@ private:
 	double period = 0.3;
 	double constant_value = 0.5;
 	double overshoot = 1.70158;
+	int64_t num_points = 3;
+	double randomness = 3.5;
 	int64_t steps = 4;
 	bool from_start = false;
 	double y_offset = 0.0;
@@ -91,6 +96,11 @@ private:
 	double damping = 10.0;
 	double mass = 1.0;
 	double velocity = 0.0;
+	String css_linear = "linear(0, 1)";
+	PackedVector2Array css_linear_points;
+	String css_cubic_bezier = "cubic-bezier(0.25, 0.1, 0.25, 1)";
+	PackedFloat64Array css_cubic_bezier_controls;
+	PackedVector2Array generated_points;
 	bool reverse = false;
 	bool invert = false;
 	int64_t format_version = FORMAT_VERSION;
@@ -141,6 +151,12 @@ private:
 	double sample_spring_out(double p_offset) const;
 	double sample_physics_spring_out(double p_offset) const;
 	double sample_step(double p_offset) const;
+	double sample_generated(double p_offset) const;
+	double sample_css_linear(double p_offset) const;
+	double sample_css_cubic_bezier(double p_offset) const;
+	void ensure_generated_points();
+	static bool parse_css_linear(const String &p_source, PackedVector2Array &r_points);
+	static bool parse_css_cubic_bezier(const String &p_source, PackedFloat64Array &r_controls);
 
 	static double bezier(double p0, double p1, double p2, double p3, double p_t);
 	static double bezier_derivative(double p0, double p1, double p2, double p3, double p_t);
@@ -169,6 +185,13 @@ public:
 	double get_constant_value() const;
 	void set_overshoot(double p_overshoot);
 	double get_overshoot() const;
+	void set_num_points(int64_t p_num_points);
+	int64_t get_num_points() const;
+	void set_randomness(double p_randomness);
+	double get_randomness() const;
+	void generate_irregular();
+	void set_generated_points(const PackedVector2Array &p_points);
+	PackedVector2Array get_generated_points() const;
 	void set_steps(int64_t p_steps);
 	int64_t get_steps() const;
 	void set_from_start(bool p_from_start);
@@ -193,6 +216,14 @@ public:
 	double get_mass() const;
 	void set_velocity(double p_velocity);
 	double get_velocity() const;
+	void set_css_linear(const String &p_source);
+	String get_css_linear() const;
+	void set_css_linear_points(const PackedVector2Array &p_points);
+	PackedVector2Array get_css_linear_points() const;
+	void set_css_cubic_bezier(const String &p_source);
+	String get_css_cubic_bezier() const;
+	void set_css_cubic_bezier_controls(const PackedFloat64Array &p_controls);
+	PackedFloat64Array get_css_cubic_bezier_controls() const;
 	void set_reverse(bool p_reverse);
 	bool is_reverse() const;
 	void set_invert(bool p_invert);

@@ -2,7 +2,7 @@ name: Native builds
 
 on:
   push:
-    branches: [native-v2-spike]
+    branches: [master, native-v2-spike]
   pull_request:
   workflow_dispatch:
 
@@ -17,9 +17,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install scons
-      - name: Build Windows debug and release
+      - name: Build supported Windows release library
         shell: pwsh
-        run: ./native/build_native.ps1 -Platform windows -Target all
+        run: ./native/build_native.ps1 -Platform windows -Target template_release
       - name: Validate Windows manifest contract
         shell: pwsh
         run: ./native/validate_native_manifest.ps1 -Platform windows
@@ -74,9 +74,9 @@ jobs:
           if (-not (Test-Path -LiteralPath $godotExe -PathType Leaf)) {
             throw "Godot executable copy was not created: $godotExe"
           }
-          & $godotExe --version
-          if ($LASTEXITCODE -ne 0) {
-            throw "Copied Godot executable validation failed with exit code $LASTEXITCODE."
+          $versionProcess = Start-Process -FilePath $godotExe -ArgumentList "--version" -NoNewWindow -Wait -PassThru
+          if ($versionProcess.ExitCode -ne 0) {
+            throw "Copied Godot executable validation failed with exit code $($versionProcess.ExitCode)."
           }
           ./test/runners/run_all_tests.ps1 --run -GodotPath $godotExe
 
@@ -110,8 +110,44 @@ jobs:
           if (-not (Test-Path -LiteralPath $godotExe -PathType Leaf)) {
             throw "Godot executable copy was not created: $godotExe"
           }
-          & $godotExe --version
-          if ($LASTEXITCODE -ne 0) {
-            throw "Copied Godot executable validation failed with exit code $LASTEXITCODE."
+          $versionProcess = Start-Process -FilePath $godotExe -ArgumentList "--version" -NoNewWindow -Wait -PassThru
+          if ($versionProcess.ExitCode -ne 0) {
+            throw "Copied Godot executable validation failed with exit code $($versionProcess.ExitCode)."
           }
           ./test/runners/run_native_web_export_test.ps1 -SkipBuild -GodotPath $godotExe
+
+  package:
+    needs: [windows-tests, web-runtime]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.1
+          use-dotnet: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: easing-curve-native-windows-x86_64
+          path: addons/easing_curve/bin
+      - uses: actions/download-artifact@v4
+        with:
+          name: easing-curve-native-web-wasm32
+          path: addons/easing_curve/bin
+      - name: Build and validate the exact dual-API archive
+        shell: pwsh
+        run: |
+          $godotCommand = (Get-Command godot -ErrorAction Stop).Source
+          $godotExe = Join-Path $env:RUNNER_TEMP "easing-curve-godot.exe"
+          Copy-Item -LiteralPath $godotCommand -Destination $godotExe -Force
+          $versionProcess = Start-Process -FilePath $godotExe -ArgumentList "--version" -NoNewWindow -Wait -PassThru
+          if ($versionProcess.ExitCode -ne 0) {
+            throw "Copied Godot executable validation failed with exit code $($versionProcess.ExitCode)."
+          }
+          ./build_asset_store.ps1
+          ./test/runners/run_release_archive_test.ps1 -GodotPath $godotExe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: easing-curve-dual-api-package
+          path: _exports/_asset_store_builds/easing_curve_v*.zip

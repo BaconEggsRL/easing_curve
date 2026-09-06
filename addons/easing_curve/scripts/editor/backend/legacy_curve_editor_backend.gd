@@ -24,7 +24,7 @@ func get_capabilities() -> Dictionary[StringName, bool]:
 		CAP_POINT_OPTIONS: true,
 		CAP_POINT_GEOMETRY: true,
 		CAP_POINT_TOPOLOGY: true,
-		CAP_CONVERSION: false,
+		CAP_CONVERSION: ClassDB.class_exists(&"NativeEasingCurve"),
 	}
 
 

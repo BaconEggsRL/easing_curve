@@ -9,6 +9,12 @@ const LEGACY_POINT_SCRIPT := preload(
 const PRESET_FACTORY := preload(
 	"res://addons/easing_curve/scripts/runtime/easing_curve_preset_geometry_factory.gd"
 )
+const CURVE_CONVERTER := preload(
+	"res://addons/easing_curve/scripts/editor/backend/curve_converter.gd"
+)
+const CONVERSION_RESULT := preload(
+	"res://addons/easing_curve/scripts/editor/backend/curve_conversion_result.gd"
+)
 const SAMPLE_COUNT := 256
 const TRANS_CUSTOM := 100
 
@@ -25,12 +31,16 @@ func _run() -> void:
 		return
 
 	_test_points_property_metadata()
+	_test_inspector_group_metadata()
 	_test_stable_enum_contract()
 	_test_default_contract()
 	_test_resource_version_contract()
 	_test_invalid_property_contract()
 	_test_builtin_equivalence()
 	_test_extended_transition_parity()
+	_test_generated_and_css_transition_parity()
+	_test_generated_and_css_resource_round_trip()
+	_test_bidirectional_conversion()
 	_test_callable_baking()
 	_test_custom_bezier_equivalence()
 	_test_point_ordering_contract()
@@ -62,6 +72,41 @@ func _test_points_property_metadata() -> void:
 		String(points_property.get(&"hint_string", "")).contains("NativeEasingCurvePoint"),
 		"points does not expose NativeEasingCurvePoint as its array element type",
 	)
+
+
+func _test_inspector_group_metadata() -> void:
+	var curve := _new_native_curve(NativeEasingCurve.TRANS_BACK, NativeEasingCurve.EASE_IN)
+	var visible_names := PackedStringArray()
+	var usage_by_name := {}
+	for property: Dictionary in ClassDB.class_get_property_list(&"NativeEasingCurve", true):
+		var usage := int(property.get(&"usage", 0))
+		if (usage & (PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_GROUP)) == 0:
+			continue
+		var property_name := String(property[&"name"])
+		visible_names.append(property_name)
+		usage_by_name[property_name] = usage
+
+	for group_name: String in ["Curve Editor", "Transition Parameters", "Global Transform"]:
+		_expect(group_name in visible_names, "%s group is missing" % group_name)
+		_expect(
+			(int(usage_by_name.get(group_name, 0)) & PROPERTY_USAGE_GROUP) != 0,
+			"%s is not registered as an Inspector group" % group_name,
+		)
+
+	var ordered_names := [
+		"Curve Editor",
+		"Transition Parameters",
+		"overshoot",
+		"points",
+		"Global Transform",
+		"reverse",
+		"invert",
+	]
+	var previous_index := -1
+	for property_name: String in ordered_names:
+		var property_index := visible_names.find(property_name)
+		_expect(property_index > previous_index, "%s is out of Inspector order" % property_name)
+		previous_index = property_index
 
 
 func _test_stable_enum_contract() -> void:
@@ -231,6 +276,147 @@ func _test_extended_transition_parity() -> void:
 		is_equal_approx(transformed.call(&"sample", 0.25), 1.0 - pow(0.75, 2.5)),
 		"native reverse/invert transform changed",
 	)
+
+
+func _test_generated_and_css_transition_parity() -> void:
+	for native_transition: int in [NativeEasingCurve.TRANS_JITTER, NativeEasingCurve.TRANS_IRREGULAR]:
+		for ease: int in range(NativeEasingCurve.EASE_OUT_IN + 1):
+			var native_curve := _new_native_curve(native_transition, ease)
+			native_curve.set(&"num_points", 9)
+			native_curve.set(&"randomness", 2.25)
+			var generated := native_curve.call(&"get_generated_points") as PackedVector2Array
+			_expect(generated.size() >= 2, "generated Native transition has no persisted samples")
+			var legacy_curve := LEGACY_CURVE_SCRIPT.new() as EasingCurve
+			legacy_curve.trans_type = (
+				EasingCurve.TRANS.JITTER
+				if native_transition == NativeEasingCurve.TRANS_JITTER
+				else EasingCurve.TRANS.IRREGULAR
+			)
+			legacy_curve.ease_type = ease
+			legacy_curve.num_points = 9
+			legacy_curve.randomness = 2.25
+			var generated_x: Array[float] = []
+			var generated_y: Array[float] = []
+			for point: Vector2 in generated:
+				generated_x.append(point.x)
+				generated_y.append(point.y)
+			legacy_curve.set(&"_irregular_points_x", generated_x)
+			legacy_curve.set(&"_irregular_points_y", generated_y)
+			var max_error := 0.0
+			for index in range(SAMPLE_COUNT + 1):
+				var offset := float(index) / SAMPLE_COUNT
+				max_error = maxf(max_error, absf(native_curve.call(&"sample", offset) - legacy_curve.sample(offset)))
+			_expect(max_error <= 0.000002, "generated Native transition parity error is %.9f" % max_error)
+
+	var css_cases := [
+		[
+			NativeEasingCurve.TRANS_CSS_LINEAR,
+			EasingCurve.TRANS.CSS_LINEAR,
+			&"css_linear",
+			"linear(0, 0.35 20%, 0.8 65%, 1)",
+		],
+		[
+			NativeEasingCurve.TRANS_CSS_CUBIC_BEZIER,
+			EasingCurve.TRANS.CSS_CUBIC_BEZIER,
+			&"css_cubic_bezier",
+			"cubic-bezier(0.42, -0.2, 0.58, 1.2)",
+		],
+	]
+	for css_case: Array in css_cases:
+		var native_curve := _new_native_curve(css_case[0], NativeEasingCurve.EASE_OUT_IN)
+		var legacy_curve := LEGACY_CURVE_SCRIPT.new() as EasingCurve
+		legacy_curve.trans_type = css_case[1]
+		native_curve.set(css_case[2], css_case[3])
+		legacy_curve.set(css_case[2], css_case[3])
+		var max_error := 0.0
+		for index in range(SAMPLE_COUNT + 1):
+			var offset := float(index) / SAMPLE_COUNT
+			max_error = maxf(max_error, absf(native_curve.call(&"sample", offset) - legacy_curve.sample(offset)))
+		_expect(max_error <= 0.000002, "CSS Native transition parity error is %.9f" % max_error)
+
+
+func _test_generated_and_css_resource_round_trip() -> void:
+	var cases := [
+		[NativeEasingCurve.TRANS_JITTER, &"generated"],
+		[NativeEasingCurve.TRANS_IRREGULAR, &"generated"],
+		[NativeEasingCurve.TRANS_CSS_LINEAR, &"css_linear"],
+		[NativeEasingCurve.TRANS_CSS_CUBIC_BEZIER, &"css_cubic_bezier"],
+	]
+	for case: Array in cases:
+		var curve := _new_native_curve(case[0], NativeEasingCurve.EASE_IN_OUT)
+		curve.set(&"num_points", 11)
+		curve.set(&"randomness", 1.75)
+		curve.set(&"css_linear", "linear(0, 0.2 15%, 0.85 80%, 1)")
+		curve.set(&"css_cubic_bezier", "cubic-bezier(0.2, -0.1, 0.7, 1.15)")
+		curve.set(&"reverse", true)
+		curve.set(&"invert", true)
+		var expected_samples := PackedFloat64Array()
+		for index in range(17):
+			expected_samples.append(float(curve.call(&"sample", float(index) / 16.0)))
+		var path := "res://test/_temp/native_%s_round_trip.tres" % case[1]
+		_expect(ResourceSaver.save(curve, path) == OK, "%s resource could not be saved" % case[1])
+		var loaded := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Resource
+		_expect(loaded != null, "%s resource could not be reloaded" % case[1])
+		if loaded == null:
+			continue
+		_expect(int(loaded.get(&"transition")) == int(case[0]), "%s transition changed after reload" % case[1])
+		_expect(bool(loaded.get(&"reverse")) and bool(loaded.get(&"invert")), "%s transforms changed after reload" % case[1])
+		for index in range(expected_samples.size()):
+			_expect(
+				absf(float(loaded.call(&"sample", float(index) / 16.0)) - expected_samples[index]) <= 0.000002,
+				"%s sampling changed after reload at %d" % [case[1], index],
+			)
+
+
+func _test_bidirectional_conversion() -> void:
+	var legacy := LEGACY_CURVE_SCRIPT.new() as EasingCurve
+	legacy.trans_type = EasingCurve.TRANS.BACK
+	legacy.ease_type = EasingCurve.EASE.IN_OUT
+	legacy.overshoot = 2.35
+	legacy.reverse = true
+	legacy.invert = true
+	var to_native := CURVE_CONVERTER.legacy_to_native(legacy)
+	_expect(CONVERSION_RESULT.is_success(to_native), "exact Legacy-to-Native conversion failed")
+	var native := to_native.get(CONVERSION_RESULT.KEY_RESOURCE) as Resource
+	_expect(native != null, "Legacy-to-Native conversion returned no resource")
+	if native != null:
+		for index in range(SAMPLE_COUNT + 1):
+			var offset := float(index) / SAMPLE_COUNT
+			_expect(
+				absf(native.call(&"sample", offset) - legacy.sample(offset)) <= 0.00001,
+				"Legacy-to-Native conversion changed sampling at %.6f" % offset,
+			)
+		var converted_path := "res://test/_temp/converted_native_curve.tres"
+		_expect(ResourceSaver.save(native, converted_path) == OK, "converted Native resource could not be saved")
+		var loaded_native := ResourceLoader.load(converted_path, "", ResourceLoader.CACHE_MODE_IGNORE) as Resource
+		_expect(loaded_native != null, "converted Native resource could not be reloaded")
+		if loaded_native != null:
+			_expect(
+				absf(float(loaded_native.call(&"sample", 0.37)) - legacy.sample(0.37)) <= 0.00001,
+				"saved/reloaded Native conversion changed sampling",
+			)
+		var to_legacy := CURVE_CONVERTER.native_to_legacy(native)
+		_expect(CONVERSION_RESULT.is_success(to_legacy), "exact Native-to-Legacy conversion failed")
+		var round_trip := to_legacy.get(CONVERSION_RESULT.KEY_RESOURCE) as EasingCurve
+		if round_trip != null:
+			for index in range(SAMPLE_COUNT + 1):
+				var offset := float(index) / SAMPLE_COUNT
+				_expect(
+					absf(round_trip.sample(offset) - legacy.sample(offset)) <= 0.00001,
+					"conversion round trip changed sampling at %.6f" % offset,
+				)
+
+	var callable_curve := LEGACY_CURVE_SCRIPT.new() as EasingCurve
+	callable_curve.trans_type = EasingCurve.TRANS.CUSTOM
+	callable_curve.set_function(func(offset: float) -> float: return offset * offset)
+	var unsupported := CURVE_CONVERTER.legacy_to_native(callable_curve)
+	_expect(
+		CONVERSION_RESULT.has_unsupported_fields(unsupported),
+		"live Callable conversion did not require explicit baking",
+	)
+	var baked := CURVE_CONVERTER.legacy_to_native(callable_curve, true, 64)
+	_expect(CONVERSION_RESULT.is_success(baked), "approved Callable conversion did not bake")
+	_expect(CONVERSION_RESULT.is_lossy(baked), "Callable bake was not classified as baked")
 
 
 func _test_callable_baking() -> void:
@@ -515,6 +701,8 @@ func _test_transition_parameter_visibility() -> void:
 	var parameter_owners := {
 		&"constant_value": NativeEasingCurve.TRANS_CONSTANT,
 		&"overshoot": NativeEasingCurve.TRANS_BACK,
+		&"num_points": [NativeEasingCurve.TRANS_JITTER, NativeEasingCurve.TRANS_IRREGULAR],
+		&"randomness": [NativeEasingCurve.TRANS_JITTER, NativeEasingCurve.TRANS_IRREGULAR],
 		&"amplitude": NativeEasingCurve.TRANS_ELASTIC,
 		&"period": NativeEasingCurve.TRANS_ELASTIC,
 		&"steps": NativeEasingCurve.TRANS_STEP,
@@ -529,23 +717,30 @@ func _test_transition_parameter_visibility() -> void:
 		&"damping": NativeEasingCurve.TRANS_PHYSICS_SPRING,
 		&"mass": NativeEasingCurve.TRANS_PHYSICS_SPRING,
 		&"velocity": NativeEasingCurve.TRANS_PHYSICS_SPRING,
+		&"css_linear": NativeEasingCurve.TRANS_CSS_LINEAR,
+		&"css_cubic_bezier": NativeEasingCurve.TRANS_CSS_CUBIC_BEZIER,
 	}
 	var parameter_transitions := [
 		NativeEasingCurve.TRANS_CONSTANT,
 		NativeEasingCurve.TRANS_BACK,
+		NativeEasingCurve.TRANS_JITTER,
+		NativeEasingCurve.TRANS_IRREGULAR,
 		NativeEasingCurve.TRANS_ELASTIC,
 		NativeEasingCurve.TRANS_STEP,
 		NativeEasingCurve.TRANS_POWER,
 		NativeEasingCurve.TRANS_BOUNCE,
 		NativeEasingCurve.TRANS_SPRING,
 		NativeEasingCurve.TRANS_PHYSICS_SPRING,
+		NativeEasingCurve.TRANS_CSS_LINEAR,
+		NativeEasingCurve.TRANS_CSS_CUBIC_BEZIER,
 	]
 	for transition: int in parameter_transitions:
 		curve.set(&"transition", transition)
 		for property_name: StringName in parameter_owners:
+			var owners: Variant = parameter_owners[property_name]
+			var expected_visible: bool = transition in owners if owners is Array else owners == transition
 			_expect(
-				_is_editor_property_visible(curve, property_name)
-				== (parameter_owners[property_name] == transition),
+				_is_editor_property_visible(curve, property_name) == expected_visible,
 				"Native transition %d has incorrect visibility for %s" % [transition, property_name],
 			)
 	curve.set(&"transition", NativeEasingCurve.TRANS_LINEAR)
@@ -706,6 +901,11 @@ func _test_deep_runtime_copy() -> void:
 	var source := _new_native_curve(NativeEasingCurve.TRANS_CUBIC, NativeEasingCurve.EASE_OUT)
 	source.set(&"num_bounces", 8)
 	source.set(&"bounce_damping", 31.25)
+	source.set(&"num_points", 7)
+	source.set(&"randomness", 1.25)
+	source.call(&"set_generated_points", PackedVector2Array([Vector2.ZERO, Vector2(0.5, 0.4), Vector2.ONE]))
+	source.set(&"css_linear", "linear(0, 0.4 35%, 1)")
+	source.set(&"css_cubic_bezier", "cubic-bezier(0.3, -0.2, 0.6, 1.1)")
 	source.call(&"cubic_bezier", 0.42, 0.0, 0.58, 1.0)
 	var source_points: Array = source.get(&"points")
 	(source_points[0] as Resource).set(&"handle_mode", NativeEasingCurvePoint.HANDLE_LINKED)
@@ -734,6 +934,14 @@ func _test_deep_runtime_copy() -> void:
 	)
 	_expect(runtime.get(&"num_bounces") == 8, "runtime copy lost the Native bounce count")
 	_expect(is_equal_approx(runtime.get(&"bounce_damping"), 31.25), "runtime copy lost Native bounce damping")
+	_expect(runtime.get(&"num_points") == 7, "runtime copy lost the Native generated point count")
+	_expect(is_equal_approx(runtime.get(&"randomness"), 1.25), "runtime copy lost Native randomness")
+	_expect(
+		runtime.call(&"get_generated_points") == source.call(&"get_generated_points"),
+		"runtime copy lost persisted generated points",
+	)
+	_expect(runtime.get(&"css_linear") == source.get(&"css_linear"), "runtime copy lost CSS Linear source")
+	_expect(runtime.get(&"css_cubic_bezier") == source.get(&"css_cubic_bezier"), "runtime copy lost CSS cubic-bezier source")
 
 	var runtime_notifications := {&"count": 0}
 	runtime.connect(&"points_changed", func(_points: Array) -> void: runtime_notifications[&"count"] += 1)

@@ -4,10 +4,10 @@
 resources. They coexist with the GDScript `EasingCurve` and
 `EasingCurvePoint` APIs; neither runtime solver delegates to the other.
 
-The GDScript API remains the stable compatibility and fallback implementation.
-It is not deprecated. A future deprecation label is conditional on full Native
-runtime, editor, serialization, platform, test, and release qualification, and
-would begin a compatibility period rather than remove the legacy classes.
+Both API families are supported in v1.2.0. The GDScript API remains the
+compatibility and fallback implementation and is not deprecated. Any future
+deprecation proposal remains conditional on broader Native platform coverage,
+a stable release cycle, proven migration and rollback, and explicit approval.
 
 See [PLAN.md](PLAN.md) for milestone status, the manual smoke-test checklist,
 and the prioritized next implementation tranche.
@@ -15,11 +15,12 @@ and the prioritized next implementation tranche.
 ## Build contract
 
 The `godot-cpp` submodule is pinned to `godot-4.4.1-stable`. The extension
-manifest accepts Godot 4.4 and later compatible engines. Build both debug and
-release variants from the repository root:
+manifest accepts Godot 4.4 and later compatible engines. Build the supported
+Windows release library and both non-threaded Web variants from the repository
+root:
 
 ```powershell
-./native/build_native.ps1 -Platform windows -Target all
+./native/build_native.ps1 -Platform windows -Target template_release
 ./native/build_native.ps1 -Platform web -Target all
 ```
 
@@ -65,10 +66,13 @@ redundant canonical point geometry when saved; modified presets retain their
 point states and marker. Call `get_format_status()` or `is_format_supported()`
 before migration tooling uses the resource.
 
-Future bidirectional converters share the validated dictionary schema in
-`curve_conversion_result.gd`. Every converted field must be classified as
+The bidirectional converter uses the validated dictionary schema in
+`curve_conversion_result.gd`. Every converted field is classified as
 `exact`, `approximated`, `baked`, or `unsupported`; the schema carries the
 source/target backend IDs, optional output resource, warnings, and errors.
+Inspector conversion always creates a new unsaved resource. A live legacy
+Custom Callable is refused unless the user explicitly chooses the bake action;
+the Native result contains sampled points and never retains the Callable.
 
 Standard transition IDs `0`–`11` intentionally match Godot Tween. Native-only
 IDs are frozen independently:
@@ -85,12 +89,13 @@ IDs are frozen independently:
 | 107 | CSS Linear |
 | 108 | CSS Cubic Bézier |
 
-Constant, Step, Power, Physics Spring, parameterized Back/Elastic/Bounce/Spring, and
-reverse/invert are currently native. Arbitrary Callables can be explicitly
-baked into piecewise-linear Native Bézier points; sampling never retains or
-invokes the Callable. Jitter, Irregular, and the CSS modes remain reserved until
-their compiled representations land.
-Unsupported reserved IDs are rejected rather than silently sampling as linear.
+All transition IDs above are implemented. Jitter and Irregular persist their
+generated point arrays, so sampling is deterministic until **Generate** is used
+again. CSS Linear parses stop lists into a compiled piecewise-linear
+representation, and CSS Cubic Bézier parses and solves its four controls in
+Native code. Arbitrary Callables can be explicitly baked into piecewise-linear
+Native Bézier points; Native sampling never retains or invokes the Callable.
+Invalid transition IDs are rejected rather than silently sampling as linear.
 
 `points` returns an isolated typed-array container. Point resources remain
 shared for authored editing, and nested changes invalidate compiled segments.
@@ -114,7 +119,7 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
-The Native smoke suite currently contains 1,030 checks. The runtime benchmark runs
+The Native smoke suite currently contains 1,785 checks. The runtime benchmark runs
 in an isolated project containing only this addon and
 the benchmark script. It reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
@@ -199,7 +204,11 @@ clipboard, and cross-copy behavior as Legacy. Deferred value-edit completion is
 resolved by curve and point identity rather than retaining row controls, so an
 Inspector rebuild, topology action, or resource switch cannot replay a stale UI
 callback or merge unrelated Undo transactions.
-Native numeric parameter sliders use the same deferred transaction boundary,
+The Native property list is grouped in this order: **Curve Editor**,
+**Transition Parameters**, active transition fields, **Points**, **Global
+Transform**, **Reverse**, and **Invert**. The Points section is created at the
+serialized `points` field only for point-graph transitions. Native numeric
+parameter sliders use the same deferred transaction boundary,
 including the Constant and Back parameters that regenerate Bézier preset geometry:
 motion previews locally, then publishes one Inspector/live-scene update on release.
 Directly entered values still publish immediately.
@@ -230,13 +239,16 @@ The original Web failure was caused by the absent wasm32 library. The validated
 manifest now loads the matching non-threaded extension; no legacy substitution
 is used for serialized Native resources.
 
-## Remaining release work
+## Remaining release certification
 
-- Run the corrected Windows-test and Web browser-runtime jobs in GitHub Actions
-  and retain the debug/release Web artifacts.
-- Finish generated and CSS representations.
-- Manually confirm the new-point preference persists across an editor restart
-  and that changing it alone does not restart a running scene.
-- Add optional, non-destructive bidirectional conversion.
-- Build the exact dual-API release archive.
-- Add remaining platforms before any legacy deprecation proposal.
+- Run the corrected Windows behavioral and Web browser-runtime jobs in GitHub
+  Actions and retain the exact artifacts.
+- Retain the passing automated exact-ZIP Windows dual-API and plugin-lifecycle
+  evidence; test both Web export variants and the real-manifest legacy fallback.
+- Manually verify visible Inspector ordering, conversion confirmation,
+  saved/reloaded converted resources, lifecycle behavior, and the new-point
+  preference across an editor restart.
+- Record a quiet-host performance baseline. The current relative performance
+  gates pass, but the historical absolute baseline is intentionally unpromoted.
+- Add remaining Native platforms and complete at least one stable release cycle
+  before considering any legacy deprecation proposal.

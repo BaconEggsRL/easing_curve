@@ -53,12 +53,16 @@ func _hide_property_chrome() -> void:
 
 
 func _on_pressed() -> void:
-	var object := get_edited_object() as EasingCurve
+	var object := get_edited_object() as Resource
 	if object == null:
+		return
+	if object.get_class() == &"NativeEasingCurve":
+		if is_instance_valid(curve_editor):
+			curve_editor.generate_native_irregular()
 		return
 	EASING_CURVE_EDITOR_UNDO.apply_parameter_action(
 		undo_redo,
-		object,
+		object as EasingCurve,
 		"Generate Easing Curve",
 		func(): object.generate_irregular(),
 		self,

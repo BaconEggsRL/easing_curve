@@ -1,16 +1,13 @@
 # <img src="https://raw.githubusercontent.com/BaconEggsRL/easing_curve/refs/heads/master/media/icon_32x32.png"> Easing Curve
-GDScript curve editor for easing functions.
+Dual GDScript and Native curve editor for easing functions.
 
 Designed for parity with Godot's Tween system and easing equations.
 
-The `native-v2-spike` branch also contains the experimental
-`NativeEasingCurve` and `NativeEasingCurvePoint` GDExtension APIs. They are
-independent from `EasingCurve` and `EasingCurvePoint`, and both API families can
-coexist in one project. The GDScript API remains the supported legacy/fallback
-API and is **not deprecated**. Deprecation can be considered only after the
-Native implementation meets or exceeds the legacy runtime, editor,
-serialization, compatibility, platform, reliability, and performance gates;
-removal would require a separate future plan.
+Version 1.2.0 includes two independent, supported API families:
+`EasingCurve` / `EasingCurvePoint` in GDScript and `NativeEasingCurve` /
+`NativeEasingCurvePoint` in GDExtension. Both can coexist in one project and use
+the same Inspector workflow. The legacy API is **not deprecated** and remains
+the portable fallback.
 
 * [Robert Pennner's easing functions](https://easings.net) (GDScript port: [godot-easing](https://github.com/impmja/godot-easing))
 * [Godot 4.6 easing equations](https://github.com/godotengine/godot/blob/4.6/scene/animation/easing_equations.h)
@@ -30,6 +27,33 @@ removal would require a separate future plan.
 
 * Godot 4.4.0 is the verified minimum for plugin loading.
 * The full workflow has been verified on Godot 4.7.1.
+* Native resources are supported on Windows x86_64 and non-threaded Web builds.
+* Legacy resources remain supported on all plugin platforms and do not require
+  a Native binary.
+* Windows editor sessions currently use the release Native DLL. Native debug
+  builds and hot reload are not part of the v1.2.0 support contract.
+
+### Choose an API:
+
+| Project need | Recommended resource |
+| --- | --- |
+| Windows/Web project prioritizing Native sampling | `NativeEasingCurve` |
+| Other platforms or maximum portability | `EasingCurve` |
+| Existing project already using legacy resources | Keep `EasingCurve`; migration is optional |
+
+Both resources expose the same transition catalog, point editor, transition
+parameters, and Reverse/Invert transforms. Select **Convert to Native Copy** or
+**Convert to Legacy Copy** in the Inspector to create a separate unsaved copy;
+the source resource is never replaced. A live legacy Custom Callable requires
+the explicit bake action because Native resources never retain callbacks.
+
+```gdscript
+@export var legacy_curve: EasingCurve
+@export var native_curve: NativeEasingCurve
+
+func eased_value(t: float) -> float:
+	return native_curve.sample(t) if native_curve else legacy_curve.sample(t)
+```
 
 ### Installation:
 

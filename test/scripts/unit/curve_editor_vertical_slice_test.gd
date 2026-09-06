@@ -525,6 +525,8 @@ func _test_native_inspector_path() -> void:
 	_expect(content != null, "Inspector plugin did not build the Native Curve Editor")
 	if content != null:
 		root.add_child(content)
+		var points_section := inspector.call("_handle_native_points", curve) as Control
+		root.add_child(points_section)
 		var preset_toolbar := content.find_child("CurvePresetToolbar", true, false)
 		var ease_control := content.find_child("CurveEase", true, false) as OptionButton
 		var trans_control := content.find_child("CurveTransition", true, false) as OptionButton
@@ -550,9 +552,9 @@ func _test_native_inspector_path() -> void:
 		_expect(editor != null, "Native Inspector content omitted the shared Curve Editor")
 		if editor != null:
 			_expect(editor.get_backend_id() == &"native", "Native Inspector used the wrong backend")
-			var add_button := _find_button(content, "Add Point")
+			var add_button := _find_button(points_section, "Add Point")
 			_expect(add_button != null, "Native Inspector omitted the shared point-list Add control")
-			_expect(_find_drag_handle(content) != null, "Native point list omitted the legacy drag handle")
+			_expect(_find_drag_handle(points_section) != null, "Native point list omitted the legacy drag handle")
 			var first_point := curve.call(&"get_point", 0) as Resource
 			var first_panel: Node = inspector.get("_native_points_content").get_child(0)
 			var position_inputs := first_panel.find_children("*", "EditorSpinSlider", true, false)
@@ -599,6 +601,7 @@ func _test_native_inspector_path() -> void:
 				add_button.pressed.emit()
 				_expect(curve.call(&"get_point_count") == before_count + 1, "Native point-list Add did not use the shared backend")
 		await process_frame
+		points_section.free()
 	content.free()
 
 
@@ -705,6 +708,8 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 	var inspector := INSPECTOR_PLUGIN.new()
 	var content := inspector.handle_easing_curve_editor(curve)
 	root.add_child(content)
+	var points_section := inspector.call("_handle_native_points", curve) as Control
+	root.add_child(points_section)
 	var editor := _find_curve_editor(content)
 	var history := UndoRedo.new()
 	editor.editor_undo_redo = history
@@ -718,7 +723,7 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 		&"left_control_point",
 		&"right_control_point",
 	]:
-		var header := _find_native_property_header(content, point, property_name)
+		var header := _find_native_property_header(points_section, point, property_name)
 		_expect(header != null, "Native point list omitted selectable %s" % property_name)
 		if header == null:
 			continue
@@ -750,7 +755,6 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 			"Native %s property menu is incomplete" % property_name,
 		)
 
-	var points_section := content.get_child(content.get_child_count() - 1) as Control
 	var shortcut_focus := _find_button(points_section, "Add Point")
 	shortcut_focus.grab_focus()
 	var shortcut_counts := {&"copy": 0, &"paste": 0, &"path": 0}
@@ -777,7 +781,7 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 	points_section.call(&"_input", command_copy)
 	_expect(shortcut_counts[&"copy"] == 2, "Native Points shortcut did not accept Cmd+C")
 
-	var handle_header := _find_native_property_header(content, point, &"handle_mode")
+	var handle_header := _find_native_property_header(points_section, point, &"handle_mode")
 	handle_header.gui_input.emit(_mouse_button(Vector2.ZERO, true))
 	var original_point := point
 	var original_mode := int(point.get(&"handle_mode"))
@@ -852,7 +856,7 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 		input.value_focus_entered.emit()
 		input.value = input.value + 0.05
 		input.value_focus_exited.emit()
-		var add_button := _find_button(content, "Add Point")
+		var add_button := _find_button(points_section, "Add Point")
 		var count_before_add: int = curve.call(&"get_point_count")
 		add_button.pressed.emit()
 		var publications_after_add: int = publications[0]
@@ -880,6 +884,7 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 		)
 	else:
 		content.free()
+	points_section.free()
 
 	history.clear_history(false)
 	history.free()

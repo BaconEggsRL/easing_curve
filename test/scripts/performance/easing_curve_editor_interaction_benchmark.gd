@@ -517,9 +517,8 @@ func _create_fixture(
 		host.add_child(editor)
 		host.add_child(inspector.call(&"handle_points", curve) as Control)
 	else:
-		host.add_child(
-			inspector.call(&"_handle_native_curve_editor", curve, editor) as Control
-		)
+		host.add_child(inspector.call(&"_handle_native_curve_editor", curve, editor) as Control)
+		host.add_child(inspector.call(&"_handle_native_points", curve) as Control)
 	await process_frame
 	editor.queue_redraw()
 	await _wait_for_draw(editor, editor.draw_count)

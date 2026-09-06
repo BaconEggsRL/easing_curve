@@ -31,6 +31,36 @@ if ($apiVersion -ne "4.4.1-stable") {
 $platforms = if ($Platform -eq "all") { @("windows", "web") } else { @($Platform) }
 $targets = if ($Target -eq "all") { @("template_debug", "template_release") } else { @($Target) }
 
+function Initialize-WebToolchain {
+	if (Get-Command emcc -ErrorAction SilentlyContinue) {
+		return
+	}
+
+	$candidates = @()
+	if (-not [string]::IsNullOrWhiteSpace($env:EMSDK)) {
+		$candidates += $env:EMSDK
+	}
+	$candidates += Join-Path $nativeRoot ".toolchains\emsdk"
+
+	foreach ($candidate in $candidates) {
+		$environmentScript = Join-Path $candidate "emsdk_env.ps1"
+		if (-not (Test-Path -LiteralPath $environmentScript -PathType Leaf)) {
+			continue
+		}
+		. $environmentScript | Out-Null
+		if (Get-Command emcc -ErrorAction SilentlyContinue) {
+			Write-Host "Activated Emscripten SDK: $candidate"
+			return
+		}
+	}
+
+	throw "Web builds require an activated Emscripten SDK. Set EMSDK or install the repository-local native/.toolchains/emsdk toolchain."
+}
+
+if ($platforms -contains "web") {
+	Initialize-WebToolchain
+}
+
 function Get-NativeOutputPath {
 	param(
 		[string]$BuildPlatform,

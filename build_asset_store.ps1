@@ -1,217 +1,167 @@
 $ErrorActionPreference = "Stop"
 
-$PluginPath = "addons\easing_curve"
-$ConfigPath = "$PluginPath\plugin.cfg"
-$CanonicalDistributionFiles = @(
-    @{
-        Name = "README"
-        SourcePath = "README.md"
-        PackagedPath = "$PluginPath\README.md"
-        ArchivePath = "addons/easing_curve/README.md"
+$ProjectRoot = (Resolve-Path $PSScriptRoot).Path
+$PluginPath = Join-Path $ProjectRoot "addons\easing_curve"
+$ConfigPath = Join-Path $PluginPath "plugin.cfg"
+$AllowlistPath = Join-Path $ProjectRoot "release\addon_files.txt"
+$OutputPath = Join-Path $ProjectRoot "_exports\_asset_store_builds"
+$BuildPath = Join-Path $OutputPath "_staging"
+$ArchiveRoot = "addons/easing_curve"
+$GeneratedArchiveFiles = @("BUILD_METADATA.json", "SHA256SUMS")
+
+function Get-PluginVersion {
+    $VersionLine = Get-Content -LiteralPath $ConfigPath |
+        Where-Object { $_ -match '^\s*version\s*=' } |
+        Select-Object -First 1
+    if ($VersionLine -notmatch '^\s*version\s*=\s*"([^"]+)"') {
+        throw "Could not parse version from $ConfigPath"
     }
-    @{
-        Name = "LICENSE"
-        SourcePath = "LICENSE.md"
-        PackagedPath = "$PluginPath\LICENSE.md"
-        ArchivePath = "addons/easing_curve/LICENSE.md"
+    return $Matches[1]
+}
+
+function Get-AllowlistedFiles {
+    if (-not (Test-Path -LiteralPath $AllowlistPath -PathType Leaf)) {
+        throw "Release allowlist is missing: $AllowlistPath"
     }
-)
-$RequiredArchiveFiles = @(
-    "addons/easing_curve/plugin.cfg"
-)
-
-$OutputPath = "_exports\_asset_store_builds"
-$BuildPath = "$OutputPath\_staging"
-
-
-function Sync-CanonicalDistributionFiles {
-    param([array]$Files)
-
-    foreach ($File in $Files) {
-        if (-not (Test-Path $File.SourcePath -PathType Leaf)) {
-            throw "Could not find canonical $($File.Name): $($File.SourcePath)"
+    $Files = @(
+        Get-Content -LiteralPath $AllowlistPath |
+            ForEach-Object { $_.Trim().Replace('\', '/') } |
+            Where-Object { $_ -and -not $_.StartsWith('#') }
+    )
+    if ($Files.Count -eq 0 -or ($Files | Sort-Object -Unique).Count -ne $Files.Count) {
+        throw "Release allowlist is empty or contains duplicate paths."
+    }
+    foreach ($RelativePath in $Files) {
+        if ($RelativePath.StartsWith('/') -or $RelativePath.Contains('../') -or $RelativePath.Contains(':')) {
+            throw "Unsafe release allowlist path: $RelativePath"
         }
-        Copy-Item $File.SourcePath $File.PackagedPath -Force
+    }
+    return $Files
+}
+
+function Get-SourcePath {
+    param([string]$RelativePath)
+    if ($RelativePath -eq "README.md" -or $RelativePath -eq "LICENSE.md") {
+        return Join-Path $ProjectRoot $RelativePath
+    }
+    return Join-Path $PluginPath $RelativePath.Replace('/', [IO.Path]::DirectorySeparatorChar)
+}
+
+function Copy-AllowlistedFiles {
+    param([string[]]$Files, [string]$DestinationRoot)
+    foreach ($RelativePath in $Files) {
+        $SourcePath = Get-SourcePath -RelativePath $RelativePath
+        if (-not (Test-Path -LiteralPath $SourcePath -PathType Leaf)) {
+            throw "Allowlisted release file is missing: $SourcePath"
+        }
+        $DestinationPath = Join-Path $DestinationRoot $RelativePath.Replace('/', [IO.Path]::DirectorySeparatorChar)
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $DestinationPath) | Out-Null
+        Copy-Item -LiteralPath $SourcePath -Destination $DestinationPath -Force
     }
 }
 
-
-function Test-PackagedCanonicalDistributionFile {
-    param(
-        [System.IO.Compression.ZipArchive]$Archive,
-        [hashtable]$File
+function Write-BuildMetadata {
+    param([string]$DestinationRoot, [string]$Version)
+    $SourceCommit = (git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Could not resolve source commit." }
+    $GodotCppCommit = (git -C (Join-Path $ProjectRoot "native\godot-cpp") rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Could not resolve godot-cpp commit." }
+    $SourceDirty = @(git status --porcelain).Count -gt 0
+    if ($LASTEXITCODE -ne 0) { throw "Could not resolve source worktree status." }
+    $Metadata = [ordered]@{
+        plugin = "easing_curve"
+        version = $Version
+        source_commit = $SourceCommit
+        source_dirty = $SourceDirty
+        godot_cpp_commit = $GodotCppCommit
+        godot_extension_api = "4.4.1-stable"
+        native_platforms = @("windows.x86_64", "web.wasm32.nothreads")
+        legacy_deprecated = $false
+    }
+    [IO.File]::WriteAllText(
+        (Join-Path $DestinationRoot "BUILD_METADATA.json"),
+        ($Metadata | ConvertTo-Json -Depth 4) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
     )
+}
 
-    $Entry = $Archive.GetEntry($File.ArchivePath)
-    if ($null -eq $Entry) {
-        Write-Host "  [FAIL] Missing packaged $($File.Name)" -ForegroundColor Red
-        return $false
-    }
-
-    $Reader = [System.IO.StreamReader]::new($Entry.Open())
-    try {
-        $PackagedContents = $Reader.ReadToEnd()
-    }
-    finally {
-        $Reader.Dispose()
-    }
-
-    $CanonicalContents = [System.IO.File]::ReadAllText(
-        (Resolve-Path $File.SourcePath).Path
+function Write-Checksums {
+    param([string]$DestinationRoot)
+    $ArtifactNames = @(
+        "bin/easing_curve_native.gdextension",
+        "bin/libeasing_curve_native.windows.template_release.x86_64.dll",
+        "bin/libeasing_curve_native.web.template_debug.wasm32.nothreads.wasm",
+        "bin/libeasing_curve_native.web.template_release.wasm32.nothreads.wasm"
     )
-    if ($PackagedContents -cne $CanonicalContents) {
-        Write-Host "  [FAIL] Packaged $($File.Name) differs from root $($File.Name)" -ForegroundColor Red
-        return $false
+    $Lines = foreach ($RelativePath in $ArtifactNames) {
+        $Path = Join-Path $DestinationRoot $RelativePath.Replace('/', [IO.Path]::DirectorySeparatorChar)
+        $Hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+        "$Hash  $RelativePath"
     }
-
-    Write-Host "  [OK]   Packaged $($File.Name) matches root $($File.Name)" -ForegroundColor Green
-    return $true
+    [IO.File]::WriteAllLines(
+        (Join-Path $DestinationRoot "SHA256SUMS"),
+        $Lines,
+        [Text.UTF8Encoding]::new($false)
+    )
 }
 
+$Version = Get-PluginVersion
+$OutputZip = Join-Path $OutputPath "easing_curve_v$Version.zip"
+$Files = Get-AllowlistedFiles
+$StagedAddon = Join-Path $BuildPath "addons\easing_curve"
 
-# Read version from plugin.cfg.
-$VersionLine = Get-Content $ConfigPath |
-    Where-Object { $_ -match '^\s*version\s*=' } |
-    Select-Object -First 1
+Write-Host "Building Easing Curve v$Version from a strict allowlist..."
+New-Item -ItemType Directory -Force -Path $OutputPath | Out-Null
+Remove-Item -LiteralPath $BuildPath -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $StagedAddon | Out-Null
+Copy-AllowlistedFiles -Files $Files -DestinationRoot $StagedAddon
+Write-BuildMetadata -DestinationRoot $StagedAddon -Version $Version
+Write-Checksums -DestinationRoot $StagedAddon
 
-if (-not $VersionLine) {
-    throw "Could not find version in $ConfigPath"
-}
-
-if ($VersionLine -notmatch '^\s*version\s*=\s*"([^"]+)"') {
-    throw "Could not parse version from: $VersionLine"
-}
-
-$Version = $Matches[1]
-$OutputZip = "$OutputPath\easing_curve_v$Version.zip"
-
-Write-Host "Building Easing Curve v$Version..."
-
-# Root distribution files are canonical; refresh packaged addon copies before staging.
-Sync-CanonicalDistributionFiles $CanonicalDistributionFiles
-
-# Make sure output directory exists.
-New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
-
-# Clean previous staging directory.
-Remove-Item $BuildPath -Recurse -Force -ErrorAction SilentlyContinue
-
-# Create required Asset Store structure.
-New-Item -ItemType Directory -Path "$BuildPath\addons" | Out-Null
-
-# Copy only addons/easing_curve.
-Copy-Item `
-    $PluginPath `
-    "$BuildPath\addons\easing_curve" `
-    -Recurse
-
-# Remove an existing build of the same version.
-Remove-Item $OutputZip -Force -ErrorAction SilentlyContinue
-
-# ZIP contains:
-#
-# addons/
-# └── easing_curve/
-#
+Remove-Item -LiteralPath $OutputZip -Force -ErrorAction SilentlyContinue
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-
-# Resolve staging path to an absolute path.
-$BuildPathFull = (Resolve-Path $BuildPath).Path.TrimEnd('\')
-
-$Zip = [System.IO.Compression.ZipFile]::Open(
+[System.IO.Compression.ZipFile]::CreateFromDirectory(
+    $BuildPath,
     $OutputZip,
-    [System.IO.Compression.ZipArchiveMode]::Create
+    [System.IO.Compression.CompressionLevel]::Optimal,
+    $false
 )
 
-try {
-    Get-ChildItem "$BuildPathFull\addons" -File -Recurse | ForEach-Object {
-        # Make the archive path relative to _staging.
-        $RelativePath = $_.FullName.Substring(
-            $BuildPathFull.Length + 1
-        )
-
-        # ZIP paths must use forward slashes for macOS/Linux compatibility.
-        $EntryPath = $RelativePath.Replace('\', '/')
-
-        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-            $Zip,
-            $_.FullName,
-            $EntryPath,
-            [System.IO.Compression.CompressionLevel]::Optimal
-        ) | Out-Null
-    }
-}
-finally {
-    $Zip.Dispose()
-}
-
-# Verify ZIP structure and cross-platform paths.
-Write-Host ""
-Write-Host "Verifying ZIP..."
-
-$VerifyZip = [System.IO.Compression.ZipFile]::OpenRead(
-    (Resolve-Path $OutputZip).Path
+$ExpectedEntries = @(
+    $Files | ForEach-Object { "$ArchiveRoot/$_" }
+) + @(
+    $GeneratedArchiveFiles | ForEach-Object { "$ArchiveRoot/$_" }
 )
-
-$VerificationFailed = $false
-
+$ExpectedEntries = @($ExpectedEntries | Sort-Object)
+$Archive = [System.IO.Compression.ZipFile]::OpenRead($OutputZip)
 try {
-    foreach ($Entry in $VerifyZip.Entries) {
-        $EntryPath = $Entry.FullName
-
-        # ZIP entries must use forward slashes, never Windows backslashes.
-        if ($EntryPath.Contains('\')) {
-            Write-Host "  [FAIL] Windows-style path: $EntryPath" -ForegroundColor Red
-            $VerificationFailed = $true
-            continue
-        }
-
-        # Every file must be under addons/easing_curve/.
-        if (-not $EntryPath.StartsWith("addons/easing_curve/")) {
-            Write-Host "  [FAIL] Invalid root path: $EntryPath" -ForegroundColor Red
-            $VerificationFailed = $true
-            continue
-        }
-
-        Write-Host "  [OK]   $EntryPath" -ForegroundColor DarkGray
+    $ActualEntries = @(
+        $Archive.Entries |
+            Where-Object { -not [string]::IsNullOrEmpty($_.Name) } |
+            ForEach-Object { $_.FullName } |
+            Sort-Object
+    )
+    if ($ActualEntries.Count -ne $ExpectedEntries.Count) {
+        throw "Archive entry count differs from the release allowlist."
     }
-
-    foreach ($RequiredFile in $RequiredArchiveFiles) {
-        if ($null -eq $VerifyZip.GetEntry($RequiredFile)) {
-            Write-Host "  [FAIL] Missing required archive file: $RequiredFile" -ForegroundColor Red
-            $VerificationFailed = $true
-            continue
+    for ($Index = 0; $Index -lt $ExpectedEntries.Count; $Index++) {
+        if ($ActualEntries[$Index] -cne $ExpectedEntries[$Index]) {
+            throw "Unexpected archive contents: expected '$($ExpectedEntries[$Index])', found '$($ActualEntries[$Index])'."
         }
-
-        Write-Host "  [OK]   Required archive file present: $RequiredFile" -ForegroundColor Green
     }
-
-    foreach ($File in $CanonicalDistributionFiles) {
-        if (-not (Test-PackagedCanonicalDistributionFile $VerifyZip $File)) {
-            $VerificationFailed = $true
+    foreach ($Entry in $ActualEntries) {
+        if ($Entry.Contains('\')) {
+            throw "Archive contains a Windows-style path: $Entry"
         }
     }
 }
 finally {
-    $VerifyZip.Dispose()
+    $Archive.Dispose()
+    Remove-Item -LiteralPath $BuildPath -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host ""
-
-if ($VerificationFailed) {
-    throw "ZIP verification FAILED. Do not upload this archive."
-}
-
-Write-Host "ZIP verification PASSED." -ForegroundColor Green
-Write-Host "  [OK] Root is addons/easing_curve/" -ForegroundColor Green
-Write-Host "  [OK] All ZIP paths use forward slashes (/)" -ForegroundColor Green
-Write-Host "  [OK] No Windows-style backslashes found" -ForegroundColor Green
-Write-Host "  [OK] Archive is safe for Windows, macOS, and Linux" -ForegroundColor Green
-
-# Clean staging directory.
-Remove-Item $BuildPath -Recurse -Force
-
-Write-Host ""
-Write-Host "Asset Store build complete:"
+$ArchiveHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $OutputZip).Hash
+Write-Host "PASS: exact allowlisted archive created."
 Write-Host $OutputZip
+Write-Host "SHA256: $ArchiveHash"

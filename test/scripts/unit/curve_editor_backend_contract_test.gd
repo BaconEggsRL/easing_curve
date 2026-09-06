@@ -58,7 +58,12 @@ func _init() -> void:
 		_expect(native_backend.get_capabilities()[&"point_topology"], "Native point topology is missing")
 		_expect(native_backend.is_point_graph(), "Native custom curve did not expose its point graph")
 		_expect(native_backend.get_transition_ids().has(100), "Native custom transition is missing")
-		_expect(not native_backend.get_transition_ids().has(102), "Native advertises unimplemented Jitter")
+		for transition_id: int in range(100, 109):
+			_expect(
+				native_backend.get_transition_ids().has(transition_id),
+				"Native transition %d is missing" % transition_id,
+			)
+		_expect(native_backend.get_capabilities()[&"conversion"], "Native conversion capability is missing")
 		_expect(native_backend.get_points().size() == native_backend.get_point_count(), "Native backend point list changed")
 		var native_point: Resource = native_backend.get_point(0)
 		_expect(native_backend.find_point(native_point) == 0, "Native backend point lookup changed")
@@ -106,6 +111,8 @@ func _init() -> void:
 		_expect(native_backend.is_point_property_locked(0, &"position"), "Native backend did not report the position lock")
 		native.set(&"transition", 0)
 		_expect(native_backend.is_point_graph(), "Native editable preset did not expose point editing")
+		native.set(&"transition", 6)
+		_expect(not native_backend.is_point_graph(), "Native function transition exposed a Points section")
 		var native_topology := ClassDB.instantiate(&"NativeEasingCurve") as Resource
 		native_topology.set(&"transition", 100)
 		_test_topology_contract(
