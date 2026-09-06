@@ -3154,7 +3154,7 @@ static func _transition_supports_ease(transition: EasingCurve.TRANS) -> bool:
 
 
 static func _native_transition_supports_ease(transition: int) -> bool:
-	return transition not in [0, 100, 101, 104]
+	return transition not in [0, 100, 101, 104, 107, 108]
 
 
 static func _set_transition_display(
