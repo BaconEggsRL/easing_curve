@@ -697,10 +697,15 @@ func _commit_backend_snapshot_action(
 	else:
 		editor_undo_redo.create_action(action_name)
 	if editor_undo_redo is EditorUndoRedoManager:
-		editor_undo_redo.add_do_method(self, &"_apply_backend_snapshot_and_selection", after, selected_after_id)
-		editor_undo_redo.add_do_method(self, &"_publish_backend_change")
-		editor_undo_redo.add_undo_method(self, &"_apply_backend_snapshot_and_selection", before, selected_before_id)
-		editor_undo_redo.add_undo_method(self, &"_publish_backend_change")
+		if native_live_edit:
+			# Inspector controls are rebuilt when the transition changes.
+			editor_undo_redo.add_do_method(_backend, &"apply_editor_snapshot", after, weakref(self), selected_after_id)
+			editor_undo_redo.add_undo_method(_backend, &"apply_editor_snapshot", before, weakref(self), selected_before_id)
+		else:
+			editor_undo_redo.add_do_method(self, &"_apply_backend_snapshot_and_selection", after, selected_after_id)
+			editor_undo_redo.add_do_method(self, &"_publish_backend_change")
+			editor_undo_redo.add_undo_method(self, &"_apply_backend_snapshot_and_selection", before, selected_before_id)
+			editor_undo_redo.add_undo_method(self, &"_publish_backend_change")
 		if native_live_edit:
 			editor_undo_redo.add_do_method(
 				resource,
@@ -927,6 +932,10 @@ func _has_endpoint_at(x: float) -> bool:
 func _apply_backend_snapshot_and_selection(snapshot: Variant, selected_point_id: int) -> void:
 	if _backend == null or not _backend.apply_snapshot(snapshot):
 		return
+	_restore_backend_selection(selected_point_id)
+
+
+func _restore_backend_selection(selected_point_id: int) -> void:
 	selected_index = -1
 	if selected_point_id != 0:
 		for index in range(_point_count()):

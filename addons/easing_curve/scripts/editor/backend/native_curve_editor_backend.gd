@@ -256,7 +256,25 @@ func apply_snapshot(snapshot: Variant) -> bool:
 	resources.assign(point_order)
 	if not _is_unique_native_points(resources):
 		return false
+	var live_state: Dictionary = snapshot.get(SNAPSHOT_LIVE_STATE, {})
+	if (
+		not live_state.is_empty()
+		and (
+			curve.get(&"transition") != live_state.get(&"transition")
+			or curve.get(&"ease_type") != live_state.get(&"ease_type")
+		)
+	):
+		curve.call(&"set_editor_state_snapshot", live_state)
 	return bool(curve.call(&"apply_point_topology_snapshot", resources, point_states))
+
+
+func apply_editor_snapshot(snapshot: Variant, editor_ref: WeakRef, selected_point_id: int) -> void:
+	if not apply_snapshot(snapshot):
+		return
+	var editor := editor_ref.get_ref() as EasingCurveEditor
+	if editor != null and editor.get_curve() == curve:
+		editor._restore_backend_selection(selected_point_id)
+		editor._publish_backend_change()
 
 
 func create_preview_backend() -> RefCounted:

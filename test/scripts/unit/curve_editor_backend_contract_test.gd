@@ -6,6 +6,10 @@ const BackendFactory := preload(
 
 
 func _init() -> void:
+	_run.call_deferred()
+
+
+func _run() -> void:
 	var legacy := EasingCurve.new()
 	var legacy_backend := BackendFactory.create(legacy)
 	_expect(legacy_backend != null, "legacy backend was not selected")
@@ -113,6 +117,9 @@ func _init() -> void:
 		_expect(native_backend.is_point_graph(), "Native editable preset did not expose point editing")
 		native.set(&"transition", 6)
 		_expect(not native_backend.is_point_graph(), "Native function transition exposed a Points section")
+		_test_native_transition_undo_redo()
+		if Engine.is_editor_hint():
+			_test_native_transition_undo_after_inspector_rebuild()
 		var native_topology := ClassDB.instantiate(&"NativeEasingCurve") as Resource
 		native_topology.set(&"transition", 100)
 		_test_topology_contract(
@@ -123,6 +130,54 @@ func _init() -> void:
 
 	_expect(BackendFactory.create(Resource.new()) == null, "backend factory accepted an unrelated Resource")
 	_finish("curve editor backend contract")
+
+
+func _test_native_transition_undo_redo() -> void:
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	curve.set(&"transition", 4)
+	var editor := EasingCurveEditor.new()
+	var history := UndoRedo.new()
+	editor.editor_undo_redo = history
+	editor.set_curve(curve)
+	var backend := BackendFactory.create(curve)
+	for transition: int in [6, 107, 108, 0]:
+		var before: Variant = backend.capture_snapshot()
+		editor.edit_curve_property(&"transition", transition)
+		var after: Variant = backend.capture_snapshot()
+		_expect(history.undo(), "Native transition action could not be undone")
+		_expect(backend.capture_snapshot() == before, "Native transition Undo lost settings or point identity")
+		_expect(history.redo(), "Native transition action could not be redone")
+		_expect(backend.capture_snapshot() == after, "Native transition Redo lost settings or point identity")
+	history.clear_history()
+	editor.free()
+	history.free()
+
+
+func _test_native_transition_undo_after_inspector_rebuild() -> void:
+	var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	curve.set(&"transition", 4)
+	var plugin := EditorPlugin.new()
+	var manager := plugin.get_undo_redo()
+	_expect(manager != null, "Editor Undo / Redo manager is unavailable")
+	if manager == null:
+		plugin.free()
+		return
+	var editor := EasingCurveEditor.new()
+	editor.editor_undo_redo = manager
+	editor.set_curve(curve)
+	var before: Dictionary = curve.call(&"get_editor_state_snapshot")
+	editor.edit_curve_property(&"transition", 6)
+	var after: Dictionary = curve.call(&"get_editor_state_snapshot")
+	editor.free()
+	var history := manager.get_history_undo_redo(manager.get_object_history_id(curve))
+	_expect(history != null and history.has_undo(), "Native transition has no resource history")
+	if history != null:
+		_expect(history.undo(), "Native transition Undo failed after inspector rebuild")
+		_expect(curve.call(&"get_editor_state_snapshot") == before, "Native resource was not restored after inspector rebuild")
+		_expect(history.redo(), "Native transition Redo failed after inspector rebuild")
+		_expect(curve.call(&"get_editor_state_snapshot") == after, "Native resource was not redone after inspector rebuild")
+	manager.clear_history()
+	plugin.free()
 
 
 func _test_topology_contract(curve: Resource, backend: RefCounted, context: String) -> void:
