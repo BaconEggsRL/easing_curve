@@ -25,7 +25,7 @@ the portable fallback.
 
 ### Compatibility:
 
-* Godot 4.4.0 is the verified minimum for plugin loading.
+* Godot **4.4.1 or newer** is required for v1.2.0, including both Legacy and Native workflows.
 * The full workflow has been verified on Godot 4.7.1.
 * Native resources are supported on Windows x86_64 and non-threaded Web builds.
 * Legacy resources remain supported on all plugin platforms and do not require
@@ -63,7 +63,7 @@ func eased_value(t: float) -> float:
 * Install **Easing Curve** normally through the Asset Store.
 * The plugin should be installed to `res://addons/easing_curve/`.
 
-**Godot 4.4–4.6:**
+**Godot 4.4.1–4.6:**
 * Download **Easing Curve** through the Asset Library.
 * In the **Configure Asset Before Installing** window, make sure **Ignore asset root** is **unchecked** before installing.
 * Confirm that the installation preview shows the plugin under:

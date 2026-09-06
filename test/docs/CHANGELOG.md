@@ -38,6 +38,12 @@ current top entry.
 
 ### Fixed
 
+* Fixed Windows CI test initialization when Godot is supplied as a GUI executable
+  without a console companion. The launcher now waits for Godot to finish before
+  reading its exit code or cleaning up; required test gates remain enabled.
+* Fixed the default new-point handle-mode dropdown collapsing to its arrow on
+  Godot 4.4.1 and 4.6.1. Preferred sizing now measures unclipped labels and
+  refreshes the item-width cache before reading it, for both API families.
 * Bound Ease/Trans toolbar callbacks to their owning resource/editor when Legacy
   and Native inspectors coexist, preventing cross-resource changes and nil
   `curve_mode` errors after switching between them.
@@ -59,6 +65,9 @@ current top entry.
 
 ### Compatibility
 
+* Set the v1.2.0 minimum to **Godot 4.4.1** for Legacy and Native workflows.
+  The Native manifest now matches the pinned `godot-4.4.1-stable` build API and
+  its runtime version check. Godot 4.4.0 is not supported by this release.
 * Native binaries target Windows x86_64 and non-threaded Web. The legacy
   resource remains the fallback on other platforms and in projects that do not
   serialize Native resource types.
@@ -67,6 +76,13 @@ current top entry.
 
 ### Testing
 
+* Added matching Tween, Native and Legacy benchmarks for 100 properties and
+  1000 methods, plus a local adapter for Godot's existing Hugo/Plotly results
+  interface. Graphs use recorded runs; performance results are not release gates.
+* Added default handle-mode width regression checks for both APIs, verified
+  on Godot 4.4.1, 4.6.1 and 4.7.1.
+* Enabled Native build checks on `dev` pushes and retained failed Windows test
+  logs as workflow artifacts to support integration and release diagnosis.
 * Added Native runtime/public-contract, shared-backend and Inspector regression
   coverage, with separate ABI, Legacy-only, Windows/Web export and exact-package
   validation tools.

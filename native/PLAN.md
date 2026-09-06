@@ -354,7 +354,7 @@ The first Native release targets:
 - Windows x86_64.
 - Web wasm32 non-threaded.
 
-Build against the Godot 4.4 extension API and validate through Godot 4.7, following [Godot’s GDExtension compatibility guidance](https://docs.godotengine.org/en/latest/tutorials/scripting/cpp/gdextension_cpp_example.html).
+Build against the Godot 4.4.1 extension API and validate through Godot 4.7, following [Godot’s GDExtension compatibility guidance](https://docs.godotengine.org/en/latest/tutorials/scripting/cpp/gdextension_cpp_example.html).
 
 Web exports enable Extension Support as required by [Godot’s Web export documentation](https://docs.godotengine.org/en/4.5/tutorials/export/exporting_for_web.html).
 
@@ -364,18 +364,18 @@ Linux, macOS, Android, and threaded Web may be deferred from the first release, 
 
 ### NATIVE-01 — Toolchain, platforms, and fallback feasibility
 
-**Status:** **In progress.** Windows debug/release builds, Windows release export, Godot 4.4–4.7 ABI loading, legacy-only fallback, and prior Godot 4.7.1 non-threaded Web debug/release browser runtime are verified. A Windows job downloads the release DLL and runs all 23 suites. Both Windows consumers now copy setup-Godot's resolved command to a validated temporary `.exe`, replacing the ineffective extensionless-link dereference. The latest hosted attempt failed inside setup-Godot with a CRC infrastructure error before checkout, so the corrected workflow still needs a hosted run. Current local Web exports succeed; Chrome launch remains blocked by crashpad/IPC sandbox access.
+**Status:** **In progress.** Windows debug/release builds, Windows release export, Godot 4.4.1–4.7.1 ABI loading, legacy-only fallback, and prior Godot 4.7.1 non-threaded Web debug/release browser runtime are verified. A Windows job downloads the release DLL and runs all 23 suites. Both Windows consumers now copy setup-Godot's resolved command to a validated temporary `.exe`, replacing the ineffective extensionless-link dereference. The latest hosted attempt reached the Windows test bootstrap but checked for the script-class cache before the GUI Godot process finished. The shared launcher now waits for GUI executables, and Windows failure logs are uploaded; a hosted rerun is still required. Current local Web exports succeed; Chrome launch remains blocked by crashpad/IPC sandbox access.
 
-**Goal:** Prove Godot 4.4 compatibility, Windows/Web builds, and legacy-only fallback.
+**Goal:** Prove Godot 4.4.1 compatibility, Windows/Web builds, and legacy-only fallback.
 
 **Implementation:**
 
-1. Pin stable Godot 4.4-compatible `godot-cpp`.
+1. Pin stable Godot 4.4.1-compatible `godot-cpp`.
 2. Build Windows and non-threaded Web debug/release libraries.
 3. Add only tested manifest entries.
 4. Create Native-only, legacy-only, and mixed-resource fixtures.
 5. Make Native editor registration conditional.
-6. Test Godot 4.4–4.7 loading and export behavior.
+6. Test Godot 4.4.1–4.7.1 loading and export behavior.
 
 **Acceptance:** Legacy remains usable without Native; both APIs coexist when Native is present.
 

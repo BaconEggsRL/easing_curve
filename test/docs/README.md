@@ -70,7 +70,8 @@ a named test function or a historical PASS. Manual sign-off is maintained in
    skips its FoldableContainer/responsive fixtures under headless Godot 4.7.
 5. **Release evidence:** minimum plugin-loading compatibility, Native ABI and full
    workflow compatibility are different claims. The ABI runner defaults to
-   4.4.1/4.5.1/4.6.1/4.7.1, not the README's 4.4.0 minimum-load claim.
+   4.4.1/4.5.1/4.6.1/4.7.1. The v1.2.0 supported minimum is 4.4.1 for both APIs;
+   historical 4.4.0 Legacy results do not expand that release contract.
 
 ### Separate non-publishing release gates
 
@@ -151,6 +152,26 @@ change; rebuild/revalidate the candidate package before release. Visible manual
 sign-off remains outstanding.
 
 ---
+
+### Minimum version and Windows CI launcher follow-up — 2026-09-06
+
+Source: `0d7b544520693e4688302ae8cb6a5f4f32317b4f` plus the uncommitted
+minimum-version documentation/manifest and CI launcher changes. The minimum is
+now Godot **4.4.1** for both APIs; this does not extend platform support.
+
+The GUI-only Godot executable used by CI reproduced the missing global script
+class cache failure locally before the fix. Piping the launch output makes
+PowerShell wait for process completion before inspecting its exit code or
+cleaning up. With that fix, the same GUI-only 4.7.1 executable passed **23/23**
+suites, exit **0**. A separate delayed-exit fixture verified captured stdout and
+propagation of exit **7**. Existing clipboard/layout skips still apply.
+
+The Native compatibility runner passed on **4.4.1, 4.5.1, 4.6.1 and 4.7.1**;
+Windows/Web manifest validation and the release-workflow contract also passed.
+Logs were preserved under `_exports/_validation/ci-gui-*.log` and
+`_exports/_validation/minimum-441-*.log` before successful-run cleanup.
+The hosted workflow rerun, rebuilt candidate exports/archive and visible manual
+sign-off remain outstanding. No release or merge was performed.
 
 ## Automated suites
 

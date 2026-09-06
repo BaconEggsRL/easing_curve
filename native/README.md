@@ -14,11 +14,10 @@ and the prioritized next implementation tranche.
 
 ## Build contract
 
-The `godot-cpp` submodule is pinned to `godot-4.4.1-stable`. The effective Native
-minimum is **Godot 4.4.1**: although the manifest declares `4.4`, godot-cpp also
-checks the API patch version and rejects this DLL under 4.4.0. This build pin is
-separate from the GDScript plugin's minimum loading version. Supporting Native
-on 4.4.0 requires rebuilding against its API and validating that build.
+The `godot-cpp` submodule is pinned to `godot-4.4.1-stable`. The v1.2.0 minimum
+is **Godot 4.4.1** for both API families. The extension manifest declares `4.4.1`,
+matching godot-cpp's runtime version check. Godot 4.4.0 is outside the v1.2.0
+support contract; the current Native DLL cannot load on it.
 Build the supported
 Windows release library and both non-threaded Web variants from the repository
 root:
@@ -45,7 +44,8 @@ manifest entry. Release exports use the explicit release entry. This keeps the
 project and fallback test scene loadable without claiming debug/hot-reload
 support.
 
-The Windows ABI fixture validates one 4.4-built DLL against Godot 4.4–4.7:
+The Windows ABI fixture validates one 4.4.1-built DLL against Godot
+4.4.1, 4.5.1, 4.6.1 and 4.7.1:
 
 ```powershell
 ./test/runners/run_native_compatibility_test.ps1

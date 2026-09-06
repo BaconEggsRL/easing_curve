@@ -150,7 +150,9 @@ try {
 	$previousErrorActionPreference = $ErrorActionPreference
 	try {
 		$ErrorActionPreference = "Continue"
-		& $Godot @launchArguments
+		# CI may supply the GUI executable without a console companion. Piping
+		# output makes PowerShell wait for it before reading its exit code/cleanup.
+		& $Godot @launchArguments | Write-Output
 		$exitCode = $LASTEXITCODE
 	}
 	finally {

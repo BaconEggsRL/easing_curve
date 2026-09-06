@@ -25,7 +25,7 @@ the portable fallback.
 
 ### Compatibility:
 
-* Godot 4.4.0 is the verified minimum for plugin loading.
+* Godot **4.4.1 or newer** is required for v1.2.0, including both Legacy and Native workflows.
 * The full workflow has been verified on Godot 4.7.1.
 * Native resources are supported on Windows x86_64 and non-threaded Web builds.
 * Legacy resources remain supported on all plugin platforms and do not require
@@ -63,7 +63,7 @@ func eased_value(t: float) -> float:
 * Install **Easing Curve** normally through the Asset Store.
 * The plugin should be installed to `res://addons/easing_curve/`.
 
-**Godot 4.4–4.6:**
+**Godot 4.4.1–4.6:**
 * Download **Easing Curve** through the Asset Library.
 * In the **Configure Asset Before Installing** window, make sure **Ignore asset root** is **unchecked** before installing.
 * Confirm that the installation preview shows the plugin under:
@@ -178,13 +178,14 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 * **Zoom and Pan**
   * Zoom and pan can be used to see points outside the grid box. The grid box represents an x_range and y_range of 0 to 1.
-  * Use the zoom slider or scroll wheel to adjust the zoom level. The arrow box to the right of the zoom slider will reset the zoom.
+  * Use the zoom slider (drag it or scroll over its track), or hold Ctrl/Cmd while scrolling over the graph, to adjust the zoom level. Plain scrolling over the graph scrolls the Inspector. The arrow box to the right of the zoom slider will reset the zoom.
   * Click and drag with the middle mouse button to pan the curve editor. The arrow box to the right of the zoom slider will reset the pan.
 
 * **Reordering the Points List**
   * Click the up or down arrows or drag a point in the points list to swap it with another point.
   * You can also use the drag handles to move a point anywhere in the points list.
-  * Select a property of any point and right click to copy / paste.
+  * Select a property of any Legacy or Native point and right click to copy its value, paste a compatible value, or copy its property path.
+  * Ctrl/Cmd+C, Ctrl/Cmd+V, and Ctrl/Cmd+Shift+C perform the same actions for the selected point property. Compatible values can be copied between Legacy and Native curves.
 
 **&nbsp;**
 

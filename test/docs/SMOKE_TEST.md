@@ -176,8 +176,9 @@ Native types, open/edit/play a Legacy curve.
 
 On each claimed compatible Godot version record its exact patch number and repeat
 import/enable, P02, one point edit, P05 transition history, save/restart and playback.
-The README advertises 4.4.0 minimum plugin loading and full workflow on 4.7.1;
-an ABI run on 4.4.1 does not prove 4.4.0 or full UI compatibility. Unsupported
+The v1.2.0 minimum is 4.4.1 for both APIs; use 4.7.1 for primary workflow sign-off
+and 4.4.1 for the minimum-version subset. ABI loading alone does not prove full
+UI compatibility. Unsupported
 environments are N/A with a reason, never PASS. No unexplained plugin errors.
 
 ## v1.2.0 sign-off

@@ -37,7 +37,7 @@ try {
 [configuration]
 
 entry_symbol = "easing_curve_native_library_init"
-compatibility_minimum = "4.4"
+compatibility_minimum = "4.4.1"
 
 [libraries]
 
@@ -62,7 +62,7 @@ windows.release.x86_64 = "res://addons/easing_curve/bin/libeasing_curve_native.w
 		$versionLabel = (& $resolvedGodot --version | Out-String).Trim()
 		$logPath = Join-Path $validationRoot ("test\_temp\native-abi-" + ($versionLabel -replace '[^0-9A-Za-z.-]', '_') + ".log")
 		$bootstrapLogPath = Join-Path $validationRoot ("test\_temp\native-abi-bootstrap-" + ($versionLabel -replace '[^0-9A-Za-z.-]', '_') + ".log")
-		Write-Host "Validating the pinned 4.4 Native ABI with Godot $versionLabel..."
+		Write-Host "Validating the pinned 4.4.1 Native ABI with Godot $versionLabel..."
 		& $powerShellExecutable -NoProfile -ExecutionPolicy Bypass -File $runner -GodotPath $resolvedGodot --editor --headless --path $validationRoot --import --quit-after 1 --log-file $bootstrapLogPath
 		$bootstrapExitCode = $LASTEXITCODE
 		$bootstrapText = if (Test-Path -LiteralPath $bootstrapLogPath) { Get-Content -Raw -LiteralPath $bootstrapLogPath } else { "" }
