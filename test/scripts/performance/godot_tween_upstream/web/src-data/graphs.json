@@ -1,0 +1,182 @@
+[
+  {
+    "id": "animation-animated-models",
+    "title": "Animated Models",
+    "benchmark-path-prefix": "Animation/Animated Models"
+  },
+  {
+    "id": "animation-tween",
+    "title": "Tween",
+    "benchmark-path-prefix": "Animation/Tween"
+  },
+  {
+    "id": "asset-import-export-runtime",
+    "title": "Asset I/O",
+    "benchmark-path-prefix": "Asset Import Export/Runtime"
+  },
+  {
+    "id": "core-callables",
+    "title": "Callables",
+    "benchmark-path-prefix": "Core/Callable"
+  },
+  {
+    "id": "core-rng",
+    "title": "Random Number Generator",
+    "benchmark-path-prefix": "Core/Random Number Generator"
+  },
+  {
+    "id": "core-objectdb",
+    "title": "ObjectDB",
+    "benchmark-path-prefix": "Core/Object Db"
+  },
+  {
+    "id": "core-signal",
+    "title": "Signals",
+    "benchmark-path-prefix": "Core/Signal"
+  },
+  {
+    "id": "gdscript-allocations",
+    "title": "GDscript Allocations",
+    "benchmark-path-prefix": "Gdscript/Alloc"
+  },
+  {
+    "id": "gdscript-arrays",
+    "title": "GDscript Arrays",
+    "benchmark-path-prefix": "Gdscript/Array"
+  },
+  {
+    "id": "gdscript-string-checksum",
+    "title": "GDscript String Checksums",
+    "benchmark-path-prefix": "Gdscript/String Checksum"
+  },
+  {
+    "id": "gdscript-string-format",
+    "title": "GDscript String Format",
+    "benchmark-path-prefix": "Gdscript/String Format"
+  },
+  {
+    "id": "gdscript-string-manipulations",
+    "title": "GDscript String Manipulations",
+    "benchmark-path-prefix": "Gdscript/String Manipulation"
+  },
+  {
+    "id": "math-expression",
+    "title": "Expression",
+    "benchmark-path-prefix": "Math/Expression"
+  },
+  {
+    "id": "math-noise",
+    "title": "Noise",
+    "benchmark-path-prefix": "Math/Noise"
+  },
+  {
+    "id": "navigation-astar-2d",
+    "title": "Navigation AStar2D",
+    "benchmark-path-prefix": "Navigation/Astar 2d"
+  },
+  {
+    "id": "navigation-astar-3d",
+    "title": "Navigation AStar3D",
+    "benchmark-path-prefix": "Navigation/Astar 3d"
+  },
+  {
+    "id": "navigation-navigation-2d",
+    "title": "Navigation 2D",
+    "benchmark-path-prefix": "Navigation/Navigation 2d"
+  },
+  {
+    "id": "navigation-navigation-3d",
+    "title": "Navigation 3D",
+    "benchmark-path-prefix": "Navigation/Navigation 3d"
+  },
+  {
+    "id": "physics-rigid-body-2d",
+    "title": "Rigid Body 2D",
+    "benchmark-path-prefix": "Physics/Rigid Body 2d"
+  },
+  {
+    "id": "physics-rigid-body-3d",
+    "title": "Rigid Body 3D",
+    "benchmark-path-prefix": "Physics/Rigid Body 3d"
+  },
+  {
+    "id": "rendering-culling",
+    "title": "Culling",
+    "benchmark-path-prefix": "Rendering/Culling"
+  },
+  {
+    "id": "rendering-hlod",
+    "title": "HLOD",
+    "benchmark-path-prefix": "Rendering/Hlod"
+  },
+  {
+    "id": "rendering-bunnymark",
+    "title": "Bunnymark",
+    "benchmark-path-prefix": "Rendering/Bunnymark"
+  },
+  {
+    "id": "rendering-lights-2d",
+    "title": "Light2D",
+    "benchmark-path-prefix": "Rendering/Lights 2d"
+  },
+  {
+    "id": "rendering-polygon-sprite-2d",
+    "title": "Polygon Sprite 2d",
+    "benchmark-path-prefix": "Rendering/Polygon Sprite 2d"
+  },
+  {
+    "id": "rendering-lights-and-meshes",
+    "title": "Lights and Meshes",
+    "benchmark-path-prefix": "Rendering/Lights And Meshes"
+  },
+  {
+    "id": "rendering-sponza",
+    "title": "Sponza",
+    "benchmark-path-prefix": "Rendering/Sponza"
+  },
+  {
+    "id": "scene-nodes-add-children",
+    "title": "Scene Nodes Add Children",
+    "benchmark-path-prefix": "Scene Nodes/Add Children"
+  },
+  {
+    "id": "scene-nodes-delete-children",
+    "title": "Scene Nodes Delete Children",
+    "benchmark-path-prefix": "Scene Nodes/Delete Children"
+  },
+  {
+    "id": "viewport-activation",
+    "title": "Viewport Activation",
+    "benchmark-path-prefix": "Viewport/Activation"
+  },
+  {
+    "id": "viewport-allocation",
+    "title": "Viewport Allocation",
+    "benchmark-path-prefix": "Viewport/Allocation"
+  },
+  {
+    "id": "binary-size",
+    "title": "Size",
+    "benchmark-path-prefix": "Extra/Size"
+  },
+  {
+    "id": "build-time",
+    "title": "Build Time",
+    "benchmark-path-prefix": "Extra/Build Time"
+  },
+  {
+    "id": "build-memory-use",
+    "title": "Build Memory Use",
+    "benchmark-path-prefix": "Extra/Build Memory Use"
+  },
+  {
+    "id": "startup-time",
+    "title": "Startup Time",
+    "benchmark-path-prefix": "Extra/Startup Time"
+  },
+  {
+    "id": "memory-use",
+    "title": "Memory Use",
+    "benchmark-path-prefix": "Extra/Memory Use"
+  }
+]

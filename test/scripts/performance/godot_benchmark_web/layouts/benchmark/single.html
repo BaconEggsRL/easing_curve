@@ -1,0 +1,29 @@
+{{ define "main" }}
+{{ $parts := split (path.BaseName .Permalink) "_" }}
+{{ $benchmark := index (where .Site.Data.data.benchmarks "commit" "eq" (index $parts 1)) 0 }}
+<h1>Run {{ $benchmark.local.started_at }}</h1>
+<p><a href="/">All results</a> · <a href="/graph/animation-easing-comparison/">Combined history</a></p>
+<p>Medians of {{ $benchmark.local.trials_per_case }} five-second trials per case.
+All values below are actual milliseconds; lower is better.</p>
+<table>
+  <thead><tr><th>Backend / workload</th><th>Setup (ms)</th><th>Render CPU (ms/frame)</th></tr></thead>
+  <tbody>{{ range $benchmark.benchmarks }}
+    <tr><td>{{ delimit .path " / " }}</td>
+      <td>{{ printf "%.6f" .results.local_editor.time }}</td>
+      <td>{{ printf "%.6f" .results.local_editor.render_cpu }}</td></tr>
+  {{ end }}</tbody>
+</table>
+<p>Method variants include the GDScript sampling adapter. Render CPU measures drawing work;
+similar render timings do not establish equal easing cost.</p>
+<h2>Recorded environment</h2>
+<table class="table-first-column-align-right">
+  <tr><td>Engine</td><td>{{ $benchmark.engine.version }}<br><code>{{ $benchmark.engine.version_hash }}</code></td></tr>
+  <tr><td>CPU</td><td>{{ $benchmark.system.cpu_name }}</td></tr>
+  <tr><td>GPU</td><td>{{ $benchmark.system.gpu }}</td></tr>
+  <tr><td>OS / renderer</td><td>{{ $benchmark.system.os }} / {{ $benchmark.local.renderer }}</td></tr>
+  <tr><td>Addon commit</td><td><code>{{ $benchmark.local.source_commit }}</code> (dirty: {{ $benchmark.local.source_dirty }})</td></tr>
+  <tr><td>Native DLL SHA-256</td><td style="overflow-wrap:anywhere">{{ $benchmark.local.native_dll_sha256 }}</td></tr>
+  <tr><td>Upstream workload</td><td><code>{{ $benchmark.local.upstream_commit }}</code></td></tr>
+  <tr><td>Report directory</td><td>{{ $benchmark.local.run_id }}</td></tr>
+</table>
+{{ end }}

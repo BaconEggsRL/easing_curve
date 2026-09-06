@@ -1,0 +1,23 @@
+<p>
+  Local Easing Curve results · {{ len .Site.Data.data.benchmarks }} recorded runs.
+  Each point is a run's median, using Linear easing.
+  Times are normalized independently against each series' recent history;
+  <strong>1.0 is that series' reference, not Tween's cost.</strong>
+  Open a run below for actual milliseconds. Same-day runs are shown at their recorded local start time.
+</p>
+<nav>
+  <a href="/">All results</a> ·
+  <a href="/graph/animation-native-easing-curve/">Native</a> ·
+  <a href="/graph/animation-legacy-easing-curve/">Legacy</a> ·
+  <a href="/graph/animation-tween/">Tween</a> ·
+  <a href="/graph/animation-easing-comparison/">Combined</a>
+</nav>
+<details>
+  <summary>Recorded runs and raw timings</summary>
+  <ul>
+  {{ range sort .Site.Data.data.benchmarks ".local.started_at" "desc" }}
+    <li><a href="/benchmark/{{ .date }}_{{ .commit }}/">{{ .local.started_at }}</a>
+      · {{ .engine.version }} · {{ .local.trials_per_case }} trials per case</li>
+  {{ end }}
+  </ul>
+</details>

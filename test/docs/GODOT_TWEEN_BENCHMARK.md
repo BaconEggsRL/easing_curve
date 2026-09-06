@@ -45,6 +45,71 @@ edit the development scene or the root project's `.godot/` files. Both source
 directories have `.gdignore` files: these scripts are imported only in the
 isolated host, where the original upstream resource paths resolve.
 
+## View results with Godot's existing web interface
+
+The [upstream Hugo/Plotly web interface](https://github.com/godotengine/godot-benchmarks/tree/main/web)
+is vendored at the same pinned commit as the workloads. The local adapter reads
+completed benchmark reports and builds these pages:
+
+- `/graph/animation-native-easing-curve/`
+- `/graph/animation-legacy-easing-curve/`
+- `/graph/animation-tween/`
+- `/graph/animation-easing-comparison/`
+
+Install Python 3 and Hugo on PATH, then run from the repository root:
+
+```powershell
+./test/runners/run_godot_benchmark_web.ps1 -Serve
+```
+
+Open `http://127.0.0.1:8765/`. Use the existing Filter box (`time`, `render_cpu`,
+or a workload name), click legend entries to hide series, drag to zoom and use
+Plotly's camera button to download a PNG. Each graph links to raw timing tables.
+The server binds only to localhost; Ctrl+C stops a foreground `-Serve` run.
+
+Python uses only its standard library. Hugo **0.117.0** was tested (the version
+specified by upstream's included workflow). Executables and the port can be
+selected explicitly:
+
+```powershell
+./test/runners/run_godot_benchmark_web.ps1 -PythonPath python -HugoPath 'C:/tools/hugo.exe' -Port 8765 -Serve
+```
+
+Omit `-Serve` to build only. Each build is retained under
+`_exports/_benchmarks/godot-web/<build-id>/`, with generated `source/` and static
+`public/` directories. No hosting, publishing or scheduled benchmark collection
+is performed. Re-run the benchmark runner, then rebuild the web interface to
+include additional results. `-ResultsPath` selects another results directory;
+`-Renderer` selects `forward_plus`, `mobile` or `gl_compatibility`.
+
+The graph uses **one point per recorded run**, calculated as the median of its
+trials. It retains upstream's independently normalized series and logarithmic
+scale: each series is divided by its reference from up to ten recent values.
+**1.0 does not mean the cost of Tween.** These graphs show changes over time;
+use the raw millisecond tables or the comparison CSV for relative backend cost.
+With one recorded run, all series have a single point at 1.0. No synthetic dates,
+historical engine results or debug/release measurements are added.
+
+Only completed rendered runs matching the newest selected run's hardware,
+renderer and upstream workload are combined. Headless and other-machine reports
+are listed as excluded in `public/import-manifest.json`. Engine and addon
+revisions may change across history and are recorded on each result page.
+The current two rendered runs are from the same day; their directory timestamps
+provide distinct local start times. Original JSON reports remain unchanged.
+
+The pinned web source is preserved. Generated copies get small adaptations for
+local use: same-day timestamps, visible single-point markers, short-history
+preview handling, numeric reference sorting, and an axis range around the
+recorded data. Local templates replace the public server's hardcoded hardware,
+daily-run claims and debug/release tables with actual metadata and units. The
+upstream graph page, chart renderer, theme, filters and Plotly controls are reused.
+
+Data-adapter checks run separately from the Godot correctness suite:
+
+```powershell
+python test/scripts/performance/test_godot_benchmark_web.py
+```
+
 ## Workloads
 
 | Workload | Tween baseline | Native and Legacy variants |
@@ -157,3 +222,12 @@ Ryzen 9 7950X and RTX 4070 Ti:
 
 The reports are local ignored artifacts. Mobile/Compatibility renderer runs,
 other engine versions and visual playback were not validated in this record.
+
+Web interface verification: five data-adapter tests passed; Hugo 0.117.0 built
+the seven local pages without warnings. Headless Edge checks passed for all four
+graph routes, two distinct recorded timestamps, metric/empty filters, legend
+toggle, raw timing/CPU metadata, one-run compact rendering and four Plotly PNG
+exports. The Native page and its PNG were visually inspected. The tested build
+is `_exports/_benchmarks/godot-web/20260906-022952-3e54926d/`; its 20 vendored web
+source hashes match `web-hashes.json`. No new performance measurements were
+collected while implementing the web interface.

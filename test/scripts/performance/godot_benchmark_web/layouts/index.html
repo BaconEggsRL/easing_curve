@@ -1,0 +1,30 @@
+{{ define "main" }}
+<h1>Easing Curve benchmark results</h1>
+<p>This local site uses Godot's benchmark web interface with measured Tween,
+Native Easing Curve and Legacy Easing Curve results. It is independent of the public benchmark server.</p>
+{{ partial "local-notice.html" . }}
+<h2>Graphs</h2>
+<p>The preview line is the median across normalized series; shaded areas show
+the interquartile range and full range across series, not a confidence interval.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:2em">
+{{ range .Site.Data.data.graphs }}
+  <div><h3><a href="/graph/{{ .id }}/">{{ .title }}</a></h3>
+    <div id="{{ .id }}" style="border-radius:6px;overflow:hidden"></div></div>
+{{ end }}
+</div>
+{{ $latest := index (sort .Site.Data.data.benchmarks ".local.started_at" "desc") 0 }}
+<h2>Benchmarking machine</h2>
+<table class="table-first-column-align-right">
+  <tr><td>CPU</td><td>{{ $latest.system.cpu_name }}</td></tr>
+  <tr><td>GPU</td><td>{{ $latest.system.gpu }}</td></tr>
+  <tr><td>OS</td><td>{{ $latest.system.os }}</td></tr>
+  <tr><td>Renderer</td><td>{{ $latest.local.renderer }}</td></tr>
+</table>
+<p>Only rendered results from matching hardware and the pinned workload are included.
+No debug/release template or dedicated-server measurements are implied by the
+<code>local_editor</code> label. <a href="/import-manifest.json">Included and excluded reports</a>.</p>
+{{ end }}
+{{ define "javascript" }}
+<script src="{{ "/graphs.js" | relURL }}"></script>
+<script>Database.graphs.forEach(graph => displayGraph(`#${graph.id}`, graph.id, "compact"));</script>
+{{ end }}

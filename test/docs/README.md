@@ -9,6 +9,11 @@ case, or add `-ValidateOnly` for deterministic workload checks. JSON, CSV and
 Markdown reports include a local Tween baseline and pinned upstream provenance.
 These six performance cases are separate from the 23-suite correctness manifest.
 
+Run `./test/runners/run_godot_benchmark_web.ps1 -Serve` to view saved results in
+Godot's existing Hugo/Plotly benchmark interface, with Native, Legacy, Tween and
+combined graphs. Python 3 and Hugo are required; see the
+[web interface instructions](GODOT_TWEEN_BENCHMARK.md#view-results-with-godots-existing-web-interface).
+
 ## v1.2.0 parity coverage audit
 
 Audit baseline: `v1.1.0..ea7e2c6`, plus the release-preparation test/documentation

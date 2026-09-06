@@ -1,0 +1,85 @@
+{
+  "commit": "ef3a94f131552c9c5aa040c985185de705068eda",
+  "files": [
+    {
+      "path": ".gdignore",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "generate-content.py",
+      "sha256": "EF8C3F999901FC7C3DAAF0E23525333CFE5B1036873E2F012F90D0F8D60D2D17"
+    },
+    {
+      "path": "hugo.toml",
+      "sha256": "B6E2D5591E40446FFB1507A72A0EED9A37FA36886C8E5243A2389AD5C708D2D0"
+    },
+    {
+      "path": "README.md",
+      "sha256": "28B3FF7FF5BB6EAE34A4C4F8C5646DF77662B83B665384FDCA69099A6BA3B2FE"
+    },
+    {
+      "path": "content/_index.md",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "data/.gitkeep",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "godot-empty-project/project.godot",
+      "sha256": "EAA8BF8C22FD0D4E8E2625FBEBB08992A0E0368F691EB000515170E70F7452FF"
+    },
+    {
+      "path": "godot-empty-project/test.tscn",
+      "sha256": "7354D30B07F066E2803F894164F7CF20874222928C32D2FD9E9E524C59A9ED13"
+    },
+    {
+      "path": "layouts/index.html",
+      "sha256": "D89DCB8B5BD304794FE5AA32496FD2216D8AA272EA91E948A6232300F057759C"
+    },
+    {
+      "path": "layouts/benchmark/single.html",
+      "sha256": "7ADF8B2850BF16A7198588D2A1705AE54A6AEBC949C592A75388F68D6DF2F9AB"
+    },
+    {
+      "path": "layouts/graph/single.html",
+      "sha256": "3526285D402B7B80E55E7A4D8B851FCFBFD929911ADFCCA80F8E0BBFBEF170C8"
+    },
+    {
+      "path": "layouts/_default/baseof.html",
+      "sha256": "63B16E5998F56A409AD274A8A168091B3A8823FA1D2955520828271EBE055096"
+    },
+    {
+      "path": "src-data/graphs.json",
+      "sha256": "E19CE5CC3CF27B22B173791686F0121A04E8074BB9983958C2D9CA6EA0507D7A"
+    },
+    {
+      "path": "src-data/benchmarks/.github/dependabot.yml",
+      "sha256": "97BBF02F049442305ADFDA1EBF0F8193DF60CAD9A639B614BCC69ACA8AB56E79"
+    },
+    {
+      "path": "src-data/benchmarks/.github/workflows/ci.yml",
+      "sha256": "E24D72DCB2D960825EBB7DB326E90296AFAF693CACFDF9DA0AD9B3DFF540C280"
+    },
+    {
+      "path": "static/graphs.js",
+      "sha256": "4ACFC2E18CD9E0168DBA0059EC898CF25DAE505DF22C4C1CBC472D03F1C9F8E6"
+    },
+    {
+      "path": "static/main.css",
+      "sha256": "0C307E5BC32502F7024A99C5A027D4CCB0AEFAFB6A6E6318E788FA8C03296212"
+    },
+    {
+      "path": "static/site.webmanifest",
+      "sha256": "08BCDB3FFCF0654F5A432E50B1773BC7C5EE43C0B6DD0976640542BB44F56A48"
+    },
+    {
+      "path": "static/thirdparty/plotly.min.js",
+      "sha256": "122E3BE346D66616944D0B83EAAF7242581508C3C1CFA0995A17AF0D83EFF770"
+    },
+    {
+      "path": "static/thirdparty/water.css",
+      "sha256": "C4D3BBE57C411A79A93BA01E7C9A9113214F42C72D7508D3C86CB2223A80A24F"
+    }
+  ]
+}

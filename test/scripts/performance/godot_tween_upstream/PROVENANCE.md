@@ -26,3 +26,19 @@ adapted from this manager; its curve workloads derive from `tween.gd`.
 The original copyright notices and MIT grant are retained in
 [LICENSE.md](LICENSE.md). These vendored development tests are not addon runtime
 dependencies and are outside the release package's addon-only content.
+
+## Existing web interface
+
+The `web/` subtree is also an unmodified copy from this pinned commit, downloaded
+on 2026-09-06. [`web-hashes.json`](web-hashes.json) records SHA-256 for every
+vendored web file. It includes upstream's Hugo templates, generator, graph
+definitions, JavaScript, Plotly 3.1.0 and Water.css with their original notices.
+The root [MIT license](LICENSE.md) and the web footer's Godot contributor
+attribution are preserved. No upstream workflow is run or published by this task.
+
+`prepare_godot_benchmark_web.py` copies this source into an ignored build
+directory and adapts our recorded data to its schema. The local templates under
+`../godot_benchmark_web/layouts/` supply accurate metadata in place of the
+public server's fixed hardware and build labels. Small checked replacements in
+the generated chart script handle short/same-day history, numeric sorting,
+markers and date bounds. Original vendored files remain unchanged.
