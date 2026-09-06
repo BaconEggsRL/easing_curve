@@ -12,6 +12,9 @@ current top entry.
   remains fully supported and is not deprecated.
 * Added persistent Native Jitter and Irregular modes, Native CSS `linear()` and
   `cubic-bezier()` parsing/sampling, and explicit Callable-to-points baking.
+* Added Native sampling for the shared Tween and extended easing catalog,
+  editable Custom Bézier points, Reverse/Invert transforms, runtime copies and
+  versioned Native resource serialization.
 * Added non-destructive Legacy-to-Native and Native-to-Legacy Inspector
   conversion. Conversion creates an unsaved side-by-side resource and reports
   exact, baked, approximated, and unsupported fields before confirmation.
@@ -21,6 +24,12 @@ current top entry.
 * Organized the Native Inspector in visible Curve Editor, Transition
   Parameters, Points, and Global Transform sections. Points appear only for
   point-graph transitions; Reverse and Invert remain stable serialized fields.
+* Shared graph editing between Legacy and Native, including point selection,
+  add/delete, endpoint crossing, list/toolbar reorder, handle modes, locks,
+  Force Linear, transform previews and default handle-mode settings.
+* Brought Native point-property copy/paste, property paths and reset controls
+  into the shared Inspector workflow. Parameter sliders and accepted text edits
+  defer publication until the edit completes.
 * Added exact-package staging through an explicit allowlist, reproducible build
   metadata, and SHA-256 hashes for the Native manifest and binaries.
 * Fixed Windows CI executable validation by checking an explicitly started
@@ -29,6 +38,11 @@ current top entry.
 
 ### Fixed
 
+* Fixed Native transition Undo/Redo after the Inspector is rebuilt or another
+  resource is selected. History restores transition/Ease settings and geometry
+  through the retained backend instead of depending on a destroyed editor control.
+* Disabled Native Ease and its reset control for CSS Linear and CSS Cubic Bezier,
+  matching Legacy behavior.
 * Fixed Native-to-Legacy point-lock conversion by normalizing Native lock data
   into the legacy typed dictionary contract.
 * Deferred opening converted resources until the confirmation signal completes,
@@ -47,6 +61,21 @@ current top entry.
   serialize Native resource types.
 * Windows editor sessions use the release Native DLL. Native Windows debug
   builds and hot reload are outside the v1.2.0 support contract.
+
+### Testing
+
+* Added Native runtime/public-contract, shared-backend and Inspector regression
+  coverage, with separate ABI, Legacy-only, Windows/Web export and exact-package
+  validation tools.
+* Made the Native Inspector-lifecycle regression part of the registered
+  Editor-host suite, with real editor history, external/embedded resource
+  save/reload and isolation from another inspected resource.
+* Added a paired Legacy/Native smoke checklist and a coverage audit that separates
+  mandatory assertions, conditional clipboard/layout checks and manual release
+  sign-off. Release-preparation validation passed all 23 registered suites and
+  the separate ABI, Legacy-only, Windows/Web export, archive and release-workflow
+  checks. [Validation evidence](README.md) identifies the working-tree/archive
+  state and outstanding manual checks; manual release sign-off remains pending.
 
 ## v1.1.0
 

@@ -1,4 +1,195 @@
-# Easing Curve — Manual Visible Editor Smoke Test
+# v1.2.0 — Legacy / Native parity smoke test
+
+Run this paired checklist after the gates in [Development testing](README.md).
+The detailed interaction checks below remain applicable to **both** APIs; they
+are not a Legacy-only sign-off. An automated PASS does not verify physical input,
+OS clipboard, visible layout, or editor-to-running-game integration.
+
+## Candidate and paired fixtures
+
+Record version ___; commit ___; working-tree changes ___; archive SHA-256 ___;
+Godot ___; OS ___; display scale ___; browser ___; tester/date ___.
+
+Primary environment: Windows x86_64, Godot 4.7.1, release Native DLL. Install only
+the candidate addon in a clean project. Enable it under Project Settings > Plugins.
+
+Create a Node with a script exporting two Resource properties, `legacy_curve`
+and `native_curve`. Assign new EasingCurve and NativeEasingCurve resources.
+Save the scene with the resources embedded. Duplicate the scene, save each
+resource as a separate `.tres`, and use that scene for external-resource tests.
+Do not alter existing project fixtures. Test the same named modes and edits on
+Legacy and Native; their integer transition IDs need not match.
+
+For Custom geometry, create endpoints (0, 0), (1, 1) and an interior point near
+(0.5, 0.4). For random curves, generate once, then convert that persisted result
+to the other API. Independently generated Jitter/Irregular shapes need not match.
+
+### Intentional differences
+
+- Legacy remains supported; migration is optional. Native targets Windows
+  x86_64 and non-threaded Web. Windows Native debug DLLs/hot reload are excluded.
+- Native bakes Legacy Custom Callables to points instead of retaining a live
+  Callable. Read exact/baked/approximated/unsupported conversion reports.
+- Conversion creates a separate unsaved copy and must not replace its source.
+- Numerical equality is assessed by automated tolerances, not visual judgment.
+  Editor view state is distinct from serialized curve geometry.
+
+## Paired release scenarios
+
+Run each scenario on Legacy and Native. Complete the detailed sections below
+when a scenario references them. For every failure, record reproduction steps,
+the resource kind (embedded/external), logs and an issue link.
+
+| ID | Scenario | Legacy pass | Native pass | Evidence / issue / blocked reason |
+| --- | --- | --- | --- | --- |
+| P01 | Clean install, responsive layout and folding | [ ] | [ ] | |
+| P02 | Transitions, Ease and modified presets | [ ] | [ ] | |
+| P03 | Point selection, topology and handles | [ ] | [ ] | |
+| P04 | Parameters, CSS and generation | [ ] | [ ] | |
+| P05 | Real editor history and save/reload | [ ] | [ ] | |
+| P06 | OS clipboard and conversion | [ ] | [ ] | |
+| P07 | View controls, transforms and thumbnails | [ ] | [ ] | |
+| P08 | Running scene and Windows/Web exports | [ ] | [ ] | |
+| P09 | Restart, plugin lifecycle and compatibility | [ ] | [ ] | |
+
+### P01 — Clean install and layout
+
+Automation covers package import and control structure. Manually complete
+sections 1–3 below on both fixtures at narrow, normal and wide Inspector widths,
+and at the display scales claimed in the test record. Open popups, type Vector2
+values, scroll, fold/edit/unfold, and switch resources.
+
+Expected: one coherent graph/toolbar, readable fields and reset arrows, no overlap,
+duplicate foldouts, stale rows or scroll jumps. Generate/Convert remain reachable.
+
+### P02 — Transition and Ease availability
+
+Automation covers sampling, parameter metadata, Points mode, Ease/reset state and
+Native dropdown/history restoration. Manual coverage is popup/focus/redraw.
+
+1. Set Quad / Ease Out. Switch to CSS Linear, then CSS Cubic Bezier. Ease and its
+   reset must be unavailable; only the matching CSS input should be exposed.
+2. Return to Quad. Change Ease, then reset it to In. Modify a control point:
+   the modified marker/preset reset appear and Ease disables. Reset the preset;
+   Ease becomes available again.
+3. Visit Custom, Linear, Constant, Step, Back, Power, Elastic, Bounce, Spring,
+   Physics Spring, Jitter and Irregular. Inspect parameter rows and point editing.
+
+Expected: no stale values or rows. Custom/Linear/Constant/Step/CSS do not offer
+Ease; clean ease-capable presets do. Points appear only for point-graph modes.
+
+### P03 — Selection, topology, handles and typed fields
+
+Automation covers state, identity, ordering, locks, invalid edits and simulated
+gestures. Complete sections 4–12 below physically on both APIs: add via graph/list,
+select from graph/list/toolbar, cross neighbors, Shift-drag, reorder at endpoints,
+delete, cycle Handle Modes, toggle Force Linear/locks, type values, accept with
+Enter/focus loss, and reset before/after reordering.
+
+Expected: graph/list/fields refer to the same logical point, constraints hold,
+drop indicators remain stable, one accepted edit gives one history action, and
+a no-op click gives none. Observe hit targets, focus and drag feedback directly.
+
+### P04 — Parameters, CSS and generated state
+
+Automation covers sampling, deferred publication and representative round trips.
+
+1. Edit/reset Back, Elastic, Bounce, Step and spring parameters with sliders and
+   typed fields. Observe preview feedback and accepted values.
+2. Enter `linear(0, 0.35 20%, 0.8 65%, 1)` and
+   `cubic-bezier(0.42, 0, 0.58, 1)` in the respective modes.
+3. Enter malformed CSS, then restore valid text. Compare fallback/diagnostics
+   with Legacy and check recovery; do not assume malformed text is valid.
+4. Generate Jitter/Irregular, convert the persisted result for comparison,
+   save/reopen, undo/redo generation and play the animation.
+
+Expected: no stale graph, partial accepted text, repeated action per drag tick,
+or loss of generated data. Matching persisted fixtures play alike.
+
+### P05 — Actual history, ownership and persistence
+
+Automation uses the real EditorUndoRedoManager after freeing/replacing controls,
+with embedded/external fixtures and another inspected resource. Manually verify
+the actual editor keyboard routing and saved scene state on **both** APIs:
+
+1. Save Quad / Ease Out. Select Elastic, CSS Cubic Bezier, then Quad. After each
+   edit inspect another Node/resource and return, causing an Inspector rebuild.
+2. Undo once per edit, then Redo. Check Trans, Ease, geometry, parameter rows and
+   Points. A console history message alone is not a pass.
+3. With resource B inspected, undo the earlier change to A; inspect both. Confirm
+   the intended resource/history changes and B's data is unchanged.
+4. Save after Undo, reopen the scene/resource and verify values. In a fresh edit
+   sequence repeat after Redo. Restart Godot and verify persisted values again.
+5. Repeat with point drag, lock, reorder, parameter change and preset reset.
+
+Expected: the actual exported resource changes, not just its visible dropdown;
+no wrong-resource edits, stale callbacks, missing geometry or extra actions.
+
+### P06 — Clipboard and conversion dialogs
+
+Automation validates typed paste and conversion contracts. OS exchange is skipped
+in headless runs without clipboard support; dialogs require visible sign-off.
+
+1. Copy/paste Position, control points, Handle Mode and supported boolean values
+   Legacy-to-Native and back. Copy a property path before/after reordering.
+2. Paste incompatible text; confirm no mutation or undo action.
+3. Convert both ways for a preset, edited Custom, CSS and persisted random curve.
+   Read the report; cancel once, then confirm and save under a new filename.
+4. Convert a Legacy Custom Callable; inspect baking/report behavior and the result.
+
+Expected: clicked-row targeting and current property paths; usable dialog focus;
+cancel leaves source untouched; confirm opens a separate editable resource;
+conversion limitations are disclosed and source/copy edits remain independent.
+
+### P07 — Graph view, transforms and previews
+
+Automation covers transforms, preview geometry and zoom routing. Physically pan,
+zoom, Autofit, navigate selection, scroll inside/outside the graph and switch
+resources. Toggle Reverse, Invert and both; compare graph and playback, then
+undo/redo. Check saved FileSystem thumbnails after changing curves.
+
+Expected: correct input target, no stale previews and no geometry changes from
+view-only actions. Complete the matching detailed checks below.
+
+### P08 — Running scene and exported applications
+
+Automation separately covers Windows/Web exported numeric fixtures. It does not
+certify physical editor-to-running-game interaction or browser presentation.
+
+1. Run a small animation with each resource. Edit point, transition and parameter
+   values while running; Undo/Redo each and observe actual motion.
+2. Run both APIs from the clean candidate package in a Windows export.
+3. Run non-threaded Web with extension support enabled in the export configuration.
+   Record browser/version and debug/release; inspect loading, motion and console.
+
+Expected: no missing library, graph/runtime divergence or repeated errors.
+
+### P09 — Lifecycle and bounded compatibility claims
+
+Save/restart/reopen both types, disable/re-enable the plugin twice and close the
+project. In a separate Legacy-only project without Native binaries or serialized
+Native types, open/edit/play a Legacy curve.
+
+On each claimed compatible Godot version record its exact patch number and repeat
+import/enable, P02, one point edit, P05 transition history, save/restart and playback.
+The README advertises 4.4.0 minimum plugin loading and full workflow on 4.7.1;
+an ABI run on 4.4.1 does not prove 4.4.0 or full UI compatibility. Unsupported
+environments are N/A with a reason, never PASS. No unexplained plugin errors.
+
+## v1.2.0 sign-off
+
+- [ ] Automated results/skips recorded in [Development testing](README.md).
+- [ ] P01–P09 completed for both resource forms; failures linked in the table.
+- [ ] Actual candidate archive hash and clean-install result recorded.
+- [ ] No unexplained editor/runtime/browser errors.
+- [ ] Compatibility claims match tested environments.
+- [ ] Tester/date ___; release decision and remaining blockers ___.
+
+Automated execution does not check these boxes.
+
+---
+
+# Detailed visible interaction checks (run for both APIs)
 
 Use this checklist for release-candidate validation of the Easing Curve Godot editor plugin.
 

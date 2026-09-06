@@ -1,5 +1,121 @@
 # Development testing
 
+## v1.2.0 parity coverage audit
+
+Audit baseline: `v1.1.0..ea7e2c6`, plus the release-preparation test/documentation
+changes in this working tree. Coverage means assertions that execute, not merely
+a named test function or a historical PASS. Manual sign-off is maintained in
+[the paired smoke checklist](SMOKE_TEST.md).
+
+| Behavior | Executed automated coverage | Remaining boundary |
+| --- | --- | --- |
+| Built-in and extended sampling | `tween_equivalence_test.gd`, `native_v2_smoke_test.gd`: Tween comparisons, configured extended modes, custom Bézier and transforms | Numeric fixtures/tolerances, not every possible parameter combination or visual playback |
+| CSS and generated curves | `css_linear_test.gd`, Native smoke: valid CSS samples, persisted generated data, generated/CSS round trips | Native CSS parity uses representative strings; broader malformed-input differential coverage remains a follow-up |
+| Backend topology and identity | `curve_editor_backend_contract_test.gd`: add/remove/reorder, exact point resources, invalid snapshots, plain UndoRedo transition restoration | Runtime-mode suite does not exercise the Editor history manager |
+| Inspector lifetime and real history | `curve_editor_vertical_slice_test.gd`: actual Native transition dropdown, EditorUndoRedoManager, freed/replaced controls, another inspected resource, repeated Undo/Redo, external `.tres` and exported embedded `.tscn` save/reload | Physical shortcuts, real scene-tab history routing, Inspector selection navigation and remote running-game integration still require P05/P08 |
+| Shared transition controls | Vertical slice: table-driven Quad, CSS Linear/Cubic Bezier, Custom, Linear, Back and Power; selected IDs, Ease/reset, Points mode, parameter metadata, modified/reset preset | Metadata/mode assertions are not screenshots; full catalog/layout/focus sweep is P01/P02 |
+| Point gestures and properties | Vertical slice plus gesture, position-X, reorder, add/delete, control-editability and selection suites: simulated input, constraints, identity, reset, accepted edit/publication behavior | OS input delivery, actual hit targets, drop indicators, focus and scroll usability require P03 |
+| Clipboard and conversion | Vertical slice: typed paste/invalid data, conversion report and deferred confirmation contracts; Native smoke/public contract: bidirectional conversion, ownership, Callable baking | OS clipboard branch requires display support; visible menus, confirmation/cancellation focus and source/copy navigation require P06 |
+| Serialization and runtime updates | `serialization_transition_contract_test.gd`, `native_public_contract_test.gd`, Native smoke, `runtime_curve_updates_test.gd`: public surface, format versions, representative round trips and notifications | Not every API × parameter × container × history combination; real editor-to-game synchronization remains manual |
+| Layout, view, preview | Vertical slice, `editor_undo_redo_test.gd`, preview and transform suites: structure, zoom routing, preview geometry and cached state | Headless FoldableContainer/responsive fixtures skipped; visible sizing, theme/DPI, folding and thumbnails require P01/P07 |
+| Distribution and compatibility | Separate runners below; CI builds Windows/Web, runs Windows suites, Web runtime and package validation | Separate checks are not included in the 23-suite command; actual candidate install, disable/re-enable and browser presentation require P08/P09 |
+
+### Gaps closed for this candidate
+
+- Moved the real Editor undo-manager lifecycle regression out of the runtime-only
+  backend suite into the registered Editor-host vertical slice. Previously the
+  `Engine.is_editor_hint()` branch never ran in the default manifest.
+- Extended the regression to dropdown signals, reopened UI selection, external
+  and embedded persistence, and isolation from a subsequently inspected resource.
+- Added shared transition-control assertions, including CSS Ease disabling and
+  restoring Ease when returning to/resetting Quad.
+- The vertical slice now fails explicitly without an Editor host or Native class.
+  OS clipboard unavailability emits a SKIP marker; typed paste checks still run.
+
+### Conditional coverage and prioritized follow-ups
+
+1. **P1, manual now:** actual scene-tab/global-history keyboard routing, live
+   editor-to-running-game transition updates, OS clipboard exchange and dialogs.
+   The new regression uses real history but constructed inspector controls; it
+   does not claim end-to-end physical UI coverage. Future automated UI work should
+   test those routes rather than add more plain UndoRedo-only tests.
+2. **P1, automatable follow-up:** extend real Editor-manager lifecycle coverage to
+   Ease changes, parameters, generation, transforms and multiple actions across
+   multiple scene histories. Existing fixtures cover portions with plain UndoRedo
+   or direct mutation; that is not equivalent to the complete editor lifecycle.
+3. **P2, automatable follow-up:** expand Native/Legacy malformed CSS differential
+   cases, parameter boundary combinations and conversion round trips. Preserve
+   current numerical tolerances; share generated points when comparing RNG modes.
+4. **P2, manual now:** layout/theme/DPI, physical input, accessibility/focus,
+   folding and repeated plugin lifecycle. `editor_undo_redo_test.gd` explicitly
+   skips its FoldableContainer/responsive fixtures under headless Godot 4.7.
+5. **Release evidence:** minimum plugin-loading compatibility, Native ABI and full
+   workflow compatibility are different claims. The ABI runner defaults to
+   4.4.1/4.5.1/4.6.1/4.7.1, not the README's 4.4.0 minimum-load claim.
+
+### Separate non-publishing release gates
+
+Run from the repository root. `EASING_CURVE_GODOT_PATH` selects the primary engine;
+the ABI runner uses its explicit version list. Direct Godot invocations must
+include an absolute repository-local `--log-file` under `test/_temp`.
+
+```powershell
+./test/runners/run_all_tests.ps1 --run
+./test/runners/release_workflow_contract_test.ps1
+./test/runners/run_native_compatibility_test.ps1
+./test/runners/run_legacy_without_native_test.ps1
+./test/runners/run_native_release_export_test.ps1
+./test/runners/run_native_web_export_test.ps1 -SkipBuild
+./build_asset_store.ps1
+./test/runners/run_release_archive_test.ps1
+```
+
+The Windows export runner builds the release DLL and needs SCons/toolchain and
+installed Godot Windows export templates. Web `-SkipBuild` validates existing
+debug/release WASM binaries and needs Web templates, Python and a supported
+Chromium browser; omit that flag to build WASM with the configured toolchain.
+Archive validation tests the exact allowlisted ZIP, not merely the checkout.
+The release workflow contract mocks publishing operations; it does not publish.
+
+Record exit codes, exact engine versions, skips, artifact hash and source state
+before successful-run cleanup. Failed prerequisites are unverified, not passes.
+Never promote a working-tree result to committed/archive release readiness.
+
+### v1.2.0 execution record — 2026-09-06
+
+Source: `ea7e2c6` plus the uncommitted parity test/documentation changes. Version
+remains `1.2.0-dev`; nothing was committed, tagged or published by this work.
+
+- Initial full runs: 22/23 suites passed; the new fixture emitted unnamed
+  root-node and assertion-message formatting diagnostics despite passing its
+  assertions. Fixed the fixture's root name and Array-to-string formatting;
+  no product-code change or diagnostic suppression was required.
+- Regression proof: in an isolated host, replacing only the editor script with
+  its pre-`ea7e2c6` version caused 12/619 vertical-slice checks to fail, including
+  resource restoration, reopened selection and persisted undo state.
+- Focused restored-code run: **619/619** vertical-slice checks passed in the
+  Editor host, including all new lifecycle/control-state checks.
+- Release-workflow helper contract and Legacy-without-Native runner: **PASS**.
+- Native ABI: **PASS** on stable Godot **4.4.1, 4.5.1, 4.6.1 and 4.7.1**. This is
+  ABI evidence, not a new full-workflow or minimum-4.4.0 claim.
+- Windows release DLL rebuild and exported built-in/custom Native resources:
+  **PASS** on Godot 4.7.1.
+- Non-threaded Web debug and release exports: **PASS** in the automated browser
+  runner using existing WASM binaries (`-SkipBuild`). Initial sandboxed Chromium
+  startup failed with Windows IPC access denied; the approved elevated retry
+  passed both runtime fixtures. This is not manual browser presentation sign-off.
+- Exact allowlisted `easing_curve_v1.2.0-dev.zip`: **PASS** for hashes, both APIs'
+  load/sample/save/reload and plugin lifecycle. SHA-256:
+  `BB879A9878627E1573D638B532B98B07531264C24EAC022AE0ECBEAAE4EA9891`.
+- Full-suite closeout: **23/23 suites PASS**, runner exit **0**, **23 PASS markers**,
+  **0 SCRIPT ERROR markers**, no timeouts or unexpected diagnostics. Existing
+  narrowly classified engine teardown/root-certificate diagnostics remain allowed.
+  Skips: OS clipboard exchange in vertical-slice/Points-list tests and visible
+  FoldableContainer/responsive layout fixtures. These remain manual requirements.
+- Results and the archive hash were recorded before the required successful-run
+  cleanup; transient logs/isolated fixtures are removed by `--cleanup`.
+- Manual P01–P09: **not performed; all sign-off boxes remain unchecked**.
+
 ---
 
 ## Automated suites

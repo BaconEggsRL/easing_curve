@@ -26,6 +26,13 @@ func _init() -> void:
 
 
 func _run() -> void:
+	_expect(Engine.is_editor_hint(), "Vertical slice requires an Editor host")
+	_expect(ClassDB.class_exists(&"NativeEasingCurve"), "Vertical slice requires the Native extension")
+	if not Engine.is_editor_hint() or not ClassDB.class_exists(&"NativeEasingCurve"):
+		_finish("shared curve editor vertical slice")
+		return
+	await _test_native_transition_history_lifecycle()
+	_test_transition_control_parity()
 	await _test_default_new_point_handle_modes()
 	await _test_shared_wheel_zoom_routing()
 	_test_legacy_selection_path()
@@ -40,6 +47,144 @@ func _run() -> void:
 	await _test_native_deferred_parameter_editor()
 	await _test_native_property_clipboard_and_lifecycle()
 	_finish("shared curve editor vertical slice")
+
+
+func _test_native_transition_history_lifecycle() -> void:
+	var plugin := EditorPlugin.new()
+	var manager := plugin.get_undo_redo()
+	_expect(manager != null, "Native lifecycle test requires the real Editor undo manager")
+	if manager == null:
+		plugin.free()
+		return
+	for embedded: bool in [false, true]:
+		var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+		curve.set(&"transition", 4)
+		curve.set(&"ease_type", EasingCurve.EASE.OUT)
+		curve = _round_trip_native_fixture(curve, embedded)
+		var before: Dictionary = curve.call(&"get_editor_state_snapshot")
+		var inspector := INSPECTOR_PLUGIN.new()
+		inspector.editor_undo_redo = manager
+		var content := inspector.handle_easing_curve_editor(curve)
+		root.add_child(content)
+		await process_frame
+		var trans := content.find_child("CurveTransition", true, false) as OptionButton
+		trans.item_selected.emit(trans.get_item_index(6))
+		var after: Dictionary = curve.call(&"get_editor_state_snapshot")
+		_expect(int(curve.get(&"transition")) == 6, "Native dropdown did not change the resource")
+		await process_frame
+		content.free()
+
+		# Reuse the inspector for another resource, as a real selection change does.
+		var other := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+		var other_before: Dictionary = other.call(&"get_editor_state_snapshot")
+		var other_content := inspector.handle_easing_curve_editor(other)
+		root.add_child(other_content)
+		var reopened := INSPECTOR_PLUGIN.new()
+		var reopened_content := reopened.handle_easing_curve_editor(curve)
+		root.add_child(reopened_content)
+		await process_frame
+		var reopened_trans := reopened_content.find_child("CurveTransition", true, false) as OptionButton
+		var reopened_ease := reopened_content.find_child("CurveEase", true, false) as OptionButton
+		var history := manager.get_history_undo_redo(manager.get_object_history_id(curve))
+		_expect(history != null and history.has_undo(), "Native dropdown did not register resource history")
+		if history != null:
+			for redo: bool in [false, true, false, true]:
+				_expect(history.redo() if redo else history.undo(), "Native resource history action failed")
+				await process_frame
+				var expected := after if redo else before
+				_expect(curve.call(&"get_editor_state_snapshot") == expected, "Native lifecycle history lost transition, Ease, or geometry")
+				_expect(reopened_trans.get_selected_id() == expected[&"transition"], "Reopened Trans dropdown is stale")
+				_expect(reopened_ease.get_selected_id() == expected[&"ease_type"], "Reopened Ease dropdown is stale")
+				_expect(other.call(&"get_editor_state_snapshot") == other_before, "Undo/Redo changed the newly inspected resource")
+				var loaded := _round_trip_native_fixture(curve, embedded)
+				_expect(loaded.call(&"get_editor_state_snapshot") == expected, "Undo/Redo result did not survive save/reload")
+		manager.clear_history()
+		other_content.free()
+		reopened_content.free()
+	plugin.free()
+
+
+func _round_trip_native_fixture(curve: Resource, embedded: bool) -> Resource:
+	var path := "res://test/_temp/native_parity.tscn" if embedded else "res://test/_temp/native_parity.tres"
+	if not embedded:
+		_expect(ResourceSaver.save(curve, path) == OK, "Could not save external Native fixture")
+		return ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	var node := Node.new()
+	node.name = &"NativeParityFixture"
+	node.set_script(preload("res://test/scripts/support/native_curve_parity_fixture.gd"))
+	node.set(&"native_curve", curve)
+	var scene := PackedScene.new()
+	_expect(scene.pack(node) == OK, "Could not pack exported Native property")
+	_expect(ResourceSaver.save(scene, path) == OK, "Could not save embedded Native fixture")
+	node.free()
+	var loaded := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+	var instance := loaded.instantiate()
+	var result := instance.get(&"native_curve") as Resource
+	instance.free()
+	return result
+
+
+func _test_transition_control_parity() -> void:
+	var factory := preload("res://addons/easing_curve/scripts/editor/backend/curve_editor_backend_factory.gd")
+	var legacy := EasingCurve.new()
+	var native := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	var inspector := INSPECTOR_PLUGIN.new()
+	# Native ID, Legacy ID, Ease enabled, Points visible, active parameter.
+	var cases := [
+		[4, EasingCurve.TRANS.QUAD, true, true, &""],
+		[107, EasingCurve.TRANS.CSS_LINEAR, false, false, &"css_linear"],
+		[108, EasingCurve.TRANS.CSS_CUBIC_BEZIER, false, false, &"css_cubic_bezier"],
+		[100, EasingCurve.TRANS.CUSTOM, false, true, &""],
+		[0, EasingCurve.TRANS.LINEAR, false, true, &""],
+		[10, EasingCurve.TRANS.BACK, true, true, &"overshoot"],
+		[105, EasingCurve.TRANS.POWER, true, false, &"power"],
+		[4, EasingCurve.TRANS.QUAD, true, true, &""],
+	]
+	for curve: Resource in [legacy, native]:
+		var is_native := curve == native
+		var ease := INSPECTOR_PLUGIN._create_option(EasingCurve.EASE, EasingCurve.EASE.IN)
+		var trans: OptionButton = (
+			INSPECTOR_PLUGIN._create_native_transition_option(0, factory.create(curve).get_transition_ids())
+			if is_native else INSPECTOR_PLUGIN._create_transition_option(EasingCurve.TRANS.LINEAR)
+		)
+		var ease_reset := INSPECTOR_PLUGIN._create_reserved_reset_button("Reset Ease")
+		var preset_reset := INSPECTOR_PLUGIN._create_reserved_reset_button("Reset preset")
+		for entry: Array in cases:
+			var transition: int = entry[0] if is_native else entry[1]
+			curve.set(&"transition" if is_native else &"trans_type", transition)
+			curve.set(&"ease_type", EasingCurve.EASE.OUT)
+			_update_parity_controls(inspector, curve, ease, trans, ease_reset, preset_reset)
+			_expect(trans.get_item_index(transition) >= 0 and trans.get_selected_id() == transition, "Parity transition is missing or incorrectly selected")
+			_expect(ease.disabled == not entry[2], "Parity Ease availability differs for %s" % str(entry))
+			_expect(is_equal_approx(ease_reset.self_modulate.a, 1.0 if entry[2] else 0.0), "Parity Ease reset availability differs")
+			_expect(factory.create(curve).is_point_graph() == entry[3], "Parity Points visibility differs")
+			for parameter: StringName in [&"css_linear", &"css_cubic_bezier", &"overshoot", &"power"]:
+				var visible := false
+				for property: Dictionary in curve.get_property_list():
+					if property.name == parameter:
+						visible = (int(property.usage) & PROPERTY_USAGE_EDITOR) != 0
+				_expect(visible == (parameter == entry[4]), "Parity parameter visibility differs for %s" % parameter)
+		# The final case is Quad; a point edit disables Ease until preset reset.
+		var point: Resource = factory.create(curve).get_point(0)
+		point.set(&"right_control_point", Vector2(0.2, 0.8))
+		_update_parity_controls(inspector, curve, ease, trans, ease_reset, preset_reset)
+		_expect(ease.disabled and is_zero_approx(ease_reset.self_modulate.a), "Modified preset still exposes Ease")
+		_expect(is_equal_approx(preset_reset.self_modulate.a, 1.0), "Modified preset omitted reset")
+		curve.call(&"reset_selected_preset")
+		_update_parity_controls(inspector, curve, ease, trans, ease_reset, preset_reset)
+		_expect(not ease.disabled, "Reset preset did not restore Ease")
+		curve.set(&"ease_type", EasingCurve.EASE.IN)
+		_update_parity_controls(inspector, curve, ease, trans, ease_reset, preset_reset)
+		_expect(is_zero_approx(ease_reset.self_modulate.a), "Default Ease retained its reset arrow")
+		for control: Control in [ease, trans, ease_reset, preset_reset]:
+			control.free()
+
+
+func _update_parity_controls(inspector: EditorInspectorPlugin, curve: Resource, ease: OptionButton, trans: OptionButton, ease_reset: Button, preset_reset: Button) -> void:
+	if curve is EasingCurve:
+		INSPECTOR_PLUGIN._update_preset_state_ui(curve, ease, trans, ease_reset, preset_reset)
+	else:
+		inspector.call(&"_update_native_preset_state_ui", curve, ease, trans, ease_reset, preset_reset)
 
 
 func _test_default_new_point_handle_modes() -> void:
@@ -1047,6 +1192,8 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 		_expect(DisplayServer.clipboard_get() == "points/%d/handle_mode" % current_index, "Native Copy Property Path retained a stale pre-reorder index")
 		DisplayServer.clipboard_set(original_clipboard)
 		legacy_content.free()
+	else:
+		print("SKIP: OS clipboard exchange requires a clipboard-capable visible Editor; paste validation still runs")
 
 	history.clear_history()
 	publications[0] = 0
