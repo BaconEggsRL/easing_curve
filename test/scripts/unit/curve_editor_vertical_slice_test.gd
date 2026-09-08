@@ -32,6 +32,7 @@ func _run() -> void:
 		_finish("shared curve editor vertical slice")
 		return
 	await _test_native_transition_history_lifecycle()
+	await _test_mixed_resource_autofit_isolation()
 	await _test_mixed_resource_toolbar_isolation()
 	_test_transition_control_parity()
 	await _test_default_new_point_handle_modes()
@@ -48,6 +49,40 @@ func _run() -> void:
 	await _test_native_deferred_parameter_editor()
 	await _test_native_property_clipboard_and_lifecycle()
 	_finish("shared curve editor vertical slice")
+
+
+func _test_mixed_resource_autofit_isolation() -> void:
+	for native_first: bool in [true, false]:
+		var inspector := INSPECTOR_PLUGIN.new()
+		var native_curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+		var curves: Array[Resource] = [native_curve, EasingCurve.new()]
+		if not native_first:
+			curves.reverse()
+		var contents: Array[Control] = []
+		var editors: Array[EasingCurveEditor] = []
+		var sections: Array[Control] = []
+		for resource: Resource in curves:
+			inspector._parse_begin(resource)
+			var content := inspector.handle_easing_curve_editor(resource)
+			root.add_child(content)
+			contents.append(content)
+			editors.append(inspector.easing_curve_editor)
+			sections.append(inspector._curve_editor_section)
+			inspector.call(&"_queue_autofit_curve_editor")
+		# One folded graph must not prevent its sibling from finishing.
+		sections[0].call(&"fold")
+		for frame in range(5):
+			await process_frame
+		_expect(not editors[1].is_graph_render_suppressed(), "Second graph stayed suppressed")
+		_expect(editors[0].is_graph_render_suppressed(), "Folded graph lost pending Autofit")
+		sections[0].call(&"expand")
+		for frame in range(5):
+			await process_frame
+		for editor: EasingCurveEditor in editors:
+			_expect(not editor.is_graph_render_suppressed(), "Mixed resource graph stayed blank after rebuild")
+		_expect(not inspector.call(&"_is_autofit_pending"), "Mixed resource Autofit did not finish")
+		for content: Control in contents:
+			content.free()
 
 
 func _test_mixed_resource_toolbar_isolation() -> void:

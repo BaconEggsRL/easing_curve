@@ -699,8 +699,16 @@ var _selected_point_property_header: PanelContainer
 var _point_list_controller := PointListController.new()
 var _position_x_order_preview_point: EasingCurvePoint
 var _initial_autofit_resource_ids: Dictionary[int, bool] = {}
-var _autofit_pending := false
+
+
+class AutofitRequest:
+	var editor: WeakRef
+	var section: WeakRef
+
+
+var _autofit_requests: Dictionary[int, AutofitRequest] = {}
 var _autofit_request_id := 0
+var _autofit_rebuild_resources: Dictionary[int, WeakRef] = {}
 
 
 func _detach_selected_point_property_header() -> void:
@@ -983,7 +991,6 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		easing_curve_editor = EasingCurveEditor.new()
 		easing_curve_editor.editor_undo_redo = editor_undo_redo
 		easing_curve_editor.set_curve(object)
-		_apply_autofit_render_state()
 
 		# Restore the Resource-owned transient Curve Editor view state. The later
 		# slider initialization intentionally remains the canonical zoom source.
@@ -1077,19 +1084,17 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		easing_curve_editor.set_slider_value(
 			view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]
 		)
-		if _consume_initial_autofit_for_loaded_resource(object):
-			_queue_autofit_curve_editor()
-
-
 		_curve_editor_section = _create_foldable_section(
 			"Curve Editor",
 			curve_editor_content,
 			object,
 		) as PointsFoldableSection
 		_curve_editor_section.folding_changed.connect(
-			_on_curve_editor_section_folding_changed
+			_on_curve_editor_section_folding_changed.bind(weakref(easing_curve_editor))
 		)
 		curve_section.add_child(_curve_editor_section)
+		if _consume_rebuild_autofit(object) or _consume_initial_autofit_for_loaded_resource(object):
+			_queue_autofit_curve_editor()
 		########################################
 		return curve_section
 	return null
@@ -1190,7 +1195,7 @@ func _handle_native_curve_editor(
 		object,
 	) as PointsFoldableSection
 	_curve_editor_section.folding_changed.connect(
-		_on_curve_editor_section_folding_changed
+		_on_curve_editor_section_folding_changed.bind(weakref(easing_curve_editor))
 	)
 	root.add_child(_curve_editor_section)
 
@@ -3011,56 +3016,84 @@ func _queue_autofit_curve_editor() -> void:
 
 
 func _request_autofit() -> int:
-	_autofit_pending = true
+	if not is_instance_valid(easing_curve_editor):
+		return -1
+	for pending_id: int in _autofit_requests.keys():
+		if _autofit_requests[pending_id].editor.get_ref() == easing_curve_editor:
+			_cancel_autofit(pending_id)
 	_autofit_request_id += 1
-	_apply_autofit_render_state()
+	var request := AutofitRequest.new()
+	request.editor = weakref(easing_curve_editor)
+	if is_instance_valid(_curve_editor_section):
+		request.section = weakref(_curve_editor_section)
+	_autofit_requests[_autofit_request_id] = request
+	easing_curve_editor.set_graph_render_suppressed(true)
+	easing_curve_editor.tree_exiting.connect(
+		_on_autofit_editor_exiting.bind(_autofit_request_id), CONNECT_ONE_SHOT,
+	)
 	return _autofit_request_id
 
 
-func _cancel_autofit(request_id: int = -1) -> void:
-	if request_id >= 0 and not _is_current_autofit_request(request_id):
+func _on_autofit_editor_exiting(request_id: int) -> void:
+	if not _is_current_autofit_request(request_id):
 		return
-	_autofit_pending = false
-	_autofit_request_id += 1
-	_apply_autofit_render_state()
+	var editor := _autofit_requests[request_id].editor.get_ref() as EasingCurveEditor
+	if is_instance_valid(editor):
+		var resource := editor.get_curve()
+		if resource is EasingCurve:
+			_autofit_rebuild_resources[resource.get_instance_id()] = weakref(resource)
+	_cancel_autofit(request_id)
+
+
+func _consume_rebuild_autofit(resource: Resource) -> bool:
+	var resource_id := resource.get_instance_id()
+	var pending := _autofit_rebuild_resources.has(resource_id)
+	_autofit_rebuild_resources.erase(resource_id)
+	for pending_id: int in _autofit_rebuild_resources.keys():
+		if _autofit_rebuild_resources[pending_id].get_ref() == null:
+			_autofit_rebuild_resources.erase(pending_id)
+	return pending
+
+
+func _cancel_autofit(request_id: int = -1) -> void:
+	if request_id < 0:
+		for pending_id: int in _autofit_requests.keys():
+			_cancel_autofit(pending_id)
+		return
+	if not _is_current_autofit_request(request_id):
+		return
+	var editor := _autofit_requests[request_id].editor.get_ref() as EasingCurveEditor
+	_autofit_requests.erase(request_id)
+	if is_instance_valid(editor):
+		var exit_callback := _on_autofit_editor_exiting.bind(request_id)
+		if editor.tree_exiting.is_connected(exit_callback):
+			editor.tree_exiting.disconnect(exit_callback)
+		editor.set_graph_render_suppressed(false)
 
 
 func _complete_autofit(request_id: int) -> void:
 	if not _is_current_autofit_request(request_id):
 		return
-	if not _is_autofit_ready():
-		_cancel_autofit(request_id)
-		return
-
-	easing_curve_editor.autofit()
-	_autofit_pending = false
-	_apply_autofit_render_state()
+	var editor := _autofit_requests[request_id].editor.get_ref() as EasingCurveEditor
+	if is_instance_valid(editor) and editor.is_autofit_ready():
+		editor.autofit()
+	_cancel_autofit(request_id)
 
 
 func _is_current_autofit_request(request_id: int) -> bool:
-	return _autofit_pending and request_id == _autofit_request_id
+	return _autofit_requests.has(request_id)
 
 
 func _is_autofit_pending() -> bool:
-	return _autofit_pending
+	return not _autofit_requests.is_empty()
 
 
-func _is_autofit_ready() -> bool:
-	return (
-		is_instance_valid(easing_curve_editor)
-		and easing_curve_editor.is_autofit_ready()
-	)
-
-
-func _apply_autofit_render_state() -> void:
-	if is_instance_valid(easing_curve_editor):
-		easing_curve_editor.set_graph_render_suppressed(_autofit_pending)
-
-
-func _on_curve_editor_section_folding_changed(is_folded: bool) -> void:
-	if is_folded or not _autofit_pending:
+func _on_curve_editor_section_folding_changed(is_folded: bool, editor_ref: WeakRef) -> void:
+	if is_folded:
 		return
-	call_deferred(&"_autofit_curve_editor", _autofit_request_id)
+	for request_id: int in _autofit_requests:
+		if _autofit_requests[request_id].editor.get_ref() == editor_ref.get_ref():
+			call_deferred(&"_autofit_curve_editor", request_id)
 
 
 func _autofit_curve_editor(request_id: int = -1) -> void:
@@ -3075,7 +3108,7 @@ func _defer_autofit_frames(request_id: int, frames_remaining: int) -> void:
 	if not _is_current_autofit_request(request_id):
 		return
 	var tree := Engine.get_main_loop() as SceneTree
-	if tree == null:
+	if tree == null or not is_instance_valid(_autofit_requests[request_id].editor.get_ref()):
 		_cancel_autofit(request_id)
 		return
 
@@ -3086,15 +3119,14 @@ func _defer_autofit_frames(request_id: int, frames_remaining: int) -> void:
 	# is presented.
 	if frames_remaining > 0:
 		tree.process_frame.connect(
-			_defer_autofit_frames.bind(request_id, frames_remaining - 1),
+			func() -> void: _defer_autofit_frames(request_id, frames_remaining - 1),
 			CONNECT_ONE_SHOT,
 		)
 		return
 
-	if (
-		is_instance_valid(_curve_editor_section)
-		and _curve_editor_section.folded
-	):
+	var section_ref := _autofit_requests[request_id].section
+	var section := section_ref.get_ref() as PointsFoldableSection if section_ref != null else null
+	if is_instance_valid(section) and section.folded:
 		return
 	_complete_autofit(request_id)
 
