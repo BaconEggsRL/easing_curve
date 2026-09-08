@@ -18,6 +18,7 @@ func _run() -> void:
 		_test_constraints(native)
 	_test_format_and_placement()
 	_test_display_space_handle_parity()
+	_test_grid_snapping()
 	await _test_rendered()
 	_finish("drag coordinates")
 
@@ -253,6 +254,68 @@ func _test_display_space_handle_parity() -> void:
 					_dispose(editor)
 
 
+func _test_grid_snapping() -> void:
+	for native: bool in [false, true]:
+		for reverse: bool in [false, true]:
+			for invert: bool in [false, true]:
+				for count: int in [2, 10, 100]:
+					var editor := _fixture(native, reverse, invert)
+					var before: Variant = editor._backend.capture_snapshot()
+					_expect(not editor._snap_count_input.visible, "Disabled snapping showed count")
+					editor._snap_button.button_pressed = true
+					editor._snap_count_input.value = count
+					_expect(editor.snap_count == count and editor._snap_count_input.visible, "Snap controls did not synchronize")
+					_expect(editor._backend.capture_snapshot() == before, "Snap setting changed curve geometry")
+					var target := Vector2(0.637, 0.823)
+					var expected := target.snapped(Vector2.ONE / float(count))
+					_press(editor, _resolved(editor, &"position"))
+					_motion(editor, target)
+					_expect(editor._get_drag_coordinate_position().distance_to(expected) < 0.0001, "Point snap did not match visible graph grid")
+					editor._handle_left_released()
+					_expect((editor.editor_undo_redo as UndoRedo).get_history_count() == 1, "Snapped drag changed Undo count")
+					var resource := editor.get_curve()
+					var replacement := EasingCurveEditor.new()
+					replacement.set_curve(resource)
+					_expect(replacement.snap_enabled and replacement.snap_count == count, "Graph rebuild lost snap preferences")
+					replacement.free()
+					_dispose(editor)
+		var editor := _fixture(native)
+		editor.snap_enabled = true
+		editor.snap_count = 10
+		_press(editor, _resolved(editor, &"left_control_point"))
+		_motion(editor, Vector2(0.233, 0.317))
+		_expect(editor._get_drag_coordinate_position().distance_to(Vector2(0.233, 0.317)) < 0.0001, "Grid snapping affected a handle")
+		editor._handle_left_released()
+		_press(editor, Vector2(0.731, 0.183))
+		_expect(editor.pending_add_point != null and editor._get_drag_coordinate_position().distance_to(Vector2(0.7, 0.2)) < 0.0001, "New point did not snap on press")
+		_motion(editor, Vector2(0.812, 0.287))
+		_expect(editor._get_drag_coordinate_position().distance_to(Vector2(0.8, 0.3)) < 0.0001, "Pending point did not snap on motion")
+		editor._cancel_pending_add()
+		editor.snap_enabled = false
+		var origin := _resolved(editor, &"position")
+		_press(editor, origin)
+		var motion := InputEventMouseMotion.new()
+		motion.position = editor.get_view_pos(Vector2(0.637, 0.823))
+		motion.ctrl_pressed = OS.get_name() != "macOS"
+		motion.meta_pressed = OS.get_name() == "macOS"
+		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+		editor._gui_input(motion)
+		_expect(editor._get_drag_coordinate_position().distance_to(Vector2(0.6, 0.8)) < 0.0001, "Temporary Ctrl/Cmd snapping failed")
+		editor._handle_left_released()
+		(editor.editor_undo_redo as UndoRedo).undo()
+		editor.snap_enabled = true
+		_press(editor, origin)
+		_motion(editor, origin + Vector2(0.21, 0.01), true)
+		_expect(is_equal_approx(editor._get_drag_coordinate_position().y, origin.y), "Snapping overrode Shift axis constraint")
+		editor._handle_left_released()
+		editor.snap_count = 1
+		_expect(editor.snap_count == 2, "Snap count accepted less than 2")
+		editor.snap_count = 200
+		_expect(editor.snap_count == 100, "Snap count accepted more than 100")
+		_expect(editor._coordinate_overlay.z_index > 0 and editor._coordinate_overlay.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Readout is not a foreground input-transparent overlay")
+		_dispose(editor)
+
+
 func _test_rendered() -> void:
 	if DisplayServer.get_name() == "headless":
 		print("SKIP: rendered drag-coordinate smoke requires display support")
@@ -298,6 +361,12 @@ func _test_rendered() -> void:
 	await process_frame
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-top-inset.png")
+	for editor: EasingCurveEditor in editors:
+		editor._snap_button.button_pressed = true
+		editor._snap_count_input.value = 100
+	await process_frame
+	await RenderingServer.frame_post_draw
+	root.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-snapping.png")
 	for editor: EasingCurveEditor in editors:
 		editor._handle_left_released()
 		var press := InputEventMouseButton.new()

@@ -6,6 +6,9 @@ extends Control
 ## Graph editor for interactive EasingCurve point and control-handle editing.
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
+const SNAP_TOOLBAR_HEIGHT := 32.0
+const SNAP_ENABLED_META := &"_easing_curve_snap_enabled"
+const SNAP_COUNT_META := &"_easing_curve_snap_count"
 const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
@@ -119,8 +122,17 @@ var initial_grab_pos: Vector2
 var initial_grab_index: int
 var initial_grab_left_control: Vector2
 var initial_grab_right_control: Vector2
-var snap_enabled: bool = false
-var snap_count: int = 10
+var snap_enabled: bool = false:
+	set(value):
+		snap_enabled = value
+		_sync_snap_controls()
+var snap_count: int = 10:
+	set(value):
+		snap_count = clampi(value, 2, 100)
+		_sync_snap_controls()
+var _snap_button: Button
+var _snap_count_input: EditorSpinSlider
+var _coordinate_overlay: Control
 var _zoom_x: float = 1.0 # horizontal zoom
 var _zoom_y: float = 1.0 # vertical zoom
 var _zoom_step := 0
@@ -182,6 +194,14 @@ func _ready() -> void:
 		set_curve(EasingCurve.new())
 
 	_create_point_toolbar()
+	_create_snap_toolbar()
+	_coordinate_overlay = Control.new()
+	_coordinate_overlay.name = "DragCoordinates"
+	_coordinate_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_coordinate_overlay.z_index = 1
+	add_child(_coordinate_overlay)
+	_coordinate_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_coordinate_overlay.draw.connect(_draw_drag_coordinates)
 	_update_point_toolbar()
 
 
@@ -297,6 +317,7 @@ func _handle_pending_add_motion(event: InputEventMouseMotion) -> void:
 	var world_pos := get_world_pos(event.position)
 	if not world_pos.is_finite():
 		return
+	world_pos = _snap_graph_position(world_pos, event.is_command_or_control_pressed())
 	world_pos = _backend.display_to_curve_position(world_pos)
 	var value_range := _value_range()
 	var clamped_pos := world_pos.clamp(
@@ -359,6 +380,8 @@ func _handle_drag_motion(event: InputEventMouseMotion) -> void:
 	var world_pos = get_world_pos(event.position)
 	if not world_pos.is_finite():
 		return
+	if dragging_control == ControlIndex.NONE:
+		world_pos = _snap_graph_position(world_pos, event.is_command_or_control_pressed())
 	world_pos = _backend.display_to_curve_position(world_pos)
 	if dragging_control == ControlIndex.NONE and _backend.is_point_property_locked(dragging_point, &"position"):
 		return
@@ -508,6 +531,7 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 	var world_pos := get_world_pos(event.position)
 	if not world_pos.is_finite():
 		return
+	world_pos = _snap_graph_position(world_pos, event.is_command_or_control_pressed())
 	world_pos = _backend.display_to_curve_position(world_pos)
 	var value_range := _value_range()
 	var clamped_pos := world_pos.clamp(Vector2(0, value_range.x), Vector2(1.0, value_range.y))
@@ -1150,6 +1174,8 @@ func _restore_right_delete_drag_state() -> void:
 # DRAWING POINTS & CONTROLS
 # =========================
 func _draw():
+	if _coordinate_overlay != null:
+		_coordinate_overlay.queue_redraw()
 	if _backend == null or _graph_render_suppressed:
 		return
 
@@ -1287,8 +1313,6 @@ func _draw():
 			draw_line(pos_view, right_view, right_line_color)
 			draw_circle(right_view, right_radius, right_color)
 
-	_draw_drag_coordinates()
-
 
 func begin_point_list_coordinate_drag(input: Control, point: Resource, property_name: StringName) -> void:
 	if _backend == null or _backend.find_point(point) < 0:
@@ -1347,9 +1371,7 @@ func _format_drag_coordinates(position: Vector2) -> String:
 
 func _get_drag_coordinate_label_position(anchor: Vector2, text_size: Vector2) -> Vector2:
 	var margin := 4.0 * _editor_scale
-	var toolbar_height := (
-		0.0 if _is_point_toolbar_hidden() else SELECTION_TOOLBAR_HEIGHT * _editor_scale
-	)
+	var toolbar_height := _get_graph_toolbar_height()
 	var minimum := Vector2(margin, toolbar_height + margin)
 	var maximum := size - Vector2.ONE * margin - text_size
 	if maximum.x < minimum.x or maximum.y < minimum.y:
@@ -1388,8 +1410,16 @@ func _draw_drag_coordinates() -> void:
 		&"font_color", &"Editor", get_theme_color(&"font_color", &"Label")
 	)
 	color.a *= 0.8
-	draw_string(
-		font, label_position + Vector2(0, font.get_ascent(font_size)), text,
+	var outline := get_theme_color(&"font_outline_color", &"Label")
+	if is_zero_approx(outline.a):
+		outline = Color.BLACK if color.get_luminance() > 0.5 else Color.WHITE
+	var baseline := label_position + Vector2(0, font.get_ascent(font_size))
+	_coordinate_overlay.draw_string_outline(
+		font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size,
+		maxi(1, roundi(2.0 * _editor_scale)), outline,
+	)
+	_coordinate_overlay.draw_string(
+		font, baseline, text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color,
 	)
 
@@ -1462,6 +1492,8 @@ func set_curve(resource: Resource) -> void:
 	_backend = BackendFactory.create(resource)
 	_curve = resource as EasingCurve
 	var current := get_curve()
+	snap_enabled = bool(current.get_meta(SNAP_ENABLED_META, false)) if current != null else false
+	snap_count = int(current.get_meta(SNAP_COUNT_META, 10)) if current != null else 10
 	if current != null:
 		current.changed.connect(_on_curve_changed)
 		selected_index = -1 if presentation_owned else _selected_index_by_curve.get(
@@ -1797,11 +1829,7 @@ func _get_autofit_world_bounds() -> Rect2:
 func _get_graph_view_rect() -> Rect2:
 	var margin := 4.0 * _editor_scale
 	var coordinate_padding := _get_coordinate_top_padding()
-	var toolbar_height := (
-		0.0
-		if _is_point_toolbar_hidden()
-		else SELECTION_TOOLBAR_HEIGHT * _editor_scale
-	)
+	var toolbar_height := _get_graph_toolbar_height()
 	return Rect2(
 		Vector2(margin, toolbar_height + margin + coordinate_padding),
 		Vector2(
@@ -1861,7 +1889,7 @@ func _get_minimum_size() -> Vector2:
 	# expands into this reserved height instead of shrinking the Inspector.
 	return Vector2(
 		64.0,
-		graph_height + SELECTION_TOOLBAR_HEIGHT,
+		graph_height + SELECTION_TOOLBAR_HEIGHT + SNAP_TOOLBAR_HEIGHT,
 	) * _editor_scale
 
 
@@ -2202,6 +2230,70 @@ func _draw_sampled_curve() -> void:
 			draw_line(prev, pt, LINE_COLOR, 2)
 
 		prev = pt
+
+
+func _get_graph_toolbar_height() -> float:
+	return 0.0 if _is_point_toolbar_hidden() else (SELECTION_TOOLBAR_HEIGHT + SNAP_TOOLBAR_HEIGHT) * _editor_scale
+
+
+func _snap_graph_position(position: Vector2, temporary_snap := false) -> Vector2:
+	if not snap_enabled and not temporary_snap:
+		return position
+	# Snap in visible graph space before Reverse/Invert and axis constraints.
+	return position.snapped(Vector2.ONE / float(snap_count))
+
+
+func _create_snap_toolbar() -> void:
+	var toolbar := HBoxContainer.new()
+	toolbar.custom_minimum_size.y = SNAP_TOOLBAR_HEIGHT * _editor_scale
+	_point_toolbar_panel.add_child(toolbar)
+	_snap_button = Button.new()
+	_snap_button.icon = EDITOR_THEME_CACHE.get_icon(&"SnapGrid")
+	if _snap_button.icon == null:
+		_snap_button.text = "Snap"
+	_snap_button.toggle_mode = true
+	_snap_button.tooltip_text = "Toggle Grid Snap (points only; Ctrl/Cmd temporarily enables snapping)"
+	_snap_button.toggled.connect(_on_snap_toggled)
+	toolbar.add_child(_snap_button)
+	toolbar.add_child(VSeparator.new())
+	_snap_count_input = EditorSpinSlider.new()
+	_snap_count_input.min_value = 2
+	_snap_count_input.max_value = 100
+	_snap_count_input.step = 1
+	_snap_count_input.custom_minimum_size.x = 65.0 * _editor_scale
+	_snap_count_input.tooltip_text = "Grid subdivisions on both X and Y (2–100)"
+	_snap_count_input.value_changed.connect(_on_snap_count_changed)
+	toolbar.add_child(_snap_count_input)
+	_point_toolbar_panel.custom_minimum_size.y += SNAP_TOOLBAR_HEIGHT * _editor_scale
+	_sync_snap_controls()
+
+
+func _sync_snap_controls() -> void:
+	if _snap_button == null or _snap_count_input == null:
+		return
+	_snap_button.set_pressed_no_signal(snap_enabled)
+	_snap_count_input.set_value_no_signal(snap_count)
+	_snap_count_input.visible = snap_enabled
+
+
+func _on_snap_toggled(enabled: bool) -> void:
+	snap_enabled = enabled
+	var resource := get_curve()
+	if resource != null:
+		if enabled:
+			resource.set_meta(SNAP_ENABLED_META, true)
+		else:
+			resource.remove_meta(SNAP_ENABLED_META)
+
+
+func _on_snap_count_changed(value: float) -> void:
+	snap_count = roundi(value)
+	var resource := get_curve()
+	if resource != null:
+		if snap_count != 10:
+			resource.set_meta(SNAP_COUNT_META, snap_count)
+		else:
+			resource.remove_meta(SNAP_COUNT_META)
 
 
 func _create_point_toolbar() -> void:

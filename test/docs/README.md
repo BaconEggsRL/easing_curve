@@ -7,6 +7,22 @@ pending-add resource. The four private helpers separate resolved coordinates,
 formatting, bounded placement and direct drawing. The instance-local suppression
 flag controls presentation only; it does not finish or cancel transactions.
 
+Grid-snapping follow-up: an input-transparent foreground Control draws the
+readout above graph geometry, with a theme outline (contrasting fallback when
+transparent). The snap toolbar follows the bundled Godot Curve editor: toggle,
+one 2–100 subdivision count for both axes (default 10), and temporary Ctrl/Cmd
+snapping. Only points and pending additions snap; Bézier handles remain free.
+Snapping occurs in visible graph space before existing constraints. Major grid
+lines retain Godot's sparse layout even at 100 subdivisions. Preferences use
+per-resource editor metadata and restore when the graph is rebuilt.
+
+Snapping regression coverage checks both backends, Reverse/Invert combinations,
+counts 2/10/100, new-point placement, free handles, Shift precedence, temporary
+snapping, preference restoration and one Undo action. The focused suite passes
+763 headless checks and 775 rendered checks. Evidence: `test/_temp/snapping.txt`,
+`test/_temp/snapping-rendered.txt`, `test/_temp/snapping-full-correctness.txt`,
+and `drag-coordinates-snapping.png` alongside the rendered fixture captures.
+
 Follow-up: graph transforms and Autofit share a font-sized top inset, allowing
 the readout to stay above top-edge points. Points-list slider drags now feed the
 same readout via weak presentation references to the input and point; they never
@@ -58,12 +74,12 @@ Validation on Godot `4.7.1.stable.official.a13da4feb`, 2026-09-08:
 | Check | Result |
 | --- | --- |
 | Fresh pre-edit baseline | All 24 suites passed |
-| Focused drag-coordinate suite, headless | 603 checks passed |
+| Focused drag-coordinate suite, headless | 763 checks passed |
 | Gesture characterization | 214 checks passed |
 | Position-X drag | 72 checks passed |
 | Editor vertical slice | 1,053 checks passed |
 | Inspector ownership | 567 checks passed |
-| Rendered drag-coordinate suite | 615 checks passed |
+| Rendered drag-coordinate suite | 775 checks passed |
 | Final correctness runner | All 25 suites passed |
 
 Rendered execution uses actual graph drawing in an Editor host, synthetic viewport

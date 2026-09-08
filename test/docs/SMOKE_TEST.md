@@ -4,6 +4,13 @@
 
 For both Native and Legacy Custom graphs:
 
+- Toggle grid snapping; the subdivision field appears only when enabled. Try
+  2, 10 and 100 subdivisions: points and new additions snap on both axes while
+  handles stay free. Ctrl/Cmd temporarily enables snapping when the toggle is
+  off. Shift axis constraints, locks and Undo remain intact. Reopen the resource
+  and confirm its snap settings are restored. Repeat with Reverse/Invert.
+- Move the readout across curve and handle lines: its foreground text and thin
+  outline stay readable above them, including at enlarged scale and in light themes.
 - Drag a point and each handle; confirm `(x.xx, y.yy)` follows the resolved
   visible position. Include Reverse, Invert, both transforms, negative handle
   values, and pending additions. Near-zero negatives should read `0.00`.
