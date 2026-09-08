@@ -4,7 +4,7 @@ const CURVE_EDITOR := preload(
 	"res://addons/easing_curve/scripts/editor/easing_curve_editor.gd"
 )
 const INSPECTOR_PLUGIN := preload(
-	"res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/inspector_curve_context.gd"
 )
 const CURVE_EDITOR_SETTINGS := preload(
 	"res://addons/easing_curve/scripts/editor/curve_editor_settings.gd"
@@ -35,6 +35,9 @@ func _run() -> void:
 	await _test_mixed_resource_autofit_isolation()
 	await _test_mixed_resource_toolbar_isolation()
 	await _test_mixed_resource_point_list_isolation()
+	await _test_presentation_ownership()
+	await _test_context_gesture_teardown()
+	await _test_context_point_actions()
 	_test_transition_control_parity()
 	await _test_default_new_point_handle_modes()
 	await _test_shared_wheel_zoom_routing()
@@ -63,6 +66,7 @@ func _test_mixed_resource_autofit_isolation() -> void:
 		var editors: Array[EasingCurveEditor] = []
 		var sections: Array[Control] = []
 		for resource: Resource in curves:
+			inspector = INSPECTOR_PLUGIN.new()
 			inspector._parse_begin(resource)
 			var content := inspector.handle_easing_curve_editor(resource)
 			root.add_child(content)
@@ -103,6 +107,8 @@ func _test_mixed_resource_toolbar_isolation() -> void:
 		var contents: Array[Control] = []
 		var toolbars: Dictionary = {}
 		for resource: Resource in curves:
+			inspector = INSPECTOR_PLUGIN.new()
+			inspector.editor_undo_redo = manager
 			inspector._parse_begin(resource)
 			var content := inspector.handle_easing_curve_editor(resource)
 			root.add_child(content)
@@ -116,7 +122,6 @@ func _test_mixed_resource_toolbar_isolation() -> void:
 			var ease := toolbar.get_child(1) as OptionButton
 			var transition := toolbar.get_child(4) as OptionButton
 			# A later parse may clear Legacy state while both toolbars remain alive.
-			inspector._parse_begin(fixture.native_curve)
 			for ease_id: int in [2, 3, 1, 0, 1]:
 				var before: Dictionary = resource.call(&"get_editor_state_snapshot")
 				ease.item_selected.emit(ease.get_item_index(ease_id))
@@ -154,18 +159,20 @@ func _test_mixed_resource_point_list_isolation() -> void:
 	var editor := inspector.easing_curve_editor
 	var history := UndoRedo.new()
 	editor.editor_undo_redo = history
-	var points_section := inspector._create_native_points_inspector(native_curve)
+	var points_section := inspector._handle_native_points(native_curve)
 	root.add_child(points_section)
 	var publications := [0]
 	editor.committed_change_publisher = func() -> void:
 		publications[0] += 1
 	var legacy_curve := EasingCurve.new()
+	inspector = INSPECTOR_PLUGIN.new()
 	inspector._parse_begin(legacy_curve)
 	var legacy_content := inspector.handle_easing_curve_editor(legacy_curve)
 	root.add_child(legacy_content)
 	var transition := legacy_content.get_child(0).get_child(4) as OptionButton
 	transition.item_selected.emit(transition.get_item_index(EasingCurve.TRANS.CUBIC))
 	legacy_content.free()
+	inspector = INSPECTOR_PLUGIN.new()
 	inspector._parse_begin(legacy_curve)
 	legacy_content = inspector.handle_easing_curve_editor(legacy_curve)
 	root.add_child(legacy_content)
@@ -339,7 +346,7 @@ func _test_transition_control_parity() -> void:
 			control.free()
 
 
-func _update_parity_controls(inspector: EditorInspectorPlugin, curve: Resource, ease: OptionButton, trans: OptionButton, ease_reset: Button, preset_reset: Button) -> void:
+func _update_parity_controls(inspector: InspectorCurveContext, curve: Resource, ease: OptionButton, trans: OptionButton, ease_reset: Button, preset_reset: Button) -> void:
 	if curve is EasingCurve:
 		INSPECTOR_PLUGIN._update_preset_state_ui(curve, ease, trans, ease_reset, preset_reset)
 	else:
@@ -1020,7 +1027,8 @@ func _test_native_inspector_path() -> void:
 	conversion_control.free()
 
 	var inspector := INSPECTOR_PLUGIN.new()
-	_expect(inspector._can_handle(curve), "Inspector plugin rejected NativeEasingCurve")
+	var registered_plugin = load("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd").new()
+	_expect(registered_plugin._can_handle(curve), "Inspector plugin rejected NativeEasingCurve")
 	var content := inspector.handle_easing_curve_editor(curve)
 	_expect(content != null, "Inspector plugin did not build the Native Curve Editor")
 	if content != null:
@@ -1420,7 +1428,8 @@ func _test_native_property_clipboard_and_lifecycle() -> void:
 		disposal_input.value_focus_exited.emit()
 		var publications_before_disposal: int = publications[0]
 		var replacement_curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
-		inspector.call("_parse_begin", replacement_curve)
+		var replacement_context := INSPECTOR_PLUGIN.new()
+		replacement_context._parse_begin(replacement_curve)
 		content.free()
 		await process_frame
 		_expect(
@@ -1880,3 +1889,179 @@ func _find_drag_handle(node: Node) -> EasingCurveDragHandle:
 		if result != null:
 			return result
 	return null
+
+
+func _test_presentation_ownership() -> void:
+	var plugin_script := load("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
+	var host := EditorPlugin.new()
+	var manager := host.get_undo_redo()
+	for pair in [["legacy", "native"], ["native", "legacy"], ["legacy", "legacy"], ["native", "native"], ["same_legacy", "legacy"], ["same_native", "native"]]:
+		var first := _make_handle_mode_curve(StringName(String(pair[0]).trim_prefix("same_")))
+		var second := first if String(pair[0]).begins_with("same_") else _make_handle_mode_curve(StringName(pair[1]))
+		var plugin = plugin_script.new()
+		plugin.editor_undo_redo = manager
+		var contexts: Array = []
+		var roots: Array[Control] = []
+		for resource: Resource in [first, second]:
+			plugin._parse_begin(resource)
+			var context = plugin._construction_context
+			contexts.append(context)
+			var graph: Control = context.handle_easing_curve_editor(resource)
+			root.add_child(graph)
+			roots.append(graph)
+			var list: Control = context._handle_native_points(resource) if context._native_curve != null else context._create_points_section(context.handle_points(resource), resource)
+			root.add_child(list)
+			roots.append(list)
+			plugin._construction_context = null
+		var a = contexts[0]
+		var b = contexts[1]
+		_expect(a != b, "Presentations shared a context")
+		b.easing_curve_editor.selected_index = 1
+		var second_before: Dictionary = second.call(&"get_editor_state_snapshot")
+		var first_point := first.get(&"points")[0] as Resource
+		a._apply_editor_point_property_change(first, first_point, 99, &"position", Vector2(0.0, 0.27))
+		_expect(is_equal_approx(first.get(&"points")[0].position.y, 0.27), "Owning presentation lost clipboard edit")
+		_expect(b.easing_curve_editor.selected_index == 1, "Sibling acquired clipboard selection")
+		if first != second:
+			_expect(second.call(&"get_editor_state_snapshot") == second_before, "Clipboard changed sibling resource")
+			var before_rejected: Dictionary = first.call(&"get_editor_state_snapshot")
+			a._apply_editor_point_property_change(second, second.get(&"points")[0], 0, &"position", Vector2(0, 0.8))
+			_expect(first.call(&"get_editor_state_snapshot") == before_rejected, "Clipboard accepted wrong resource")
+		var before_count: int = first.get(&"points").size()
+		_find_button(roots[1], "Add Point").pressed.emit()
+		_expect(first.get(&"points").size() == before_count + 1, "Add Point changed wrong presentation")
+		var history := manager.get_history_undo_redo(manager.get_object_history_id(first))
+		_expect(history.undo(), "Presentation Add Point has no Undo")
+		_expect(first.get(&"points").size() == before_count, "Presentation Add Point Undo failed")
+		_expect(b.easing_curve_editor.selected_index == 1, "Undo changed sibling selection")
+		await process_frame
+		for control: Control in roots:
+			control.free()
+		var weak_context: WeakRef = weakref(a)
+		a = null
+		b = null
+		contexts.clear()
+		await process_frame
+		_expect(weak_context.get_ref() == null, "Undo history retained closed context")
+		_expect(history.redo(), "Resource Redo failed after presentation destruction")
+		_expect(first.get(&"points").size() == before_count + 1, "Closed presentation Redo lost resource edit")
+		manager.clear_history()
+	host.free()
+
+
+func _test_context_gesture_teardown() -> void:
+	var host := EditorPlugin.new()
+	var manager := host.get_undo_redo()
+	for backend: StringName in [&"legacy", &"native"]:
+		for text_edit: bool in [false, true]:
+			for graph_first: bool in [false, true]:
+				var resource := _make_handle_mode_curve(backend)
+				var owner := INSPECTOR_PLUGIN.new()
+				owner.editor_undo_redo = manager
+				owner._parse_begin(resource)
+				var graph := owner.handle_easing_curve_editor(resource)
+				root.add_child(graph)
+				var list: Control = owner._handle_native_points(resource) if backend == &"native" else owner._create_points_section(owner.handle_points(resource), resource)
+				root.add_child(list)
+				var inputs := list.find_children("*", "EditorSpinSlider", true, false)
+				var y_input := inputs[1] as EditorSpinSlider
+				if text_edit:
+					y_input.value_focus_entered.emit()
+				else:
+					y_input.grabbed.emit()
+				y_input.value = 0.43
+				# Another presentation of the same resource appears during the gesture.
+				var sibling := INSPECTOR_PLUGIN.new()
+				sibling.editor_undo_redo = manager
+				sibling._parse_begin(resource)
+				var sibling_graph := sibling.handle_easing_curve_editor(resource)
+				root.add_child(sibling_graph)
+				var sibling_list: Control = sibling._handle_native_points(resource) if backend == &"native" else sibling._create_points_section(sibling.handle_points(resource), resource)
+				root.add_child(sibling_list)
+				sibling.easing_curve_editor.selected_index = 1
+				y_input.value = 0.53
+				var sibling_y := sibling_list.find_children("*", "EditorSpinSlider", true, false)[1] as EditorSpinSlider
+				_expect(is_equal_approx(sibling_y.value, 0.53), "Sibling resource fields stopped synchronizing")
+				_expect(not sibling._point_edit_transaction_controller.is_point_edit_active(), "Sibling acquired Legacy transaction")
+				_expect(not bool(sibling.easing_curve_editor.get("_backend_point_edit_active")), "Sibling acquired Native transaction")
+				if text_edit:
+					y_input.value_focus_exited.emit()
+				else:
+					y_input.ungrabbed.emit()
+				# The completion is queued, but the owning roots disappear first.
+				if graph_first:
+					graph.free()
+					list.free()
+				else:
+					list.free()
+					graph.free()
+				await process_frame
+				await process_frame
+				var history := manager.get_history_undo_redo(manager.get_object_history_id(resource))
+				_expect(history.get_history_count() == 1, "Teardown lost or duplicated gesture history")
+				_expect(is_equal_approx(resource.get(&"points")[0].position.y, 0.53), "Teardown lost applied gesture")
+				_expect(history.undo(), "Closed gesture has no Undo")
+				_expect(is_zero_approx(resource.get(&"points")[0].position.y), "Closed gesture Undo failed")
+				_expect(sibling.easing_curve_editor.selected_index == 1, "Closed gesture Undo changed sibling selection")
+				_expect(history.redo(), "Closed gesture has no Redo")
+				_expect(is_equal_approx(resource.get(&"points")[0].position.y, 0.53), "Closed gesture Redo failed")
+				sibling_list.free()
+				sibling_graph.free()
+				manager.clear_history()
+	host.free()
+
+
+func _test_context_point_actions() -> void:
+	var host := EditorPlugin.new()
+	var manager := host.get_undo_redo()
+	for backend_id: StringName in [&"legacy", &"native"]:
+		var resource := _make_handle_mode_curve(backend_id)
+		var owner := INSPECTOR_PLUGIN.new()
+		owner.editor_undo_redo = manager
+		owner._parse_begin(resource)
+		var graph := owner.handle_easing_curve_editor(resource)
+		root.add_child(graph)
+		var list: Control = owner._handle_native_points(resource) if backend_id == &"native" else owner._create_points_section(owner.handle_points(resource), resource)
+		root.add_child(list)
+		var sibling_resource := _make_handle_mode_curve(&"native" if backend_id == &"legacy" else &"legacy")
+		var sibling := INSPECTOR_PLUGIN.new()
+		sibling.editor_undo_redo = manager
+		sibling._parse_begin(sibling_resource)
+		var sibling_graph := sibling.handle_easing_curve_editor(sibling_resource)
+		root.add_child(sibling_graph)
+		var sibling_before: Dictionary = sibling_resource.call(&"get_editor_state_snapshot")
+		for edit in [[&"position", Vector2(0, 0.12)], [&"right_control_point", Vector2(0.25, 0.3)], [&"handle_mode", 2], [&"handle_mode", 0], [&"right_force_linear", true], [&"right_force_linear", false], [&"position_lock", true], [&"position_lock", false], [&"right_control_lock", true], [&"right_control_lock", false]]:
+			var before: Dictionary = resource.call(&"get_editor_state_snapshot")
+			owner.easing_curve_editor.edit_point_property(0, edit[0], edit[1])
+			var after: Dictionary = resource.call(&"get_editor_state_snapshot")
+			_expect(sibling_resource.call(&"get_editor_state_snapshot") == sibling_before, "Graph property edit crossed resources")
+			if before != after:
+				var history := manager.get_history_undo_redo(manager.get_object_history_id(resource))
+				_expect(history.undo(), "Graph property edit lost Undo")
+				_expect(resource.call(&"get_editor_state_snapshot") == before, "Graph property Undo lost state")
+				_expect(history.redo(), "Graph property edit lost Redo")
+				_expect(resource.call(&"get_editor_state_snapshot") == after, "Graph property Redo lost state")
+			await process_frame
+		owner.easing_curve_editor.edit_point_property(0, &"position_lock", false)
+		owner._on_add_point_btn_pressed()
+		await process_frame
+		var points: Array = resource.get(&"points")
+		var target := points[1] as Resource
+		owner._move_point_relative(target, 1)
+		await process_frame
+		var backend := preload("res://addons/easing_curve/scripts/editor/backend/curve_editor_backend_factory.gd").create(resource)
+		var current: int = backend.find_point(target)
+		_expect(current != 1, "Reorder did not move point identity")
+		owner._apply_editor_point_property_change(resource, target, 1, &"handle_mode", 3)
+		_expect(int(target.get(&"handle_mode")) == 3, "Clipboard trusted stale index after reorder")
+		owner.easing_curve_editor.remove_point_from_list(target)
+		await process_frame
+		var after_remove: Dictionary = resource.call(&"get_editor_state_snapshot")
+		owner._apply_editor_point_property_change(resource, target, 1, &"handle_mode", 0)
+		_expect(resource.call(&"get_editor_state_snapshot") == after_remove, "Clipboard mutated a removed point")
+		_expect(sibling_resource.call(&"get_editor_state_snapshot") == sibling_before, "Point actions changed sibling resource")
+		list.free()
+		graph.free()
+		sibling_graph.free()
+		manager.clear_history()
+	host.free()

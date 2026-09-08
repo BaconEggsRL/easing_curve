@@ -123,7 +123,11 @@ func _get_drop_target_index(mouse_y: float, point_panels: Array[Control]) -> int
 
 
 func _can_drop_data(position: Vector2, data) -> bool:
-	if not data.has("index") or not data.has("point"):
+	if not data is Dictionary or not data.has("index") or not data.has("point"):
+		return false
+
+	var source_panel = data["point"]
+	if not is_instance_valid(source_panel) or source_panel.get_parent() != self:
 		return false
 
 	var point_panels: Array[Control] = []
@@ -162,6 +166,11 @@ func _can_drop_data(position: Vector2, data) -> bool:
 
 
 func _drop_data(position: Vector2, data) -> void:
+	if not data is Dictionary or not data.has("point") or not data.has("index"):
+		return
+	var source_panel = data["point"]
+	if not is_instance_valid(source_panel) or source_panel.get_parent() != self:
+		return
 	var point_panels: Array[Control] = []
 
 	for child in get_children():

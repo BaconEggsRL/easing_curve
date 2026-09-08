@@ -40,7 +40,7 @@ func _make_fixture() -> Dictionary:
 	curve.points = points
 	var editor_context := EDITOR_HOST.create_inspector_context(curve)
 	var editor: EasingCurveEditor = editor_context.editor
-	var inspector: EditorInspectorPlugin = editor_context.inspector
+	var inspector: InspectorCurveContext = editor_context.inspector
 	return {"curve": curve, "editor": editor, "inspector": inspector, "points": curve.points.duplicate()}
 
 
@@ -173,7 +173,7 @@ func _test_constructed_list_routes_move_controls_and_drag_swap() -> void:
 		var swap_connections: Array = point_list.point_swap_requested.get_connections()
 		_expect(
 			swap_connections.size() == 1
-			and swap_connections[0]["callable"].get_method() == &"_move_point",
+			and swap_connections[0]["callable"].get_method() == &"_on_point_list_swap",
 			"Constructed list drag-swap intent was not routed to the Inspector mutation path",
 		)
 

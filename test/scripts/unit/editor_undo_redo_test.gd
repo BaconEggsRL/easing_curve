@@ -1,7 +1,7 @@
 extends "res://test/scripts/support/test_case.gd"
 
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
-const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
+const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/inspector_curve_context.gd")
 const GENERATE_FUNCTION_EDITOR_PROPERTY = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/generate_function_editor_property.gd"
 )

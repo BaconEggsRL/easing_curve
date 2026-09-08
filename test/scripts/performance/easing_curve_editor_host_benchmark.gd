@@ -8,7 +8,7 @@ extends SceneTree
 ##   --log-file test/_temp/easing_curve_editor_host_benchmark.log
 
 const INSPECTOR_PLUGIN = preload(
-	"res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/inspector_curve_context.gd"
 )
 const PLUGIN_CONFIG_PATH := "res://addons/easing_curve/plugin.cfg"
 const POINT_COUNTS := [9, 65]

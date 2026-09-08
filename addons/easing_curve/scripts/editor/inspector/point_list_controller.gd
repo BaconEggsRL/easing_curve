@@ -48,6 +48,7 @@ func build_point_list(
 	for point_index in range(curve.points.size()):
 		var point := curve.points[point_index]
 		var point_panel := PanelContainer.new()
+		point_panel.set_meta(&"point_resource", point)
 		point_panel.add_theme_stylebox_override(
 			&"panel",
 			_zero_margin_panel_stylebox,
@@ -198,7 +199,7 @@ func _create_point_side_vbox(
 	move_up_btn.flat = true
 	move_up_btn.tooltip_text = "Move Point Up"
 	move_up_btn.pressed.connect(
-		request_move_up.bind(point_index, curve, move_point)
+		_request_relative_move.bind(curve.points[point_index], curve, -1, move_point)
 	)
 	side_vbox.add_child(move_up_btn)
 
@@ -221,7 +222,7 @@ func _create_point_side_vbox(
 	move_down_btn.flat = true
 	move_down_btn.tooltip_text = "Move Point Down"
 	move_down_btn.pressed.connect(
-		request_move_down.bind(point_index, curve, move_point)
+		_request_relative_move.bind(curve.points[point_index], curve, 1, move_point)
 	)
 	side_vbox.add_child(move_down_btn)
 
@@ -424,3 +425,9 @@ func _refresh_input_bindings(point_id: int) -> void:
 
 	binding["inputs"] = inputs
 	_input_bindings[point_id] = binding
+
+
+func _request_relative_move(point: EasingCurvePoint, curve: EasingCurve, offset: int, move_point: Callable) -> void:
+	var index := curve.points.find(point)
+	if index >= 0:
+		move_point.call(index, wrapi(index + offset, 0, curve.points.size()))

@@ -8,7 +8,7 @@ extends SceneTree
 ## of mouse motion without forcing one rendered frame per event.
 
 const INSPECTOR_PLUGIN = preload(
-	"res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd"
+	"res://addons/easing_curve/scripts/editor/inspector/inspector_curve_context.gd"
 )
 const PLUGIN_CONFIG_PATH := "res://addons/easing_curve/plugin.cfg"
 const ORDINARY_POINT_COUNTS := [3, 5, 9]

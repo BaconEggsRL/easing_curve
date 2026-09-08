@@ -3,7 +3,7 @@ extends "res://test/scripts/support/test_case.gd"
 const EDITOR_UNDO = preload("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
 const EDITOR_HOST = preload("res://test/scripts/support/editor_host_test_harness.gd")
 const EDITOR_DRIVER = preload("res://test/scripts/support/easing_curve_editor_test_driver.gd")
-const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
+const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/inspector_curve_context.gd")
 
 func _init() -> void:
 	if not EDITOR_HOST.require_editor_host("easing_curve_control_editability_test.gd"):

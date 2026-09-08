@@ -27,7 +27,7 @@ func _make_fixture(right_x: float = 0.6) -> Dictionary:
 	curve.points = [a, b, c]
 	var editor_context := EDITOR_HOST.create_inspector_context(curve)
 	var editor: EasingCurveEditor = editor_context.editor
-	var inspector: EditorInspectorPlugin = editor_context.inspector
+	var inspector: InspectorCurveContext = editor_context.inspector
 	return {
 		"curve": curve,
 		"editor": editor,
@@ -138,7 +138,7 @@ func _test_linear_control_x_drag_crosses_multiple_points() -> void:
 	var editor_context := EDITOR_HOST.create_inspector_context(curve)
 	var editor: EasingCurveEditor = editor_context.editor
 	editor.selected_index = 1
-	var inspector: EditorInspectorPlugin = editor_context.inspector
+	var inspector: InspectorCurveContext = editor_context.inspector
 	var input := EditorSpinSlider.new()
 	var reset_btn := Button.new()
 	input.set_meta(DRAGGING_META, true)

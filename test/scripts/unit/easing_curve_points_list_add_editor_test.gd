@@ -35,7 +35,7 @@ func _test_points_list_remove_button_undo_redo() -> void:
 	]
 	var editor_context := EDITOR_HOST.create_inspector_context(curve)
 	var editor: EasingCurveEditor = editor_context.editor
-	var inspector: EditorInspectorPlugin = editor_context.inspector
+	var inspector: InspectorCurveContext = editor_context.inspector
 	var before := EDITOR_UNDO.capture_state(curve)
 
 	var remove_button := Button.new()

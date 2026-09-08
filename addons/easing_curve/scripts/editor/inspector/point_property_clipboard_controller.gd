@@ -97,7 +97,7 @@ func apply_point_value(
 		or not apply_callback.is_valid()
 	):
 		return
-	apply_callback.call(point_index, property_name, value)
+	apply_callback.call(curve_resource, point, point_index, property_name, value)
 
 
 static func copy_path(

@@ -30,7 +30,7 @@ func _make_fixture(left_x: float = 0.2, right_x: float = 0.6) -> Dictionary:
 
 	var editor_context := EDITOR_HOST.create_inspector_context(curve)
 	var editor: EasingCurveEditor = editor_context.editor
-	var inspector: EditorInspectorPlugin = editor_context.inspector
+	var inspector: InspectorCurveContext = editor_context.inspector
 	return {
 		"curve": curve,
 		"editor": editor,
@@ -188,7 +188,7 @@ func _test_position_x_drag_crosses_multiple_points() -> void:
 
 	var editor_context := EDITOR_HOST.create_inspector_context(curve)
 	var editor: EasingCurveEditor = editor_context.editor
-	var inspector: EditorInspectorPlugin = editor_context.inspector
+	var inspector: InspectorCurveContext = editor_context.inspector
 	var moved: EasingCurvePoint = points[1]
 	editor.selected_index = 1
 
@@ -234,7 +234,7 @@ func _test_position_x_drag_continues_through_backtracking() -> void:
 	var editor_context := EDITOR_HOST.create_inspector_context(curve)
 	var editor: EasingCurveEditor = editor_context.editor
 	editor.selected_index = 1
-	var inspector: EditorInspectorPlugin = editor_context.inspector
+	var inspector: InspectorCurveContext = editor_context.inspector
 	var expected_orders := [
 		[points[0], moved, points[2], points[3], points[4]],
 		[points[0], moved, points[2], points[3], points[4]],

@@ -2,7 +2,7 @@
 class_name EasingCurveEditorHostTestHarness
 extends RefCounted
 
-const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
+const INSPECTOR_PLUGIN = preload("res://addons/easing_curve/scripts/editor/inspector/inspector_curve_context.gd")
 
 
 static func require_editor_host(test_name: String) -> bool:
@@ -19,7 +19,7 @@ static func require_inspector_host(test_name: String) -> bool:
 	if not require_editor_host(test_name):
 		return false
 	var inspector := INSPECTOR_PLUGIN.new()
-	if inspector is EditorInspectorPlugin:
+	if inspector is InspectorCurveContext:
 		return true
 	push_error("%s could not instantiate EasingCurveEditorInspectorPlugin" % test_name)
 	return false
@@ -37,7 +37,7 @@ static func create_inspector_context(
 	editor.size = editor_size
 	editor.set_curve(curve)
 	var inspector := INSPECTOR_PLUGIN.new()
-	if not inspector is EditorInspectorPlugin:
+	if not inspector is InspectorCurveContext:
 		push_error("Could not create EasingCurveEditorInspectorPlugin test context")
 		editor.free()
 		return {}

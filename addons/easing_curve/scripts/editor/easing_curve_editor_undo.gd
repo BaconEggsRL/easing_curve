@@ -107,34 +107,16 @@ static func commit_applied_action(
 		)
 	var inspector := _find_parent_inspector(source_property)
 	if inspector != null and undo_redo is EditorUndoRedoManager:
-		# Match native Inspector actions so live debugging receives the same complete
-		# resource-free snapshot on the initial edit, Undo, and Redo.
-		undo_redo.add_do_method(inspector, "_edit_request_change", curve, "")
-		undo_redo.add_undo_method(inspector, "_edit_request_change", curve, "")
-		undo_redo.add_do_method(
-			inspector,
-			"emit_signal",
-			&"property_edited",
-			String(EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY),
-		)
-		undo_redo.add_undo_method(
-			inspector,
-			"emit_signal",
-			&"property_edited",
-			String(EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY),
-		)
+		var publisher := load("res://addons/easing_curve/scripts/editor/easing_curve_editor_undo.gd")
+		undo_redo.add_do_method(publisher, &"publish_if_alive", curve, weakref(inspector))
+		undo_redo.add_undo_method(publisher, &"publish_if_alive", curve, weakref(inspector))
 	if context.selection_restorer.is_valid():
 		if undo_redo is EditorUndoRedoManager:
-			undo_redo.add_do_method(
-				context.selection_restorer.get_object(),
-				context.selection_restorer.get_method(),
-				context.after_selection.duplicate(true),
-			)
-			undo_redo.add_undo_method(
-				context.selection_restorer.get_object(),
-				context.selection_restorer.get_method(),
-				context.before_selection.duplicate(true),
-			)
+			var target := context.selection_restorer.get_object()
+			var method := context.selection_restorer.get_method()
+			var bound := context.selection_restorer.get_bound_arguments()
+			undo_redo.callv("add_do_method", [target, method, context.after_selection.duplicate(true)] + bound)
+			undo_redo.callv("add_undo_method", [target, method, context.before_selection.duplicate(true)] + bound)
 		else:
 			undo_redo.add_do_method(
 				context.selection_restorer.bind(context.after_selection.duplicate(true)),
@@ -200,3 +182,11 @@ static func _find_parent_inspector(source_property: EditorProperty) -> EditorIns
 			return current as EditorInspector
 		current = current.get_parent()
 	return null
+
+
+static func publish_if_alive(curve: EasingCurve, inspector_ref: WeakRef) -> void:
+	var inspector := inspector_ref.get_ref() as EditorInspector
+	if inspector == null:
+		return
+	inspector.call("_edit_request_change", curve, "")
+	inspector.emit_signal(&"property_edited", String(EasingCurve.EDITOR_STATE_SNAPSHOT_PROPERTY))
