@@ -218,3 +218,37 @@ func _sort_points_by_x(point_order: Array[Resource]) -> Array[Resource]:
 	for entry in entries:
 		result.append(entry[&"point"])
 	return result
+
+
+func create_point_for_list(handle_mode: int) -> Resource:
+	var points := get_points()
+	var position := Vector2.ZERO
+	if points.is_empty():
+		position = Vector2.ZERO
+	elif not _has_endpoint_at(0.0):
+		position = Vector2(0.0, 0.0)
+	elif not _has_endpoint_at(1.0):
+		position = Vector2(1.0, 1.0)
+	else:
+		var largest_gap := -1.0
+		for index in range(points.size() - 1):
+			var left: Vector2 = points[index].get(&"position")
+			var right: Vector2 = points[index + 1].get(&"position")
+			var gap := right.x - left.x
+			if gap > largest_gap:
+				largest_gap = gap
+				position.x = (left.x + right.x) * 0.5
+		position.y = sample(position.x)
+	var point := create_point(position)
+	if point != null and bool(get_capabilities().get(CAP_HANDLE_MODES, false)):
+		point.set(&"handle_mode", handle_mode)
+	return point
+
+
+
+func _has_endpoint_at(x: float) -> bool:
+	for point in get_points():
+		var position: Vector2 = point.get(&"position")
+		if is_equal_approx(position.x, x):
+			return true
+	return false

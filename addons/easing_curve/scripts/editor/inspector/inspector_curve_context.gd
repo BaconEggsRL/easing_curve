@@ -6,6 +6,14 @@ extends RefCounted
 ## Constructed once per parse pass and retained by its graph/list roots.
 ## Controllers and UI callbacks are local; history restores selection through a weak reference.
 
+signal native_selection_changed(point: Resource)
+
+const NativePointListEditController = preload(
+	"res://addons/easing_curve/scripts/editor/inspector/native_point_list_edit_controller.gd"
+)
+const CurveEditorSettings = preload(
+	"res://addons/easing_curve/scripts/editor/curve_editor_settings.gd"
+)
 const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
@@ -84,9 +92,13 @@ var _native_points_refresh_queued := false
 var _native_point_identity_signature := PackedInt64Array()
 var _native_editor_generation := 0
 var _native_point_edit_finish_request_id := 0
+var _point_edit_finish_request_id := 0
 var _conversion_added := false
 var resource: Resource
 var disposed := false
+var graph_root_ref: WeakRef
+var points_root_ref: WeakRef
+var _detached_native_editor: NativePointListEditController
 var _finishing := false
 var registrations: Array[Dictionary] = []
 
@@ -345,26 +357,130 @@ func add_custom_control(control: Control) -> void:
 	registrations.append({"control": control})
 
 
-func _retain_presentation_root(control: Control) -> void:
+func _retain_presentation_root(control: Control, is_graph := false) -> void:
 	control.set_meta(&"_inspector_context", self)
-	control.tree_exiting.connect(_dispose_presentation)
+	if is_graph:
+		graph_root_ref = weakref(control)
+	else:
+		points_root_ref = weakref(control)
+	control.tree_exiting.connect(_on_presentation_root_exiting.bind(control.get_instance_id(), is_graph))
 
 
-func _dispose_presentation() -> void:
-	if disposed or _finishing:
+func _on_presentation_root_exiting(root_id: int, is_graph: bool) -> void:
+	var root_ref := graph_root_ref if is_graph else points_root_ref
+	if disposed or root_ref == null:
+		return
+	var presentation_root := root_ref.get_ref() as Control
+	if presentation_root == null or presentation_root.get_instance_id() != root_id:
+		return
+	if is_graph:
+		# Commit while the graph and its Undo source are still valid.
+		_finish_applied_point_edit()
+		_cancel_autofit()
+		graph_root_ref = null
+		curve_editor_property = null
+		_curve_editor_section = null
+		if is_instance_valid(easing_curve_editor):
+			easing_curve_editor.committed_change_publisher = Callable()
+			easing_curve_editor.set_curve(null)
+		easing_curve_editor = null
+	else:
+		# An active graph gesture belongs to the surviving graph.
+		if not is_instance_valid(easing_curve_editor) or easing_curve_editor.dragging_point < 0:
+			_finish_applied_point_edit()
+		_cancel_pending_native_point_edit_finish()
+		_point_edit_finish_request_id += 1
+		points_root_ref = null
+		_native_points_content = null
+		_native_points_refresh_queued = false
+		_point_list_controller.clear_input_bindings()
+		_detach_selected_point_property_header()
+	presentation_root.remove_meta(&"_inspector_context")
+	if graph_root_ref == null and points_root_ref == null:
+		_dispose_presentation()
+
+
+func _finish_applied_point_edit() -> void:
+	if _finishing:
 		return
 	_finishing = true
 	if is_instance_valid(easing_curve_editor):
 		easing_curve_editor.finish_active_point_edit()
 	if curve != null:
 		_commit_point_edit()
+	if _detached_native_editor != null:
+		_detached_native_editor.finish()
 	_cancel_pending_native_point_edit_finish()
-	disposed = true
+	_point_edit_finish_request_id += 1
 	_finishing = false
+
+
+func _dispose_presentation() -> void:
+	if disposed or _finishing:
+		return
+	_finish_applied_point_edit()
+	disposed = true
 	_point_list_controller.clear_input_bindings()
 	_point_edit_transaction_controller.setup_point_edit_callbacks(Callable(), Callable(), Callable())
 	_point_edit_transaction_controller.setup(null, Callable())
+	if _detached_native_editor != null:
+		_detached_native_editor.dispose()
+		_detached_native_editor = null
 	_cancel_autofit()
+
+
+func _native_list_editor() -> NativePointListEditController:
+	if _detached_native_editor == null:
+		_detached_native_editor = NativePointListEditController.new()
+		_detached_native_editor.backend = BackendFactory.create(_native_curve)
+		_detached_native_editor.undo_redo = editor_undo_redo
+		_detached_native_editor.capture_selection = _capture_point_selection_state
+		_detached_native_editor.restore_selection = _selection_restorer()
+	return _detached_native_editor
+
+
+func _edit_native_point_property(index: int, property_name: StringName, value: Variant, changing := false) -> void:
+	if disposed:
+		return
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.edit_point_property(index, property_name, value, changing)
+	else:
+		_native_list_editor().edit(_point_at(_native_curve, index), property_name, value, changing)
+
+
+func _select_native_point(point: Resource) -> void:
+	var backend := BackendFactory.create(_native_curve)
+	_point_list_controller.assign_logical_selection(
+		_native_curve, backend.find_point(point), _point_list_controller.selected_point_property_name,
+	)
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.select_point_resource(point)
+	else:
+		native_selection_changed.emit(point)
+
+
+func _prepare_native_point_edit(point: Resource, property_name: StringName) -> bool:
+	if is_instance_valid(easing_curve_editor):
+		return easing_curve_editor.prepare_point_list_edit(point, property_name)
+	return _native_list_editor().prepare(point, property_name)
+
+
+func _remove_native_point(point: Resource) -> void:
+	if disposed:
+		return
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.remove_point_from_list(point)
+	else:
+		var editor := _native_list_editor()
+		editor.mutate("Remove Easing Curve Point", editor.backend.remove_point.bind(editor.backend.find_point(point)))
+
+
+func _move_native_point(from_index: int, to_index: int) -> void:
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.move_point_from_list(from_index, to_index)
+	else:
+		var editor := _native_list_editor()
+		editor.mutate("Reorder Easing Curve Point", editor.backend.swap_points.bind(from_index, to_index))
 
 
 static func _restore_context_selection(selection: Dictionary, context_ref: WeakRef) -> void:
@@ -476,7 +592,9 @@ func _point_list_curve_resource() -> Resource:
 
 static func _point_at(curve_resource: Resource, point_index: int) -> Resource:
 	var backend := BackendFactory.create(curve_resource)
-	return backend.get_point(point_index) if backend != null else null
+	if backend == null or point_index < 0 or point_index >= backend.get_point_count():
+		return null
+	return backend.get_point(point_index)
 
 
 func _apply_editor_point_property_change(
@@ -497,11 +615,9 @@ func _apply_editor_point_property_change(
 	if backend.get_backend_id() == &"legacy":
 		_apply_point_property_change(point_index, property_name, value)
 		return
-	if not is_instance_valid(easing_curve_editor):
-		return
 	_point_list_controller.request_selection_refresh_preservation()
-	easing_curve_editor.select_point_resource(point)
-	easing_curve_editor.edit_point_property(point_index, property_name, value)
+	_select_native_point(point)
+	_edit_native_point_property(point_index, property_name, value)
 
 
 func _create_selectable_point_property_header(
@@ -704,11 +820,7 @@ func _select_native_point_property(
 		property_name,
 	)
 	_attach_selected_point_property_header(property_header)
-	if is_instance_valid(easing_curve_editor):
-		easing_curve_editor.select_point_resource(point)
-
-
-
+	_select_native_point(point)
 
 
 ## Curve
@@ -757,6 +869,8 @@ func _attach_selected_point_property_header(
 func _sync_graph_selected_point_index(point_index: int) -> void:
 	if is_instance_valid(easing_curve_editor):
 		easing_curve_editor.selected_index = point_index
+	elif _native_curve != null:
+		native_selection_changed.emit(_point_at(_native_curve, point_index))
 
 
 func _clear_point_property_selection() -> void:
@@ -827,24 +941,25 @@ func _create_point_add_controls() -> Control:
 	handle_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_add_new_point_handle_mode_items(handle_mode)
 	_sync_new_point_handle_mode_option(
-		easing_curve_editor.get_default_new_point_handle_mode(),
+		CurveEditorSettings.get_default_new_point_handle_mode(),
 		handle_mode,
 	)
 	handle_mode.item_selected.connect(
 		func(index: int) -> void:
-			easing_curve_editor.set_default_new_point_handle_mode(
+			CurveEditorSettings.set_default_new_point_handle_mode(
 				handle_mode.get_item_id(index)
 			)
 	)
 	var sync_callback := func(value: int) -> void:
 		_sync_new_point_handle_mode_option(value, handle_mode)
-	easing_curve_editor.default_new_point_handle_mode_changed.connect(sync_callback)
-	row.tree_exiting.connect(
-		_disconnect_new_point_handle_mode_option.bind(
-			easing_curve_editor,
-			sync_callback,
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.default_new_point_handle_mode_changed.connect(sync_callback)
+		row.tree_exiting.connect(
+			_disconnect_new_point_handle_mode_option.bind(
+				easing_curve_editor,
+				sync_callback,
+			)
 		)
-	)
 	var handle_mode_slot := HorizontallyShrinkableControlSlot.new()
 	handle_mode_slot.name = &"NewPointHandleModeSlot"
 	handle_mode_slot.set_content(
@@ -1027,6 +1142,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		easing_curve_editor.presentation_owned = true
 		easing_curve_editor.editor_undo_redo = editor_undo_redo
 		easing_curve_editor.set_curve(object)
+		_sync_graph_selected_point_index(_selected_point_index_for_resource(object))
 
 		# Restore the Resource-owned transient Curve Editor view state. The later
 		# slider initialization intentionally remains the canonical zoom source.
@@ -1132,7 +1248,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		if _consume_rebuild_autofit(object) or _consume_initial_autofit_for_loaded_resource(object):
 			_queue_autofit_curve_editor()
 		########################################
-		_retain_presentation_root(curve_section)
+		_retain_presentation_root(curve_section, true)
 		return curve_section
 	return null
 
@@ -1141,6 +1257,8 @@ func _handle_native_curve_editor(
 	object: Resource,
 	editor_override: EasingCurveEditor = null,
 ) -> Control:
+	if _detached_native_editor != null:
+		_finish_applied_point_edit()
 	_native_curve = object
 	_native_editor_generation += 1
 	_cancel_pending_native_point_edit_finish()
@@ -1188,8 +1306,11 @@ func _handle_native_curve_editor(
 		if is_instance_valid(editor_override)
 		else EasingCurveEditor.new()
 	)
+	easing_curve_editor.presentation_owned = true
 	easing_curve_editor.editor_undo_redo = editor_undo_redo
 	easing_curve_editor.set_curve(object)
+	_sync_graph_selected_point_index(_selected_point_index_for_resource(object))
+	easing_curve_editor.point_selection_changed.connect(native_selection_changed.emit)
 	var resource_editor := easing_curve_editor
 	preset_reset.pressed.connect(easing_curve_editor.reset_native_preset)
 	ease_reset.pressed.connect(
@@ -1253,7 +1374,7 @@ func _handle_native_curve_editor(
 		preset_reset,
 	)
 	_queue_autofit_curve_editor()
-	_retain_presentation_root(root)
+	_retain_presentation_root(root, true)
 	return root
 
 
@@ -1364,7 +1485,7 @@ func _refresh_native_point_list(object: Resource) -> void:
 
 
 func _build_native_point_list(object: Resource) -> void:
-	if not is_instance_valid(_native_points_content) or not is_instance_valid(easing_curve_editor):
+	if not is_instance_valid(_native_points_content):
 		return
 	var backend := BackendFactory.create(object)
 	if backend == null:
@@ -1421,12 +1542,13 @@ func _create_native_point_panel(
 	panel.add_theme_stylebox_override(&"panel", _zero_margin_panel_stylebox)
 	var selection_callback := func(selected_point: Resource) -> void:
 		_update_native_point_panel_selection(selected_point, panel, point)
-	easing_curve_editor.point_selection_changed.connect(selection_callback)
+	native_selection_changed.connect(selection_callback)
 	panel.tree_exiting.connect(
 		_disconnect_native_selection_callback.bind(selection_callback)
 	)
 	_update_native_point_panel_selection(
-		easing_curve_editor.get_selected_point_resource(),
+		easing_curve_editor.get_selected_point_resource() if is_instance_valid(easing_curve_editor)
+			else _point_at(_native_curve, _point_list_controller.selected_point_index),
 		panel,
 		point,
 	)
@@ -1480,7 +1602,7 @@ func _create_native_point_panel(
 	remove_button.flat = true
 	remove_button.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_REMOVE)
 	remove_button.tooltip_text = "Remove Point"
-	remove_button.pressed.connect(easing_curve_editor.remove_point_from_list.bind(point))
+	remove_button.pressed.connect(_remove_native_point.bind(point))
 	row.add_child(remove_button)
 	return panel
 
@@ -1559,9 +1681,9 @@ func _on_native_input_grabbed(
 	property_name: StringName,
 	property_header: PanelContainer,
 ) -> void:
-	if disposed or not is_instance_valid(easing_curve_editor):
+	if disposed:
 		return
-	if easing_curve_editor.prepare_point_list_edit(point, property_name):
+	if _prepare_native_point_edit(point, property_name):
 		return
 	_cancel_pending_native_point_edit_finish()
 	input.set_meta(DRAGGING_META, true)
@@ -1583,9 +1705,9 @@ func _on_native_input_value_focus_entered(
 	point: Resource,
 	property_name: StringName,
 ) -> void:
-	if disposed or not is_instance_valid(easing_curve_editor):
+	if disposed:
 		return
-	if easing_curve_editor.prepare_point_list_edit(point, property_name):
+	if _prepare_native_point_edit(point, property_name):
 		return
 	_cancel_pending_native_point_edit_finish()
 	if input.has_meta(DRAGGING_META):
@@ -1608,14 +1730,14 @@ func _queue_native_point_edit_finish(
 	point: Resource,
 	property_name: StringName,
 ) -> void:
-	if not is_instance_valid(easing_curve_editor) or not is_instance_valid(_native_curve):
+	if disposed or not is_instance_valid(_native_curve):
 		return
 	_native_point_edit_finish_request_id += 1
 	_finish_native_point_edit_deferred.call_deferred(
 		_native_point_edit_finish_request_id,
 		_native_editor_generation,
 		_native_curve.get_instance_id(),
-		easing_curve_editor.get_instance_id(),
+		easing_curve_editor.get_instance_id() if is_instance_valid(easing_curve_editor) else 0,
 		point.get_instance_id() if is_instance_valid(point) else 0,
 		property_name,
 	)
@@ -1639,8 +1761,7 @@ func _finish_native_point_edit_deferred(
 		or editor_generation != _native_editor_generation
 		or not is_instance_valid(_native_curve)
 		or _native_curve.get_instance_id() != curve_id
-		or not is_instance_valid(easing_curve_editor)
-		or easing_curve_editor.get_instance_id() != editor_id
+		or (editor_id != 0 and (not is_instance_valid(easing_curve_editor) or easing_curve_editor.get_instance_id() != editor_id))
 	):
 		return
 	var backend := BackendFactory.create(_native_curve)
@@ -1652,7 +1773,9 @@ func _finish_native_point_edit_deferred(
 		if candidate.get_instance_id() == point_id:
 			point = candidate
 			break
-	if point != null:
+	if not is_instance_valid(easing_curve_editor):
+		_native_list_editor().finish()
+	elif point != null:
 		easing_curve_editor.finish_point_list_edit(point, property_name)
 	else:
 		easing_curve_editor.finish_active_point_edit()
@@ -1669,10 +1792,9 @@ func _on_native_vector_value_changed(
 		disposed
 		or not is_instance_valid(point)
 		or not is_instance_valid(input)
-		or not is_instance_valid(easing_curve_editor)
 	):
 		return
-	var native_curve := easing_curve_editor.get_curve()
+	var native_curve := _native_curve
 	if native_curve == null:
 		return
 	var backend := BackendFactory.create(native_curve)
@@ -1681,7 +1803,7 @@ func _on_native_vector_value_changed(
 		return
 	var vector: Vector2 = point.get(property_name)
 	vector[axis] = value
-	easing_curve_editor.edit_point_property(
+	_edit_native_point_property(
 		current_index,
 		property_name,
 		vector,
@@ -1728,9 +1850,9 @@ func _add_native_handle_mode_property(
 	)
 	option.item_selected.connect(
 		func(mode: int):
-			if disposed or not is_instance_valid(point) or not is_instance_valid(easing_curve_editor):
+			if disposed or not is_instance_valid(point):
 				return
-			var native_curve := easing_curve_editor.get_curve()
+			var native_curve := _native_curve
 			if native_curve == null:
 				return
 			var backend := BackendFactory.create(native_curve)
@@ -1741,7 +1863,7 @@ func _add_native_handle_mode_property(
 					point,
 					&"handle_mode",
 				)
-				easing_curve_editor.edit_point_property(current_index, &"handle_mode", mode)
+				_edit_native_point_property(current_index, &"handle_mode", mode)
 	)
 	var changed_callback := func() -> void:
 		if is_instance_valid(option):
@@ -1766,8 +1888,8 @@ func _update_native_point_panel_selection(
 
 
 func _disconnect_native_selection_callback(callback: Callable) -> void:
-	if is_instance_valid(easing_curve_editor) and easing_curve_editor.point_selection_changed.is_connected(callback):
-		easing_curve_editor.point_selection_changed.disconnect(callback)
+	if native_selection_changed.is_connected(callback):
+		native_selection_changed.disconnect(callback)
 
 
 func _add_conversion_control(
@@ -1964,7 +2086,8 @@ func _on_x_input_value_changed(value: float, point: EasingCurvePoint, x_input: E
 	)
 	i = _get_current_point_index(point)
 	_update_point_reset_btn(reset_btn, i, edit_property_name) # show reset if different
-	easing_curve_editor.queue_redraw()
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.queue_redraw()
 
 
 func _on_y_input_value_changed(value: float, point: EasingCurvePoint, y_input: EditorSpinSlider, reset_btn: Button, property_name: String) -> void:
@@ -1984,7 +2107,8 @@ func _on_y_input_value_changed(value: float, point: EasingCurvePoint, y_input: E
 		point if edit_property_name == &"position" else null,
 	)
 	_update_point_reset_btn(reset_btn, i, edit_property_name) # show reset if different
-	easing_curve_editor.queue_redraw()
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.queue_redraw()
 
 
 func _get_point_input_edit_property(
@@ -2202,14 +2326,16 @@ func _reorder_position_edited_point(
 	)
 	if not defer_list_reorder:
 		_position_x_order_preview_point = null
-		easing_curve_editor.clear_position_x_order_preview()
+		if is_instance_valid(easing_curve_editor):
+			easing_curve_editor.clear_position_x_order_preview()
 	var point_index := point_order.find(point)
 	if point_index == -1:
 		return
 
 	if defer_list_reorder:
 		_position_x_order_preview_point = point
-		easing_curve_editor.set_position_x_order_preview(point)
+		if is_instance_valid(easing_curve_editor):
+			easing_curve_editor.set_position_x_order_preview(point)
 		return
 
 	_point_list_controller.assign_logical_selection(
@@ -2562,7 +2688,8 @@ func _create_force_linear_button(
 			)
 			force_linear_btn.modulate.a = 1.0
 			_apply_point_property_change(_get_current_point_index(point), force_property, toggled_on)
-			easing_curve_editor.queue_redraw()
+			if is_instance_valid(easing_curve_editor):
+				easing_curve_editor.queue_redraw()
 	)
 	return force_linear_btn
 
@@ -2707,12 +2834,20 @@ func _create_vector2_axis_row(
 func _on_add_point_btn_pressed() -> void:
 	if disposed:
 		return
-	if not is_instance_valid(easing_curve_editor):
-		return
-	if easing_curve_editor.get_backend_id() != &"legacy":
+	if curve == null and is_instance_valid(easing_curve_editor):
 		easing_curve_editor.add_point_from_list()
 		return
-	var point := easing_curve_editor.create_point_for_list() as EasingCurvePoint
+	var backend := BackendFactory.create(_point_list_curve_resource())
+	if backend == null:
+		return
+	var new_point: Resource = backend.create_point_for_list(CurveEditorSettings.get_default_new_point_handle_mode())
+	if curve == null:
+		_native_list_editor().mutate("Add Easing Curve Point", func() -> void:
+			if backend.add_point(new_point) >= 0:
+				_select_native_point(new_point)
+		)
+		return
+	var point := new_point as EasingCurvePoint
 	if point == null:
 		return
 	_point_list_controller.request_selection_refresh_preservation()
@@ -2787,10 +2922,14 @@ func _selected_point_index_for_resource(curve_resource: Resource) -> int:
 
 
 func _on_curve_editor_point_changed(_i: int, _new_point: EasingCurvePoint) -> void:
-	easing_curve_editor.queue_redraw()
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.queue_redraw()
 
 
 func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
+	if disposed:
+		return
+	_point_edit_finish_request_id += 1
 	_commit_position_x_order_preview()
 	_point_edit_transaction_controller.finish_point_edit(curve, point_order)
 
@@ -2803,16 +2942,18 @@ func _connect_point_input_drag_signals(input: EditorSpinSlider) -> void:
 
 
 func _on_point_input_grabbed(input: EditorSpinSlider) -> void:
+	_point_edit_finish_request_id += 1
 	input.set_meta(DRAGGING_META, true)
 
 
 func _on_point_input_ungrabbed(input: EditorSpinSlider) -> void:
 	if input.has_meta(DRAGGING_META):
 		input.remove_meta(DRAGGING_META)
-	_commit_point_edit.call_deferred()
+	_queue_point_edit_finish()
 
 
 func _on_point_input_focus_entered(input: EditorSpinSlider) -> void:
+	_point_edit_finish_request_id += 1
 	if input.has_meta(DRAGGING_META):
 		input.remove_meta(DRAGGING_META)
 		_commit_point_edit()
@@ -2823,17 +2964,28 @@ func _on_point_input_focus_exited(input: EditorSpinSlider) -> void:
 	if not input.has_meta(VALUE_EDITING_META):
 		return
 	input.remove_meta(VALUE_EDITING_META)
-	_commit_point_edit.call_deferred()
+	_queue_point_edit_finish()
+
+
+func _queue_point_edit_finish() -> void:
+	_point_edit_finish_request_id += 1
+	_finish_point_edit_deferred.call_deferred(_point_edit_finish_request_id)
+
+
+func _finish_point_edit_deferred(request_id: int) -> void:
+	if not disposed and request_id == _point_edit_finish_request_id:
+		_commit_point_edit()
 
 
 func _on_position_x_input_focus_entered(input: EditorSpinSlider) -> void:
+	_point_edit_finish_request_id += 1
 	input.set_meta(POSITION_X_EDITING_META, true)
 
 
 func _on_position_x_input_focus_exited(input: EditorSpinSlider) -> void:
 	if input.has_meta(POSITION_X_EDITING_META):
 		input.remove_meta(POSITION_X_EDITING_META)
-		_commit_point_edit.call_deferred()
+		_queue_point_edit_finish()
 
 
 func _on_linear_control_x_input_focus_entered(
@@ -3433,7 +3585,7 @@ func _move_point_relative(point: Resource, offset: int) -> void:
 	if curve != null:
 		_move_point(index, target)
 	else:
-		easing_curve_editor.move_point_from_list(index, target)
+		_move_native_point(index, target)
 
 
 func _on_point_list_swap(from_index: int, to_index: int, list: Control) -> void:
@@ -3453,4 +3605,4 @@ func _on_point_list_swap(from_index: int, to_index: int, list: Control) -> void:
 	if curve != null:
 		_move_point(source, target)
 	else:
-		easing_curve_editor.move_point_from_list(source, target)
+		_move_native_point(source, target)

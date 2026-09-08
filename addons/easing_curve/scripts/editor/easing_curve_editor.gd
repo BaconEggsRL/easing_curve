@@ -829,29 +829,7 @@ func add_point_from_list() -> Resource:
 
 
 func create_point_for_list() -> Resource:
-	if _backend == null:
-		return null
-	var points := _points()
-	var position := Vector2.ZERO
-	if points.is_empty():
-		position = Vector2.ZERO
-	elif not _has_endpoint_at(0.0):
-		position = Vector2(0.0, 0.0)
-	elif not _has_endpoint_at(1.0):
-		position = Vector2(1.0, 1.0)
-	else:
-		var largest_gap := -1.0
-		for index in range(points.size() - 1):
-			var left: Vector2 = points[index].get(&"position")
-			var right: Vector2 = points[index + 1].get(&"position")
-			var gap := right.x - left.x
-			if gap > largest_gap:
-				largest_gap = gap
-				position.x = (left.x + right.x) * 0.5
-		position.y = _backend.sample(position.x)
-	var point := _create_point_with_default_handle_mode(position)
-	return point
-
+	return _backend.create_point_for_list(get_default_new_point_handle_mode()) if _backend != null else null
 
 func _create_point_with_default_handle_mode(position: Vector2) -> Resource:
 	if _backend == null:

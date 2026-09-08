@@ -26,12 +26,19 @@ The [Godot Tween comparison](GODOT_TWEEN_BENCHMARK.md) runs the upstream
 Run `./test/runners/run_godot_tween_comparison.ps1` for three rendered trials per
 case, or add `-ValidateOnly` for deterministic workload checks. JSON, CSV and
 Markdown reports include a local Tween baseline and pinned upstream provenance.
-These six performance cases are separate from the 23-suite correctness manifest.
+These six performance cases are separate from the 24-suite correctness manifest.
 
 Run `./test/runners/run_godot_benchmark_web.ps1 -Serve` to view saved results in
 Godot's existing Hugo/Plotly benchmark interface, with Native, Legacy, Tween and
 combined graphs. Python 3 and Hugo are required; see the
 [web interface instructions](GODOT_TWEEN_BENCHMARK.md#view-results-with-godots-existing-web-interface).
+
+## Inspector ownership
+
+The [ownership follow-up](INSPECTOR_OWNERSHIP.md) records the graph/Points lifetime
+fixes, the indexed regression suite, rendered input coverage and baseline
+diagnostic comparison. Run `./test/runners/run_all_tests.ps1 --run` for all 24
+correctness suites.
 
 ## v1.2.0 parity coverage audit
 
