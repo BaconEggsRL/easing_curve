@@ -1,6 +1,12 @@
 @tool
 extends "res://addons/easing_curve/scripts/editor/backend/curve_editor_backend.gd"
 
+const PointState := preload("res://addons/easing_curve/scripts/runtime/easing_curve_point_state.gd")
+const PointTransition := preload("res://addons/easing_curve/scripts/runtime/easing_curve_point_state_transition.gd")
+
+var _control_drag_point: WeakRef
+var _control_drag_scale := Vector2.ONE
+
 const IMPLEMENTED_TRANSITION_IDS := [
 	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
 	100, 101, 102, 103, 104, 105, 106, 107, 108,
@@ -197,6 +203,14 @@ func is_point_property_locked(index: int, property_name: StringName) -> bool:
 	return point != null and bool(point.call(&"is_lock_active", property_name))
 
 
+func prepare_point_control_drag(index: int, display_scale: Vector2) -> void:
+	var point := get_point(index)
+	if point == null or not display_scale.is_finite() or is_zero_approx(display_scale.x) or is_zero_approx(display_scale.y):
+		return
+	_control_drag_point = weakref(point)
+	_control_drag_scale = display_scale.abs()
+
+
 func apply_point_property(
 	index: int,
 	property_name: StringName,
@@ -234,7 +248,30 @@ func apply_point_property(
 			_apply_control_state(point, CONTROL_SIDE_RIGHT, CONTROL_STATE_FREE)
 		_:
 			return false
-	return bool(current_point.call(&"apply_state", point.call(&"capture_state")))
+	var edited_state: Dictionary = point.call(&"capture_state")
+	if (
+		property_name in [&"left_control_point", &"right_control_point"]
+		and value is Vector2 and value.is_finite()
+		and int(current_point.get(&"handle_mode")) in [EasingCurvePoint.HandleMode.BALANCED, EasingCurvePoint.HandleMode.MIRRORED]
+		and _control_drag_point != null and _control_drag_point.get_ref() == current_point
+	):
+		_apply_display_space_handles(current_point, property_name, edited_state)
+	return bool(current_point.call(&"apply_state", edited_state))
+
+
+func _apply_display_space_handles(point: Resource, property_name: StringName, edited_state: Dictionary) -> void:
+	var state := PointState.new()
+	state.position = point.get(&"position")
+	state.left_control_point = point.get(&"left_control_point")
+	state.right_control_point = point.get(&"right_control_point")
+	state.handle_mode = int(point.get(&"handle_mode"))
+	state.handle_display_scale = _control_drag_scale
+	var side := CONTROL_SIDE_LEFT if property_name == &"left_control_point" else CONTROL_SIDE_RIGHT
+	# Reuse Legacy's screen-space length/direction rules, then publish one Native
+	# state update. The resolved moved handle retains Native setter constraints.
+	var pair := PointTransition.get_control_point_pair(state, side, edited_state[property_name])
+	edited_state[&"left_control_point"] = pair.left
+	edited_state[&"right_control_point"] = pair.right
 
 
 func capture_snapshot() -> Variant:

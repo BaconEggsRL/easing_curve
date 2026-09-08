@@ -20,6 +20,25 @@ works when only the Points surface survives. The fix is in Inspector callbacks;
 Native resource setters, serialization and binaries are unchanged. Field range
 refreshes block signals to avoid turning UI synchronization into another edit.
 
+Native Balanced/Mirrored graph drags now use the same handle-pair calculation as
+Legacy, with the graph's current X/Y display scale. Balanced preserves the
+opposite handle's screen-space radius; Mirrored preserves equal opposing screen
+vectors. The Native backend retains the prepared scale per presentation and
+publishes the resulting handle pair in one existing Native state update. This
+does not add editor-scale data to resources or change Native runtime setters.
+Rotation coverage compares both backends through multiple angles, wide/tall
+graphs and unequal X/Y zoom. Against the previous Native backend, 40 assertions
+fail; the corrected backend passes all 603 focused checks (615 rendered).
+
+Native Position inputs now constrain both X and Y to `[0, 1]`, including Linear
+control aliases. The central Native Inspector edit path also clamps Position so
+non-widget edits cannot bypass the bounds. Free handle coordinates remain
+unrestricted by these point limits. Ownership/list coverage passes 567 checks,
+including limits, direct callback edits and Undo. Evidence is recorded in
+`test/_temp/balanced-parity-before.txt`, `test/_temp/balanced-parity.txt`,
+`test/_temp/position-limits.txt`, `test/_temp/balanced-rendered.txt`, and
+`test/_temp/balanced-full-correctness-final.txt`.
+
 Coordinate sources: `position`, `left_control_point`, `right_control_point`, and
 the pending point's `position` are absolute curve-space values. Pending-add press
 and motion already convert input into that space. Native applies Reverse/Invert
@@ -39,12 +58,12 @@ Validation on Godot `4.7.1.stable.official.a13da4feb`, 2026-09-08:
 | Check | Result |
 | --- | --- |
 | Fresh pre-edit baseline | All 24 suites passed |
-| Focused drag-coordinate suite, headless | 347 checks passed |
+| Focused drag-coordinate suite, headless | 603 checks passed |
 | Gesture characterization | 214 checks passed |
 | Position-X drag | 72 checks passed |
 | Editor vertical slice | 1,053 checks passed |
-| Inspector ownership | 550 checks passed |
-| Rendered drag-coordinate suite | 359 checks passed |
+| Inspector ownership | 567 checks passed |
+| Rendered drag-coordinate suite | 615 checks passed |
 | Final correctness runner | All 25 suites passed |
 
 Rendered execution uses actual graph drawing in an Editor host, synthetic viewport

@@ -444,6 +444,8 @@ func _native_list_editor() -> NativePointListEditController:
 func _edit_native_point_property(index: int, property_name: StringName, value: Variant, changing := false) -> void:
 	if disposed:
 		return
+	if property_name == &"position" and value is Vector2:
+		value = value.clamp(Vector2.ZERO, Vector2.ONE)
 	if is_instance_valid(easing_curve_editor):
 		easing_curve_editor.edit_point_property(index, property_name, value, changing)
 	else:
@@ -1630,8 +1632,8 @@ func _add_native_vector_property(
 	for axis in range(2):
 		var input := EditorSpinSlider.new()
 		input.label = "X" if axis == 0 else "Y"
-		input.min_value = 0.0 if property_name == &"position" and axis == 0 else -1024.0
-		input.max_value = 1.0 if property_name == &"position" and axis == 0 else 1024.0
+		input.min_value = 0.0 if property_name == &"position" else -1024.0
+		input.max_value = 1.0 if property_name == &"position" else 1024.0
 		input.step = SLIDER_INPUT_STEP
 		input.hide_slider = true
 		input.flat = true
@@ -1812,8 +1814,6 @@ func _on_native_vector_value_changed(
 	var edit_property := _get_native_point_input_edit_property(point, property_name)
 	var vector: Vector2 = point.get(edit_property)
 	vector[axis] = value
-	if edit_property == &"position" and edit_property != property_name:
-		vector.x = clampf(vector.x, 0.0, 1.0)
 	_edit_native_point_property(
 		current_index,
 		edit_property,
@@ -1853,9 +1853,8 @@ func _refresh_native_vector_inputs(
 			var signals_blocked := inputs[axis].is_blocking_signals()
 			inputs[axis].set_block_signals(true)
 			inputs[axis].read_only = not _is_native_point_input_editable(point, property_name)
-			if axis == 0:
-				inputs[axis].min_value = 0.0 if edit_property == &"position" else -1024.0
-				inputs[axis].max_value = 1.0 if edit_property == &"position" else 1024.0
+			inputs[axis].min_value = 0.0 if edit_property == &"position" else -1024.0
+			inputs[axis].max_value = 1.0 if edit_property == &"position" else 1024.0
 			inputs[axis].set_value_no_signal(value[axis])
 			inputs[axis].set_block_signals(signals_blocked)
 

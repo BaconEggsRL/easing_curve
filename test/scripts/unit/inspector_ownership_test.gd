@@ -61,6 +61,7 @@ func _run() -> void:
 		await _test_point_list_coordinates(native)
 		await _test_clipboard(native)
 	await _test_original_reproduction()
+	await _test_native_point_position_limits()
 	if DisplayServer.get_name() != "headless":
 		await _test_rendered_inspectors()
 	_host.free()
@@ -245,6 +246,43 @@ func _test_native_linear_list_without_graph() -> void:
 	_close(p)
 	history.clear_history()
 	await process_frame
+
+
+func _test_native_point_position_limits() -> void:
+	for linear: bool in [false, true]:
+		var target := _curve(true)
+		var point: Resource = Factory.create(target).get_point(1)
+		if linear:
+			point.set(&"handle_mode", EasingCurvePoint.HandleMode.LINEAR)
+		var p := _presentation(target)
+		await process_frame
+		var property_name := "left_control_point" if linear else "position"
+		var input := _input(p, point, 1, property_name)
+		_expect(input.min_value == 0.0 and input.max_value == 1.0, "Native point Y input range differs from X")
+		var history := _history(target)
+		history.clear_history()
+		input.grabbed.emit()
+		input.value = 2.5
+		_expect((point.get(&"position") as Vector2).y == 1.0, "Native point Y drag exceeded 1")
+		input.value = -0.5
+		_expect((point.get(&"position") as Vector2).y == 0.0, "Native point Y drag fell below 0")
+		input.ungrabbed.emit()
+		await process_frame
+		_expect(history.get_history_count() == 1, "Clamped Y drag changed transaction count")
+		history.undo()
+		_expect(is_equal_approx((point.get(&"position") as Vector2).y, 0.4), "Clamped Y Undo failed")
+		# Callback guard also clamps values arriving outside the widget's Range.
+		p.context._on_native_vector_value_changed(4.0, point, property_name, 1, input)
+		_expect((point.get(&"position") as Vector2).y == 1.0, "Native callback bypassed Y limit")
+		p.context._edit_native_point_property(Factory.create(target).find_point(point), &"position", Vector2(0.35, -2.0))
+		_expect((point.get(&"position") as Vector2).y == 0.0, "Native direct Inspector edit bypassed Y limit")
+		if not linear:
+			var handle_input := _input(p, point, 1, "left_control_point")
+			handle_input.value = 1.5
+			_expect((point.get(&"left_control_point") as Vector2).y == 1.5, "Position clamp restricted a Free handle")
+		_close(p)
+		history.clear_history()
+		await process_frame
 
 
 func _collect_inputs(node: Node, result: Array[EditorSpinSlider]) -> void:

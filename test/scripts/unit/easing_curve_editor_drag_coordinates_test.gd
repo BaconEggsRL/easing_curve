@@ -17,6 +17,7 @@ func _run() -> void:
 		_test_lifecycle(native)
 		_test_constraints(native)
 	_test_format_and_placement()
+	_test_display_space_handle_parity()
 	await _test_rendered()
 	_finish("drag coordinates")
 
@@ -214,6 +215,42 @@ func _test_format_and_placement() -> void:
 			_expect(position.x + text_size.x <= editor.size.x - 4 * scale and position.y + text_size.y <= editor.size.y - 4 * scale, "Label escaped bottom/right bounds")
 	_expect(not editor._get_drag_coordinate_label_position(Vector2.ZERO, Vector2(900, 900)).is_finite(), "Oversized label was not omitted")
 	_dispose(editor)
+
+
+func _test_display_space_handle_parity() -> void:
+	for mode: int in [EasingCurvePoint.HandleMode.BALANCED, EasingCurvePoint.HandleMode.MIRRORED]:
+		for property_name: StringName in [&"left_control_point", &"right_control_point"]:
+			for graph_size: Vector2 in [Vector2(900, 320), Vector2(480, 520)]:
+				var legacy_trace: Array[Vector2] = []
+				for native: bool in [false, true]:
+					var editor := _fixture(native)
+					editor.size = graph_size
+					editor._zoom_x = 1.3
+					editor._zoom_y = 0.8
+					editor.update_view_transform()
+					var point := editor._point(1)
+					point.set(&"handle_mode", mode)
+					var opposite := &"right_control_point" if property_name == &"left_control_point" else &"left_control_point"
+					var center := editor.get_view_pos(point.get(&"position"))
+					var opposite_length := center.distance_to(editor.get_view_pos(point.get(opposite)))
+					_press(editor, _resolved(editor, property_name))
+					for angle: float in [0.2, 0.6, 1.0, 1.4, 2.0]:
+						var target := editor.get_world_pos(center + Vector2.from_angle(angle) * 55.0)
+						_motion(editor, target)
+						var moved := editor.get_view_pos(point.get(property_name)) - center
+						var other := editor.get_view_pos(point.get(opposite)) - center
+						_expect(absf(moved.normalized().cross(other.normalized())) < 0.0001 and moved.dot(other) < 0, "Handles lost opposite screen-space alignment")
+						var expected_length := opposite_length if mode == EasingCurvePoint.HandleMode.BALANCED else moved.length()
+						_expect(absf(other.length() - expected_length) < 0.01, "Rotation changed opposite screen-space radius")
+						for property: StringName in [&"left_control_point", &"right_control_point"]:
+							var result: Vector2 = point.get(property)
+							if native:
+								_expect(result.distance_to(legacy_trace.pop_front()) < 0.0001, "Native display-space rotation differs from Legacy")
+							else:
+								legacy_trace.append(result)
+					editor._handle_left_released()
+					_expect((editor.editor_undo_redo as UndoRedo).get_history_count() == 1, "Display-space drag changed Undo transaction count")
+					_dispose(editor)
 
 
 func _test_rendered() -> void:

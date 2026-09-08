@@ -24,6 +24,12 @@ For both Native and Legacy Custom graphs:
   Check X crossing/reorder, Y edits, typed edits, control locks, and one Undo action
   per gesture. Native position locks also disable the aliased control inputs.
   Repeat with the graph removed and Points still alive.
+- Rotate Balanced/Mirrored handles in wide and tall graphs and after zooming:
+  Native should match Legacy. Balanced retains the opposite handle's visible
+  radius; Mirrored keeps equal, opposite screen vectors.
+- Enter or drag Native Position Y below 0 and above 1, including through Linear
+  control aliases. Values stop at the bounds and Undo restores the original
+  point. Confirm Free handle Y can still exceed 1 or fall below 0.
 
 2026-09-08 automated rendered smoke: both backends passed viewport press and
 outside-graph release checks. Captures at 1.0/1.5 scale with light/dark theme
