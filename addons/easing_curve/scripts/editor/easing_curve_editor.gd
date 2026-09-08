@@ -40,6 +40,7 @@ signal point_move_up_requested(index: int)
 signal point_move_down_requested(index: int)
 signal point_swap_requested(point: Resource, offset: int)
 signal point_edit_finished(point_order: Array[EasingCurvePoint])
+signal point_edit_cancelled
 signal point_selection_changed(point: Resource)
 signal default_new_point_handle_mode_changed(handle_mode: int)
 signal slider_changed
@@ -118,6 +119,7 @@ var _axis_drag_reference_active := false
 var _axis_drag_origin_view := Vector2.ZERO
 var _axis_drag_last_cursor := Vector2.ZERO
 var _axis_drag_origin_world := Vector2.ZERO
+var _drag_existing_point := false
 
 var grabbing: GrabMode = GrabMode.NONE
 var initial_grab_pos: Vector2
@@ -345,6 +347,7 @@ func _handle_pending_add_motion(event: InputEventMouseMotion) -> void:
 
 
 func _begin_axis_drag(event: InputEventMouseButton) -> void:
+	_drag_existing_point = true
 	end_point_list_coordinate_drag()
 	_drag_coordinates_suppressed = false
 	_clear_axis_drag()
@@ -574,12 +577,17 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 		dragging_point = added_index
 		dragging_control = ControlIndex.NONE
 		_begin_axis_drag(event)
+		_drag_existing_point = false
 	queue_redraw()
 
 
 func _handle_right_pressed(event: InputEventMouseButton) -> void:
 	if pending_add_point != null:
 		_cancel_pending_add()
+		accept_event()
+		return
+	if dragging_point != -1 and dragging_control == ControlIndex.NONE and _drag_existing_point:
+		_cancel_point_drag()
 		accept_event()
 		return
 	if not _supports_point_topology():
@@ -596,7 +604,27 @@ func _handle_right_pressed(event: InputEventMouseButton) -> void:
 	queue_redraw()
 
 
+func _cancel_point_drag() -> void:
+	var point := _point(dragging_point)
+	dragging_point = -1
+	dragging_control = ControlIndex.NONE
+	position_x_order_preview_point = null
+	_drag_coordinates_suppressed = true
+	_clear_axis_drag()
+	_set_right_delete_dragging(false)
+	_drag_existing_point = false
+	if _curve != null and point_edit_cancelled.has_connections():
+		point_edit_cancelled.emit()
+	elif _backend_point_edit_active:
+		# Restore the transaction's own snapshot, then finish with no net change.
+		_backend.apply_snapshot(_backend_point_edit_before)
+		_finish_backend_point_edit()
+	selected_index = _backend.find_point(point)
+	queue_redraw()
+
+
 func _handle_left_released() -> void:
+	_drag_existing_point = false
 	_drag_coordinates_suppressed = true
 	if pending_add_point != null:
 		var point := pending_add_point

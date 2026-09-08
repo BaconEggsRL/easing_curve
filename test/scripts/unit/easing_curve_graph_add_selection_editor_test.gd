@@ -171,11 +171,68 @@ func _test_graph_gesture_selection(native: bool, pending_add := true) -> void:
 			_expect_graph_add_selection(context, editor, actual, native, "rebuilt Legacy context")
 			await process_frame
 			_expect_graph_add_selection(context, editor, actual, native, "rebuilt Legacy context refresh")
+	_test_right_click_drag_cancel(context, native, manager)
 	list.free()
 	graph.free()
 	manager.clear_history()
 	host.free()
 	await process_frame
+
+
+func _test_right_click_drag_cancel(context: InspectorCurveContext, native: bool, manager: EditorUndoRedoManager) -> void:
+	var editor := context.easing_curve_editor
+	var resource := editor.get_curve()
+	for delta: Vector2 in [Vector2.ZERO, Vector2(45, -25), Vector2(500, -10)]:
+		manager.clear_history()
+		editor.size = Vector2(600, 350)
+		editor.update_view_transform()
+		var point := editor._point(1)
+		var before: Dictionary = resource.call(&"get_editor_state_snapshot")
+		var press := InputEventMouseButton.new()
+		press.button_index = MOUSE_BUTTON_LEFT
+		press.pressed = true
+		press.position = editor.get_view_pos(editor._backend.curve_to_display_position(point.get(&"position")))
+		editor._gui_input(press)
+		if delta != Vector2.ZERO:
+			var motion := InputEventMouseMotion.new()
+			motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+			motion.position = press.position + delta
+			motion.shift_pressed = delta.x > 100
+			editor._gui_input(motion)
+			_expect(resource.call(&"get_editor_state_snapshot") != before, "Cancel fixture did not move point")
+		var cancel := InputEventMouseButton.new()
+		cancel.button_index = MOUSE_BUTTON_RIGHT
+		cancel.pressed = true
+		cancel.position = press.position
+		editor._gui_input(cancel)
+		_expect(resource.call(&"get_editor_state_snapshot") == before, "Right click did not restore pre-drag state")
+		_expect_graph_add_selection(context, editor, point, native, "cancelled drag")
+		_expect(editor.dragging_point == -1 and not editor.is_right_delete_dragging, "Right click left drag/delete gesture active")
+		_expect(not editor._axis_drag_reference_active and not editor._backend_point_edit_active, "Cancel retained axis/backend edit state")
+		if not native:
+			_expect(not context._point_edit_transaction_controller.is_point_edit_active(), "Cancel retained Legacy edit transaction")
+		var history := manager.get_history_undo_redo(manager.get_object_history_id(resource))
+		_expect(not history.has_undo(), "Cancelled drag added Undo history")
+		var trailing := InputEventMouseMotion.new()
+		trailing.position = press.position + Vector2(80, 40)
+		trailing.button_mask = MOUSE_BUTTON_MASK_LEFT | MOUSE_BUTTON_MASK_RIGHT
+		editor._gui_input(trailing)
+		cancel.pressed = false
+		editor._gui_input(cancel)
+		press.pressed = false
+		editor._gui_input(press)
+		_expect(resource.call(&"get_editor_state_snapshot") == before and not history.has_undo(), "Trailing input recommitted cancelled drag")
+		press.pressed = true
+		editor._gui_input(press)
+		var next_motion := InputEventMouseMotion.new()
+		next_motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+		next_motion.position = press.position + Vector2(20, 15)
+		editor._gui_input(next_motion)
+		press.pressed = false
+		editor._gui_input(press)
+		_expect(history.has_undo(), "Normal drag after cancellation did not commit")
+		history.undo()
+		_expect(not history.has_undo() and resource.call(&"get_editor_state_snapshot") == before, "Normal drag after cancel did not produce exactly one reversible action")
 
 
 func _test_legacy_drag_selection_survives_context_rebuild() -> void:

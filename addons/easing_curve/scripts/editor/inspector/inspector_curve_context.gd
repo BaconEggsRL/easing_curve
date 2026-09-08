@@ -1290,6 +1290,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 			)
 		)
 		easing_curve_editor.point_edit_finished.connect(_commit_point_edit)
+		easing_curve_editor.point_edit_cancelled.connect(_cancel_point_edit)
 
 		# Store reference to curve resource
 		curve = object
@@ -3050,6 +3051,13 @@ func _selected_point_index_for_resource(curve_resource: Resource) -> int:
 func _on_curve_editor_point_changed(_i: int, _new_point: EasingCurvePoint) -> void:
 	if is_instance_valid(easing_curve_editor):
 		easing_curve_editor.queue_redraw()
+
+
+func _cancel_point_edit() -> void:
+	if disposed:
+		return
+	_point_edit_finish_request_id += 1
+	_point_edit_transaction_controller.cancel_point_edit(curve)
 
 
 func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:

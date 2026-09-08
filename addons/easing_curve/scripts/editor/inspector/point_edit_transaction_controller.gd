@@ -173,6 +173,15 @@ func apply_point_property_change(
 	)
 
 
+func cancel_point_edit(curve: EasingCurve) -> void:
+	if curve == null or not is_point_edit_active():
+		return
+	var before := _point_edit_before_state
+	var resource_ids := _point_edit_point_resource_ids_before
+	reset_point_edit()
+	curve._set_editor_state_snapshot_with_point_resource_order(before, resource_ids)
+
+
 func finish_point_edit(
 	curve: EasingCurve,
 	point_order: Array[EasingCurvePoint] = [],
