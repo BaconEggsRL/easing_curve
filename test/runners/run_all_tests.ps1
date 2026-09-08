@@ -145,6 +145,7 @@ $suites = @(
 	@{ Name = "easing_curve_points_list_add_editor_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_graph_add_selection_editor_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_points_list_reorder_editor_test.gd"; Editor = $true },
+	@{ Name = "native_points_transform_editor_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_navigation_tooltips_editor_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_point_state_characterization_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_selection_refresh_characterization_test.gd"; Editor = $true },

@@ -188,9 +188,12 @@ func _test_swap_equivalence(native: bool, count: int, reverse: bool, index: int,
 	var before_order := editor._points().duplicate()
 	var history := _manager.get_history_undo_redo(_manager.get_object_history_id(curve))
 	_manager.clear_history()
-	var list_buttons := _buttons(fixture.list, "Swap Previous Point" if offset < 0 else "Swap Next Point")
+	# Toolbar swaps use stored order; list arrows follow the displayed row order.
+	var list_offset := -offset if native and reverse else offset
+	var list_index := count - 1 - index if native and reverse else index
+	var list_buttons := _buttons(fixture.list, "Swap Previous Point" if list_offset < 0 else "Swap Next Point")
 	_expect(list_buttons.size() == count, "List button count differs from point count")
-	list_buttons[index].pressed.emit()
+	list_buttons[list_index].pressed.emit()
 	var after: Dictionary = curve.call(&"get_editor_state_snapshot")
 	var after_order := editor._points().duplicate()
 	var after_index := editor.selected_index

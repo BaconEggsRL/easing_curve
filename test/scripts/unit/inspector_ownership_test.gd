@@ -228,7 +228,7 @@ func _test_native_linear_list_without_graph() -> void:
 	var input := _input(p, point, 1, "right_control_point")
 	input.grabbed.emit()
 	input.value = 0.23
-	_expect(p.graph._get_drag_coordinate_position().is_equal_approx(Vector2(0.65, 0.77)), "Transformed list coordinates applied Native transform incorrectly")
+	_expect(p.graph._get_drag_coordinate_position().is_equal_approx(Vector2(0.65, 0.23)), "Transformed list coordinates applied Native transform incorrectly")
 	input.ungrabbed.emit()
 	await process_frame
 	p.graph_root.free()
@@ -238,11 +238,11 @@ func _test_native_linear_list_without_graph() -> void:
 	input.value = 0.67
 	input.value_focus_exited.emit()
 	await process_frame
-	_expect(is_equal_approx((point.get(&"position") as Vector2).y, 0.67), "Detached Linear list field did not move point")
+	_expect(is_equal_approx((point.get(&"position") as Vector2).y, 0.33), "Detached Linear list field did not move point")
 	_expect(point.get(&"right_control_point") == point.get(&"position"), "Detached Linear handle diverged")
 	_expect(history.get_history_count() == 1, "Detached Linear edit lost transaction completion")
 	history.undo()
-	_expect(is_equal_approx((point.get(&"position") as Vector2).y, 0.23), "Detached Linear Undo failed")
+	_expect(is_equal_approx((point.get(&"position") as Vector2).y, 0.77), "Detached Linear Undo failed")
 	_close(p)
 	history.clear_history()
 	await process_frame

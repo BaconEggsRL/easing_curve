@@ -8,6 +8,7 @@ extends RefCounted
 const MENU_COPY_VALUE := 0
 const MENU_PASTE_VALUE := 1
 const MENU_COPY_PATH := 2
+const BackendFactory := preload("res://addons/easing_curve/scripts/editor/backend/curve_editor_backend_factory.gd")
 
 
 static func property_path(
@@ -65,7 +66,11 @@ func copy_point_value(
 ) -> void:
 	if not _can_access_point_value(curve_resource, point, property_name):
 		return
-	DisplayServer.clipboard_set(var_to_str(point.get(property_name)))
+	var value: Variant = point.get(property_name)
+	var backend := BackendFactory.create(curve_resource)
+	if value is Vector2 and backend != null and backend.get_backend_id() == &"native":
+		value = backend.curve_to_display_position(value)
+	DisplayServer.clipboard_set(var_to_str(value))
 
 
 func paste_point_value(

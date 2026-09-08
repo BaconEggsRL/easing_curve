@@ -7,6 +7,7 @@ extends RefCounted
 ## Controllers and UI callbacks are local; history restores selection through a weak reference.
 
 signal native_selection_changed(point: Resource)
+signal native_point_display_changed()
 
 const MODE_ICONS = preload("res://addons/easing_curve/scripts/editor/inspector/curve_mode_icons.gd")
 
@@ -92,6 +93,7 @@ var _native_curve: Resource
 var _native_points_content: VBoxContainer
 var _native_points_refresh_queued := false
 var _native_point_identity_signature := PackedInt64Array()
+var _native_point_transform_flags := Vector2i.ZERO
 var _native_editor_generation := 0
 var _native_point_edit_finish_request_id := 0
 var _point_edit_finish_request_id := 0
@@ -473,7 +475,8 @@ func _on_graph_point_swap_requested(point: Resource, offset: int) -> void:
 	if curve != null:
 		_point_list_controller._request_relative_move(point as EasingCurvePoint, curve, offset, _move_point)
 	else:
-		_move_point_relative(point, offset)
+		var index: int = backend.find_point(point)
+		_move_native_point(index, wrapi(index + offset, 0, backend.get_point_count()))
 
 
 func _native_list_editor() -> NativePointListEditController:
@@ -665,6 +668,11 @@ func _apply_editor_point_property_change(
 	if backend.get_backend_id() == &"legacy":
 		_apply_point_property_change(point_index, property_name, value)
 		return
+	if value is Vector2:
+		if not _is_native_point_input_editable(point, property_name):
+			return
+		property_name = _get_native_point_input_edit_property(point, property_name)
+		value = backend.display_to_curve_position(value)
 	_point_list_controller.request_selection_refresh_preservation()
 	_select_native_point(point)
 	_edit_native_point_property(point_index, property_name, value)
@@ -1543,13 +1551,17 @@ func _on_native_points_changed(object: Resource) -> void:
 		return
 	var backend := BackendFactory.create(object)
 	var identity_signature := (
-		_get_native_point_identity_signature(backend.get_points())
+		_get_native_point_identity_signature(backend.get_display_points())
 		if backend != null
 		else PackedInt64Array()
 	)
 	if identity_signature != _native_point_identity_signature and not _native_points_refresh_queued:
 		_native_points_refresh_queued = true
 		_refresh_native_point_list.call_deferred(object)
+	var transform_flags := Vector2i(int(object.get(&"reverse")), int(object.get(&"invert")))
+	if transform_flags != _native_point_transform_flags:
+		_native_point_transform_flags = transform_flags
+		native_point_display_changed.emit()
 
 
 func _disconnect_native_curve_changed(object: Resource, callback: Callable) -> void:
@@ -1607,12 +1619,13 @@ func _build_native_point_list(object: Resource) -> void:
 	var backend := BackendFactory.create(object)
 	if backend == null:
 		return
-	var points: Array[Resource] = backend.get_points()
+	var points: Array[Resource] = backend.get_display_points()
 	for index in range(points.size()):
 		var panel := _create_native_point_panel(points[index], index, points.size())
 		_native_points_content.add_child(panel)
 		_native_points_content.call(&"enable_drop_forwarding", panel)
 	_native_point_identity_signature = _get_native_point_identity_signature(points)
+	_native_point_transform_flags = Vector2i(int(object.get(&"reverse")), int(object.get(&"invert")))
 
 
 func _create_transition_generate_action(object: Resource) -> EditorProperty:
@@ -1730,6 +1743,15 @@ func _add_native_vector_property(
 	property_name: StringName,
 	label_text: String,
 ) -> void:
+	# Bind the displayed handle to its stored side; all edit/selection paths use that property.
+	var backend := BackendFactory.create(_native_curve)
+	if property_name in [&"left_control_point", &"right_control_point"]:
+		var side: int = backend.CONTROL_SIDE_LEFT if property_name == &"left_control_point" else backend.CONTROL_SIDE_RIGHT
+		property_name = (
+			&"left_control_point"
+			if backend.display_control_side_to_curve(side) == backend.CONTROL_SIDE_LEFT
+			else &"right_control_point"
+		)
 	var property_header := _create_native_point_property_header(
 		point,
 		property_name,
@@ -1790,6 +1812,7 @@ func _add_native_vector_property(
 	var changed_callback := func():
 		_refresh_native_vector_inputs(point, property_name, inputs)
 	point.changed.connect(changed_callback)
+	native_point_display_changed.connect(changed_callback)
 	values.tree_exiting.connect(_disconnect_native_point_callback.bind(point, changed_callback))
 	_refresh_native_vector_inputs(point, property_name, inputs)
 
@@ -1921,15 +1944,15 @@ func _on_native_vector_value_changed(
 	if current_index < 0:
 		return
 	if not _is_native_point_input_editable(point, property_name):
-		input.set_value_no_signal((point.get(_get_native_point_input_edit_property(point, property_name)) as Vector2)[axis])
+		input.set_value_no_signal(_get_native_point_display_value(point, property_name)[axis])
 		return
 	var edit_property := _get_native_point_input_edit_property(point, property_name)
-	var vector: Vector2 = point.get(edit_property)
+	var vector := _get_native_point_display_value(point, property_name)
 	vector[axis] = value
 	_edit_native_point_property(
 		current_index,
 		edit_property,
-		vector,
+		backend.display_to_curve_position(vector),
 		input.has_meta(DRAGGING_META) or input.has_meta(VALUE_EDITING_META),
 	)
 
@@ -1959,7 +1982,7 @@ func _refresh_native_vector_inputs(
 	if not is_instance_valid(point):
 		return
 	var edit_property := _get_native_point_input_edit_property(point, property_name)
-	var value: Vector2 = point.get(edit_property)
+	var value := _get_native_point_display_value(point, property_name)
 	for axis in range(mini(2, inputs.size())):
 		if is_instance_valid(inputs[axis]):
 			var signals_blocked := inputs[axis].is_blocking_signals()
@@ -1969,6 +1992,12 @@ func _refresh_native_vector_inputs(
 			inputs[axis].max_value = 1.0 if edit_property == &"position" else 1024.0
 			inputs[axis].set_value_no_signal(value[axis])
 			inputs[axis].set_block_signals(signals_blocked)
+
+
+func _get_native_point_display_value(point: Resource, property_name: StringName) -> Vector2:
+	var backend := BackendFactory.create(_native_curve)
+	var edit_property := _get_native_point_input_edit_property(point, property_name)
+	return backend.curve_to_display_position(point.get(edit_property) as Vector2)
 
 
 func _add_native_handle_mode_property(
@@ -2023,6 +2052,8 @@ func _add_native_handle_mode_property(
 func _disconnect_native_point_callback(point: Resource, callback: Callable) -> void:
 	if is_instance_valid(point) and point.changed.is_connected(callback):
 		point.changed.disconnect(callback)
+	if native_point_display_changed.is_connected(callback):
+		native_point_display_changed.disconnect(callback)
 
 
 func _update_native_point_panel_selection(
@@ -3761,6 +3792,9 @@ func _move_point_relative(point: Resource, offset: int) -> void:
 	if curve != null:
 		_move_point(index, target)
 	else:
+		var display_points: Array[Resource] = backend.get_display_points()
+		var display_index := display_points.find(point)
+		target = backend.find_point(display_points[wrapi(display_index + offset, 0, display_points.size())])
 		_move_native_point(index, target)
 
 
