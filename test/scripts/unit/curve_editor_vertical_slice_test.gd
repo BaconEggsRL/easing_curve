@@ -34,6 +34,7 @@ func _run() -> void:
 	await _test_native_transition_history_lifecycle()
 	await _test_mixed_resource_autofit_isolation()
 	await _test_mixed_resource_toolbar_isolation()
+	await _test_mixed_resource_point_list_isolation()
 	_test_transition_control_parity()
 	await _test_default_new_point_handle_modes()
 	await _test_shared_wheel_zoom_routing()
@@ -140,6 +141,71 @@ func _test_mixed_resource_toolbar_isolation() -> void:
 			content.free()
 		fixture.free()
 	plugin.free()
+
+
+func _test_mixed_resource_point_list_isolation() -> void:
+	var inspector := INSPECTOR_PLUGIN.new()
+	var native_curve := _make_handle_mode_curve(&"native")
+	var point := ClassDB.instantiate(&"NativeEasingCurvePoint") as Resource
+	point.set(&"position", Vector2(0.5, 0.5))
+	native_curve.call(&"insert_point", 1, point)
+	var native_content := inspector.handle_easing_curve_editor(native_curve)
+	root.add_child(native_content)
+	var editor := inspector.easing_curve_editor
+	var history := UndoRedo.new()
+	editor.editor_undo_redo = history
+	var points_section := inspector._create_native_points_inspector(native_curve)
+	root.add_child(points_section)
+	var publications := [0]
+	editor.committed_change_publisher = func() -> void:
+		publications[0] += 1
+	var legacy_curve := EasingCurve.new()
+	inspector._parse_begin(legacy_curve)
+	var legacy_content := inspector.handle_easing_curve_editor(legacy_curve)
+	root.add_child(legacy_content)
+	var transition := legacy_content.get_child(0).get_child(4) as OptionButton
+	transition.item_selected.emit(transition.get_item_index(EasingCurve.TRANS.CUBIC))
+	legacy_content.free()
+	inspector._parse_begin(legacy_curve)
+	legacy_content = inspector.handle_easing_curve_editor(legacy_curve)
+	root.add_child(legacy_content)
+	await process_frame
+	var legacy_state := legacy_curve.get_editor_state_snapshot()
+	var position_header := _find_native_property_header(points_section, point, &"position")
+	var position_values := position_header.get_parent().get_child(position_header.get_index() + 1)
+	var position_x := position_values.get_child(0) as EditorSpinSlider
+	position_x.grabbed.emit()
+	position_x.value = 0.6
+	position_x.ungrabbed.emit()
+	await process_frame
+	await process_frame
+	_expect(is_equal_approx((point.get(&"position") as Vector2).x, 0.6), "Mixed inspector lost the Native point edit")
+	_expect(history.get_history_count() == 1, "Mixed inspector did not finish the Native point edit")
+	_expect(publications[0] == 1, "Mixed inspector did not publish the Native point edit exactly once")
+	if history.get_history_count() == 1:
+		history.undo()
+		_expect(is_equal_approx((point.get(&"position") as Vector2).x, 0.5), "Mixed inspector point Undo failed")
+		history.redo()
+		_expect(is_equal_approx((point.get(&"position") as Vector2).x, 0.6), "Mixed inspector point Redo failed")
+	var handle_header := _find_native_property_header(points_section, point, &"handle_mode")
+	var handle_option := handle_header.get_parent().get_child(handle_header.get_index() + 1) as OptionButton
+	handle_option.item_selected.emit(EasingCurvePoint.HandleMode.BALANCED)
+	_expect(int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.BALANCED, "Mixed inspector lost Native Handle Mode edit")
+	var count_before := int(native_curve.call(&"get_point_count"))
+	var add_button := _find_button(points_section, "Add Point")
+	add_button.pressed.emit()
+	await process_frame
+	await process_frame
+	_expect(int(native_curve.call(&"get_point_count")) == count_before + 1, "Mixed inspector Add Point targeted the wrong resource")
+	var position_rows := 0
+	for control: Node in points_section.find_children("*", "PanelContainer", true, false):
+		if control.get_meta(&"point_property_name", &"") == &"position":
+			position_rows += 1
+	_expect(position_rows == count_before + 1, "Mixed inspector did not refresh the Native point list")
+	_expect(legacy_curve.get_editor_state_snapshot() == legacy_state, "Native point editing changed the Legacy resource")
+	points_section.free()
+	native_content.free()
+	legacy_content.free()
 
 
 func _test_native_transition_history_lifecycle() -> void:

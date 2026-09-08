@@ -1219,6 +1219,19 @@ func _handle_native_curve_editor(
 	return root
 
 
+func _create_native_points_inspector(object: Resource) -> Control:
+	# Other expanded resources can rebuild while this list remains alive.
+	# Keep all list callbacks and deferred edits bound to their original editor.
+	var point_inspector = get_script().new()
+	point_inspector._native_curve = object
+	point_inspector.easing_curve_editor = easing_curve_editor
+	point_inspector.curve_editor_property = curve_editor_property
+	point_inspector.editor_undo_redo = editor_undo_redo
+	var section: Control = point_inspector._handle_native_points(object)
+	section.set_meta(&"_point_inspector", point_inspector)
+	return section
+
+
 func _handle_native_points(object: Resource) -> Control:
 	_native_points_content = PointsListContainer.new()
 	_native_points_content.connect(
@@ -1227,7 +1240,11 @@ func _handle_native_points(object: Resource) -> Control:
 	)
 	_native_points_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_build_native_point_list(object)
-	return _create_points_section(_native_points_content, object)
+	var section := _create_points_section(_native_points_content, object)
+	var changed_callback := _on_native_points_changed.bind(object)
+	object.changed.connect(changed_callback)
+	section.tree_exiting.connect(_disconnect_native_curve_changed.bind(object, changed_callback))
+	return section
 
 
 func _create_points_section(point_list: Control, object: Resource) -> Control:
@@ -1254,6 +1271,9 @@ func _on_native_curve_changed(
 		ease_reset,
 		preset_reset,
 	)
+
+
+func _on_native_points_changed(object: Resource) -> void:
 	var backend := BackendFactory.create(object)
 	var identity_signature := (
 		_get_native_point_identity_signature(backend.get_points())
@@ -1765,7 +1785,7 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 			return true
 		if name == "points":
 			if native_backend.is_point_graph():
-				add_custom_control(_handle_native_points(object))
+				add_custom_control(_create_native_points_inspector(object))
 			return true
 	if object is EasingCurve and name == "easing_curve_editor":
 		curve = object
