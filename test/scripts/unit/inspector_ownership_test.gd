@@ -395,15 +395,28 @@ func _test_graph_survives_points_teardown(native: bool) -> void:
 	var target := _curve(native)
 	var p := _presentation(target)
 	await process_frame
+	# Native initial Autofit suppresses drawing until its deferred layout settles.
+	for frame in range(8):
+		if not p.graph._graph_render_suppressed:
+			break
+		await process_frame
+	p.graph.update_view_transform()
 	var history := _history(target)
 	history.clear_history()
-	p.graph.dragging_point = 1
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = p.graph.get_view_pos(p.graph._backend.curve_to_display_position(p.graph._point(1).get(&"position")))
+	p.graph._gui_input(press)
+	_expect(p.graph._get_drag_coordinate_position().is_finite(), "Graph drag did not show coordinates")
 	p.graph._request_point_property_change(1, &"position", Vector2(0.35, 0.67), true)
 	p.points_root.free()
 	await process_frame
 	_expect(not p.context.disposed, "Points teardown disposed active graph")
 	_expect(history.get_history_count() == 0, "Points teardown finished active graph gesture")
+	_expect(p.graph._get_drag_coordinate_position().is_finite(), "Points teardown dismissed surviving graph coordinates")
 	p.graph._handle_left_released()
+	_expect(not p.graph._get_drag_coordinate_position().is_finite(), "Graph release retained coordinates")
 	_expect(history.get_history_count() == 1, "Surviving graph did not commit exactly one action")
 	_close(p)
 	await process_frame

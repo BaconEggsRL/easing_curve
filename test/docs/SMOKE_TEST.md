@@ -1,5 +1,29 @@
 # v1.2.0 — Legacy / Native parity smoke test
 
+## DRAG-COORDS-01 — drag-coordinate readout
+
+For both Native and Legacy Custom graphs:
+
+- Drag a point and each handle; confirm `(x.xx, y.yy)` follows the resolved
+  visible position. Include Reverse, Invert, both transforms, negative handle
+  values, and pending additions. Near-zero negatives should read `0.00`.
+- Confirm locks, Shift constraints, endpoint crossing, Free/Balanced/Mirrored
+  and Force Linear retain their existing behavior; Undo/Redo remains one edit.
+- Pan/zoom and drag near all four edges. Text stays within the graph below its
+  toolbar; it moves below the marker when there is no space above.
+- Release outside the graph, cancel a pending addition, switch window focus,
+  fold/hide the graph, replace its resource and rebuild it. No stale readout
+  should return until a new gesture begins. Removing Points alone must leave
+  a surviving active graph's readout visible.
+- Check no readout for selection/hover, Inspector field editing, panning alone
+  or function graphs. Check normal/enlarged Editor scale and light/dark themes.
+
+2026-09-08 automated rendered smoke: both backends passed viewport press and
+outside-graph release checks. Captures at 1.0/1.5 scale with light/dark theme
+fixtures were generated; normal dark and enlarged light captures were inspected.
+Physical mouse/Alt-Tab, monitor DPI and global Editor theme switching remain
+manual checks. See the DRAG-COORDS-01 coverage record in `README.md`.
+
 Run this paired checklist after the gates in [Development testing](README.md).
 The detailed interaction checks below remain applicable to **both** APIs; they
 are not a Legacy-only sign-off. An automated PASS does not verify physical input,

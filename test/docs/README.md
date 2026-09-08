@@ -1,5 +1,55 @@
 # Development testing
 
+## DRAG-COORDS-01 — shared drag-coordinate overlay
+
+Implemented in `EasingCurveEditor` only, using its existing drag indices and
+pending-add resource. The four private helpers separate resolved coordinates,
+formatting, bounded placement and direct drawing. The instance-local suppression
+flag controls presentation only; it does not finish or cancel transactions.
+
+Coordinate sources: `position`, `left_control_point`, `right_control_point`, and
+the pending point's `position` are absolute curve-space values. Pending-add press
+and motion already convert input into that space. Native applies Reverse/Invert
+once on the way to display coordinates; Legacy's backend conversion is identity
+(its resource transforms already update geometry). No C++ or resource API changes.
+
+`easing_curve_editor_drag_coordinates_test.gd` is an Editor-host suite registered
+in `run_all_tests.ps1`. It covers both backends and all Reverse/Invert combinations,
+point/handle/pending gestures, constraints and modes, interruption cleanup,
+formatting, pan/zoom, bounds, notification/snapshot/history invariants and
+instance isolation. The ownership suite additionally checks a live readout while
+the Points root exits, then dismissal on graph release. Native Autofit must settle
+before asserting visible presentation.
+
+Validation on Godot `4.7.1.stable.official.a13da4feb`, 2026-09-08:
+
+| Check | Result |
+| --- | --- |
+| Fresh pre-edit baseline | All 24 suites passed |
+| Focused drag-coordinate suite, headless | 341 checks passed |
+| Gesture characterization | 214 checks passed |
+| Position-X drag | 72 checks passed |
+| Editor vertical slice | 1,053 checks passed |
+| Inspector ownership | 332 checks passed |
+| Rendered drag-coordinate suite | 353 checks passed |
+| Final correctness runner | All 25 suites passed |
+
+Rendered execution uses actual graph drawing in an Editor host, synthetic viewport
+press/release (including release outside the graph), and light/dark theme fixtures
+at 1.0 and 1.5 scale. Normal dark and enlarged light captures were visually
+inspected for both backends. Focus-loss coverage sends Godot notifications; this
+does not claim physical OS input, actual monitor DPI changes or a global Editor
+theme-switch test. Existing standalone-host `current_window`, certificate-store
+and exit-allocation diagnostics remain in the rendered logs. No diagnostic
+allowlist was broadened.
+
+Local evidence is under `test/_temp/drag-project/test/_temp/` (focused/rendered
+logs and PNGs), `test/_temp/drag-*.txt` (individual regressions), and
+`test/_temp/drag-full-correctness.txt` (full runner). Direct launches used the
+repository launcher, `EASING_CURVE_GODOT_PATH`, and repository-local log files.
+The initial isolated import used a direct launch and emitted user-directory
+permission diagnostics; subsequent checks used the launcher's isolated data path.
+
 ## Release procedure
 
 `release.ps1 --version 1.2.0 --mode Validate` promotes `plugin.cfg` and builds

@@ -101,6 +101,7 @@ var hovered_control_index: ControlIndex = ControlIndex.NONE
 
 var dragging_point: int = -1
 var dragging_control: ControlIndex = ControlIndex.NONE
+var _drag_coordinates_suppressed := true
 var pending_add_point: Resource
 var position_x_order_preview_point: Resource
 var is_right_delete_dragging := false
@@ -182,6 +183,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_drag_coordinates_suppressed = true
 	finish_active_point_edit()
 	if not Engine.is_editor_hint():
 		return
@@ -234,6 +236,9 @@ func _gui_input(event: InputEvent) -> void:
 
 
 func _handle_mouse_button_prepass(event: InputEventMouseButton) -> bool:
+	if not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_drag_coordinates_suppressed = true
+		queue_redraw()
 	# Always end an RMB delete gesture before any later button branch can return.
 	if not event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 		_set_right_delete_dragging(false)
@@ -304,6 +309,7 @@ func _begin_axis_drag(
 	point: Resource,
 	control: ControlIndex,
 ) -> void:
+	_drag_coordinates_suppressed = false
 	_axis_drag_origin_view = event.position
 	match control:
 		ControlIndex.LEFT:
@@ -504,6 +510,7 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 		pending_add_point = _create_point_with_default_handle_mode(clamped_pos)
 		if pending_add_point == null:
 			return
+		_drag_coordinates_suppressed = false
 		queue_redraw()
 		accept_event()
 		return
@@ -514,6 +521,7 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 	if selected_index != -1:
 		dragging_point = selected_index
 		dragging_control = ControlIndex.NONE
+		_drag_coordinates_suppressed = false
 	queue_redraw()
 
 
@@ -537,6 +545,7 @@ func _handle_right_pressed(event: InputEventMouseButton) -> void:
 
 
 func _handle_left_released() -> void:
+	_drag_coordinates_suppressed = true
 	if pending_add_point != null:
 		var point := pending_add_point
 		pending_add_point = null
@@ -1059,6 +1068,7 @@ func _reorder_selected_point(to_index: int) -> void:
 
 
 func _cancel_pending_add() -> void:
+	_drag_coordinates_suppressed = true
 	pending_add_point = null
 	_set_right_delete_dragging(false)
 	queue_redraw()
@@ -1272,7 +1282,87 @@ func _draw():
 			draw_line(pos_view, right_view, right_line_color)
 			draw_circle(right_view, right_radius, right_color)
 
+	_draw_drag_coordinates()
+
+
+func _get_drag_coordinate_position() -> Vector2:
+	if _drag_coordinates_suppressed or _backend == null or _graph_render_suppressed:
+		return Vector2(NAN, NAN)
+	if not _is_point_graph():
+		return Vector2(NAN, NAN)
+	var point := pending_add_point if pending_add_point != null else _point(dragging_point)
+	if point == null:
+		return Vector2(NAN, NAN)
+	var property_name := &"position"
+	if pending_add_point == null:
+		match dragging_control:
+			ControlIndex.LEFT:
+				property_name = &"left_control_point"
+			ControlIndex.RIGHT:
+				property_name = &"right_control_point"
+	# All three properties are absolute curve coordinates. Pending-add press/motion
+	# already convert display input to curve space; apply Native transforms only once.
+	return _backend.curve_to_display_position(point.get(property_name) as Vector2)
+
+
+func _format_drag_coordinates(position: Vector2) -> String:
+	var x := "%.2f" % position.x
+	var y := "%.2f" % position.y
+	return "(%s, %s)" % ["0.00" if x == "-0.00" else x, "0.00" if y == "-0.00" else y]
+
+
+func _get_drag_coordinate_label_position(anchor: Vector2, text_size: Vector2) -> Vector2:
+	var margin := 4.0 * _editor_scale
+	var toolbar_height := (
+		0.0 if _is_point_toolbar_hidden() else SELECTION_TOOLBAR_HEIGHT * _editor_scale
+	)
+	var minimum := Vector2(margin, toolbar_height + margin)
+	var maximum := size - Vector2.ONE * margin - text_size
+	if maximum.x < minimum.x or maximum.y < minimum.y:
+		return Vector2(NAN, NAN)
+	var radius := (
+		point_radius
+		if pending_add_point != null or dragging_control == ControlIndex.NONE
+		else control_radius
+	)
+	var gap := radius + 6.0 * _editor_scale
+	var position := anchor - Vector2(text_size.x * 0.5, gap + text_size.y)
+	if position.y < minimum.y:
+		position.y = anchor.y + gap
+	return position.clamp(minimum, maximum)
+
+
+func _draw_drag_coordinates() -> void:
+	var position := _get_drag_coordinate_position()
+	if not position.is_finite():
+		return
+	var font := get_theme_font(&"font", &"Label")
+	var font_size := get_theme_font_size(&"font_size", &"Label")
+	var text := _format_drag_coordinates(position)
+	var text_size := Vector2(
+		font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x,
+		font.get_height(font_size),
+	)
+	var label_position := _get_drag_coordinate_label_position(get_view_pos(position), text_size)
+	if not label_position.is_finite():
+		return
+	var color := EDITOR_THEME_CACHE.get_color(
+		&"font_color", &"Editor", get_theme_color(&"font_color", &"Label")
+	)
+	color.a *= 0.8
+	draw_string(
+		font, label_position + Vector2(0, font.get_ascent(font_size)), text,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color,
+	)
+
+
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_drag_coordinates_suppressed = true
+		queue_redraw()
+	elif what == NOTIFICATION_VISIBILITY_CHANGED and not is_visible_in_tree():
+		_drag_coordinates_suppressed = true
+		queue_redraw()
 	if what == NOTIFICATION_FOCUS_ENTER:
 		queue_redraw()
 	elif what == NOTIFICATION_FOCUS_EXIT:
@@ -1316,6 +1406,7 @@ func set_zoom(zoom: Vector2) -> void:
 func set_curve(resource: Resource) -> void:
 	if get_curve() == resource:
 		return
+	_drag_coordinates_suppressed = true
 	if _backend != null and _backend_point_edit_active:
 		_backend.finish_point_edit()
 	_backend_point_edit_active = false
