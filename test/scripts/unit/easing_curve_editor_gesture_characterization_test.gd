@@ -28,6 +28,8 @@ func _run() -> void:
 	_test_point_axis_constraint_behavior()
 	_test_handle_axis_constraint_behavior()
 	_test_preheld_shift_drag_constraints()
+	_test_shift_reference_recapture()
+	_test_snapped_shift_cursor_reference()
 	_test_axis_constraint_downstream_control_semantics()
 	_test_axis_constraint_view_and_order_geometry()
 	_test_axis_constraint_request_and_input_boundaries()
@@ -871,6 +873,7 @@ func _test_point_axis_constraint_behavior() -> void:
 
 	var horizontal_view := start + Vector2(54.0, 14.0)
 	var horizontal_world := editor.get_world_pos(horizontal_view)
+	origin = point.position
 	var expected_horizontal := Vector2(horizontal_world.x, origin.y).clamp(
 		Vector2(0, curve.min_value),
 		Vector2(1.0, curve.max_value),
@@ -878,7 +881,7 @@ func _test_point_axis_constraint_behavior() -> void:
 	editor._gui_input(_motion(horizontal_view, MOUSE_BUTTON_MASK_LEFT, true))
 	_expect(
 		point.position.is_equal_approx(expected_horizontal),
-		"Mid-drag Shift did not constrain the point to the horizontal axis from the original drag position",
+		"Mid-drag Shift did not constrain the point to the horizontal axis from the current drag position",
 	)
 
 	var vertical_view := start + Vector2(14.0, -54.0)
@@ -941,7 +944,7 @@ func _test_point_axis_constraint_behavior() -> void:
 
 	var repress_view := preheld_start + Vector2(52.0, 10.0)
 	var repress_world := preheld_editor.get_world_pos(repress_view)
-	var expected_repress := Vector2(repress_world.x, preheld_origin.y).clamp(
+	var expected_repress := Vector2(preheld_point.position.x, repress_world.y).clamp(
 		Vector2(0, preheld_curve.min_value),
 		Vector2(1.0, preheld_curve.max_value),
 	)
@@ -1027,6 +1030,8 @@ func _test_preheld_shift_drag_constraints() -> void:
 	for property_name: StringName in [&"position", &"left_control_point", &"right_control_point"]:
 		var fixture := _fixture()
 		var editor: EasingCurveEditor = fixture.editor
+		root.add_child(editor)
+		editor.update_view_transform()
 		var point: EasingCurvePoint = fixture.curve.points[1]
 		var origin: Vector2 = point.get(property_name)
 		var start := editor.get_view_pos(origin)
@@ -1056,7 +1061,13 @@ func _test_preheld_shift_drag_constraints() -> void:
 			Input.flush_buffered_events()
 		var repress_target := start + Vector2(48, -10)
 		var repress_expected := editor.get_world_pos(repress_target)
-		repress_expected.y = origin.y
+		var anchor: Vector2 = point.get(property_name)
+		_expect(editor._axis_drag_origin_world == anchor, "Input Shift repress did not capture current target")
+		var cursor_delta := repress_target - editor._axis_drag_origin_view
+		if absf(cursor_delta.x) > absf(cursor_delta.y):
+			repress_expected.y = anchor.y
+		else:
+			repress_expected.x = anchor.x
 		editor._gui_input(_motion(repress_target, MOUSE_BUTTON_MASK_LEFT, Input.is_key_pressed(KEY_SHIFT)))
 		_expect((point.get(property_name) as Vector2).is_equal_approx(repress_expected), "Stationary Shift release/repress failed for %s" % property_name)
 		var release := InputEventKey.new()
@@ -1067,6 +1078,86 @@ func _test_preheld_shift_drag_constraints() -> void:
 		editor._gui_input(_motion(free_target, MOUSE_BUTTON_MASK_LEFT, Input.is_key_pressed(KEY_SHIFT)))
 		_expect((point.get(property_name) as Vector2).is_equal_approx(editor.get_world_pos(free_target)), "Shift release did not restore free dragging for %s" % property_name)
 		editor._gui_input(_button(MOUSE_BUTTON_LEFT, free_target, false))
+		editor._slider.free()
+		editor.free()
+
+
+func _test_shift_reference_recapture() -> void:
+	for property_name: StringName in [&"position", &"left_control_point", &"right_control_point", &"pending"]:
+		var fixture := _fixture()
+		var editor: EasingCurveEditor = fixture.editor
+		var curve: EasingCurve = fixture.curve
+		var point := curve.points[1]
+		var pending := property_name == &"pending"
+		var property := &"position" if pending else property_name
+		var start := editor.get_view_pos(Vector2(0.7, 0.3) if pending else point.get(property))
+		editor._gui_input(_button(MOUSE_BUTTON_LEFT, start, true))
+		if pending:
+			point = editor.pending_add_point
+		var resource_count := curve.points.size()
+		for free_delta: Vector2 in [Vector2(15, -18), Vector2(35, 12)]:
+			var cursor := start + free_delta
+			editor._gui_input(_motion(cursor, MOUSE_BUTTON_MASK_LEFT))
+			var anchor: Vector2 = point.get(property)
+			# A separate cursor anchor must win even when the target is elsewhere.
+			var cursor_anchor := cursor + Vector2(30, 0)
+			editor._update_axis_drag_reference(true, cursor_anchor)
+			_expect((point.get(property) as Vector2).is_equal_approx(anchor), "Shift capture moved %s" % property_name)
+			editor._update_axis_drag_reference(true, cursor_anchor + Vector2(99, 99))
+			_expect(editor._axis_drag_origin_view == cursor_anchor, "Held Shift recaptured %s" % property_name)
+			var target := cursor_anchor + Vector2(2, -6)
+			editor._gui_input(_motion(target, MOUSE_BUTTON_MASK_LEFT, true))
+			var expected := editor.get_world_pos(target)
+			expected.x = anchor.x
+			_expect((point.get(property) as Vector2).is_equal_approx(expected), "Cursor-relative vertical axis or fresh target anchor failed for %s" % property_name)
+			editor._update_axis_drag_reference(false, target)
+			var before_repress: Vector2 = point.get(property)
+			editor._update_axis_drag_reference(true, target)
+			var next := target + Vector2(6, -2)
+			editor._gui_input(_motion(next, MOUSE_BUTTON_MASK_LEFT, true))
+			expected = editor.get_world_pos(next)
+			expected.y = before_repress.y
+			_expect((point.get(property) as Vector2).is_equal_approx(expected), "Stationary recapture failed for %s" % property_name)
+			if pending:
+				_expect(curve.points.size() == resource_count, "Pending constraint committed the preview")
+			editor._update_axis_drag_reference(false, next)
+		editor._gui_input(_button(MOUSE_BUTTON_LEFT, start, false))
+		_expect(not editor._axis_drag_reference_active, "Release leaked axis reference for %s" % property_name)
+		if pending:
+			_expect(curve.points.size() == resource_count + 1, "Pending release did not commit once")
+		editor._slider.free()
+		editor.free()
+
+
+func _test_snapped_shift_cursor_reference() -> void:
+	for pending: bool in [false, true]:
+		var fixture := _fixture()
+		var editor: EasingCurveEditor = fixture.editor
+		var point: EasingCurvePoint = fixture.curve.points[1]
+		editor.snap_enabled = true
+		var start := editor.get_view_pos(Vector2(0.7, 0.3) if pending else point.position)
+		editor._gui_input(_button(MOUSE_BUTTON_LEFT, start, true))
+		if pending:
+			point = editor.pending_add_point
+		var cursor := editor.get_view_pos(Vector2(0.549, 0.5))
+		editor._gui_input(_motion(cursor, MOUSE_BUTTON_MASK_LEFT))
+		var anchor := point.position
+		_expect(anchor.is_equal_approx(Vector2(0.5, 0.5)), "Snapped Shift fixture did not establish offset")
+		editor._update_axis_drag_reference(true, cursor)
+		var target := cursor + Vector2(2, -18)
+		var expected := editor._snap_graph_position(editor.get_world_pos(target))
+		expected.x = anchor.x
+		editor._gui_input(_motion(target, MOUSE_BUTTON_MASK_LEFT, true))
+		_expect(point.position.is_equal_approx(expected) and not point.position.is_equal_approx(anchor), "Snapped target offset biased cursor-relative axis choice")
+		editor._notification(Control.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
+		_expect(not editor._axis_drag_reference_active, "Focus loss retained Shift reference")
+		editor._update_axis_drag_reference(true, target)
+		_expect(editor._axis_drag_origin_world == point.position, "Focus recovery reused old target anchor")
+		if pending:
+			editor._cancel_pending_add()
+		else:
+			editor._gui_input(_button(MOUSE_BUTTON_LEFT, target, false))
+		_expect(not editor._axis_drag_reference_active, "Gesture cleanup retained Shift reference")
 		editor._slider.free()
 		editor.free()
 
@@ -1584,11 +1675,11 @@ func _test_axis_constraint_request_and_input_boundaries() -> void:
 	pending_editor._gui_input(_button(MOUSE_BUTTON_LEFT, pending_start, true, true))
 	_expect(pending_editor.pending_add_point != null, "Pre-held Shift prevented ordinary pending-add start")
 	pending_editor._gui_input(_motion(pending_target, MOUSE_BUTTON_MASK_LEFT, true))
-	var expected_pending := pending_editor.get_world_pos(pending_target).clamp(
+	var expected_pending := Vector2(pending_editor.get_world_pos(pending_target).x, pending_editor.get_world_pos(pending_start).y).clamp(
 		Vector2(0, pending_curve.min_value),
 		Vector2(1.0, pending_curve.max_value),
 	)
-	_expect(pending_editor.pending_add_point.position.is_equal_approx(expected_pending), "Shift changed pending-add mouse tracking")
+	_expect(pending_editor.pending_add_point.position.is_equal_approx(expected_pending), "Shift did not constrain pending-add mouse tracking")
 	pending_editor._gui_input(_button(MOUSE_BUTTON_RIGHT, pending_target, true, true))
 	_expect(pending_editor.pending_add_point == null and pending_curve.points.size() == pending_count and not pending_editor.is_right_delete_dragging, "Shift changed RMB pending-add cancel semantics")
 	pending_editor._gui_input(_button(MOUSE_BUTTON_RIGHT, pending_target, false, true))

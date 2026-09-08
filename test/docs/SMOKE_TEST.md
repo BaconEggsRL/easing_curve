@@ -4,6 +4,13 @@
 
 For both Native and Legacy Custom graphs:
 
+- During pending point creation, existing-point dragging and handle dragging,
+  move freely, hold Shift, release it, move again and hold it again. Each press
+  locks from the current target position; pre-held Shift uses the mouse-down
+  reference. Release/repress without moving must also capture a fresh reference.
+  With snapping enabled, confirm the axis follows cursor displacement even when
+  the snapped point is offset from the cursor. Shift alone must not move or commit
+  anything; release resumes free tracking on the next motion.
 - Toggle grid snapping; the subdivision field appears only when enabled. Try
   2, 10 and 100 subdivisions: points and new additions snap on both axes while
   handles stay free. Ctrl/Cmd temporarily enables snapping when the toggle is

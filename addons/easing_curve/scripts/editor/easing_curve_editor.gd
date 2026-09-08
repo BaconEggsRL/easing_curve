@@ -114,7 +114,9 @@ var position_x_order_preview_point: Resource
 var is_right_delete_dragging := false
 var _right_delete_requires_exit := false
 var _right_delete_blocked_position := Vector2.ZERO
+var _axis_drag_reference_active := false
 var _axis_drag_origin_view := Vector2.ZERO
+var _axis_drag_last_cursor := Vector2.ZERO
 var _axis_drag_origin_world := Vector2.ZERO
 
 var grabbing: GrabMode = GrabMode.NONE
@@ -206,6 +208,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_clear_axis_drag()
 	_update_point_navigation_tooltips(true)
 	_drag_coordinates_suppressed = true
 	finish_active_point_edit()
@@ -247,6 +250,8 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventWithModifiers:
 		_update_point_navigation_tooltips()
+		if event is InputEventKey:
+			_update_axis_drag_reference(Input.is_key_pressed(KEY_SHIFT), get_local_mouse_position())
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -260,6 +265,7 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_handle_pan_motion(event)
 		_handle_mouse_motion(event)
+		_axis_drag_last_cursor = event.position
 		return
 
 	if event is InputEventMouseButton:
@@ -322,11 +328,13 @@ func _handle_mouse_motion(event: InputEventMouseMotion) -> void:
 
 
 func _handle_pending_add_motion(event: InputEventMouseMotion) -> void:
+	_update_axis_drag_reference(event.shift_pressed, _axis_drag_last_cursor)
 	var world_pos := get_world_pos(event.position)
 	if not world_pos.is_finite():
 		return
 	world_pos = _snap_graph_position(world_pos, event.is_command_or_control_pressed())
 	world_pos = _backend.display_to_curve_position(world_pos)
+	world_pos = _apply_axis_drag_constraint(event, world_pos)
 	var value_range := _value_range()
 	var clamped_pos := world_pos.clamp(
 		Vector2(0, value_range.x),
@@ -336,14 +344,23 @@ func _handle_pending_add_motion(event: InputEventMouseMotion) -> void:
 	queue_redraw()
 
 
-func _begin_axis_drag(
-	event: InputEventMouseButton,
-	point: Resource,
-	control: ControlIndex,
-) -> void:
+func _begin_axis_drag(event: InputEventMouseButton) -> void:
 	end_point_list_coordinate_drag()
 	_drag_coordinates_suppressed = false
-	_axis_drag_origin_view = event.position
+	_clear_axis_drag()
+	_axis_drag_last_cursor = event.position
+	_update_axis_drag_reference(event.shift_pressed, event.position)
+
+
+func _update_axis_drag_reference(shift_pressed: bool, cursor_position: Vector2) -> void:
+	var point := pending_add_point if pending_add_point != null else _point(dragging_point)
+	if not shift_pressed or point == null:
+		_clear_axis_drag()
+		return
+	if _axis_drag_reference_active:
+		return
+	_axis_drag_origin_view = cursor_position
+	var control := ControlIndex.NONE if pending_add_point != null else dragging_control
 	match control:
 		ControlIndex.LEFT:
 			_axis_drag_origin_world = point.get(&"left_control_point")
@@ -351,20 +368,18 @@ func _begin_axis_drag(
 			_axis_drag_origin_world = point.get(&"right_control_point")
 		ControlIndex.NONE:
 			_axis_drag_origin_world = point.get(&"position")
+	_axis_drag_reference_active = true
 
 
 func _clear_axis_drag() -> void:
+	_axis_drag_reference_active = false
 	_axis_drag_origin_view = Vector2.ZERO
 	_axis_drag_origin_world = Vector2.ZERO
 
 
-func _apply_axis_drag_constraint(
-	event: InputEventMouseMotion,
-	world_pos: Vector2,
-) -> Vector2:
-	if not event.shift_pressed:
+func _apply_axis_drag_constraint(event: InputEventMouseMotion, world_pos: Vector2) -> Vector2:
+	if not event.shift_pressed or not _axis_drag_reference_active:
 		return world_pos
-
 	var view_delta := event.position - _axis_drag_origin_view
 	if absf(view_delta.x) > absf(view_delta.y):
 		world_pos.y = _axis_drag_origin_world.y
@@ -374,6 +389,7 @@ func _apply_axis_drag_constraint(
 
 
 func _handle_drag_motion(event: InputEventMouseMotion) -> void:
+	_update_axis_drag_reference(event.shift_pressed, _axis_drag_last_cursor)
 	var p := _point(dragging_point)
 	if p == null:
 		return
@@ -505,14 +521,14 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 		if can_drag_control:
 			dragging_point = control[0]
 			dragging_control = control[1]
-			_begin_axis_drag(event, p, dragging_control)
+			_begin_axis_drag(event)
 		elif (
 			point_idx != -1
 			and not _backend.is_point_property_locked(point_idx, &"position")
 		):
 			dragging_point = point_idx
 			dragging_control = ControlIndex.NONE
-			_begin_axis_drag(event, _point(point_idx), dragging_control)
+			_begin_axis_drag(event)
 		queue_redraw()
 		return
 	if point_idx != -1:
@@ -520,7 +536,7 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 		if not _backend.is_point_property_locked(point_idx, &"position"):
 			dragging_point = point_idx
 			dragging_control = ControlIndex.NONE
-			_begin_axis_drag(event, p, dragging_control)
+			_begin_axis_drag(event)
 		selected_index = point_idx
 		queue_redraw()
 		return
@@ -541,6 +557,9 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 		pending_add_point = _create_point_with_default_handle_mode(clamped_pos)
 		if pending_add_point == null:
 			return
+		_clear_axis_drag()
+		_axis_drag_last_cursor = event.position
+		_update_axis_drag_reference(event.shift_pressed, event.position)
 		_drag_coordinates_suppressed = false
 		queue_redraw()
 		accept_event()
@@ -554,7 +573,7 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 	if added_index != -1:
 		dragging_point = added_index
 		dragging_control = ControlIndex.NONE
-		_drag_coordinates_suppressed = false
+		_begin_axis_drag(event)
 	queue_redraw()
 
 
@@ -1144,6 +1163,7 @@ func _reorder_selected_point(to_index: int) -> void:
 
 
 func _cancel_pending_add() -> void:
+	_clear_axis_drag()
 	_drag_coordinates_suppressed = true
 	pending_add_point = null
 	_set_right_delete_dragging(false)
@@ -1473,10 +1493,12 @@ func _draw_drag_coordinates() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_clear_axis_drag()
 		_update_point_navigation_tooltips(true)
 		_drag_coordinates_suppressed = true
 		queue_redraw()
 	elif what == NOTIFICATION_VISIBILITY_CHANGED and not is_visible_in_tree():
+		_clear_axis_drag()
 		_update_point_navigation_tooltips(true)
 		_drag_coordinates_suppressed = true
 		queue_redraw()
@@ -1528,6 +1550,7 @@ func set_curve(resource: Resource) -> void:
 	_update_point_navigation_tooltips()
 	if get_curve() == resource:
 		return
+	_clear_axis_drag()
 	end_point_list_coordinate_drag()
 	_drag_coordinates_suppressed = true
 	if _backend != null and _backend_point_edit_active:
@@ -1911,6 +1934,7 @@ func _apply_zoom_from_step():
 func _on_curve_changed() -> void:
 	if pending_add_point != null:
 		pending_add_point = null
+		_clear_axis_drag()
 	if (
 		position_x_order_preview_point != null
 		and (_backend == null or _backend.find_point(position_x_order_preview_point) == -1)

@@ -67,6 +67,43 @@ func _test_graph_gesture_selection(native: bool, pending_add := true) -> void:
 		if pending_add and pending == null:
 			break
 		var requested_position: Vector2 = pending.get(&"position") if pending_add else position
+		if pending_add:
+			for cycle in range(2):
+				var shift := InputEventKey.new()
+				shift.keycode = KEY_SHIFT
+				shift.pressed = true
+				shift.shift_pressed = true
+				Input.parse_input_event(shift)
+				Input.flush_buffered_events()
+				_expect(editor._axis_drag_reference_active, "Input Shift press did not capture pending reference")
+				_expect(editor._axis_drag_origin_world.is_equal_approx(requested_position), "Shift press did not capture current pending position")
+				var cursor_anchor := editor._axis_drag_origin_view
+				var echo := shift.duplicate() as InputEventKey
+				echo.echo = true
+				Input.parse_input_event(echo)
+				Input.flush_buffered_events()
+				_expect(editor._axis_drag_origin_view == cursor_anchor, "Shift echo recaptured pending cursor anchor")
+				var motion := InputEventMouseMotion.new()
+				motion.position = press.position + Vector2(12, -8) * (cycle + 1)
+				motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+				motion.shift_pressed = true
+				var expected: Vector2 = editor._backend.display_to_curve_position(editor.get_world_pos(motion.position))
+				var delta := motion.position - cursor_anchor
+				if absf(delta.x) > absf(delta.y):
+					expected.y = requested_position.y
+				else:
+					expected.x = requested_position.x
+				expected = expected.clamp(Vector2.ZERO, Vector2.ONE)
+				editor._gui_input(motion)
+				requested_position = pending.get(&"position")
+				_expect(requested_position.is_equal_approx(expected), "Pending Shift motion used incorrect anchors")
+				var shift_release := InputEventKey.new()
+				shift_release.keycode = KEY_SHIFT
+				Input.parse_input_event(shift_release)
+				Input.flush_buffered_events()
+				_expect(not editor._axis_drag_reference_active, "Stationary Shift release retained pending reference")
+				_expect((pending.get(&"position") as Vector2).is_equal_approx(requested_position), "Shift release moved pending point")
+				_expect(resource.call(&"get_editor_state_snapshot") == before, "Pending Shift changed resource before commit")
 		var release := InputEventMouseButton.new()
 		release.button_index = MOUSE_BUTTON_LEFT
 		release.position = press.position
