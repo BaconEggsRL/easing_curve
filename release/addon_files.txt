@@ -42,6 +42,10 @@ scripts/editor/inspector/editor_theme_cache.gd
 scripts/editor/inspector/editor_theme_cache.gd.uid
 scripts/editor/inspector/generate_function_editor_property.gd
 scripts/editor/inspector/generate_function_editor_property.gd.uid
+scripts/editor/inspector/inspector_curve_context.gd
+scripts/editor/inspector/inspector_curve_context.gd.uid
+scripts/editor/inspector/native_point_list_edit_controller.gd
+scripts/editor/inspector/native_point_list_edit_controller.gd.uid
 scripts/editor/inspector/point_edit_transaction_controller.gd
 scripts/editor/inspector/point_edit_transaction_controller.gd.uid
 scripts/editor/inspector/point_list_controller.gd
