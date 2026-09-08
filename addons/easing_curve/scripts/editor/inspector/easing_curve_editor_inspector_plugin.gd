@@ -938,7 +938,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 	if object is EasingCurve:
 		var curve_section := VBoxContainer.new()
 		curve_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		curve_section.add_theme_constant_override("separation", 0)
+		curve_section.add_theme_constant_override("separation", _compact_separation())
 
 		# Add toolbar
 		var _toolbar := GridContainer.new()

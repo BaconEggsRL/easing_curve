@@ -132,7 +132,7 @@ func setup(section_title: String, content: Control, object: Resource) -> void:
 			if style is StyleBoxFlat:
 				style.bg_color.a = 0.0
 			style.content_margin_top = 4.0
-			style.content_margin_left = 2.0
+			style.content_margin_left = 1.0
 			style.content_margin_bottom = 4.0
 			_native_section.add_theme_stylebox_override(style_name, style)
 
