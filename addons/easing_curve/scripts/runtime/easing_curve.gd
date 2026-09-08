@@ -37,6 +37,7 @@ enum TRANS {
 	CSS_LINEAR,
 	SINE,
 	CSS_CUBIC_BEZIER,
+	SMOOTHSTEP = 21,
 }
 
 # Non-deferred parameters (no slider--bools for example.)
@@ -160,6 +161,7 @@ const TRANSITION_DEFINITIONS := {
 		"editor_properties": [&"css_linear"],
 	},
 	TRANS.SINE: {"mode": CurveMode.BEZIER, "supports_ease": true},
+	TRANS.SMOOTHSTEP: {"mode": CurveMode.BEZIER, "supports_ease": true},
 	TRANS.CSS_CUBIC_BEZIER: {
 		"mode": CurveMode.FUNCTION,
 		"supports_ease": false,
@@ -1234,6 +1236,7 @@ func has_builtin_bezier_preset() -> bool:
 		TRANS.CONSTANT,
 		TRANS.LINEAR,
 		TRANS.SINE,
+		TRANS.SMOOTHSTEP,
 		TRANS.QUAD,
 		TRANS.CUBIC,
 		TRANS.QUART,

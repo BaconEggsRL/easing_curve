@@ -253,3 +253,24 @@ Released under the [MIT License](LICENSE.md).
    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=BaconEggsRL/easing_curve&type=date&legend=top-left&sealed_token=nRCgB2qxeEZVuTnXUrEG2QDyqIe13lbLuZpAr-G3LQ1bI1ePPeXCqFTMQLOMrcLJOt51N_U5Z1TwHPwpXhce4XuNB4g4ryA4xsPFDi9VS7DFDTVH412M0efFVQpEoq6IotFCRdS21ATJ4SvrEu6p4JY23FgCvQWg9ST4142oJhs7baKam4lmHB8fOguf" />
  </picture>
 </a>
+
+
+## SMOOTHSTEP-01
+
+Smoothstep is an exact editable Bezier preset in Native and Legacy. Select
+Smoothstep + IN_OUT for `3t^2 - 2t^3`; Sine IN_OUT is a different function.
+IN uses `1.5t^2 - 0.5t^3`, OUT uses `1.5t - 0.5t^3`, and OUT_IN composes
+those halves in reverse order. Existing ease defaults remain unchanged.
+IN_OUT has two endpoints with absolute controls `(1/3, 0)` and `(2/3, 1)`;
+OUT_IN uses two exact cubic segments. No fitted approximation is involved.
+
+Legacy appends transition 21; Native appends 109. Existing values, snapshot
+fields and Native format version 3 are unchanged. Smoothstep resources require
+the updated plugin and matching Native binaries; older readers do not know the
+new IDs. Modified presets, reset, Undo/Redo and conversion retain existing rules.
+
+## Curve mode icons
+
+Transition and ease dropdowns include fixed mini-curve icons in both Inspectors
+and the demo. Editor theme icons are used where available; the addon includes
+original SVG fallbacks for standalone use. Icons do not change with parameters.

@@ -238,51 +238,52 @@ func _test_native_transition_history_lifecycle() -> void:
 	if manager == null:
 		plugin.free()
 		return
-	for embedded: bool in [false, true]:
-		var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
-		curve.set(&"transition", 4)
-		curve.set(&"ease_type", EasingCurve.EASE.OUT)
-		curve = _round_trip_native_fixture(curve, embedded)
-		var before: Dictionary = curve.call(&"get_editor_state_snapshot")
-		var inspector := INSPECTOR_PLUGIN.new()
-		inspector.editor_undo_redo = manager
-		var content := inspector.handle_easing_curve_editor(curve)
-		root.add_child(content)
-		await process_frame
-		var trans := content.find_child("CurveTransition", true, false) as OptionButton
-		trans.item_selected.emit(trans.get_item_index(6))
-		var after: Dictionary = curve.call(&"get_editor_state_snapshot")
-		_expect(int(curve.get(&"transition")) == 6, "Native dropdown did not change the resource")
-		await process_frame
-		content.free()
+	for target_transition: int in [6, 109]:
+		for embedded: bool in [false, true]:
+			var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+			curve.set(&"transition", 4)
+			curve.set(&"ease_type", EasingCurve.EASE.OUT)
+			curve = _round_trip_native_fixture(curve, embedded)
+			var before: Dictionary = curve.call(&"get_editor_state_snapshot")
+			var inspector := INSPECTOR_PLUGIN.new()
+			inspector.editor_undo_redo = manager
+			var content := inspector.handle_easing_curve_editor(curve)
+			root.add_child(content)
+			await process_frame
+			var trans := content.find_child("CurveTransition", true, false) as OptionButton
+			trans.item_selected.emit(trans.get_item_index(target_transition))
+			var after: Dictionary = curve.call(&"get_editor_state_snapshot")
+			_expect(int(curve.get(&"transition")) == target_transition, "Native dropdown did not change the resource")
+			await process_frame
+			content.free()
 
-		# Reuse the inspector for another resource, as a real selection change does.
-		var other := ClassDB.instantiate(&"NativeEasingCurve") as Resource
-		var other_before: Dictionary = other.call(&"get_editor_state_snapshot")
-		var other_content := inspector.handle_easing_curve_editor(other)
-		root.add_child(other_content)
-		var reopened := INSPECTOR_PLUGIN.new()
-		var reopened_content := reopened.handle_easing_curve_editor(curve)
-		root.add_child(reopened_content)
-		await process_frame
-		var reopened_trans := reopened_content.find_child("CurveTransition", true, false) as OptionButton
-		var reopened_ease := reopened_content.find_child("CurveEase", true, false) as OptionButton
-		var history := manager.get_history_undo_redo(manager.get_object_history_id(curve))
-		_expect(history != null and history.has_undo(), "Native dropdown did not register resource history")
-		if history != null:
-			for redo: bool in [false, true, false, true]:
-				_expect(history.redo() if redo else history.undo(), "Native resource history action failed")
-				await process_frame
-				var expected := after if redo else before
-				_expect(curve.call(&"get_editor_state_snapshot") == expected, "Native lifecycle history lost transition, Ease, or geometry")
-				_expect(reopened_trans.get_selected_id() == expected[&"transition"], "Reopened Trans dropdown is stale")
-				_expect(reopened_ease.get_selected_id() == expected[&"ease_type"], "Reopened Ease dropdown is stale")
-				_expect(other.call(&"get_editor_state_snapshot") == other_before, "Undo/Redo changed the newly inspected resource")
-				var loaded := _round_trip_native_fixture(curve, embedded)
-				_expect(loaded.call(&"get_editor_state_snapshot") == expected, "Undo/Redo result did not survive save/reload")
-		manager.clear_history()
-		other_content.free()
-		reopened_content.free()
+			# Reuse the inspector for another resource, as a real selection change does.
+			var other := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+			var other_before: Dictionary = other.call(&"get_editor_state_snapshot")
+			var other_content := inspector.handle_easing_curve_editor(other)
+			root.add_child(other_content)
+			var reopened := INSPECTOR_PLUGIN.new()
+			var reopened_content := reopened.handle_easing_curve_editor(curve)
+			root.add_child(reopened_content)
+			await process_frame
+			var reopened_trans := reopened_content.find_child("CurveTransition", true, false) as OptionButton
+			var reopened_ease := reopened_content.find_child("CurveEase", true, false) as OptionButton
+			var history := manager.get_history_undo_redo(manager.get_object_history_id(curve))
+			_expect(history != null and history.has_undo(), "Native dropdown did not register resource history")
+			if history != null:
+				for redo: bool in [false, true, false, true]:
+					_expect(history.redo() if redo else history.undo(), "Native resource history action failed")
+					await process_frame
+					var expected := after if redo else before
+					_expect(curve.call(&"get_editor_state_snapshot") == expected, "Native lifecycle history lost transition, Ease, or geometry")
+					_expect(reopened_trans.get_selected_id() == expected[&"transition"], "Reopened Trans dropdown is stale")
+					_expect(reopened_ease.get_selected_id() == expected[&"ease_type"], "Reopened Ease dropdown is stale")
+					_expect(other.call(&"get_editor_state_snapshot") == other_before, "Undo/Redo changed the newly inspected resource")
+					var loaded := _round_trip_native_fixture(curve, embedded)
+					_expect(loaded.call(&"get_editor_state_snapshot") == expected, "Undo/Redo result did not survive save/reload")
+			manager.clear_history()
+			other_content.free()
+			reopened_content.free()
 	plugin.free()
 
 
@@ -314,6 +315,7 @@ func _test_transition_control_parity() -> void:
 	# Native ID, Legacy ID, Ease enabled, Points visible, active parameter.
 	var cases := [
 		[4, EasingCurve.TRANS.QUAD, true, true, &""],
+		[109, EasingCurve.TRANS.SMOOTHSTEP, true, true, &""],
 		[107, EasingCurve.TRANS.CSS_LINEAR, false, false, &"css_linear"],
 		[108, EasingCurve.TRANS.CSS_CUBIC_BEZIER, false, false, &"css_cubic_bezier"],
 		[100, EasingCurve.TRANS.CUSTOM, false, true, &""],
@@ -321,6 +323,7 @@ func _test_transition_control_parity() -> void:
 		[10, EasingCurve.TRANS.BACK, true, true, &"overshoot"],
 		[105, EasingCurve.TRANS.POWER, true, false, &"power"],
 		[4, EasingCurve.TRANS.QUAD, true, true, &""],
+		[109, EasingCurve.TRANS.SMOOTHSTEP, true, true, &""],
 	]
 	for curve: Resource in [legacy, native]:
 		var is_native := curve == native

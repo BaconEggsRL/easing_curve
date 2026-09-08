@@ -263,3 +263,18 @@ is used for serialized Native resources.
   gates pass, but the historical absolute baseline is intentionally unpromoted.
 - Add remaining Native platforms and complete at least one stable release cycle
   before considering any legacy deprecation proposal.
+
+
+## SMOOTHSTEP-01
+
+Smoothstep is an exact editable Bezier preset in Native and Legacy. Select
+Smoothstep + IN_OUT for `3t^2 - 2t^3`; Sine IN_OUT is a different function.
+IN uses `1.5t^2 - 0.5t^3`, OUT uses `1.5t - 0.5t^3`, and OUT_IN composes
+those halves in reverse order. Existing ease defaults remain unchanged.
+IN_OUT has two endpoints with absolute controls `(1/3, 0)` and `(2/3, 1)`;
+OUT_IN uses two exact cubic segments. No fitted approximation is involved.
+
+Legacy appends transition 21; Native appends 109. Existing values, snapshot
+fields and Native format version 3 are unchanged. Smoothstep resources require
+the updated plugin and matching Native binaries; older readers do not know the
+new IDs. Modified presets, reset, Undo/Redo and conversion retain existing rules.

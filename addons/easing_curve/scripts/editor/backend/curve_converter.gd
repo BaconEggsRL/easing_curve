@@ -33,6 +33,7 @@ const LEGACY_TO_NATIVE_TRANSITIONS := {
 	EasingCurve.TRANS.CSS_LINEAR: 107,
 	EasingCurve.TRANS.SINE: 1,
 	EasingCurve.TRANS.CSS_CUBIC_BEZIER: 108,
+	EasingCurve.TRANS.SMOOTHSTEP: 109,
 }
 const NATIVE_TO_LEGACY_TRANSITIONS := {
 	0: EasingCurve.TRANS.LINEAR,
@@ -56,6 +57,7 @@ const NATIVE_TO_LEGACY_TRANSITIONS := {
 	106: EasingCurve.TRANS.PHYSICS_SPRING,
 	107: EasingCurve.TRANS.CSS_LINEAR,
 	108: EasingCurve.TRANS.CSS_CUBIC_BEZIER,
+	109: EasingCurve.TRANS.SMOOTHSTEP,
 }
 const SHARED_PARAMETERS: Array[StringName] = [
 	&"constant_value",

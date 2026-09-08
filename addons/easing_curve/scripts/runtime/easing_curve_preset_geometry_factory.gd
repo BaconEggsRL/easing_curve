@@ -18,6 +18,15 @@ static func build(
 			return _constant(constant_value)
 		&"LINEAR":
 			return _linear()
+		&"SMOOTHSTEP":
+			# X is linear in the parameter; all four modes are exact cubics.
+			if ease_name == &"IN_OUT":
+				return cubic_bezier(Vector4(1.0 / 3.0, 0.0, 2.0 / 3.0, 1.0))
+			return _composed_for_ease(
+				ease_name,
+				Vector4(1.0 / 3.0, 0.0, 2.0 / 3.0, 0.5),
+				Vector4(1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0),
+			)
 		&"SINE":
 			# A sine graph is not polynomial; these handles are optimized approximations.
 			return _composed_for_ease(

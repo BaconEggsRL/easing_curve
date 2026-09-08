@@ -519,7 +519,7 @@ func _test_enum_numeric_contracts() -> void:
 		&"STEP": 5, &"POWER": 6, &"QUAD": 7, &"CUBIC": 8, &"QUART": 9,
 		&"QUINT": 10, &"EXPO": 11, &"CIRC": 12, &"BACK": 13, &"ELASTIC": 14,
 		&"BOUNCE": 15, &"SPRING": 16, &"PHYSICS_SPRING": 17, &"CSS_LINEAR": 18,
-		&"SINE": 19, &"CSS_CUBIC_BEZIER": 20,
+		&"SINE": 19, &"CSS_CUBIC_BEZIER": 20, &"SMOOTHSTEP": 21,
 	}
 	for name: StringName in transitions:
 		_expect(EasingCurve.TRANS[name] == transitions[name], "TRANS.%s numeric contract changed" % name)

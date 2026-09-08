@@ -8,6 +8,8 @@ extends Control
 ## Curve point changes and exported Tween settings restart the comparison automatically.
 ## Curve edits preview live; confirmed changes restart using a fresh runtime copy.
 
+const MODE_ICONS = preload("res://addons/easing_curve/scripts/editor/inspector/curve_mode_icons.gd")
+
 const PLUGIN_CONFIG_PATH := "res://addons/easing_curve/plugin.cfg"
 const MARKER_DOT_RADIUS := 8.0
 const DROPDOWN_MAX_WIDTH := 120.0
@@ -16,6 +18,7 @@ const DROPDOWN_MAX_WIDTH := 120.0
 const NATIVE_TRANSITIONS := [
 	["Linear", 0],
 	["Sine", 1],
+	["Smoothstep", 109],
 	["Quint", 2],
 	["Quart", 3],
 	["Quad", 4],
@@ -241,6 +244,7 @@ func _populate_curve_dropdowns() -> void:
 				EasingCurve.EASE[ease_name],
 			)
 
+	_apply_curve_dropdown_icons()
 
 func _add_dropdown_options(dropdown: OptionButton, options: Array) -> void:
 	for option in options:
@@ -292,6 +296,11 @@ func _setup_dropdowns() -> void:
 			tween_ease_dropdown.item_count - 1,
 			item[1]
 		)
+
+	for index in tween_trans_dropdown.item_count:
+		tween_trans_dropdown.set_item_icon(index, MODE_ICONS.get_native_transition_icon(int(tween_trans_dropdown.get_item_metadata(index))))
+	for index in tween_ease_dropdown.item_count:
+		tween_ease_dropdown.set_item_icon(index, MODE_ICONS.get_ease_icon(EasingCurve.EASE.keys()[int(tween_ease_dropdown.get_item_metadata(index))]))
 
 	curve_trans_dropdown.item_selected.connect(_on_curve_trans_selected)
 	curve_ease_dropdown.item_selected.connect(_on_curve_ease_selected)
@@ -831,3 +840,12 @@ func _get_matching_curve_ease() -> int:
 			return EasingCurve.EASE.OUT_IN
 
 	return EasingCurve.EASE.IN
+
+
+func _apply_curve_dropdown_icons() -> void:
+	for index in curve_trans_dropdown.item_count:
+		var id := int(curve_trans_dropdown.get_item_metadata(index))
+		var icon := MODE_ICONS.get_native_transition_icon(id) if use_native_curve else MODE_ICONS.get_transition_icon(EasingCurve.TRANS.keys()[id])
+		curve_trans_dropdown.set_item_icon(index, icon)
+	for index in curve_ease_dropdown.item_count:
+		curve_ease_dropdown.set_item_icon(index, MODE_ICONS.get_ease_icon(EasingCurve.EASE.keys()[int(curve_ease_dropdown.get_item_metadata(index))]))

@@ -8,6 +8,8 @@ extends RefCounted
 
 signal native_selection_changed(point: Resource)
 
+const MODE_ICONS = preload("res://addons/easing_curve/scripts/editor/inspector/curve_mode_icons.gd")
+
 const NativePointListEditController = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/native_point_list_edit_controller.gd"
 )
@@ -234,6 +236,7 @@ const TRANSITION_PRESENTATION := [
 		"name": "Smooth",
 		"items": [
 			{"transition": EasingCurve.TRANS.SINE},
+			{"transition": EasingCurve.TRANS.SMOOTHSTEP},
 			{"transition": EasingCurve.TRANS.CIRC},
 			{"transition": EasingCurve.TRANS.EXPO},
 		],
@@ -293,6 +296,7 @@ const NATIVE_TRANSITION_PRESENTATION := [
 		"name": "Smooth",
 		"items": [
 			{"transition": 1, "label": "Sine"},
+			{"transition": 109, "label": "Smoothstep"},
 			{"transition": 8, "label": "Circ"},
 			{"transition": 5, "label": "Expo"},
 		],
@@ -3552,7 +3556,9 @@ static func _create_transition_option(
 				.replace("_", " ")
 			)
 
-			option.add_item(display, transition)
+			option.add_icon_item(MODE_ICONS.get_transition_icon(EasingCurve.TRANS.keys()[transition], EDITOR_THEME_CACHE.get_theme()), display, transition)
+			if transition == EasingCurve.TRANS.SMOOTHSTEP:
+				option.set_item_tooltip(option.item_count - 1, "IN_OUT is canonical Smoothstep: 3t^2 - 2t^3")
 
 	option.select(option.get_item_index(selected_value))
 	return option
@@ -3574,7 +3580,9 @@ static func _create_native_transition_option(
 			continue
 		popup.add_separator(String(group["name"]))
 		for item: Dictionary in group_items:
-			option.add_item(String(item["label"]), int(item["transition"]))
+			option.add_icon_item(MODE_ICONS.get_native_transition_icon(int(item["transition"]), EDITOR_THEME_CACHE.get_theme()), String(item["label"]), int(item["transition"]))
+			if int(item["transition"]) == 109:
+				option.set_item_tooltip(option.item_count - 1, "IN_OUT is canonical Smoothstep: 3t^2 - 2t^3")
 	option.select(option.get_item_index(selected_value))
 	return option
 
@@ -3588,7 +3596,10 @@ static func _create_option(enum_dict: Dictionary, selected_value: int) -> Option
 		keys.insert(keys.find("CSS_LINEAR") + 1, "CSS_CUBIC_BEZIER")
 	for key in keys:
 		var display = key.to_lower().capitalize().replace("_", " ")
-		option.add_item(display, enum_dict[key]) # store enum value as ID
+		if enum_dict == EasingCurve.EASE:
+			option.add_icon_item(MODE_ICONS.get_ease_icon(key, EDITOR_THEME_CACHE.get_theme()), display, enum_dict[key])
+		else:
+			option.add_item(display, enum_dict[key]) # store enum value as ID
 	option.select(option.get_item_index(selected_value))
 	return option
 

@@ -1,7 +1,7 @@
 extends "res://test/scripts/support/test_case.gd"
 
 const TEST_SCENE := preload("res://addons/easing_curve/_test_scene/test.tscn")
-const NATIVE_TRANSITION_COUNT := 13
+const NATIVE_TRANSITION_COUNT := 14
 const SAMPLE_OFFSET := 0.37
 
 

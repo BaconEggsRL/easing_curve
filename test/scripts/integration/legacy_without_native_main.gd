@@ -38,6 +38,12 @@ func _initialize() -> void:
 	if loaded != null and loaded.has_method(&"sample"):
 		_check(is_equal_approx(loaded.sample(1.0), 1.0), "loaded legacy curve sampling failed")
 
+	curve.trans_type = LEGACY_CURVE_SCRIPT.TRANS.SMOOTHSTEP
+	curve.ease_type = LEGACY_CURVE_SCRIPT.EASE.IN_OUT
+	_check(absf(curve.sample(0.25) - 0.15625) < 2e-6, "Legacy-only Smoothstep failed")
+	_check(ResourceSaver.save(curve, path) == OK, "Legacy-only Smoothstep save failed")
+	loaded = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	_check(loaded != null and loaded.get("trans_type") == 21, "Legacy-only Smoothstep ID lost")
 	if _failures == 0:
 		print("PASS: legacy API loads, samples, and serializes without Native")
 		quit(0)

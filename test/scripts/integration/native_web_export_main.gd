@@ -43,6 +43,12 @@ func _ready() -> void:
 			_check(runtime_points[0] != custom_points[0], "Web runtime copy shared authored point resources")
 			_check(is_equal_approx(runtime_copy.call(&"sample", SAMPLE_OFFSET), expected), "Web runtime copy changed sampling")
 
+	var smoothstep := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	smoothstep.set(&"transition", 109)
+	smoothstep.set(&"ease_type", 2)
+	_check(int(smoothstep.get(&"transition")) == 109, "Smoothstep not registered in export")
+	_check(absf(float(smoothstep.call(&"sample", 0.25)) - 0.15625) < 1e-12, "Exported Smoothstep evaluation failed")
+
 	if _failures.is_empty():
 		print("PASS: Web export loaded built-in and custom Native curves")
 		_set_browser_result("pass")

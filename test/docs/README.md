@@ -789,3 +789,44 @@ A normal new function should **not** require changes to `_update_preset()`,
 `_init_function()`, `sample()`, `_validate_property()`, `get_function_snapshot()`,
 `set_function_snapshot()`, `DeferredParameterEditorProperty`, or
 `easing_curve_editor_undo.gd`.
+
+## SMOOTHSTEP-01 validation (2026-09-08)
+
+Completed before CURVE-ICONS-01. Godot 4.7.1: baseline 25 suites; final 26 suites
+passed, including 40,475 Smoothstep checks. Tests cover dense analytic/geometry
+references, Godot Curve, transforms, bounds, symmetry, slopes, conversion,
+serialization, snapshot Undo/Redo and modified/reset behavior. The vertical-slice
+suite also exercises Smoothstep through the actual Native Inspector history.
+All requested Windows/Web debug/release Native builds passed. Windows release,
+Web debug/release browser exports and Legacy-only validation passed.
+Logs: `test/_temp/smoothstep-baseline.txt`, `smoothstep-validated.txt`,
+`smoothstep-build.txt`, `smoothstep-windows.txt`, `smoothstep-web-final.txt`, and
+`smoothstep-legacy-final.txt`. Web browser validation required execution outside
+the sandbox after sandboxed browser startup/connection failed. No diagnostic
+allowlist changed. Earlier runs exposed stale catalog assertions and a test-only
+UndoRedo leak; these were corrected before the final validation.
+
+## CURVE-ICONS-01 validation (2026-09-08)
+
+Implemented after SMOOTHSTEP-01 passed its full gate. The shared icon catalog is
+keyed by transition/ease names; Native IDs resolve through the existing converter
+mapping. Built-in Editor theme icons are preferred for Constant, Linear,
+Smoothstep and all ease modes. The remaining mini-curves and standalone fallbacks
+are original SVG artwork exported through Inkscape 1.4.4. All 22 transitions and
+four ease modes have static assets. No Godot SVG artwork was copied.
+
+Custom theme variants are cached by name, scale and light/dark appearance.
+Inspector labels retain their icons when modified/reset; the demo uses static
+fallbacks without calling EditorInterface. No resource is sampled or mutated to
+render an icon. The demo's Tween catalog remains unchanged.
+
+Validation: all 27 correctness suites passed; focused icon coverage passed 478
+checks; Legacy-only validation passed after integration. Actual Editor popups for
+both backends and dark/light, 1.0/1.5 scale artwork fixtures were rendered and
+visually inspected. Light styling and enlarged scale were fixture overrides,
+not a physical monitor DPI change or a full Editor restart at another scale.
+Logs: `test/_temp/curve-icons-full.txt`, `curve-icons-focused.txt`,
+`curve-icons-legacy.txt`, `curve-icons-rendered.txt`, `curve-icons-inkscape.txt`.
+PNG evidence: `test/_temp/drag-project/test/_temp/curve-icons-*.png`.
+The final two SVG refinements were reimported and checked with the focused suite
+and rendered fixtures. Full-suite source code was unchanged by those refinements.

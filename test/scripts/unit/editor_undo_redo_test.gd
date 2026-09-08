@@ -538,7 +538,7 @@ func _test_transition_presentation_contract() -> void:
 	var expected_groups := [
 		{"name": "Basic", "items": [EasingCurve.TRANS.LINEAR, EasingCurve.TRANS.CONSTANT]},
 		{"name": "Polynomial", "items": [EasingCurve.TRANS.QUAD, EasingCurve.TRANS.CUBIC, EasingCurve.TRANS.QUART, EasingCurve.TRANS.QUINT, EasingCurve.TRANS.POWER]},
-		{"name": "Smooth", "items": [EasingCurve.TRANS.SINE, EasingCurve.TRANS.CIRC, EasingCurve.TRANS.EXPO]},
+		{"name": "Smooth", "items": [EasingCurve.TRANS.SINE, EasingCurve.TRANS.SMOOTHSTEP, EasingCurve.TRANS.CIRC, EasingCurve.TRANS.EXPO]},
 		{"name": "Springy", "items": [EasingCurve.TRANS.BACK, EasingCurve.TRANS.ELASTIC, EasingCurve.TRANS.BOUNCE, EasingCurve.TRANS.SPRING, EasingCurve.TRANS.PHYSICS_SPRING]},
 		{"name": "Discrete", "items": [EasingCurve.TRANS.STEP, EasingCurve.TRANS.JITTER, EasingCurve.TRANS.IRREGULAR]},
 		{"name": "CSS", "items": [EasingCurve.TRANS.CSS_CUBIC_BEZIER, EasingCurve.TRANS.CSS_LINEAR]},

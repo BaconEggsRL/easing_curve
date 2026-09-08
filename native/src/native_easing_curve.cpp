@@ -21,7 +21,7 @@ constexpr int BINARY_ITERATIONS = 32;
 
 bool is_valid_transition(NativeEasingCurve::Transition p_transition) {
 	return (p_transition >= NativeEasingCurve::TRANS_LINEAR && p_transition <= NativeEasingCurve::TRANS_SPRING) ||
-			(p_transition >= NativeEasingCurve::TRANS_CUSTOM && p_transition <= NativeEasingCurve::TRANS_CSS_CUBIC_BEZIER);
+			(p_transition >= NativeEasingCurve::TRANS_CUSTOM && p_transition <= NativeEasingCurve::TRANS_SMOOTHSTEP);
 }
 
 bool is_valid_ease_type(NativeEasingCurve::EaseType p_ease_type) {
@@ -120,7 +120,7 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("sample", "offset"), &NativeEasingCurve::sample);
 
 	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "_editor_state_snapshot", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_editor_state_snapshot", "get_editor_state_snapshot");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100,Constant:101,Jitter:102,Irregular:103,Step:104,Power:105,Physics Spring:106,CSS Linear:107,CSS Cubic Bezier:108"), "set_transition", "get_transition");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100,Constant:101,Jitter:102,Irregular:103,Step:104,Power:105,Physics Spring:106,CSS Linear:107,CSS Cubic Bezier:108,Smoothstep:109"), "set_transition", "get_transition");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "ease_type", PROPERTY_HINT_ENUM, "In,Out,In Out,Out In"), "set_ease_type", "get_ease_type");
 	ADD_GROUP("Transition Parameters", "");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "amplitude", PROPERTY_HINT_RANGE, "1.0,10.0,0.001,or_greater"), "set_amplitude", "get_amplitude");
@@ -177,6 +177,7 @@ void NativeEasingCurve::_bind_methods() {
 	BIND_ENUM_CONSTANT(TRANS_PHYSICS_SPRING);
 	BIND_ENUM_CONSTANT(TRANS_CSS_LINEAR);
 	BIND_ENUM_CONSTANT(TRANS_CSS_CUBIC_BEZIER);
+	BIND_ENUM_CONSTANT(TRANS_SMOOTHSTEP);
 	BIND_ENUM_CONSTANT(EASE_IN);
 	BIND_ENUM_CONSTANT(EASE_OUT);
 	BIND_ENUM_CONSTANT(EASE_IN_OUT);
@@ -1004,7 +1005,7 @@ void NativeEasingCurve::set_editor_state_snapshot(const Dictionary &p_snapshot) 
 }
 
 bool NativeEasingCurve::is_builtin_bezier_preset() const {
-	return transition == TRANS_CONSTANT || transition == TRANS_LINEAR || transition == TRANS_SINE || transition == TRANS_QUAD || transition == TRANS_CUBIC || transition == TRANS_QUART || transition == TRANS_QUINT || transition == TRANS_EXPO || transition == TRANS_CIRC || transition == TRANS_BACK;
+	return transition == TRANS_SMOOTHSTEP || transition == TRANS_CONSTANT || transition == TRANS_LINEAR || transition == TRANS_SINE || transition == TRANS_QUAD || transition == TRANS_CUBIC || transition == TRANS_QUART || transition == TRANS_QUINT || transition == TRANS_EXPO || transition == TRANS_CIRC || transition == TRANS_BACK;
 }
 
 bool NativeEasingCurve::is_selected_preset_modified() const {
@@ -1330,6 +1331,13 @@ TypedArray<NativeEasingCurvePoint> NativeEasingCurve::build_selected_preset_poin
 	Vector4 in_controls;
 	Vector4 out_controls;
 	switch (transition) {
+		case TRANS_SMOOTHSTEP:
+			if (ease_type == EASE_IN_OUT) {
+				return make_cubic_bezier(Vector4(1.0 / 3.0, 0.0, 2.0 / 3.0, 1.0));
+			}
+			in_controls = Vector4(1.0 / 3.0, 0.0, 2.0 / 3.0, 0.5);
+			out_controls = Vector4(1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0);
+			break;
 		case TRANS_SINE:
 			in_controls = Vector4(0.361149818, -0.000326393, 0.673540771, 0.486909956);
 			out_controls = Vector4(0.326459229, 0.513090014, 0.638850212, 1.0003264);
@@ -1506,6 +1514,8 @@ double NativeEasingCurve::sample_builtin(double p_offset) const {
 
 double NativeEasingCurve::sample_transition_in(double p_offset) const {
 	switch (transition) {
+		case TRANS_SMOOTHSTEP:
+			return p_offset * p_offset * (1.5 - 0.5 * p_offset);
 		case TRANS_SINE:
 			return 1.0 - std::cos(p_offset * PI * 0.5);
 		case TRANS_QUINT: {
@@ -1552,6 +1562,8 @@ double NativeEasingCurve::sample_transition_in(double p_offset) const {
 
 double NativeEasingCurve::sample_transition_out(double p_offset) const {
 	switch (transition) {
+		case TRANS_SMOOTHSTEP:
+			return p_offset * (1.5 - 0.5 * p_offset * p_offset);
 		case TRANS_SINE:
 			return std::sin(p_offset * PI * 0.5);
 		case TRANS_QUINT: {

@@ -34,6 +34,12 @@ func _ready() -> void:
 		_check(is_finite(expected), "custom fixture lost its validation sample")
 		_check(is_equal_approx(custom.call(&"sample", SAMPLE_OFFSET), expected), "loaded custom Native curve sampled incorrectly")
 
+	var smoothstep := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+	smoothstep.set(&"transition", 109)
+	smoothstep.set(&"ease_type", 2)
+	_check(int(smoothstep.get(&"transition")) == 109, "Smoothstep not registered in export")
+	_check(absf(float(smoothstep.call(&"sample", 0.25)) - 0.15625) < 1e-12, "Exported Smoothstep evaluation failed")
+
 	if _failures.is_empty():
 		print("PASS: Windows release export loaded built-in and custom Native curves")
 		get_tree().quit()

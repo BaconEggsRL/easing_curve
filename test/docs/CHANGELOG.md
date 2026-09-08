@@ -309,3 +309,10 @@ current top entry.
 
 - Corrected release icon assets and included the easing library in selected
   Windows and Web exports.
+
+## Development work items (no release assignment)
+
+- SMOOTHSTEP-01: exact Smoothstep presets and evaluation for both backends, all
+  ease modes, conversion, Inspector/demo entries and frozen enum contracts.
+- CURVE-ICONS-01: fixed mini-curve icons for every transition and ease mode,
+  built-in theme integration, Inkscape SVG fallbacks and demo coverage.

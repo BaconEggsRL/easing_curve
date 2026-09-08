@@ -797,3 +797,18 @@ READY / NOT READY
 Tester:
 
 Date:
+
+## SMOOTHSTEP-01
+
+For both backends, select Smoothstep and exercise all four ease modes. IN_OUT
+should match Godot Curve Smoothstep, with two endpoints and horizontal handles.
+Check Reverse/Invert, edit/reset, modified labels, Undo/Redo, conversion and
+save/reload. The demo includes Smoothstep without adding a Tween equivalent.
+
+## CURVE-ICONS-01
+
+Check all transition/ease entries in Native and Legacy Inspectors and the demo.
+Every selectable item has an icon; category separators do not. Change selection,
+modify a preset and reset it: icons stay attached to the same IDs. Inspect narrow
+Inspectors, normal/enlarged Editor scale and light/dark themes. Shapes remain
+fixed when ease or parameters change. The standalone demo uses bundled SVGs.
