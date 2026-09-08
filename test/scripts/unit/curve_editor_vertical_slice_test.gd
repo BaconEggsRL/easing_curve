@@ -52,7 +52,23 @@ func _run() -> void:
 	await _test_native_inspector_path()
 	await _test_native_deferred_parameter_editor()
 	await _test_native_property_clipboard_and_lifecycle()
+	_test_clipboard_text_parsing()
 	_finish("shared curve editor vertical slice")
+
+
+func _test_clipboard_text_parsing() -> void:
+	var clipboard := preload("res://addons/easing_curve/scripts/editor/inspector/point_property_clipboard_controller.gd")
+	for text: String in ["#", "# Heading", "#\n", "#garbage", "Vector2(#, 0)", "Vector2(1, 2, 3)", "Vector2(1, 2) trailing", "unrelated clipboard text", "Color(1, 0, 0)"]:
+		_expect(clipboard.parse_point_value(text, &"position") == null, "Invalid vector clipboard text was accepted")
+		_expect(clipboard.parse_point_value(text, &"handle_mode") == null, "Invalid handle-mode clipboard text was accepted")
+	for value: Vector2 in [Vector2.ZERO, Vector2(0.25, -1.5), Vector2(1e-7, 2500.0)]:
+		_expect(clipboard.parse_point_value(var_to_str(value), &"position") == value, "Copied Vector2 failed to round-trip")
+	_expect(clipboard.parse_point_value(" Vector2 ( 1e-3, -2.5 ) ", &"right_control_point") == Vector2(0.001, -2.5), "Vector clipboard whitespace/exponents were rejected")
+	for mode: int in EasingCurvePoint.HandleMode.values():
+		var value: Variant = clipboard.parse_point_value(var_to_str(mode), &"handle_mode")
+		_expect(clipboard.is_value_compatible(&"handle_mode", value), "Copied handle mode was rejected")
+	_expect(not clipboard.is_value_compatible(&"handle_mode", clipboard.parse_point_value("99", &"handle_mode")), "Out-of-range handle mode was accepted")
+	_expect(clipboard.parse_point_value("1.0", &"handle_mode") == null, "Float handle mode was accepted")
 
 
 func _test_mixed_resource_autofit_isolation() -> void:

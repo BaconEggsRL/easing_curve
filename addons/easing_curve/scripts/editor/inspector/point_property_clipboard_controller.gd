@@ -78,7 +78,7 @@ func paste_point_value(
 		curve_resource,
 		point,
 		property_name,
-		str_to_var(DisplayServer.clipboard_get()),
+		parse_point_value(DisplayServer.clipboard_get(), property_name),
 		apply_callback,
 	)
 
@@ -142,7 +142,30 @@ static func clipboard_has_compatible_value(
 	if clipboard.is_empty():
 		return false
 
-	return is_value_compatible(property_name, str_to_var(clipboard))
+	return is_value_compatible(property_name, parse_point_value(clipboard, property_name))
+
+
+static func parse_point_value(text: String, property_name: StringName) -> Variant:
+	# Clipboard text is arbitrary. Variant parsing can log color errors for Markdown.
+	if not EasingCurve.is_point_property_copy_paste_enabled(property_name):
+		return null
+	var definition := EasingCurve.get_point_property_definition(property_name)
+	var value := text.strip_edges()
+	if definition.get("type") == TYPE_INT:
+		return value.to_int() if value.is_valid_int() else null
+	if definition.get("type") != TYPE_VECTOR2 or not value.begins_with("Vector2"):
+		return null
+	var arguments := value.trim_prefix("Vector2").strip_edges()
+	if not arguments.begins_with("(") or not arguments.ends_with(")"):
+		return null
+	var components := arguments.substr(1, arguments.length() - 2).split(",")
+	if components.size() != 2:
+		return null
+	var x := components[0].strip_edges()
+	var y := components[1].strip_edges()
+	if not x.is_valid_float() or not y.is_valid_float():
+		return null
+	return Vector2(x.to_float(), y.to_float())
 
 
 func create_context_menu(
