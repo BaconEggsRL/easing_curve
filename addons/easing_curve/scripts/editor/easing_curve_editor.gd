@@ -116,7 +116,6 @@ var _right_delete_requires_exit := false
 var _right_delete_blocked_position := Vector2.ZERO
 var _axis_drag_origin_view := Vector2.ZERO
 var _axis_drag_origin_world := Vector2.ZERO
-var _axis_drag_shift_blocked := false
 
 var grabbing: GrabMode = GrabMode.NONE
 var initial_grab_pos: Vector2
@@ -352,23 +351,17 @@ func _begin_axis_drag(
 			_axis_drag_origin_world = point.get(&"right_control_point")
 		ControlIndex.NONE:
 			_axis_drag_origin_world = point.get(&"position")
-	_axis_drag_shift_blocked = event.shift_pressed
 
 
 func _clear_axis_drag() -> void:
 	_axis_drag_origin_view = Vector2.ZERO
 	_axis_drag_origin_world = Vector2.ZERO
-	_axis_drag_shift_blocked = false
 
 
 func _apply_axis_drag_constraint(
 	event: InputEventMouseMotion,
 	world_pos: Vector2,
 ) -> Vector2:
-	if _axis_drag_shift_blocked:
-		if not event.shift_pressed:
-			_axis_drag_shift_blocked = false
-		return world_pos
 	if not event.shift_pressed:
 		return world_pos
 

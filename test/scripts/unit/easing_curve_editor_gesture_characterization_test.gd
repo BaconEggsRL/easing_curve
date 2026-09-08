@@ -27,6 +27,7 @@ func _run() -> void:
 	_test_modifier_capable_drag_baseline()
 	_test_point_axis_constraint_behavior()
 	_test_handle_axis_constraint_behavior()
+	_test_preheld_shift_drag_constraints()
 	_test_axis_constraint_downstream_control_semantics()
 	_test_axis_constraint_view_and_order_geometry()
 	_test_axis_constraint_request_and_input_boundaries()
@@ -816,10 +817,11 @@ func _test_modifier_capable_drag_baseline() -> void:
 		Vector2(0, point_curve.min_value),
 		Vector2(1.0, point_curve.max_value),
 	)
+	expected_point_target.y = point.position.y
 	point_editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_start, true, true))
 	_expect(point_editor.dragging_point == 1, "Pre-held Shift prevented the ordinary point drag from starting")
 	point_editor._gui_input(_motion(point_target_view, MOUSE_BUTTON_MASK_LEFT, true))
-	_expect(point.position.is_equal_approx(expected_point_target), "Pre-held Shift changed the ordinary unconstrained point target")
+	_expect(point.position.is_equal_approx(expected_point_target), "Pre-held Shift did not constrain the point target")
 	point_editor._gui_input(_button(MOUSE_BUTTON_LEFT, point_target_view, false, true))
 	_expect(point_editor.dragging_point == -1, "Pre-held Shift point drag did not clear drag state on release")
 	point_editor._slider.free()
@@ -919,10 +921,11 @@ func _test_point_axis_constraint_behavior() -> void:
 		Vector2(0, preheld_curve.min_value),
 		Vector2(1.0, preheld_curve.max_value),
 	)
+	expected_held.y = preheld_origin.y
 	preheld_editor._gui_input(_motion(held_view, MOUSE_BUTTON_MASK_LEFT, true))
 	_expect(
 		preheld_point.position.is_equal_approx(expected_held),
-		"Pre-held Shift unexpectedly activated point axis constraint",
+		"Pre-held Shift did not activate point axis constraint",
 	)
 
 	var released_shift_view := preheld_start + Vector2(45.0, -20.0)
@@ -1018,6 +1021,54 @@ func _test_handle_axis_constraint_behavior() -> void:
 	right_editor._gui_input(_button(MOUSE_BUTTON_LEFT, right_vertical_view, false, true))
 	right_editor._slider.free()
 	right_editor.free()
+
+
+func _test_preheld_shift_drag_constraints() -> void:
+	for property_name: StringName in [&"position", &"left_control_point", &"right_control_point"]:
+		var fixture := _fixture()
+		var editor: EasingCurveEditor = fixture.editor
+		var point: EasingCurvePoint = fixture.curve.points[1]
+		var origin: Vector2 = point.get(property_name)
+		var start := editor.get_view_pos(origin)
+		var shift := InputEventKey.new()
+		shift.keycode = KEY_SHIFT
+		shift.pressed = true
+		shift.shift_pressed = true
+		Input.parse_input_event(shift)
+		Input.flush_buffered_events()
+		editor._gui_input(_button(MOUSE_BUTTON_LEFT, start, true, Input.is_key_pressed(KEY_SHIFT)))
+		for delta: Vector2 in [Vector2(52, -12), Vector2(12, -52)]:
+			var target := start + delta
+			var expected := editor.get_world_pos(target)
+			if absf(delta.x) > absf(delta.y):
+				expected.y = origin.y
+			else:
+				expected.x = origin.x
+			editor._gui_input(_motion(target, MOUSE_BUTTON_MASK_LEFT, Input.is_key_pressed(KEY_SHIFT)))
+			_expect((point.get(property_name) as Vector2).is_equal_approx(expected), "Pre-held Shift axis constraint failed for %s at %s" % [property_name, delta])
+		# Key release/repress has no intervening mouse motion to clear a latch.
+		for pressed: bool in [false, true]:
+			var key := InputEventKey.new()
+			key.keycode = KEY_SHIFT
+			key.pressed = pressed
+			key.shift_pressed = pressed
+			Input.parse_input_event(key)
+			Input.flush_buffered_events()
+		var repress_target := start + Vector2(48, -10)
+		var repress_expected := editor.get_world_pos(repress_target)
+		repress_expected.y = origin.y
+		editor._gui_input(_motion(repress_target, MOUSE_BUTTON_MASK_LEFT, Input.is_key_pressed(KEY_SHIFT)))
+		_expect((point.get(property_name) as Vector2).is_equal_approx(repress_expected), "Stationary Shift release/repress failed for %s" % property_name)
+		var release := InputEventKey.new()
+		release.keycode = KEY_SHIFT
+		Input.parse_input_event(release)
+		Input.flush_buffered_events()
+		var free_target := start + Vector2(30, -24)
+		editor._gui_input(_motion(free_target, MOUSE_BUTTON_MASK_LEFT, Input.is_key_pressed(KEY_SHIFT)))
+		_expect((point.get(property_name) as Vector2).is_equal_approx(editor.get_world_pos(free_target)), "Shift release did not restore free dragging for %s" % property_name)
+		editor._gui_input(_button(MOUSE_BUTTON_LEFT, free_target, false))
+		editor._slider.free()
+		editor.free()
 
 
 func _test_axis_constraint_downstream_control_semantics() -> void:
