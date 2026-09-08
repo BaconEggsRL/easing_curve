@@ -155,11 +155,11 @@ func _test_constructed_list_routes_move_controls_and_drag_swap() -> void:
 		var drag_handle := side_controls.get_child(1) as EasingCurveDragHandle
 		var move_down_button := side_controls.get_child(2) as Button
 		_expect(
-			move_up_button != null and move_up_button.tooltip_text == "Move Point Up",
+			move_up_button != null and move_up_button.tooltip_text == "Swap Previous Point",
 			"Constructed point list did not create its Move Up control",
 		)
 		_expect(
-			move_down_button != null and move_down_button.tooltip_text == "Move Point Down",
+			move_down_button != null and move_down_button.tooltip_text == "Swap Next Point",
 			"Constructed point list did not create its Move Down control",
 		)
 		_expect(

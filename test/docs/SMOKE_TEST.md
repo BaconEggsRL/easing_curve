@@ -358,18 +358,24 @@ Pass criteria:
 
 ---
 
-## 5. Point list Move Up / Move Down
+## 5. Point list Swap Previous / Swap Next
 
 With at least three points:
 
-- [ ] Use Move Up on a middle point.
+- [ ] Use Swap Previous Point on a middle point.
 - [ ] Confirm it swaps with the previous list entry.
 - [ ] Confirm selection follows the moved logical point.
-- [ ] Use Move Down and confirm the reverse.
-- [ ] From the first point, use Move Up and confirm wrap/swap behavior matches the intended current UI behavior.
-- [ ] From the last point, use Move Down and confirm the corresponding wrap/swap behavior.
+- [ ] Use Swap Next Point and confirm the reverse.
+- [ ] From the first point, use Swap Previous Point and confirm wrapping to the last entry.
+- [ ] From the last point, use Swap Next Point and confirm wrapping to the first entry.
 - [ ] Confirm the graph updates immediately after every reorder.
 - [ ] Undo and redo several reorder operations.
+- [ ] For Native and Legacy, Shift+graph Previous/Next matches the corresponding Points-list swap, including selection and Undo/Redo. Normal graph navigation still only selects a display-order neighbor.
+- [ ] Press/release Shift without moving the pointer: graph button `tooltip_text` switches between Select Previous/Next Point and Swap Previous/Next Point. Newly opened/reopened tooltips show the current action.
+- [ ] Hold Shift, switch windows, release Shift outside Godot, and return. Reopen the tooltip and confirm Select. Repeat after hiding/reopening the graph and replacing the inspected resource.
+- [ ] Rebuild the Inspector, then perform one Shift swap: exactly one reorder and one Undo action result.
+
+Known native Godot 4.7.1 presentation limitation: changing `tooltip_text` does not refresh an already-visible tooltip popup in place. It may retain the old text until Godot naturally dismisses/recreates it, such as after mouse movement/re-hover. This is not an Easing Curve defect; no custom popup or forced mouse/tooltip refresh is used.
 
 Pass criteria:
 

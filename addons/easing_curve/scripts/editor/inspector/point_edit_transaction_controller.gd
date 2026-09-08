@@ -93,6 +93,26 @@ func commit_applied_action(
 	)
 
 
+func swap_points(curve: EasingCurve, from_index: int, to_index: int, select_point: Callable) -> void:
+	if from_index == to_index or from_index < 0 or to_index < 0 or from_index >= curve.points.size() or to_index >= curve.points.size():
+		return
+	var selection_before: Dictionary = _selection_capture.call()
+	var before := capture_state(curve)
+	var point_resource_ids_before := curve._get_editor_point_resource_ids()
+	var moved_point := curve.points[from_index]
+	curve.swap_points(from_index, to_index)
+	select_point.call(moved_point)
+	var selection_after: Dictionary = _selection_capture.call()
+	var point_resource_ids_after := curve._get_editor_point_resource_ids()
+	commit_applied_action(
+		curve,
+		"Reorder Easing Curve Points",
+		create_action_context(before)
+			.with_selection(_selection_restorer, selection_before, selection_after)
+			.with_point_resource_ids(point_resource_ids_before, point_resource_ids_after),
+	)
+
+
 func apply_action(
 	curve: EasingCurve,
 	action_name: String,

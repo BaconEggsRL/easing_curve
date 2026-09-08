@@ -98,6 +98,7 @@ var _point_edit_finish_request_id := 0
 var _conversion_added := false
 var resource: Resource
 var disposed := false
+var _swap_request_graph: WeakRef
 var graph_root_ref: WeakRef
 var points_root_ref: WeakRef
 var _detached_native_editor: NativePointListEditController
@@ -380,6 +381,7 @@ func _on_presentation_root_exiting(root_id: int, is_graph: bool) -> void:
 	if is_graph:
 		# Commit while the graph and its Undo source are still valid.
 		_finish_applied_point_edit()
+		_disconnect_graph_swap_request()
 		_cancel_autofit()
 		graph_root_ref = null
 		curve_editor_property = null
@@ -425,6 +427,7 @@ func _dispose_presentation() -> void:
 	if disposed or _finishing:
 		return
 	_finish_applied_point_edit()
+	_disconnect_graph_swap_request()
 	disposed = true
 	_point_list_controller.clear_input_bindings()
 	_point_edit_transaction_controller.setup_point_edit_callbacks(Callable(), Callable(), Callable())
@@ -433,6 +436,44 @@ func _dispose_presentation() -> void:
 		_detached_native_editor.dispose()
 		_detached_native_editor = null
 	_cancel_autofit()
+
+
+func _disconnect_graph_swap_request() -> void:
+	var graph := _swap_request_graph.get_ref() as EasingCurveEditor if _swap_request_graph != null else null
+	if is_instance_valid(graph) and graph.point_swap_requested.is_connected(_on_graph_point_swap_requested):
+		graph.point_swap_requested.disconnect(_on_graph_point_swap_requested)
+	_swap_request_graph = null
+
+
+func _connect_graph_swap_request() -> void:
+	_disconnect_graph_swap_request()
+	var graph := easing_curve_editor
+	# A reused graph must relinquish its previous Inspector owner first.
+	for connection: Dictionary in graph.point_swap_requested.get_connections():
+		var callback: Callable = connection["callable"]
+		if callback.get_method() == &"_on_graph_point_swap_requested":
+			var previous_owner := callback.get_object() as InspectorCurveContext
+			if previous_owner != null:
+				previous_owner._disconnect_graph_swap_request()
+	if not graph.point_swap_requested.is_connected(_on_graph_point_swap_requested):
+		graph.point_swap_requested.connect(_on_graph_point_swap_requested)
+	_swap_request_graph = weakref(graph)
+
+
+func _on_graph_point_swap_requested(point: Resource, offset: int) -> void:
+	var graph := _swap_request_graph.get_ref() as EasingCurveEditor if _swap_request_graph != null else null
+	if disposed or not is_instance_valid(graph) or graph != easing_curve_editor:
+		return
+	var current := _point_list_curve_resource()
+	if graph.get_curve() != current or point == null:
+		return
+	var backend := BackendFactory.create(current)
+	if backend == null or backend.find_point(point) < 0:
+		return
+	if curve != null:
+		_point_list_controller._request_relative_move(point as EasingCurvePoint, curve, offset, _move_point)
+	else:
+		_move_point_relative(point, offset)
 
 
 func _native_list_editor() -> NativePointListEditController:
@@ -1151,6 +1192,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		easing_curve_editor.presentation_owned = true
 		easing_curve_editor.editor_undo_redo = editor_undo_redo
 		easing_curve_editor.set_curve(object)
+		_connect_graph_swap_request()
 		_sync_graph_selected_point_index(_selected_point_index_for_resource(object))
 
 		# Restore the Resource-owned transient Curve Editor view state. The later
@@ -1318,6 +1360,7 @@ func _handle_native_curve_editor(
 	easing_curve_editor.presentation_owned = true
 	easing_curve_editor.editor_undo_redo = editor_undo_redo
 	easing_curve_editor.set_curve(object)
+	_connect_graph_swap_request()
 	_sync_graph_selected_point_index(_selected_point_index_for_resource(object))
 	easing_curve_editor.point_selection_changed.connect(native_selection_changed.emit)
 	var resource_editor := easing_curve_editor
@@ -1570,7 +1613,7 @@ func _create_native_point_panel(
 	var move_up := Button.new()
 	move_up.flat = true
 	move_up.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_MOVE_UP)
-	move_up.tooltip_text = "Move Point Up"
+	move_up.tooltip_text = "Swap Previous Point"
 	move_up.pressed.connect(
 		_move_point_relative.bind(point, -1)
 	)
@@ -1587,7 +1630,7 @@ func _create_native_point_panel(
 	var move_down := Button.new()
 	move_down.flat = true
 	move_down.icon = EDITOR_THEME_CACHE.get_icon(EDITOR_THEME_CACHE.ICON_MOVE_DOWN)
-	move_down.tooltip_text = "Move Point Down"
+	move_down.tooltip_text = "Swap Next Point"
 	move_down.pressed.connect(
 		_move_point_relative.bind(point, 1)
 	)
@@ -2196,28 +2239,7 @@ func _move_point(from_index: int, to_index: int) -> void:
 	):
 		return
 
-	var selection_before := _capture_point_selection_state()
-	var before := _point_edit_transaction_controller.capture_state(curve)
-	var point_resource_ids_before := curve._get_editor_point_resource_ids()
-	var moved_point := curve.points[from_index]
-	curve.swap_points(from_index, to_index)
-	_select_reordered_point(moved_point)
-	var selection_after := _capture_point_selection_state()
-	var point_resource_ids_after := curve._get_editor_point_resource_ids()
-	_point_edit_transaction_controller.commit_applied_action(
-		curve,
-		"Reorder Easing Curve Points",
-		_point_edit_transaction_controller.create_action_context(before)
-			.with_selection(
-				_selection_restorer(),
-				selection_before,
-				selection_after,
-			)
-			.with_point_resource_ids(
-				point_resource_ids_before,
-				point_resource_ids_after,
-			),
-	)
+	_point_edit_transaction_controller.swap_points(curve, from_index, to_index, _select_reordered_point)
 
 func _select_reordered_point(point: EasingCurvePoint) -> void:
 	var point_index := _get_current_point_index(point)

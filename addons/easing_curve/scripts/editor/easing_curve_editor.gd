@@ -38,6 +38,7 @@ signal point_add_requested(point: EasingCurvePoint)
 signal point_remove_requested(point: EasingCurvePoint)
 signal point_move_up_requested(index: int)
 signal point_move_down_requested(index: int)
+signal point_swap_requested(point: Resource, offset: int)
 signal point_edit_finished(point_order: Array[EasingCurvePoint])
 signal point_selection_changed(point: Resource)
 signal default_new_point_handle_mode_changed(handle_mode: int)
@@ -206,6 +207,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_update_point_navigation_tooltips(true)
 	_drag_coordinates_suppressed = true
 	finish_active_point_edit()
 	if not Engine.is_editor_hint():
@@ -241,6 +243,13 @@ func _sync_default_new_point_handle_mode() -> void:
 # =========================
 # GUI INPUT (DRAGGING)
 # =========================
+func _input(event: InputEvent) -> void:
+	if not is_inside_tree() or not is_visible_in_tree():
+		return
+	if event is InputEventWithModifiers:
+		_update_point_navigation_tooltips()
+
+
 func _gui_input(event: InputEvent) -> void:
 	if _backend == null:
 		return
@@ -1039,6 +1048,8 @@ func _request_point_move_up() -> void:
 			point_move_up_requested.emit(selected_index)
 		else:
 			_reorder_selected_point(_get_display_neighbor_index(-1))
+	elif Input.is_key_pressed(KEY_SHIFT):
+		_request_point_swap(-1)
 	else:
 		selected_index = _get_display_neighbor_index(-1)
 
@@ -1051,8 +1062,44 @@ func _request_point_move_down() -> void:
 			point_move_down_requested.emit(selected_index)
 		else:
 			_reorder_selected_point(_get_display_neighbor_index(1))
+	elif Input.is_key_pressed(KEY_SHIFT):
+		_request_point_swap(1)
 	else:
 		selected_index = _get_display_neighbor_index(1)
+
+
+func _request_point_swap(offset: int) -> void:
+	var point := _selected_point_resource()
+	if point_swap_requested.has_connections():
+		point_swap_requested.emit(point, offset)
+	else:
+		# Standalone graphs use the same resource-order operation as the list.
+		var index: int = _backend.find_point(point)
+		var target := wrapi(index + offset, 0, _point_count())
+		if _curve != null:
+			var transaction := preload("res://addons/easing_curve/scripts/editor/inspector/point_edit_transaction_controller.gd").new()
+			transaction.setup(editor_undo_redo, Callable())
+			transaction.setup_point_edit_callbacks(
+				_capture_swap_selection,
+				Callable(get_script(), &"_restore_swap_selection").bind(weakref(self), weakref(_curve)),
+				Callable(),
+			)
+			transaction.swap_points(_curve, index, target, select_point_resource)
+		else:
+			move_point_from_list(index, target)
+
+
+func _capture_swap_selection() -> Dictionary:
+	var point := _selected_point_resource()
+	return {"point_resource_id": point.get_instance_id() if point != null else 0}
+
+
+static func _restore_swap_selection(selection: Dictionary, graph_ref: WeakRef, curve_ref: WeakRef) -> void:
+	var graph := graph_ref.get_ref() as EasingCurveEditor
+	if graph == null or graph.get_curve() != curve_ref.get_ref():
+		return
+	var point := instance_from_id(int(selection["point_resource_id"])) as Resource
+	graph.select_point_resource(point)
 
 
 func _can_use_point_move_buttons() -> bool:
@@ -1426,11 +1473,17 @@ func _draw_drag_coordinates() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_update_point_navigation_tooltips(true)
 		_drag_coordinates_suppressed = true
 		queue_redraw()
 	elif what == NOTIFICATION_VISIBILITY_CHANGED and not is_visible_in_tree():
+		_update_point_navigation_tooltips(true)
 		_drag_coordinates_suppressed = true
 		queue_redraw()
+	elif what == NOTIFICATION_VISIBILITY_CHANGED:
+		_update_point_navigation_tooltips()
+	elif what == NOTIFICATION_WM_WINDOW_FOCUS_IN or what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		_refresh_point_navigation_tooltips_after_focus.call_deferred()
 	if what == NOTIFICATION_FOCUS_ENTER:
 		queue_redraw()
 	elif what == NOTIFICATION_FOCUS_EXIT:
@@ -1472,6 +1525,7 @@ func set_zoom(zoom: Vector2) -> void:
 
 
 func set_curve(resource: Resource) -> void:
+	_update_point_navigation_tooltips()
 	if get_curve() == resource:
 		return
 	end_point_list_coordinate_drag()
@@ -2345,7 +2399,6 @@ func _create_point_toolbar() -> void:
 		reorder_button_size,
 		reorder_button_size,
 	)
-	_point_move_left_button.tooltip_text = "Move Point Left"
 	_point_move_left_button.pressed.connect(_request_point_move_up)
 	for style_name in [&"normal", &"hover", &"pressed", &"focus"]:
 		_point_move_left_button.add_theme_stylebox_override(
@@ -2370,7 +2423,6 @@ func _create_point_toolbar() -> void:
 		reorder_button_size,
 		reorder_button_size,
 	)
-	_point_move_right_button.tooltip_text = "Move Point Right"
 	_point_move_right_button.pressed.connect(_request_point_move_down)
 	for style_name in [&"normal", &"hover", &"pressed", &"focus"]:
 		_point_move_right_button.add_theme_stylebox_override(
@@ -2502,9 +2554,30 @@ func _create_point_toolbar_control_state_option(
 
 
 
+func _refresh_point_navigation_tooltips_after_focus() -> void:
+	if is_inside_tree() and is_visible_in_tree():
+		_update_point_navigation_tooltips()
+
+
+func _update_point_navigation_tooltips(reset_modifier := false) -> void:
+	if not is_instance_valid(_point_move_left_button) or not is_instance_valid(_point_move_right_button):
+		return
+	var swap := point_move_buttons_reorder_points or (
+		not reset_modifier and is_inside_tree() and is_visible_in_tree()
+		and Input.is_key_pressed(KEY_SHIFT)
+	)
+	var previous := "Swap Previous Point" if swap else "Select Previous Point"
+	var next := "Swap Next Point" if swap else "Select Next Point"
+	if _point_move_left_button.tooltip_text != previous:
+		_point_move_left_button.tooltip_text = previous
+	if _point_move_right_button.tooltip_text != next:
+		_point_move_right_button.tooltip_text = next
+
+
 func _update_point_toolbar() -> void:
 	if _point_toolbar == null:
 		return
+	_update_point_navigation_tooltips()
 
 	var hide_toolbar := _is_point_toolbar_hidden()
 	_point_toolbar_panel.visible = not hide_toolbar
@@ -2521,16 +2594,6 @@ func _update_point_toolbar() -> void:
 	)
 
 	_point_toolbar.visible = true
-	_point_move_left_button.tooltip_text = (
-		"Move Point Left"
-		if point_move_buttons_reorder_points
-		else "Select Previous Point"
-	)
-	_point_move_right_button.tooltip_text = (
-		"Move Point Right"
-		if point_move_buttons_reorder_points
-		else "Select Next Point"
-	)
 
 	if not valid_selection:
 		_point_label.text = (

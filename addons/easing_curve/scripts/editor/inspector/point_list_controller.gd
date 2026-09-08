@@ -197,7 +197,7 @@ func _create_point_side_vbox(
 		EDITOR_THEME_CACHE.ICON_MOVE_UP
 	)
 	move_up_btn.flat = true
-	move_up_btn.tooltip_text = "Move Point Up"
+	move_up_btn.tooltip_text = "Swap Previous Point"
 	move_up_btn.pressed.connect(
 		_request_relative_move.bind(curve.points[point_index], curve, -1, move_point)
 	)
@@ -220,7 +220,7 @@ func _create_point_side_vbox(
 		EDITOR_THEME_CACHE.ICON_MOVE_DOWN
 	)
 	move_down_btn.flat = true
-	move_down_btn.tooltip_text = "Move Point Down"
+	move_down_btn.tooltip_text = "Swap Next Point"
 	move_down_btn.pressed.connect(
 		_request_relative_move.bind(curve.points[point_index], curve, 1, move_point)
 	)
