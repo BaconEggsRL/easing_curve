@@ -58,6 +58,9 @@ const NATIVE_EASES := [
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "NativeEasingCurve") var native_curve: Resource:
 	set = set_native_curve
 
+#@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "NativeEasingCurve") var native_curve_2: Resource:
+	#set = set_native_curve
+
 @export var easing_curve: EasingCurve = EasingCurve.new():
 	set = set_easing_curve
 
@@ -540,6 +543,21 @@ func set_native_curve(value: Resource) -> void:
 		native_curve.changed.connect(_on_native_curve_changed)
 	_sync_dropdowns()
 	reset_and_start.call_deferred()
+
+
+#func set_native_curve_2(value: Resource) -> void:
+	#if value != null and value.get_class() != &"NativeEasingCurve":
+		#push_warning("Native Curve must be a NativeEasingCurve resource.")
+		#return
+	#if native_curve_2 == value:
+		#return
+	#if native_curve_2 != null and native_curve_2.changed.is_connected(_on_native_curve_changed):
+		#native_curve_2.changed.disconnect(_on_native_curve_changed)
+	#native_curve_2 = value
+	#if native_curve_2 != null and not native_curve_2.changed.is_connected(_on_native_curve_changed):
+		#native_curve_2.changed.connect(_on_native_curve_changed)
+	#_sync_dropdowns()
+	#reset_and_start.call_deferred()
 
 
 func set_easing_curve(value: EasingCurve) -> void:
