@@ -2,12 +2,6 @@
 
 [ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/_test_scene/test.gd" id="1_37kl0"]
 
-[sub_resource type="Curve" id="Curve_5p28q"]
-_data = [Vector2(0.5, 1), 0.0, 0.0, 0, 0]
-point_count = 1
-metadata/_snap_count = 100
-metadata/_snap_enabled = true
-
 [node name="TestScene" type="Control" unique_id=198225181]
 layout_mode = 3
 anchors_preset = 15
@@ -17,7 +11,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_37kl0")
-debug_curve = SubResource("Curve_5p28q")
 
 [node name="NodeContainer" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)
