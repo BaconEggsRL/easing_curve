@@ -10,13 +10,20 @@ For both Native and Legacy Custom graphs:
 - Confirm locks, Shift constraints, endpoint crossing, Free/Balanced/Mirrored
   and Force Linear retain their existing behavior; Undo/Redo remains one edit.
 - Pan/zoom and drag near all four edges. Text stays within the graph below its
-  toolbar; it moves below the marker when there is no space above.
+  toolbar. A font-sized top inset reserves room above the curve, and text stays
+  above the marker instead of flipping below it.
 - Release outside the graph, cancel a pending addition, switch window focus,
   fold/hide the graph, replace its resource and rebuild it. No stale readout
   should return until a new gesture begins. Removing Points alone must leave
   a surviving active graph's readout visible.
-- Check no readout for selection/hover, Inspector field editing, panning alone
+- Drag X/Y fields for Position, Left Control and Right Control in the Points list:
+  the graph readout follows the edited element and disappears on release or field
+  hiding/destruction. No readout appears for typing, selection/hover, panning alone
   or function graphs. Check normal/enlarged Editor scale and light/dark themes.
+- In Native Linear mode, either control field edits Position, matching Legacy.
+  Check X crossing/reorder, Y edits, typed edits, control locks, and one Undo action
+  per gesture. Native position locks also disable the aliased control inputs.
+  Repeat with the graph removed and Points still alive.
 
 2026-09-08 automated rendered smoke: both backends passed viewport press and
 outside-graph release checks. Captures at 1.0/1.5 scale with light/dark theme

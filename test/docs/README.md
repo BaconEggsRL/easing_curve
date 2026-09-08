@@ -7,6 +7,19 @@ pending-add resource. The four private helpers separate resolved coordinates,
 formatting, bounded placement and direct drawing. The instance-local suppression
 flag controls presentation only; it does not finish or cancel transactions.
 
+Follow-up: graph transforms and Autofit share a font-sized top inset, allowing
+the readout to stay above top-edge points. Points-list slider drags now feed the
+same readout via weak presentation references to the input and point; they never
+set graph drag indices. Release, typing, field hide/exit and Points teardown clear
+those references. A new graph gesture cannot inherit a dismissed list readout.
+
+Native Linear control fields now route through Position for both mutation and
+transaction completion, matching Legacy point movement and ordering. They display
+Position, use its X limits, and honor stored control/position locks. This also
+works when only the Points surface survives. The fix is in Inspector callbacks;
+Native resource setters, serialization and binaries are unchanged. Field range
+refreshes block signals to avoid turning UI synchronization into another edit.
+
 Coordinate sources: `position`, `left_control_point`, `right_control_point`, and
 the pending point's `position` are absolute curve-space values. Pending-add press
 and motion already convert input into that space. Native applies Reverse/Invert
@@ -26,12 +39,12 @@ Validation on Godot `4.7.1.stable.official.a13da4feb`, 2026-09-08:
 | Check | Result |
 | --- | --- |
 | Fresh pre-edit baseline | All 24 suites passed |
-| Focused drag-coordinate suite, headless | 341 checks passed |
+| Focused drag-coordinate suite, headless | 347 checks passed |
 | Gesture characterization | 214 checks passed |
 | Position-X drag | 72 checks passed |
 | Editor vertical slice | 1,053 checks passed |
-| Inspector ownership | 332 checks passed |
-| Rendered drag-coordinate suite | 353 checks passed |
+| Inspector ownership | 550 checks passed |
+| Rendered drag-coordinate suite | 359 checks passed |
 | Final correctness runner | All 25 suites passed |
 
 Rendered execution uses actual graph drawing in an Editor host, synthetic viewport
@@ -49,6 +62,13 @@ logs and PNGs), `test/_temp/drag-*.txt` (individual regressions), and
 repository launcher, `EASING_CURVE_GODOT_PATH`, and repository-local log files.
 The initial isolated import used a direct launch and emitted user-directory
 permission diagnostics; subsequent checks used the launcher's isolated data path.
+
+Follow-up logs: `test/_temp/drag-list-ownership.txt`,
+`test/_temp/drag-list-gesture.txt`, `test/_temp/drag-list-rendered-final.txt`, and
+`test/_temp/drag-list-full-correctness-final.txt`. The first follow-up full run
+caught an Autofit mismatch after introducing the inset; centering now uses the
+shared graph rectangle and a world-space delta to avoid pixel roundoff. The
+rendered fixture also captures `drag-coordinates-top-inset.png` at the graph top.
 
 ## Release procedure
 

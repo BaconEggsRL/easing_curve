@@ -146,6 +146,17 @@ func _test_lifecycle(native: bool) -> void:
 	root.remove_child(rebuilt)
 	_expect(not rebuilt._get_drag_coordinate_position().is_finite(), "Tree exit retained readout")
 	_dispose(rebuilt)
+	var handoff := _fixture(native)
+	var input := EditorSpinSlider.new()
+	root.add_child(input)
+	handoff.begin_point_list_coordinate_drag(input, handoff._point(1), &"position")
+	handoff.notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
+	_press(handoff, Vector2(0.73, 0.18))
+	_expect(handoff.pending_add_point != null, "List-to-graph handoff did not create pending point")
+	_expect(handoff._get_drag_coordinate_position().is_equal_approx(Vector2(0.73, 0.18)), "Pending point inherited stale list coordinate source")
+	input.free()
+	handoff._cancel_pending_add()
+	_dispose(handoff)
 
 
 func _test_constraints(native: bool) -> void:
@@ -189,6 +200,13 @@ func _test_format_and_placement() -> void:
 	_expect(editor._format_drag_coordinates(Vector2(-0.02, 1.25)) == "(-0.02, 1.25)", "Out-of-range formatting")
 	for scale: float in [1.0, 2.0]:
 		editor._editor_scale = scale
+		editor.update_view_transform()
+		var font := editor.get_theme_font(&"font", &"Label")
+		var font_size := editor.get_theme_font_size(&"font_size", &"Label")
+		var top_anchor := editor.get_view_pos(Vector2(0.5, 1.0))
+		var actual_text_size := Vector2(100, font.get_height(font_size))
+		var top_label := editor._get_drag_coordinate_label_position(top_anchor, actual_text_size)
+		_expect(top_label.y + actual_text_size.y < top_anchor.y, "Top graph padding did not leave label above point")
 		var text_size := Vector2(100, 20) * scale
 		for anchor: Vector2 in [Vector2.ZERO, Vector2(600, 0), Vector2(0, 300), Vector2(600, 300), Vector2(-300, 800)]:
 			var position := editor._get_drag_coordinate_label_position(anchor, text_size)
@@ -235,6 +253,14 @@ func _test_rendered() -> void:
 			root.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-%s-%s.png" % [scale, "light" if light else "dark"])
 			for editor: EasingCurveEditor in editors:
 				_expect(editor._get_drag_coordinate_position().is_finite(), "Rendered overlay disappeared")
+	for editor: EasingCurveEditor in editors:
+		editor._handle_left_released()
+		editor._point(1).set(&"position", Vector2(0.35, 1.0))
+		_press(editor, _resolved(editor, &"position"))
+		editor.queue_redraw()
+	await process_frame
+	await RenderingServer.frame_post_draw
+	root.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-top-inset.png")
 	for editor: EasingCurveEditor in editors:
 		editor._handle_left_released()
 		var press := InputEventMouseButton.new()

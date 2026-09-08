@@ -58,6 +58,7 @@ func _run() -> void:
 		for queued in [false, true]:
 			await _test_pending_disposal(native, queued)
 		await _test_graph_survives_points_teardown(native)
+		await _test_point_list_coordinates(native)
 		await _test_clipboard(native)
 	await _test_original_reproduction()
 	if DisplayServer.get_name() != "headless":
@@ -120,17 +121,130 @@ func _history(target: Resource) -> UndoRedo:
 	return _undo.get_history_undo_redo(_undo.get_object_history_id(target))
 
 
-func _input(presentation: Dictionary, point: Resource, axis := 1) -> EditorSpinSlider:
+func _input(presentation: Dictionary, point: Resource, axis := 1, property_name := "position") -> EditorSpinSlider:
 	if point is EasingCurvePoint:
 		var bindings: Dictionary = presentation.context._point_list_controller.get_input_bindings()
-		return bindings[point.get_instance_id()].inputs["position" + ("x" if axis == 0 else "y")].input.get_ref()
+		return bindings[point.get_instance_id()].inputs[property_name + ("x" if axis == 0 else "y")].input.get_ref()
 	var panel: Control
 	for child in presentation.context._native_points_content.get_children():
 		if child.get_meta(&"point_resource", null) == point:
 			panel = child
 	var inputs: Array[EditorSpinSlider] = []
 	_collect_inputs(panel, inputs)
-	return inputs[axis]
+	var property_offset := 0 if property_name == "position" else (2 if property_name == "left_control_point" else 4)
+	return inputs[property_offset + axis]
+
+
+func _test_point_list_coordinates(native: bool) -> void:
+	for linear: bool in [false, true]:
+		for property_name: String in ["position", "left_control_point", "right_control_point"]:
+			for axis in range(2):
+				var target := _curve(native)
+				var backend := Factory.create(target)
+				var point: Resource = backend.get_point(1)
+				if linear:
+					point.set(&"handle_mode", EasingCurvePoint.HandleMode.LINEAR)
+				var p := _presentation(target)
+				for frame in range(8):
+					await process_frame
+					if not p.graph._graph_render_suppressed:
+						break
+				p.graph.update_view_transform()
+				var input := _input(p, point, axis, property_name)
+				var history := _history(target)
+				history.clear_history()
+				var before: Vector2 = point.get(&"position")
+				input.grabbed.emit()
+				_expect(p.graph._get_drag_coordinate_position().is_finite(), "Points drag did not show coordinates")
+				_expect(p.graph.dragging_point == -1, "List readout changed graph drag state")
+				input.value = 0.85 if axis == 0 else 0.61
+				var edit_property := "position" if linear else property_name
+				var resolved: Vector2 = backend.curve_to_display_position(point.get(edit_property))
+				_expect(p.graph._get_drag_coordinate_position().is_equal_approx(resolved), "Points readout did not follow resolved property")
+				if linear:
+					_expect(is_equal_approx((point.get(&"position") as Vector2)[axis], input.value), "Linear control did not move point")
+					_expect(point.get(&"left_control_point") == point.get(&"position") and point.get(&"right_control_point") == point.get(&"position"), "Linear controls diverged from point")
+				input.ungrabbed.emit()
+				_expect(not p.graph._get_drag_coordinate_position().is_finite(), "Points release retained readout")
+				await process_frame
+				_expect(history.get_history_count() == 1, "Points gesture did not commit exactly one action")
+				history.undo()
+				_expect(point.get(&"position") == before, "Points gesture Undo did not restore position")
+				history.redo()
+				if linear and axis == 0:
+					_expect(backend.find_point(point) == 2, "Linear control X did not follow position ordering")
+				_close(p)
+				history.clear_history()
+				await process_frame
+	var target := _curve(native)
+	var backend := Factory.create(target)
+	var point: Resource = backend.get_point(1)
+	point.set(&"handle_mode", EasingCurvePoint.HandleMode.LINEAR)
+	var p := _presentation(target)
+	for frame in range(8):
+		await process_frame
+		if not p.graph._graph_render_suppressed:
+			break
+	var input := _input(p, point, 1, "left_control_point")
+	input.value_focus_entered.emit()
+	input.value = 0.57
+	input.value_focus_exited.emit()
+	await process_frame
+	_expect(is_equal_approx((point.get(&"position") as Vector2).y, 0.57), "Typed Linear control did not move point")
+	_expect(not p.graph._get_drag_coordinate_position().is_finite(), "Typing showed drag coordinates")
+	point.call(&"set_locked", &"left_control_point", true)
+	var before: Vector2 = point.get(&"position")
+	input.value = 0.91
+	_expect(point.get(&"position") == before, "Locked Linear list control moved point")
+	point.call(&"set_locked", &"left_control_point", false)
+	input.grabbed.emit()
+	_expect(p.graph._get_drag_coordinate_position().is_finite(), "List gesture did not rearm after typing")
+	input.hide()
+	input.show()
+	_expect(not p.graph._get_drag_coordinate_position().is_finite(), "Hidden list field retained coordinates")
+	input.grabbed.emit()
+	p.points_root.free()
+	_expect(not p.graph._get_drag_coordinate_position().is_finite(), "Points teardown retained list readout")
+	_close(p)
+	_history(target).clear_history()
+	await process_frame
+	if native:
+		await _test_native_linear_list_without_graph()
+
+
+func _test_native_linear_list_without_graph() -> void:
+	var target := _curve(true)
+	var backend := Factory.create(target)
+	var point: Resource = backend.get_point(1)
+	point.set(&"handle_mode", EasingCurvePoint.HandleMode.LINEAR)
+	target.set(&"reverse", true)
+	target.set(&"invert", true)
+	var p := _presentation(target)
+	for frame in range(8):
+		await process_frame
+		if not p.graph._graph_render_suppressed:
+			break
+	var input := _input(p, point, 1, "right_control_point")
+	input.grabbed.emit()
+	input.value = 0.23
+	_expect(p.graph._get_drag_coordinate_position().is_equal_approx(Vector2(0.65, 0.77)), "Transformed list coordinates applied Native transform incorrectly")
+	input.ungrabbed.emit()
+	await process_frame
+	p.graph_root.free()
+	var history := _history(target)
+	history.clear_history()
+	input.value_focus_entered.emit()
+	input.value = 0.67
+	input.value_focus_exited.emit()
+	await process_frame
+	_expect(is_equal_approx((point.get(&"position") as Vector2).y, 0.67), "Detached Linear list field did not move point")
+	_expect(point.get(&"right_control_point") == point.get(&"position"), "Detached Linear handle diverged")
+	_expect(history.get_history_count() == 1, "Detached Linear edit lost transaction completion")
+	history.undo()
+	_expect(is_equal_approx((point.get(&"position") as Vector2).y, 0.23), "Detached Linear Undo failed")
+	_close(p)
+	history.clear_history()
+	await process_frame
 
 
 func _collect_inputs(node: Node, result: Array[EditorSpinSlider]) -> void:

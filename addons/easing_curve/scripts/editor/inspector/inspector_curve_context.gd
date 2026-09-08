@@ -386,6 +386,8 @@ func _on_presentation_root_exiting(root_id: int, is_graph: bool) -> void:
 		easing_curve_editor = null
 	else:
 		# An active graph gesture belongs to the surviving graph.
+		if is_instance_valid(easing_curve_editor):
+			easing_curve_editor.end_point_list_coordinate_drag()
 		if not is_instance_valid(easing_curve_editor) or easing_curve_editor.dragging_point < 0:
 			_finish_applied_point_edit()
 		_cancel_pending_native_point_edit_finish()
@@ -460,6 +462,7 @@ func _select_native_point(point: Resource) -> void:
 
 
 func _prepare_native_point_edit(point: Resource, property_name: StringName) -> bool:
+	property_name = _get_native_point_input_edit_property(point, property_name)
 	if is_instance_valid(easing_curve_editor):
 		return easing_curve_editor.prepare_point_list_edit(point, property_name)
 	return _native_list_editor().prepare(point, property_name)
@@ -1667,12 +1670,14 @@ func _add_native_vector_property(
 				input,
 			)
 		)
+		_connect_point_list_coordinate_signals(input, point, property_name)
 		inputs.append(input)
 		values.add_child(input)
 	var changed_callback := func():
 		_refresh_native_vector_inputs(point, property_name, inputs)
 	point.changed.connect(changed_callback)
 	values.tree_exiting.connect(_disconnect_native_point_callback.bind(point, changed_callback))
+	_refresh_native_vector_inputs(point, property_name, inputs)
 
 
 func _on_native_input_grabbed(
@@ -1739,7 +1744,7 @@ func _queue_native_point_edit_finish(
 		_native_curve.get_instance_id(),
 		easing_curve_editor.get_instance_id() if is_instance_valid(easing_curve_editor) else 0,
 		point.get_instance_id() if is_instance_valid(point) else 0,
-		property_name,
+		_get_native_point_input_edit_property(point, property_name),
 	)
 
 
@@ -1801,14 +1806,37 @@ func _on_native_vector_value_changed(
 	var current_index: int = backend.find_point(point) if backend != null else -1
 	if current_index < 0:
 		return
-	var vector: Vector2 = point.get(property_name)
+	if not _is_native_point_input_editable(point, property_name):
+		input.set_value_no_signal((point.get(_get_native_point_input_edit_property(point, property_name)) as Vector2)[axis])
+		return
+	var edit_property := _get_native_point_input_edit_property(point, property_name)
+	var vector: Vector2 = point.get(edit_property)
 	vector[axis] = value
+	if edit_property == &"position" and edit_property != property_name:
+		vector.x = clampf(vector.x, 0.0, 1.0)
 	_edit_native_point_property(
 		current_index,
-		property_name,
+		edit_property,
 		vector,
 		input.has_meta(DRAGGING_META) or input.has_meta(VALUE_EDITING_META),
 	)
+
+
+func _get_native_point_input_edit_property(point: Resource, property_name: StringName) -> StringName:
+	if (
+		point != null
+		and int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.LINEAR
+		and property_name in [&"left_control_point", &"right_control_point"]
+	):
+		return &"position"
+	return property_name
+
+
+func _is_native_point_input_editable(point: Resource, property_name: StringName) -> bool:
+	if _get_native_point_input_edit_property(point, property_name) == property_name:
+		return true
+	var locks: Dictionary = point.get(&"locked")
+	return not bool(locks.get(property_name, false)) and not bool(locks.get(&"position", false))
 
 
 func _refresh_native_vector_inputs(
@@ -1818,10 +1846,18 @@ func _refresh_native_vector_inputs(
 ) -> void:
 	if not is_instance_valid(point):
 		return
-	var value: Vector2 = point.get(property_name)
+	var edit_property := _get_native_point_input_edit_property(point, property_name)
+	var value: Vector2 = point.get(edit_property)
 	for axis in range(mini(2, inputs.size())):
 		if is_instance_valid(inputs[axis]):
+			var signals_blocked := inputs[axis].is_blocking_signals()
+			inputs[axis].set_block_signals(true)
+			inputs[axis].read_only = not _is_native_point_input_editable(point, property_name)
+			if axis == 0:
+				inputs[axis].min_value = 0.0 if edit_property == &"position" else -1024.0
+				inputs[axis].max_value = 1.0 if edit_property == &"position" else 1024.0
 			inputs[axis].set_value_no_signal(value[axis])
+			inputs[axis].set_block_signals(signals_blocked)
 
 
 func _add_native_handle_mode_property(
@@ -2794,6 +2830,7 @@ func _create_vector2_axis_row(
 			_on_y_input_value_changed.bind(point, input, reset_btn, property_name)
 		)
 	_connect_point_input_drag_signals(input)
+	_connect_point_list_coordinate_signals(input, point, StringName(property_name))
 
 	if axis == "x" and property_name == "position":
 		input.value_focus_entered.connect(
@@ -2932,6 +2969,39 @@ func _commit_point_edit(point_order: Array[EasingCurvePoint] = []) -> void:
 	_point_edit_finish_request_id += 1
 	_commit_position_x_order_preview()
 	_point_edit_transaction_controller.finish_point_edit(curve, point_order)
+
+
+func _connect_point_list_coordinate_signals(input: EditorSpinSlider, point: Resource, property_name: StringName) -> void:
+	input.grabbed.connect(_begin_point_list_coordinates.bind(input, point, property_name))
+	input.ungrabbed.connect(_end_point_list_coordinates.bind(input))
+	input.value_focus_entered.connect(_end_point_list_coordinates.bind(input))
+	input.tree_exiting.connect(_end_point_list_coordinates.bind(input))
+	input.visibility_changed.connect(_on_coordinate_input_visibility_changed.bind(input))
+
+
+func _on_coordinate_input_visibility_changed(input: EditorSpinSlider) -> void:
+	if not input.is_visible_in_tree():
+		_end_point_list_coordinates(input)
+
+
+func _begin_point_list_coordinates(input: EditorSpinSlider, point: Resource, property_name: StringName) -> void:
+	if disposed or not is_instance_valid(easing_curve_editor) or not input.has_meta(DRAGGING_META):
+		return
+	var edit_property := property_name
+	if point is EasingCurvePoint:
+		if not _is_point_input_editable(point, property_name):
+			return
+		edit_property = _get_point_input_edit_property(point, property_name)
+	else:
+		if not _is_native_point_input_editable(point, property_name):
+			return
+		edit_property = _get_native_point_input_edit_property(point, property_name)
+	easing_curve_editor.begin_point_list_coordinate_drag(input, point, edit_property)
+
+
+func _end_point_list_coordinates(input: EditorSpinSlider) -> void:
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.end_point_list_coordinate_drag(input)
 
 
 func _connect_point_input_drag_signals(input: EditorSpinSlider) -> void:

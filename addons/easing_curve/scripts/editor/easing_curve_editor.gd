@@ -102,6 +102,9 @@ var hovered_control_index: ControlIndex = ControlIndex.NONE
 var dragging_point: int = -1
 var dragging_control: ControlIndex = ControlIndex.NONE
 var _drag_coordinates_suppressed := true
+var _point_list_coordinate_input: WeakRef
+var _point_list_coordinate_point: WeakRef
+var _point_list_coordinate_property := StringName()
 var pending_add_point: Resource
 var position_x_order_preview_point: Resource
 var is_right_delete_dragging := false
@@ -309,6 +312,7 @@ func _begin_axis_drag(
 	point: Resource,
 	control: ControlIndex,
 ) -> void:
+	end_point_list_coordinate_drag()
 	_drag_coordinates_suppressed = false
 	_axis_drag_origin_view = event.position
 	match control:
@@ -448,6 +452,7 @@ func _handle_wheel(event: InputEventMouseButton) -> bool:
 
 
 func _handle_left_pressed(event: InputEventMouseButton) -> void:
+	end_point_list_coordinate_drag()
 	var control = get_control_at(event.position)
 	var point_idx = get_point_at(event.position)
 	if (
@@ -1285,11 +1290,40 @@ func _draw():
 	_draw_drag_coordinates()
 
 
+func begin_point_list_coordinate_drag(input: Control, point: Resource, property_name: StringName) -> void:
+	if _backend == null or _backend.find_point(point) < 0:
+		return
+	# Presentation references only: list callbacks still own the edit lifecycle.
+	_point_list_coordinate_input = weakref(input)
+	_point_list_coordinate_point = weakref(point)
+	_point_list_coordinate_property = property_name
+	_drag_coordinates_suppressed = false
+	queue_redraw()
+
+
+func end_point_list_coordinate_drag(input: Control = null) -> void:
+	if _point_list_coordinate_input == null:
+		return
+	if input != null and _point_list_coordinate_input.get_ref() != input:
+		return
+	_point_list_coordinate_input = null
+	_point_list_coordinate_point = null
+	_point_list_coordinate_property = &""
+	_drag_coordinates_suppressed = true
+	queue_redraw()
+
+
 func _get_drag_coordinate_position() -> Vector2:
 	if _drag_coordinates_suppressed or _backend == null or _graph_render_suppressed:
 		return Vector2(NAN, NAN)
 	if not _is_point_graph():
 		return Vector2(NAN, NAN)
+	if _point_list_coordinate_input != null:
+		var input := _point_list_coordinate_input.get_ref() as Control
+		var list_point := _point_list_coordinate_point.get_ref() as Resource
+		if input == null or list_point == null or _backend.find_point(list_point) < 0:
+			return Vector2(NAN, NAN)
+		return _backend.curve_to_display_position(list_point.get(_point_list_coordinate_property) as Vector2)
 	var point := pending_add_point if pending_add_point != null else _point(dragging_point)
 	if point == null:
 		return Vector2(NAN, NAN)
@@ -1320,16 +1354,20 @@ func _get_drag_coordinate_label_position(anchor: Vector2, text_size: Vector2) ->
 	var maximum := size - Vector2.ONE * margin - text_size
 	if maximum.x < minimum.x or maximum.y < minimum.y:
 		return Vector2(NAN, NAN)
-	var radius := (
-		point_radius
-		if pending_add_point != null or dragging_control == ControlIndex.NONE
-		else control_radius
-	)
+	var is_point := pending_add_point != null or dragging_control == ControlIndex.NONE
+	if _point_list_coordinate_input != null:
+		is_point = _point_list_coordinate_property == &"position"
+	var radius := point_radius if is_point else control_radius
 	var gap := radius + 6.0 * _editor_scale
 	var position := anchor - Vector2(text_size.x * 0.5, gap + text_size.y)
-	if position.y < minimum.y:
-		position.y = anchor.y + gap
 	return position.clamp(minimum, maximum)
+
+
+func _get_coordinate_top_padding() -> float:
+	if _backend == null or not _is_point_graph():
+		return 0.0
+	var font := get_theme_font(&"font", &"Label")
+	return font.get_height(get_theme_font_size(&"font_size", &"Label")) + point_radius + 6.0 * _editor_scale
 
 
 func _draw_drag_coordinates() -> void:
@@ -1406,6 +1444,7 @@ func set_zoom(zoom: Vector2) -> void:
 func set_curve(resource: Resource) -> void:
 	if get_curve() == resource:
 		return
+	end_point_list_coordinate_drag()
 	_drag_coordinates_suppressed = true
 	if _backend != null and _backend_point_edit_active:
 		_backend.finish_point_edit()
@@ -1520,13 +1559,6 @@ func _is_point_toolbar_hidden() -> bool:
 
 
 func update_view_transform() -> void:
-	var margin := 4.0 * _editor_scale
-	var toolbar_height := (
-		0.0
-		if _is_point_toolbar_hidden()
-		else SELECTION_TOOLBAR_HEIGHT * _editor_scale
-	)
-
 	var auto_range := Vector2(0.0, 1.0)
 
 	var auto_min_y = auto_range.x
@@ -1548,22 +1580,15 @@ func update_view_transform() -> void:
 
 	# Get world rect
 	var world_rect = Rect2(Vector2(min_x, min_y), Vector2(max_x - min_x, max_y - min_y))
-	var view_origin := Vector2(
-		margin,
-		toolbar_height + margin,
-	)
-	var view_size := Vector2(
-		maxf(size.x - margin * 2.0, 1.0),
-		maxf(size.y - toolbar_height - margin * 2.0, 1.0),
-	)
-	var view_scale = view_size / world_rect.size
+	var graph_rect := _get_graph_view_rect()
+	var view_scale = graph_rect.size / world_rect.size
 
 	var world_trans: Transform2D
 	world_trans = world_trans.translated_local(-world_rect.position - Vector2(0, world_rect.size.y))
 	world_trans = world_trans.scaled(Vector2(view_scale.x, -view_scale.y))
 
 	var view_trans: Transform2D
-	view_trans = view_trans.translated_local(view_origin)
+	view_trans = view_trans.translated_local(graph_rect.position)
 
 	_world_to_view = view_trans * world_trans
 
@@ -1714,9 +1739,9 @@ func autofit() -> void:
 	pan_offset = Vector2.ZERO
 	update_view_transform()
 
-	var graph_rect := _get_graph_view_rect()
-	var bounds_center_view := _world_to_view * bounds.get_center()
-	pan_offset = graph_rect.get_center() - bounds_center_view
+	# Use a world-space delta so centering does not retain pixel roundoff after
+	# adding the coordinate-text inset to the graph's screen origin.
+	pan_offset = _world_to_view.basis_xform(Vector2(0.5, 0.5) - bounds.get_center())
 	pan_changed.emit(pan_offset)
 	queue_redraw()
 
@@ -1771,16 +1796,17 @@ func _get_autofit_world_bounds() -> Rect2:
 
 func _get_graph_view_rect() -> Rect2:
 	var margin := 4.0 * _editor_scale
+	var coordinate_padding := _get_coordinate_top_padding()
 	var toolbar_height := (
 		0.0
 		if _is_point_toolbar_hidden()
 		else SELECTION_TOOLBAR_HEIGHT * _editor_scale
 	)
 	return Rect2(
-		Vector2(margin, toolbar_height + margin),
+		Vector2(margin, toolbar_height + margin + coordinate_padding),
 		Vector2(
 			maxf(size.x - margin * 2.0, 1.0),
-			maxf(size.y - toolbar_height - margin * 2.0, 1.0),
+			maxf(size.y - toolbar_height - margin * 2.0 - coordinate_padding, 1.0),
 		),
 	)
 
