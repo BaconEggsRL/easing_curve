@@ -555,9 +555,11 @@ func _handle_left_pressed(event: InputEventMouseButton) -> void:
 	var new_point := _create_point_with_default_handle_mode(clamped_pos)
 	if new_point == null:
 		return
-	selected_index = _request_point_add(new_point)
-	if selected_index != -1:
-		dragging_point = selected_index
+	var added_index := _request_point_add(new_point)
+	if _curve == null or selected_index != added_index:
+		selected_index = added_index
+	if added_index != -1:
+		dragging_point = added_index
 		dragging_control = ControlIndex.NONE
 		_drag_coordinates_suppressed = false
 	queue_redraw()
@@ -587,7 +589,9 @@ func _handle_left_released() -> void:
 	if pending_add_point != null:
 		var point := pending_add_point
 		pending_add_point = null
-		selected_index = _request_point_add(point)
+		var added_index := _request_point_add(point)
+		if _curve == null or selected_index != added_index:
+			selected_index = added_index
 		dragging_point = -1
 		dragging_control = ControlIndex.NONE
 		_clear_axis_drag()
@@ -997,7 +1001,10 @@ func _point_edit_action_name(property_name: StringName) -> String:
 func _request_point_add(point: Resource) -> int:
 	if _curve != null and point is EasingCurvePoint and point_add_requested.has_connections():
 		point_add_requested.emit(point)
-		return _backend.find_point(point)
+		# Legacy snapshots reconstruct point Resources. The Inspector add handler
+		# selects the committed replacement synchronously, so return that index
+		# instead of looking up the transient request Resource.
+		return selected_index
 	finish_active_point_edit()
 	var before := _duplicate_snapshot(_backend.capture_snapshot())
 	var selected_before := _selected_point_resource()

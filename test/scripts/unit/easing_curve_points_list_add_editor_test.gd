@@ -252,14 +252,20 @@ func _test_graph_point_adds() -> void:
 	graph_point.left_control_point = Vector2(0.15, 0.75)
 	graph_point.right_control_point = Vector2(0.35, 0.75)
 	graph_editor.selected_index = 0
+	EDITOR_DRIVER.connect_curve_editor(graph_editor, graph_inspector)
 
-	EDITOR_DRIVER.add_point_from_graph(graph_inspector, graph_point)
+	# Exercise the real pending-add completion path. Legacy snapshot application
+	# reconstructs point Resources, so selection must follow the committed point.
+	graph_editor.pending_add_point = graph_point
+	graph_editor.call("_handle_left_released")
 
 	_expect(graph_curve.points.size() == 3, "Graph Add did not add exactly one point")
 	_expect(graph_curve.points[0].position == Vector2.ZERO and graph_curve.points[2].position == Vector2.ONE, "Graph Add changed an endpoint")
 	_expect(graph_curve.points[1].position == graph_point.position, "Graph Add did not preserve the requested point position")
 	_expect(_is_ordered_by_x(graph_curve.points), "Graph Add did not keep point order")
-	_expect(graph_editor.selected_index == 0, "Graph Add request changed graph selection behavior")
+	_expect_selected_point(graph_inspector, graph_editor, graph_curve, 1, "Graph Add")
+	EDITOR_DRIVER.rebuild_for_curve(graph_inspector, graph_curve)
+	_expect_selected_point(graph_inspector, graph_editor, graph_curve, 1, "Graph Add refresh")
 	graph_editor.free()
 
 	var takeover_curve := EasingCurve.new()
@@ -271,14 +277,14 @@ func _test_graph_point_adds() -> void:
 	var takeover_context := EDITOR_HOST.create_inspector_context(takeover_curve)
 	var takeover_editor: EasingCurveEditor = takeover_context.editor
 	var takeover_inspector: Object = takeover_context.inspector
+	EDITOR_DRIVER.connect_curve_editor(takeover_editor, takeover_inspector)
 
-	EDITOR_DRIVER.add_point_from_graph(
-		takeover_inspector,
-		EasingCurvePoint.new(Vector2(1.0, 0.8)),
-	)
+	takeover_editor.pending_add_point = EasingCurvePoint.new(Vector2(1.0, 0.8))
+	takeover_editor.call("_handle_left_released")
 
 	_expect(takeover_curve.points.size() == 2, "Graph endpoint Add did not use endpoint takeover")
 	_expect(takeover_curve.points[0].position == Vector2.ZERO and takeover_curve.points[1].position == Vector2(1.0, 0.8), "Graph endpoint Add did not replace the right endpoint")
+	_expect_selected_point(takeover_inspector, takeover_editor, takeover_curve, 1, "Graph endpoint Add")
 	takeover_editor.free()
 
 

@@ -892,6 +892,9 @@ var _selected_point_property_header: PanelContainer
 var _point_list_controller := PointListController.new()
 var _position_x_order_preview_point: EasingCurvePoint
 var _initial_autofit_resource_ids: Dictionary[int, bool] = {}
+# Shared by Inspector parse contexts through the plugin. Legacy graph selection
+# must survive property-list rebuilds caused by add/drag topology publication.
+var _legacy_selection_by_resource: Dictionary[int, Dictionary] = {}
 
 
 class AutofitRequest:
@@ -942,6 +945,65 @@ func _capture_point_selection_state() -> Dictionary:
 		_point_list_curve_resource(),
 		graph_selected_index,
 	)
+
+
+func _persist_legacy_selection() -> void:
+	if curve == null:
+		return
+	var curve_id := curve.get_instance_id()
+	var selection := _capture_point_selection_state()
+	if not bool(selection.get("has_selection", false)):
+		_legacy_selection_by_resource.erase(curve_id)
+		return
+	_legacy_selection_by_resource[curve_id] = {
+		"curve": weakref(curve),
+		"selection": selection.duplicate(true),
+	}
+
+
+func _restore_persisted_legacy_selection(curve_resource: EasingCurve) -> int:
+	if curve_resource == null:
+		return -1
+	var curve_id := curve_resource.get_instance_id()
+	var state: Dictionary = _legacy_selection_by_resource.get(curve_id, {})
+	if state.is_empty():
+		return -1
+	var curve_ref := state.get("curve") as WeakRef
+	if curve_ref == null or curve_ref.get_ref() != curve_resource:
+		_legacy_selection_by_resource.erase(curve_id)
+		return -1
+	var selection: Dictionary = state.get("selection", {})
+	if selection.is_empty():
+		_legacy_selection_by_resource.erase(curve_id)
+		return -1
+	var point_index := _point_list_controller.restore_selection(curve_resource, selection)
+	if point_index == -1:
+		_legacy_selection_by_resource.erase(curve_id)
+	return point_index
+
+
+func _on_legacy_graph_selection_changed(point: Resource) -> void:
+	if (
+		disposed
+		or curve == null
+		or not is_instance_valid(easing_curve_editor)
+		or easing_curve_editor.get_curve() != curve
+	):
+		return
+	if point == null:
+		_point_list_controller.clear_logical_selection()
+		_persist_legacy_selection()
+		return
+	var legacy_point := point as EasingCurvePoint
+	var point_index := _get_current_point_index(legacy_point) if legacy_point != null else -1
+	if point_index < 0:
+		return
+	_point_list_controller.assign_logical_selection(
+		curve,
+		point_index,
+		_point_list_controller.selected_point_property_name,
+	)
+	_persist_legacy_selection()
 
 
 func _restore_point_selection_state(selection: Dictionary) -> void:
@@ -1193,7 +1255,8 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		easing_curve_editor.editor_undo_redo = editor_undo_redo
 		easing_curve_editor.set_curve(object)
 		_connect_graph_swap_request()
-		_sync_graph_selected_point_index(_selected_point_index_for_resource(object))
+		var restored_selection := _restore_persisted_legacy_selection(object)
+		_sync_graph_selected_point_index(restored_selection)
 
 		# Restore the Resource-owned transient Curve Editor view state. The later
 		# slider initialization intentionally remains the canonical zoom source.
@@ -1210,6 +1273,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		easing_curve_editor.zoom_changed.connect(object._on_curve_editor_zoom_changed)
 		easing_curve_editor.pan_changed.connect(object._on_curve_editor_pan_changed)
 		easing_curve_editor.point_changed.connect(_on_curve_editor_point_changed)
+		easing_curve_editor.point_selection_changed.connect(_on_legacy_graph_selection_changed)
 		easing_curve_editor.point_property_change_requested.connect(_apply_point_property_change)
 		easing_curve_editor.point_add_requested.connect(_on_curve_editor_point_add_requested)
 		easing_curve_editor.point_remove_requested.connect(_remove_point)
@@ -3100,7 +3164,9 @@ func _on_linear_control_x_input_focus_exited(
 
 
 func _on_curve_editor_point_add_requested(point: EasingCurvePoint) -> void:
-	_add_point(point, _capture_point_selection_state())
+	# Graph-created Legacy points are reconstructed by set_point_snapshot(), so
+	# select the committed point resource here rather than the transient request.
+	_add_point(point, _capture_point_selection_state(), true)
 
 
 func _create_handle_mode_property(
