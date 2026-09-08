@@ -586,7 +586,7 @@ func _handle_right_pressed(event: InputEventMouseButton) -> void:
 		_cancel_pending_add()
 		accept_event()
 		return
-	if dragging_point != -1 and dragging_control == ControlIndex.NONE and _drag_existing_point:
+	if dragging_point != -1 and _drag_existing_point:
 		_cancel_point_drag()
 		accept_event()
 		return

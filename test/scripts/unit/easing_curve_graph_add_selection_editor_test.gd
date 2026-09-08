@@ -172,6 +172,14 @@ func _test_graph_gesture_selection(native: bool, pending_add := true) -> void:
 			await process_frame
 			_expect_graph_add_selection(context, editor, actual, native, "rebuilt Legacy context refresh")
 	_test_right_click_drag_cancel(context, native, manager)
+	for mode: int in [EasingCurvePoint.HandleMode.FREE, EasingCurvePoint.HandleMode.BALANCED, EasingCurvePoint.HandleMode.MIRRORED]:
+		for property_name: StringName in [&"left_control_point", &"right_control_point"]:
+			editor.edit_point_property(1, &"handle_mode", EasingCurvePoint.HandleMode.FREE)
+			var center: Vector2 = editor._point(1).get(&"position")
+			editor.edit_point_property(1, &"left_control_point", center + Vector2(-0.08, -0.12))
+			editor.edit_point_property(1, &"right_control_point", center + Vector2(0.08, 0.12))
+			editor.edit_point_property(1, &"handle_mode", mode)
+			_test_right_click_drag_cancel(context, native, manager, property_name)
 	list.free()
 	graph.free()
 	manager.clear_history()
@@ -179,7 +187,7 @@ func _test_graph_gesture_selection(native: bool, pending_add := true) -> void:
 	await process_frame
 
 
-func _test_right_click_drag_cancel(context: InspectorCurveContext, native: bool, manager: EditorUndoRedoManager) -> void:
+func _test_right_click_drag_cancel(context: InspectorCurveContext, native: bool, manager: EditorUndoRedoManager, property_name: StringName = &"position") -> void:
 	var editor := context.easing_curve_editor
 	var resource := editor.get_curve()
 	for delta: Vector2 in [Vector2.ZERO, Vector2(45, -25), Vector2(500, -10)]:
@@ -191,8 +199,11 @@ func _test_right_click_drag_cancel(context: InspectorCurveContext, native: bool,
 		var press := InputEventMouseButton.new()
 		press.button_index = MOUSE_BUTTON_LEFT
 		press.pressed = true
-		press.position = editor.get_view_pos(editor._backend.curve_to_display_position(point.get(&"position")))
+		press.position = editor.get_view_pos(editor._backend.curve_to_display_position(point.get(property_name)))
 		editor._gui_input(press)
+		if property_name != &"position":
+			var expected_control := EasingCurveEditor.ControlIndex.LEFT if property_name == &"left_control_point" else EasingCurveEditor.ControlIndex.RIGHT
+			_expect(editor.dragging_control == expected_control, "Cancel fixture did not start the requested handle drag")
 		if delta != Vector2.ZERO:
 			var motion := InputEventMouseMotion.new()
 			motion.button_mask = MOUSE_BUTTON_MASK_LEFT
