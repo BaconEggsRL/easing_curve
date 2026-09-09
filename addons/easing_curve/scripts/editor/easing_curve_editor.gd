@@ -2048,6 +2048,10 @@ func autofit() -> void:
 	# Keep the world-space centering delta exact when the bounds are centered.
 	pan_offset = _world_to_view.basis_xform(Vector2(0.5, 0.5) - bounds.get_center())
 	pan_offset += fit_center - graph_rect.get_center()
+	var toolbar_gap := float(_point_toolbar_panel.get_theme_constant(&"separation")) / _editor_scale
+	var minimum_y := _get_top_controls_minimum_y(self, toolbar_gap) + point_radius
+	var bounds_top := get_view_pos(Vector2(bounds.position.x, bounds.end.y)).y
+	pan_offset.y += maxf(0.0, minimum_y - bounds_top)
 	pan_changed.emit(pan_offset)
 	queue_redraw()
 

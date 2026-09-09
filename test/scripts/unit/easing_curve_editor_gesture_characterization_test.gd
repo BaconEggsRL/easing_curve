@@ -19,7 +19,8 @@ func _run() -> void:
 	await _test_autofit_avoids_overlays()
 	await _test_autofit_limits_overlay_shrinkage()
 	_test_zoom_metadata_contract()
-	_test_loaded_resource_initial_autofit_gate()
+	_test_resource_initial_autofit_gate()
+	await _test_new_resource_automatic_autofit()
 	_test_view_state_update_ownership()
 	_test_view_state_restore_and_rebuild_order()
 	await _test_autofit_request_lifecycle()
@@ -544,19 +545,19 @@ func _test_zoom_metadata_contract() -> void:
 	editor.free()
 
 
-func _test_loaded_resource_initial_autofit_gate() -> void:
+func _test_resource_initial_autofit_gate() -> void:
 	var unsaved_curve := EasingCurve.new()
 	var unsaved_context := EDITOR_HOST.create_inspector_context(unsaved_curve)
 	var unsaved_editor: EasingCurveEditor = unsaved_context.editor
 	var unsaved_inspector: Object = unsaved_context.inspector
 	_expect(
-		not bool(
+		bool(
 			unsaved_inspector.call(
-				"_consume_initial_autofit_for_loaded_resource",
+				"_consume_initial_autofit",
 				unsaved_curve,
 			)
 		),
-		"Unsaved EasingCurve unexpectedly requested initial Autofit",
+		"New EasingCurve did not request initial Autofit",
 	)
 	unsaved_editor.free()
 
@@ -585,7 +586,7 @@ func _test_loaded_resource_initial_autofit_gate() -> void:
 		_expect(
 			bool(
 				loaded_inspector.call(
-					"_consume_initial_autofit_for_loaded_resource",
+					"_consume_initial_autofit",
 					loaded_curve,
 				)
 			),
@@ -594,7 +595,7 @@ func _test_loaded_resource_initial_autofit_gate() -> void:
 		_expect(
 			not bool(
 				loaded_inspector.call(
-					"_consume_initial_autofit_for_loaded_resource",
+					"_consume_initial_autofit",
 					loaded_curve,
 				)
 			),
@@ -602,6 +603,38 @@ func _test_loaded_resource_initial_autofit_gate() -> void:
 		)
 		loaded_editor.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
+
+
+func _test_new_resource_automatic_autofit() -> void:
+	var curve := EasingCurve.new()
+	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
+	var content := EDITOR_DRIVER.create_curve_editor(inspector, curve)
+	get_root().add_child(content)
+	var editor := EDITOR_DRIVER.curve_editor(inspector)
+	_expect(bool(inspector.call("_is_autofit_pending")), "New Legacy resource did not queue Autofit")
+	for frame in range(6):
+		await process_frame
+	var fitted_zoom := Vector2(editor._zoom_x, editor._zoom_y)
+	var fitted_pan := editor.pan_offset
+	editor.autofit()
+	_expect(Vector2(editor._zoom_x, editor._zoom_y).is_equal_approx(fitted_zoom), "New resource automatic zoom differed from settled Autofit")
+	_expect(editor.pan_offset.is_equal_approx(fitted_pan), "New resource automatic pan differed from settled Autofit")
+	_expect(not bool(inspector.call("_is_autofit_pending")), "New resource Autofit remained pending")
+	editor._gui_input(_button(MOUSE_BUTTON_WHEEL_UP, Vector2(100.0, 100.0), true, false, true))
+	var navigated_zoom := Vector2(editor._zoom_x, editor._zoom_y)
+	var navigated_pan := editor.pan_offset
+	get_root().remove_child(content)
+	content.free()
+	var replacement := EDITOR_DRIVER.create_curve_editor(inspector, curve)
+	get_root().add_child(replacement)
+	var replacement_editor := EDITOR_DRIVER.curve_editor(inspector)
+	_expect(not bool(inspector.call("_is_autofit_pending")), "Rebuild repeated initial Autofit")
+	for frame in range(6):
+		await process_frame
+	_expect(Vector2(replacement_editor._zoom_x, replacement_editor._zoom_y).is_equal_approx(navigated_zoom), "Rebuild lost navigated zoom")
+	_expect(replacement_editor.pan_offset.is_equal_approx(navigated_pan), "Rebuild lost navigated pan")
+	get_root().remove_child(replacement)
+	replacement.free()
 
 
 func _test_view_state_update_ownership() -> void:

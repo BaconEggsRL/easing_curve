@@ -1364,7 +1364,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 			_on_curve_editor_section_folding_changed.bind(weakref(easing_curve_editor))
 		)
 		curve_section.add_child(_curve_editor_section)
-		if _consume_rebuild_autofit(object) or _consume_initial_autofit_for_loaded_resource(object):
+		if _consume_rebuild_autofit(object) or _consume_initial_autofit(object):
 			_queue_autofit_curve_editor()
 		########################################
 		_retain_presentation_root(curve_section, true)
@@ -3524,11 +3524,8 @@ func _emit_curve_property(property_name: StringName, value: Variant, object: Eas
 	)
 
 
-func _consume_initial_autofit_for_loaded_resource(object: EasingCurve) -> bool:
+func _consume_initial_autofit(object: EasingCurve) -> bool:
 	if object == null:
-		return false
-	var resource_path := object.resource_path
-	if resource_path.is_empty() or resource_path.contains("::"):
 		return false
 	var resource_id := object.get_instance_id()
 	if _initial_autofit_resource_ids.has(resource_id):
