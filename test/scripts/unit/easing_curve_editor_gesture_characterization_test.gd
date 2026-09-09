@@ -301,7 +301,7 @@ func _test_overlay_resize_and_theme() -> void:
 				var inset := 8.0 * scale_value
 				var top := editor._point_toolbar_panel.get_rect()
 				var bottom := editor._zoom_overlay.get_rect()
-				_expect(top.position.is_equal_approx(Vector2.ONE * inset), "Top overlay lost logical insets after resize/theme change")
+				_expect(top.position.is_equal_approx(Vector2(inset, 0)), "Top overlay lost its compact top edge or logical side insets")
 				_expect(is_equal_approx(top.end.x, editor.size.x - inset), "Top overlay width did not follow resize")
 				_expect(is_equal_approx(bottom.position.x, inset) and is_equal_approx(bottom.end.x, editor.size.x - inset) and is_equal_approx(bottom.end.y, editor.size.y - inset), "Bottom overlay lost logical insets after resize/theme change")
 				_expect(is_equal_approx(bottom.size.y, editor._zoom_overlay.get_combined_minimum_size().y), "Bottom overlay height ignored widget minimum size")
@@ -325,6 +325,7 @@ func _test_overlay_resize_and_theme() -> void:
 		var graph_before := editor._get_graph_view_rect()
 		var count_bottom := editor._snap_count_input.get_global_rect().end.y
 		_expect(editor._get_coordinate_minimum_y() >= count_bottom + 8.0 * editor._editor_scale, "Readout clamp ignored the numeric Snap field")
+		_expect(editor._get_autofit_view_rect().position.y >= count_bottom + 12.0 * editor._editor_scale, "Autofit lost the preferred gap below the numeric Snap field")
 		editor._point_toolbar_panel.add_theme_constant_override(&"separation", 10)
 		for frame in range(4):
 			await process_frame
@@ -348,8 +349,8 @@ func _test_autofit_avoids_overlays() -> void:
 				var graph := editor._get_graph_view_rect()
 				editor.autofit()
 				var fit := editor._get_autofit_view_rect()
-				_expect(fit.position.y >= editor._snap_button.get_global_rect().end.y + 8.0 * scale_value, "Autofit ignored visible top controls")
-				_expect(fit.end.y <= editor._zoom_overlay.position.y - 8.0 * scale_value, "Autofit ignored the zoom overlay")
+				_expect(fit.position.y >= editor._snap_button.get_global_rect().end.y + 12.0 * scale_value, "Autofit lost the preferred gap below Grid Snap")
+				_expect(fit.end.y <= editor._zoom_overlay.position.y - 12.0 * scale_value, "Autofit lost the preferred gap above the zoom overlay")
 				var bounds := editor._get_autofit_world_bounds()
 				for world: Vector2 in [bounds.position, bounds.end, Vector2(bounds.position.x, bounds.end.y), Vector2(bounds.end.x, bounds.position.y)]:
 					_expect(graph.grow(0.01).has_point(editor.get_view_pos(world)), "Autofit left curve or handle bounds outside the canvas")

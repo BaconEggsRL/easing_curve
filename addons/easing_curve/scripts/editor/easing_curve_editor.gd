@@ -83,6 +83,7 @@ const CONTROL_LINE_COLOR = Color(1, 1, 1, 0.4)
 const BEZIER_DRAW_TOLERANCE_PIXELS := 0.75
 const BEZIER_DRAW_MAX_DEPTH := 12
 const AUTOFIT_PADDING_RATIO := 0.10
+const AUTOFIT_CONTROL_GAP := 12.0
 const AUTOFIT_MAX_OVERLAY_ZOOM_STEPS := 2
 const FUNCTION_DRAW_STEPS := 120
 const GRAPH_GRID_DIVISIONS := Vector2i(4, 2)
@@ -242,9 +243,9 @@ func _update_overlay_layout() -> void:
 		return
 	var inset := OVERLAY_INSET * _editor_scale
 	_point_toolbar_panel.offset_left = inset
-	_point_toolbar_panel.offset_top = inset
+	_point_toolbar_panel.offset_top = 0.0
 	_point_toolbar_panel.offset_right = -inset
-	_point_toolbar_panel.offset_bottom = inset + _point_toolbar_panel.get_combined_minimum_size().y
+	_point_toolbar_panel.offset_bottom = _point_toolbar_panel.get_combined_minimum_size().y
 	if _zoom_overlay != null:
 		_zoom_overlay.offset_left = inset
 		_zoom_overlay.offset_right = -inset
@@ -1620,14 +1621,14 @@ func _get_coordinate_minimum_y() -> float:
 	return _get_top_controls_minimum_y(_coordinate_overlay)
 
 
-func _get_top_controls_minimum_y(canvas: Control) -> float:
+func _get_top_controls_minimum_y(canvas: Control, gap: float = GRID_SNAP_COORDINATE_LABEL_MIN_GAP) -> float:
 	var minimum := 4.0 * _editor_scale
 	var to_canvas := canvas.get_global_transform().affine_inverse()
 	for control: Control in [_point_toolbar, _snap_button, _snap_count_input]:
 		if control == null or not control.is_visible_in_tree():
 			continue
 		var bounds := to_canvas * control.get_global_transform() * Rect2(Vector2.ZERO, control.size)
-		minimum = maxf(minimum, bounds.end.y + GRID_SNAP_COORDINATE_LABEL_MIN_GAP * _editor_scale)
+		minimum = maxf(minimum, bounds.end.y + gap * _editor_scale)
 	return minimum
 
 
@@ -2046,10 +2047,10 @@ func autofit() -> void:
 
 func _get_autofit_view_rect() -> Rect2:
 	var graph_rect := _get_graph_view_rect()
-	var top := maxf(graph_rect.position.y, _get_top_controls_minimum_y(self))
+	var top := maxf(graph_rect.position.y, _get_top_controls_minimum_y(self, AUTOFIT_CONTROL_GAP))
 	var bottom := graph_rect.end.y
 	if _zoom_overlay != null and _zoom_overlay.is_visible_in_tree():
-		bottom = minf(bottom, _zoom_overlay.position.y - OVERLAY_INSET * _editor_scale)
+		bottom = minf(bottom, _zoom_overlay.position.y - AUTOFIT_CONTROL_GAP * _editor_scale)
 	# Prefer clear space, but retain a usable fit when controls fill the canvas.
 	if top >= bottom:
 		return graph_rect

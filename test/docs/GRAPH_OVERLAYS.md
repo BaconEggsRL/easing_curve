@@ -30,7 +30,7 @@ Log: `test/_temp/overlay-baseline-gesture.txt`.
 
 The shared `EasingCurveEditor` draws into its entire rectangle, apart from the
 existing four-logical-pixel edge margin and a square height cap. The point/Grid Snap panel is anchored
-eight logical pixels from the top and sides; the shared zoom row is anchored
+flush with the top and eight logical pixels from the sides; the shared zoom row is anchored
 eight logical pixels from the bottom and sides. Passive containers, labels and
 separators ignore input. Interactive descendants retain their existing behavior.
 
@@ -52,7 +52,7 @@ grid, reference box and transforms share the expanded graph rectangle.
 
 The zoom row remains an overlay. Autofit and automatic initial fitting prefer
 the clear vertical space between the actual visible top controls and the zoom
-row, with eight logical pixels of preferred clearance. Hidden controls reserve
+row, with twelve logical pixels of preferred clearance. Hidden controls reserve
 no space. Avoiding overlays may reduce zoom by at most two slider steps from
 the full-canvas fit. This retains at least about 69% of that fit's linear size
 instead of allowing a narrow clear strip to shrink the whole plot. Partial
@@ -67,6 +67,22 @@ graph. This is a fitting preference, not a clipping or input boundary.
 Manual pan and pointer-anchored zoom continue using the full canonical graph
 rectangle. Readout placement shares the same measurement of visible top
 controls but keeps its independent canvas-edge clamps.
+
+The spacing refinement removes the top panel's eight-pixel vertical inset to
+tighten the gap below the Curve Editor foldable header. It raises Autofit's
+preferred control clearance from eight to twelve logical pixels at both ends,
+including the numeric Grid Snap field. The readout retains its separate
+eight-pixel gap. Section height, graph dimensions, soft zoom limit, passive
+input routing and manual overlap behavior are unchanged.
+
+Matched Legacy/Native captures at width 420 preserve the 420x292 editor and
+zoom step 10. The toolbar moves up eight pixels; the plot moves up four, gaining
+four pixels of visible clearance below the Snap field and above the zoom row
+without changing plot size. Captures and measurements are in the isolated
+project's `test/_temp/spacing-{before,after}*` files. Focused checks pass 994
+gesture assertions headless/rendered and 955 readout assertions.
+Full correctness passes 32 of 33 suites, with only the same two baseline CSS
+label assertions failing (`test/_temp/spacing-full.txt`).
 
 The editor's established minimum-height budget is capped at its width. The
 canonical graph rectangle also caps height at width if a caller supplies a tall
