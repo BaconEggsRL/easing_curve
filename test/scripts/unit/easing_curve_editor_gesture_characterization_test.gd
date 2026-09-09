@@ -12,6 +12,7 @@ func _init() -> void:
 
 
 func _run() -> void:
+	await _test_overlay_section_geometry()
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
 	_test_view_state_update_ownership()
@@ -37,6 +38,54 @@ func _run() -> void:
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
 	_finish("graph gesture characterization")
+
+
+func _test_overlay_section_geometry() -> void:
+	var measurements: Array[Dictionary] = []
+	for native: bool in [false, true]:
+		for function_mode: bool in [false, true]:
+			for width: float in [320.0, 450.0, 700.0]:
+				var curve: Resource
+				if native:
+					curve = ClassDB.instantiate(&"NativeEasingCurve")
+					curve.set(&"transition", 6 if function_mode else 100)
+				else:
+					var legacy := EasingCurve.new()
+					legacy.trans_type = EasingCurve.TRANS.ELASTIC if function_mode else EasingCurve.TRANS.CUSTOM
+					curve = legacy
+				var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
+				var content := inspector.handle_easing_curve_editor(curve)
+				var viewport := SubViewport.new()
+				viewport.size = Vector2i(1000, 1000)
+				root.add_child(viewport)
+				viewport.add_child(content)
+				content.size = Vector2(width, 0)
+				for frame in range(6):
+					await process_frame
+				var editor := inspector.easing_curve_editor
+				var graph_content := editor.get_parent() as VBoxContainer
+				var zoom_row := editor._slider.get_parent() as HBoxContainer
+				var separation := graph_content.get_theme_constant(&"separation")
+				var graph_rect := editor._get_graph_view_rect()
+				var measurement := {
+					"native": native, "function": function_mode, "width": editor.size.x,
+					"scale": editor._editor_scale,
+					"outer_height": inspector._curve_editor_section.size.y,
+					"content_height": graph_content.size.y, "editor_height": editor.size.y,
+					"graph_height": graph_rect.size.y, "top_reservation": graph_rect.position.y - 4.0 * editor._editor_scale,
+					"zoom_minimum": zoom_row.get_combined_minimum_size().y, "separation": separation,
+				}
+				measurements.append(measurement)
+				print("OVERLAY_LAYOUT: ", JSON.stringify(measurement))
+				_expect(is_equal_approx(graph_content.size.y, editor.size.y + zoom_row.size.y + separation), "Baseline graph section height does not equal its layout rows")
+				if DisplayServer.get_name() != "headless":
+					viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+					await RenderingServer.frame_post_draw
+					var capture := viewport.get_texture().get_image().get_region(Rect2i(Vector2i.ZERO, Vector2i(ceili(content.size.x), ceili(content.size.y))))
+					capture.save_png("res://test/_temp/overlay-%s-%s-%d.png" % ["native" if native else "legacy", "function" if function_mode else "custom", width])
+				viewport.free()
+	var output := FileAccess.open("res://test/_temp/overlay-layout.json", FileAccess.WRITE)
+	output.store_string(JSON.stringify(measurements, "\t"))
 
 
 func _fixture() -> Dictionary:
