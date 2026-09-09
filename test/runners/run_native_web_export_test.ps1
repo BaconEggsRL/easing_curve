@@ -265,18 +265,8 @@ $sourceBinDirectory = Join-Path $projectRoot "addons\easing_curve\bin"
 $manifestValidator = Join-Path $nativeDirectory "validate_native_manifest.ps1"
 $godotRunner = Join-Path $PSScriptRoot "run_godot.ps1"
 $powerShellExecutable = (Get-Process -Id $PID).Path
-$selectedGodotPath = if (-not [string]::IsNullOrWhiteSpace($GodotPath)) {
-	$GodotPath
-} elseif (-not [string]::IsNullOrWhiteSpace($env:EASING_CURVE_GODOT_PATH)) {
-	$env:EASING_CURVE_GODOT_PATH
-} else {
-	"C:\Godot\4.7\engine\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64_console.exe"
-}
-$selectedGodotPath = (Resolve-Path -LiteralPath $selectedGodotPath -ErrorAction Stop).Path
-$godotVersion = (& $selectedGodotPath --version | Out-String).Trim()
-if ([string]::IsNullOrWhiteSpace($godotVersion)) {
-	throw "Could not determine the selected Godot version: $selectedGodotPath"
-}
+$selectedGodotPath = (Resolve-GodotExecutable -GodotPath $GodotPath).Path
+$godotVersion = Get-GodotVersion -ExecutablePath $selectedGodotPath -LogPath (Join-Path $projectRoot ('test/_temp/identity-' + [guid]::NewGuid().ToString('N') + '.log'))
 if (-not $ExportTemplateVersion) { $ExportTemplateVersion = (Get-Content "$PSScriptRoot/../../tooling/godot/editor-pin.json" -Raw | ConvertFrom-Json).export_template_version }
 $templateVersion = $ExportTemplateVersion
 $installedTemplateDirectory = Join-Path $env:APPDATA "Godot\export_templates\$templateVersion"

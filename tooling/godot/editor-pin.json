@@ -9,5 +9,23 @@
   "export_template_version": "4.7.1.stable",
   "official_version": "4.7.1",
   "qualification_run": "https://github.com/BaconEggsRL/easing_curve/actions/runs/34304514823",
-  "issue": "https://github.com/godotengine/godot/issues/111645"
+  "issue": "https://github.com/godotengine/godot/issues/111645",
+  "candidate_tag": "tooling-godot-4.7.1-ec111645-p1",
+  "candidate_asset": "candidate.zip",
+  "candidate_archive_sha256": "B0C23B722CD1D3C784324776C1AC3E447DA66AC517C58F6BFFF0D626FA86773A",
+  "build_name": "ec111645-p1",
+  "control_build_name": "ec111645-control",
+  "historical_archive": {
+    "url": "https://github.com/BaconEggsRL/easing_curve/releases/download/tooling-godot-111645-historical-input-p1/easing_curve_v1.2.1-dev.zip",
+    "sha256": "F3E3A8C17735824D5C947EE95AC113D35B09353160CAB0D9979563D562C9F786",
+    "source_run": "https://github.com/BaconEggsRL/easing_curve/actions/runs/34299688373"
+  },
+  "build_toolchain": {
+    "python_version": "3.12.10",
+    "scons_version": "4.11.1",
+    "msvc_version": "14.5",
+    "msvc_toolset_version": "14.51.36231",
+    "compiler_file_version": "19.51.36256.0",
+    "windows_sdk_version": "10.0.26100.0"
+  }
 }

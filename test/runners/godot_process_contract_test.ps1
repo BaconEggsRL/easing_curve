@@ -11,7 +11,10 @@ class FakeGodot {
     static int Main(string[] args) {
         string trace = Environment.GetEnvironmentVariable("FAKE_GODOT_TRACE");
         if (!String.IsNullOrEmpty(trace)) File.AppendAllText(trace, Environment.GetCommandLineArgs()[0] + " " + String.Join(" ", args) + "\n");
-        if (Array.IndexOf(args, "--version") >= 0) { Console.WriteLine("4.7.1.stable.contract-test"); return 0; }
+        if (Array.IndexOf(args, "--version") >= 0) {
+            Console.WriteLine("4.7.1.stable.contract-test");
+            int versionExit; return Int32.TryParse(Environment.GetEnvironmentVariable("FAKE_GODOT_VERSION_EXIT"), out versionExit) ? versionExit : 0;
+        }
         int delay; if (Int32.TryParse(Environment.GetEnvironmentVariable("FAKE_GODOT_DELAY"), out delay)) Thread.Sleep(delay);
         Console.WriteLine("PASS: complete synthetic semantic result set");
         Console.Error.WriteLine("synthetic stderr retained");
@@ -31,6 +34,23 @@ $oldHash = $env:EASING_CURVE_EDITOR_GODOT_SHA256
 try {
 	$env:EASING_CURVE_EDITOR_GODOT_PATH = "$temp/editor.exe"
 	$env:EASING_CURVE_EDITOR_GODOT_SHA256 = $sha
+	foreach ($code in @(0, 1, -1073741819)) {
+		$env:FAKE_GODOT_VERSION_EXIT = [string]$code
+		$accepted = $false
+		try { $version = Get-GodotVersion -ExecutablePath "$temp/runtime.exe" -LogPath "$temp/identity.log"; $accepted = $true } catch { if ($code -eq 0) { throw } }
+		Assert-Test ($accepted -eq ($code -eq 0)) 'Nonempty version output hid an identity-process failure.'
+		$identity = Get-Content "$temp/identity.log.process.json" -Raw | ConvertFrom-Json
+		Assert-Test ($identity.signed_exit -eq $code) 'Identity failure lost its native exit status.'
+	}
+	$env:FAKE_GODOT_VERSION_EXIT = '0'
+	$env:EASING_CURVE_EDITOR_GODOT_PATH = ''
+	$rejected = $false
+	try { Resolve-GodotExecutable -GodotPath "$temp/runtime.exe" -Arguments @('--editor') -PreferGui | Out-Null } catch { $rejected = $true }
+	Assert-Test $rejected 'GUI editor selection silently fell back with a configured SHA but no path.'
+	$env:EASING_CURVE_EDITOR_GODOT_PATH = "$temp/editor.exe"
+	Copy-Item "$temp/runtime.exe" "$temp/editor_console.exe"
+	$selected = Resolve-GodotExecutable -GodotPath "$temp/runtime.exe" -Arguments @('--editor')
+	Assert-Test ($selected.Path -eq (Resolve-Path "$temp/editor.exe").Path) 'Pinned editor was replaced by its companion.'
 	Assert-Test (-not (Test-GodotEditorInvocation @('--headless', '--', '--editor'))) 'User arguments changed the invocation role.'
 	foreach ($roleArgs in @(@('--editor','--headless'), @('--import'), @('--headless','--export-release','Windows','game.exe'), @('--headless','--script','test.gd'))) {
 		$env:FAKE_GODOT_TRACE = "$temp/trace-$([guid]::NewGuid().ToString('N')).txt"
@@ -67,6 +87,6 @@ try {
 } finally {
 	$env:EASING_CURVE_EDITOR_GODOT_PATH = $oldPath
 	$env:EASING_CURVE_EDITOR_GODOT_SHA256 = $oldHash
-	Remove-Item Env:FAKE_GODOT_EXIT,Env:FAKE_GODOT_DELAY,Env:FAKE_GODOT_TRACE -ErrorAction SilentlyContinue
+	Remove-Item Env:FAKE_GODOT_EXIT,Env:FAKE_GODOT_DELAY,Env:FAKE_GODOT_TRACE,Env:FAKE_GODOT_VERSION_EXIT -ErrorAction SilentlyContinue
 }
 exit 0

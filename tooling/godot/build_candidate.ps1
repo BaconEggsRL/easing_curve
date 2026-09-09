@@ -3,6 +3,9 @@ param([int]$Jobs = 16, [string]$PythonPath = 'python', [string]$OutputName = 'go
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path "$PSScriptRoot/../..").Path
 $pin = Get-Content "$PSScriptRoot/editor-pin.json" -Raw | ConvertFrom-Json
+. "$PSScriptRoot/build_toolchain.ps1"
+. "$PSScriptRoot/../../test/runners/godot_process_contract.ps1"
+$pythonVersion = Assert-QualifiedPython $PythonPath $pin.build_toolchain
 $output = Join-Path $root "test/_temp/$OutputName"
 $source = Join-Path $output 'source'
 $patch = Join-Path $PSScriptRoot $pin.patch
@@ -21,7 +24,7 @@ $previousLocalAppData = $env:LOCALAPPDATA
 try {
 	Invoke-Checked $PythonPath @('-m', 'venv', "$output/build-tools")
 	$buildPython = "$output/build-tools/Scripts/python.exe"
-	Invoke-Checked $buildPython @('-m', 'pip', 'install', 'scons==4.11.1')
+	Invoke-Checked $buildPython @('-m', 'pip', 'install', "scons==$($pin.build_toolchain.scons_version)")
 	if (-not (Test-Path '.git')) {
 		Invoke-Checked git @('init')
 		Invoke-Checked git @('remote', 'add', 'origin', 'https://github.com/godotengine/godot.git')
@@ -34,6 +37,7 @@ try {
 	Invoke-Checked $buildPython @('misc/scripts/install_accesskit.py')
 	Invoke-Checked $buildPython @('misc/scripts/install_d3d12_sdk_windows.py')
 	$argsList = @("-j$Jobs", 'platform=windows', 'target=editor', 'arch=x86_64', 'production=yes', 'lto=none', 'debug_symbols=yes')
+	$argsList += @("msvc_version=$($pin.build_toolchain.msvc_version)", "mssdk_version=$($pin.build_toolchain.windows_sdk_version)")
 	foreach ($variant in @('control', 'patched')) {
 		$destination = Join-Path $output $variant
 		New-Item -ItemType Directory -Path $destination -Force | Out-Null
@@ -43,28 +47,31 @@ try {
 			$changed = @(git diff --name-only)
 			if ($changed.Count -ne 1 -or $changed[0] -ne 'editor/doc/editor_help.cpp') { throw 'Unexpected patch scope.' }
 		}
-		$env:BUILD_NAME = if ($variant -eq 'patched') { 'ec111645-p1' } else { 'ec111645-control' }
+		$env:BUILD_NAME = if ($variant -eq 'patched') { $pin.build_name } else { $pin.control_build_name }
 		# A clean build prevents stale version strings in incremental/unity objects.
 		& $buildPython -m SCons @argsList --clean *> "$destination/clean.log"
 		if ($LASTEXITCODE -ne 0) { throw "Could not clean the $variant build." }
+		& $buildPython -m SCons @argsList --dry-run *> "$destination/configure.log"
+		if ($LASTEXITCODE -ne 0) { throw "Could not configure the $variant build." }
+		$toolchain = Get-QualifiedResolvedToolchain "$source/.scons_env.json" $pin.build_toolchain
+		$toolchain | ConvertTo-Json -Depth 4 | Set-Content "$destination/resolved-toolchain.json"
 		& $buildPython -m SCons @argsList *> "$destination/build.log"
 		if ($LASTEXITCODE -ne 0) { throw "Godot $variant build failed; see $destination/build.log" }
+		$toolchain = Get-QualifiedResolvedToolchain "$source/.scons_env.json" $pin.build_toolchain
 		Copy-Item 'bin/godot.windows.editor.x86_64.exe' "$destination/godot-editor.exe"
 		Get-ChildItem bin -Filter '*.pdb' | Copy-Item -Destination $destination
 		Copy-Item COPYRIGHT.txt "$destination/COPYRIGHT.txt"
 		Copy-Item LICENSE.txt "$destination/LICENSE.txt"
 		Copy-Item $patch "$destination/editor-help-lifetime.patch"
 		git diff --binary | Set-Content "$destination/applied.diff"
-		$version = (& "$destination/godot-editor.exe" --version --log-file "$destination/version.log" | Out-String).Trim()
-		if ($LASTEXITCODE -ne 0) { throw 'Candidate version query failed.' }
+		$version = Get-GodotVersion -ExecutablePath "$destination/godot-editor.exe" -LogPath "$destination/version.log"
 		[ordered]@{
 			source_commit=$pin.source_commit; source_tag=$pin.source_tag; variant=$variant; version=$version
 			executable_sha256=(Get-FileHash "$destination/godot-editor.exe").Hash
 			patch_sha256=(Get-FileHash $patch).Hash; build_name=$env:BUILD_NAME
 			command=@('python', '-m', 'SCons') + $argsList; scons=(& $buildPython -m SCons --version | Out-String).Trim()
-			python=(& $buildPython --version | Out-String).Trim(); os=[Environment]::OSVersion.VersionString
-			visual_studio=(& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -format json | Out-String | ConvertFrom-Json)
-			windows_sdk=@(Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/Include" -Directory | Select-Object -ExpandProperty Name)
+			python=$pythonVersion; python_path=(Resolve-Path $buildPython).Path; os=[Environment]::OSVersion.VersionString
+			resolved_toolchain=$toolchain
 			symbols=@(Get-ChildItem $destination -Filter '*.pdb' | ForEach-Object { @{name=$_.Name; sha256=(Get-FileHash $_.FullName).Hash} })
 		} | ConvertTo-Json -Depth 8 | Set-Content "$destination/provenance.json"
 	}

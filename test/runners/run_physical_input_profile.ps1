@@ -32,29 +32,8 @@ function Resolve-ProjectRoot {
 function Resolve-GodotExecutables {
     param([string]$RequestedPath)
 
-    if ($env:EASING_CURVE_EDITOR_GODOT_PATH) {
-        Assert-GodotExecutableHash $env:EASING_CURVE_EDITOR_GODOT_PATH $env:EASING_CURVE_EDITOR_GODOT_SHA256 | Out-Null
-        $pinned = (Resolve-Path -LiteralPath $env:EASING_CURVE_EDITOR_GODOT_PATH).Path
-        return @{ Gui = $pinned; Console = $pinned }
-    }
-
-    $fallback = "C:\Godot\4.7\engine\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64.exe"
-    $gui = $RequestedPath
-    if ([string]::IsNullOrWhiteSpace($gui)) { $gui = $env:EASING_CURVE_GODOT_PATH }
-    if ([string]::IsNullOrWhiteSpace($gui)) { $gui = $fallback }
-    if (-not (Test-Path -LiteralPath $gui -PathType Leaf)) {
-        throw "Godot executable was not found: $gui"
-    }
-
-    $gui = (Resolve-Path -LiteralPath $gui).Path
-    if ([IO.Path]::GetFileNameWithoutExtension($gui).EndsWith("_console", [StringComparison]::OrdinalIgnoreCase)) {
-        $candidate = $gui -replace '_console\.exe$', '.exe'
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $gui = $candidate }
-    }
-
-    $console = Join-Path ([IO.Path]::GetDirectoryName($gui)) ([IO.Path]::GetFileNameWithoutExtension($gui) + "_console.exe")
-    if (-not (Test-Path -LiteralPath $console -PathType Leaf)) { $console = $gui }
-    return @{ Gui = $gui; Console = $console }
+    $selection = Resolve-GodotExecutable -GodotPath $RequestedPath -Arguments @('--editor') -PreferGui
+    return @{ Gui = $selection.Path; Console = $selection.Path }
 }
 
 function Write-ProjectConfig {
@@ -139,7 +118,7 @@ function Prepare-ProfileProject {
 
     $projectPath = Join-Path $tempBase $Label
     if (Test-Path -LiteralPath $projectPath) {
-        Remove-Item -LiteralPath $projectPath -Recurse -Force
+        throw "Refusing to overwrite an existing profile fixture: $projectPath"
     }
     New-Item -ItemType Directory -Force -Path $projectPath | Out-Null
 
@@ -183,6 +162,8 @@ function Prepare-ProfileProject {
         & $godot.Console --editor --headless --path $projectPath --import --log-file $bootstrapLog
     )
     $bootstrapExit = $LASTEXITCODE
+    $bootstrapExit | Set-Content -LiteralPath "$bootstrapLog.exitcode.txt"
+    Assert-GodotProcessExit $bootstrapExit "Physical-input bootstrap '$Label'" $bootstrapLog
     $cache = Join-Path $projectPath ".godot\global_script_class_cache.cfg"
     $bootstrapText = if (Test-Path -LiteralPath $bootstrapLog -PathType Leaf) {
         Get-Content -Raw -LiteralPath $bootstrapLog
@@ -533,7 +514,7 @@ function Remove-PreparedProjects {
 
 $projectRoot = Resolve-ProjectRoot
 $godot = Resolve-GodotExecutables -RequestedPath $GodotPath
-$tempBase = Join-Path $projectRoot "test\_temp\physical-input-projects"
+$tempBase = Join-Path $projectRoot ("test\_temp\physical-input-projects\" + [guid]::NewGuid().ToString('N'))
 $outputBase = Join-Path $projectRoot "test\_temp"
 New-Item -ItemType Directory -Force -Path $tempBase | Out-Null
 
@@ -586,6 +567,9 @@ if ($SmokeTest) {
                 throw "Side-by-side physical-input smoke test timed out for '$($entry.Key)'."
             }
             $editorLog = Join-Path $projects[$entry.Key] "test\_temp\smoke_editor.log"
+            $entry.Value.WaitForExit()
+            $entry.Value.ExitCode | Set-Content -LiteralPath "$editorLog.exitcode.txt"
+            Assert-GodotProcessExit $entry.Value.ExitCode "Physical-input side-by-side smoke test '$($entry.Key)'" $editorLog
             $text = if (Test-Path -LiteralPath $editorLog -PathType Leaf) { Get-Content -Raw -LiteralPath $editorLog } else { "" }
             if (Test-LogHasScriptFailure $text) {
                 throw "Side-by-side physical-input smoke test reported a script failure for '$($entry.Key)'. See $editorLog"

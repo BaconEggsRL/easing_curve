@@ -57,9 +57,13 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read Godot tooling manifest
+        id: godot-tooling
+        shell: pwsh
+        run: ./tooling/godot/read_manifest.ps1
       - uses: chickensoft-games/setup-godot@v2
         with:
-          version: 4.7.1
+          version: ${{ steps.godot-tooling.outputs.official_version }}
           use-dotnet: false
           include-templates: true
       - name: Install qualified editor for editor invocation roles
@@ -78,14 +82,14 @@ jobs:
           if (-not (Test-Path -LiteralPath $godotExe -PathType Leaf)) {
             throw "Godot executable copy was not created: $godotExe"
           }
-          $versionProcess = Start-Process -FilePath $godotExe -ArgumentList "--version" -NoNewWindow -Wait -PassThru
-          if ($versionProcess.ExitCode -ne 0) {
-            throw "Copied Godot executable validation failed with exit code $($versionProcess.ExitCode)."
-          }
+          . ./test/runners/godot_process_contract.ps1
+          Get-GodotVersion -ExecutablePath $godotExe -LogPath "$env:GITHUB_WORKSPACE/test/_temp/official-version.log"
           ./test/runners/godot_process_contract_test.ps1
           if ($LASTEXITCODE -ne 0) { throw "Godot process contract tests failed." }
           ./test/runners/runner_hardening_test.ps1
           if ($LASTEXITCODE -ne 0) { throw "Runner hardening tests failed." }
+          ./tooling/godot/tooling_contract_test.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Tooling contract tests failed." }
           ./test/runners/run_all_tests.ps1 --run -GodotPath $godotExe
           if ($LASTEXITCODE -ne 0) { throw "Windows correctness suites failed." }
           ./test/runners/run_native_release_export_test.ps1 -SkipBuild -GodotPath $godotExe
@@ -116,9 +120,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Read Godot tooling manifest
+        id: godot-tooling
+        shell: pwsh
+        run: ./tooling/godot/read_manifest.ps1
       - uses: chickensoft-games/setup-godot@v2
         with:
-          version: 4.7.1
+          version: ${{ steps.godot-tooling.outputs.official_version }}
           use-dotnet: false
           include-templates: true
       - name: Install qualified editor for editor invocation roles
@@ -141,10 +149,8 @@ jobs:
           if (-not (Test-Path -LiteralPath $godotExe -PathType Leaf)) {
             throw "Godot executable copy was not created: $godotExe"
           }
-          $versionProcess = Start-Process -FilePath $godotExe -ArgumentList "--version" -NoNewWindow -Wait -PassThru
-          if ($versionProcess.ExitCode -ne 0) {
-            throw "Copied Godot executable validation failed with exit code $($versionProcess.ExitCode)."
-          }
+          . ./test/runners/godot_process_contract.ps1
+          Get-GodotVersion -ExecutablePath $godotExe -LogPath "$env:GITHUB_WORKSPACE/test/_temp/official-version.log"
           ./test/runners/run_native_web_export_test.ps1 -SkipBuild -GodotPath $godotExe
           if ($LASTEXITCODE -ne 0) { throw "Native Web validation failed." }
       - name: Preserve editor tooling provenance
@@ -161,9 +167,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Read Godot tooling manifest
+        id: godot-tooling
+        shell: pwsh
+        run: ./tooling/godot/read_manifest.ps1
       - uses: chickensoft-games/setup-godot@v2
         with:
-          version: 4.7.1
+          version: ${{ steps.godot-tooling.outputs.official_version }}
           use-dotnet: false
       - name: Install qualified editor for editor invocation roles
         shell: pwsh
@@ -182,10 +192,8 @@ jobs:
           $godotCommand = (Get-Command godot -ErrorAction Stop).Source
           $godotExe = Join-Path $env:RUNNER_TEMP "easing-curve-godot.exe"
           Copy-Item -LiteralPath $godotCommand -Destination $godotExe -Force
-          $versionProcess = Start-Process -FilePath $godotExe -ArgumentList "--version" -NoNewWindow -Wait -PassThru
-          if ($versionProcess.ExitCode -ne 0) {
-            throw "Copied Godot executable validation failed with exit code $($versionProcess.ExitCode)."
-          }
+          . ./test/runners/godot_process_contract.ps1
+          Get-GodotVersion -ExecutablePath $godotExe -LogPath "$env:GITHUB_WORKSPACE/test/_temp/official-version.log"
           ./build_asset_store.ps1
           if ($LASTEXITCODE -ne 0) { throw "Archive build failed." }
           ./test/runners/release_archive_diagnostics_test.ps1

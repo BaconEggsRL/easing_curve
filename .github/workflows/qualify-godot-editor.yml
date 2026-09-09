@@ -18,17 +18,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download tooling-godot-4.7.1-ec111645-p1 --repo "$env:GITHUB_REPOSITORY" --pattern candidate.zip --dir test/_temp/candidate-download
-          if ($LASTEXITCODE -ne 0) { throw 'Candidate staging download failed.' }
-          Expand-Archive test/_temp/candidate-download/candidate.zip test/_temp/candidate
-          . ./test/runners/godot_process_contract.ps1
           $pin = Get-Content tooling/godot/editor-pin.json -Raw | ConvertFrom-Json
+          gh release download $pin.candidate_tag --repo "$env:GITHUB_REPOSITORY" --pattern $pin.candidate_asset --dir test/_temp/candidate-download
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate staging download failed.' }
+          . ./test/runners/godot_process_contract.ps1
+          $archive = Join-Path test/_temp/candidate-download $pin.candidate_asset
+          Assert-GodotExecutableHash $archive $pin.candidate_archive_sha256
+          Expand-Archive $archive test/_temp/candidate
           Assert-GodotExecutableHash test/_temp/candidate/godot-editor.exe $pin.editor_sha256
       - uses: actions/upload-artifact@v4
         with:
           name: unpublished-godot-candidate
           compression-level: 0
-          path: test/_temp/candidate-download/candidate.zip
+          path: test/_temp/candidate-download/*
   qualify:
     needs: stage-candidate
     strategy:
@@ -41,20 +43,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Read Godot tooling manifest
+        id: godot-tooling
+        shell: pwsh
+        run: ./tooling/godot/read_manifest.ps1
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ steps.godot-tooling.outputs.python_version }}
       - uses: chickensoft-games/setup-godot@v2
         with:
-          version: 4.7.1
+          version: ${{ steps.godot-tooling.outputs.official_version }}
           use-dotnet: false
           include-templates: true
-      - uses: actions/download-artifact@v4
-        with:
-          name: easing-curve-package-diagnostics
-          run-id: 34299688373
-          github-token: ${{ github.token }}
-          path: test/_temp/historical-input
+      - name: Download verified historical archive
+        shell: pwsh
+        run: ./tooling/godot/download_historical_archive.ps1
       - uses: actions/download-artifact@v4
         with:
           name: unpublished-godot-candidate
@@ -62,18 +65,19 @@ jobs:
       - name: Obtain unpublished candidate bytes and capture tool
         shell: pwsh
         run: |
-          Expand-Archive test/_temp/candidate-download/candidate.zip test/_temp/candidate
           $pin = Get-Content tooling/godot/editor-pin.json -Raw | ConvertFrom-Json
           . ./test/runners/godot_process_contract.ps1
+          $candidateArchive = Join-Path test/_temp/candidate-download $pin.candidate_asset
+          Assert-GodotExecutableHash $candidateArchive $pin.candidate_archive_sha256
+          Expand-Archive $candidateArchive test/_temp/candidate
           Assert-GodotExecutableHash test/_temp/candidate/godot-editor.exe $pin.editor_sha256
           Invoke-WebRequest https://download.sysinternals.com/files/Procdump.zip -OutFile test/_temp/procdump.zip
           Expand-Archive test/_temp/procdump.zip test/_temp/procdump
           $signature = Get-AuthenticodeSignature test/_temp/procdump/procdump64.exe
           if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*Microsoft Corporation*') { throw 'Invalid ProcDump signature.' }
-          $archive = Get-ChildItem test/_temp/historical-input -Filter easing_curve_v1.2.1-dev.zip -Recurse | Select-Object -First 1
-          Expand-Archive $archive.FullName test/_temp/release-input
+          Assert-GodotExecutableHash $env:HISTORICAL_ARCHIVE $pin.historical_archive.sha256
+          Expand-Archive $env:HISTORICAL_ARCHIVE test/_temp/release-input
           Copy-Item test/_temp/release-input/addons/easing_curve/bin/* addons/easing_curve/bin -Force
-          "HISTORICAL_ARCHIVE=$($archive.FullName)" >> $env:GITHUB_ENV
           $official = Join-Path $env:RUNNER_TEMP 'official-godot.exe'
           Copy-Item (Get-Command godot).Source $official
           "OFFICIAL_GODOT=$official" >> $env:GITHUB_ENV

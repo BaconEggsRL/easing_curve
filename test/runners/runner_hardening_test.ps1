@@ -54,5 +54,50 @@ foreach ($file in @('run_native_editor_script_validation.ps1', 'run_native_inspe
 		if ($passed -ne ($code -eq 0)) { throw 'Physical-input smoke check accepted a crash with clean output.' }
 	}
 }
-Write-Host "PASS: runner wrappers retain raw status; archive and profiling checks reject crashes despite clean semantic output. Evidence: $temp"
+& {
+	. (Get-RunnerFunction 'run_physical_input_profile.ps1' 'Prepare-ProfileProject')
+	$tempBase = $temp
+	New-Item -ItemType Directory "$temp/previous-failure" | Out-Null
+	'original failed evidence' | Set-Content "$temp/previous-failure/evidence.txt"
+	$rejected = $false
+	try { Prepare-ProfileProject -Label 'previous-failure' -SourceKind current | Out-Null } catch { $rejected = $true }
+	if (-not $rejected -or (Get-Content "$temp/previous-failure/evidence.txt") -ne 'original failed evidence') { throw 'A later profile run overwrote failed evidence.' }
+}
+& {
+	$ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'run_physical_input_profile.ps1'), [ref]$null, [ref]$null)
+	$bootstrapFunction = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Prepare-ProfileProject' }, $true).Extent.Text
+	# Execute the actual validation tail, without the fixture-copy setup or generated cache writes.
+	$tail = $bootstrapFunction.Substring($bootstrapFunction.IndexOf('$bootstrapOutput = @(')).TrimEnd()
+	$bootstrap = [scriptblock]::Create($tail.Substring(0, $tail.Length - 1))
+	$smokeLoop = $ast.Find({ param($node) $node -is [Management.Automation.Language.ForEachStatementAst] -and $node.Condition.Extent.Text -eq '$smokeProcesses.GetEnumerator()' }, $true)
+	if (-not $smokeLoop) { throw 'Missing side-by-side smoke branch.' }
+	$smoke = [scriptblock]::Create($smokeLoop.Extent.Text)
+	function Test-Path { return $true }
+	function Test-LogHasScriptFailure { return $false }
+	function Get-PluginVersion { return 'synthetic' }
+	function Write-ProjectConfig {}
+	function Invoke-SyntheticGodot { $global:LASTEXITCODE = $script:profileExit; 'Initialization completed' }
+	$projectPath = $temp
+	$projectConfig = 'unused'
+	$bootstrapLog = "$temp/bootstrap.log"
+	$Label = 'synthetic'
+	$godot = @{ Console='Invoke-SyntheticGodot' }
+	'clean import' | Set-Content $bootstrapLog
+	'PHYSICAL_INPUT_PROBE_START' | Set-Content "$temp/test/_temp/smoke_editor.log"
+	foreach ($code in @(0, 1, -1073741819)) {
+		$script:profileExit = $code
+		$accepted = $false
+		try { & $bootstrap | Out-Null; $accepted = $true } catch { if ($code -eq 0) { throw } }
+		if ($accepted -ne ($code -eq 0)) { throw 'Profiler bootstrap accepted a nonzero exit with a clean cache.' }
+		$process = [pscustomobject]@{ ExitCode=$code; Id=123 }
+		$process | Add-Member ScriptMethod WaitForExit { param($Timeout) return $true }
+		$smokeProcesses = [ordered]@{ synthetic=$process }
+		$projects = @{ synthetic=$temp }
+		$accepted = $false
+		try { & $smoke | Out-Null; $accepted = $true } catch { if ($code -eq 0) { throw } }
+		if ($accepted -ne ($code -eq 0)) { throw 'Side-by-side smoke accepted a crash with clean output.' }
+		if (-not [IO.File]::Exists($bootstrapLog) -or -not [IO.File]::Exists("$temp/test/_temp/smoke_editor.log")) { throw 'Failed profiler fixture was removed.' }
+	}
+}
+Write-Host "PASS: runner wrappers retain raw status; all profiler branches and archive checks reject crashes despite clean output. Evidence: $temp"
 exit 0

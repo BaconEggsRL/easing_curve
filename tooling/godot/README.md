@@ -8,7 +8,9 @@ Upstream report: https://github.com/godotengine/godot/issues/111645.
 ## Identity and selection
 
 `editor-pin.json` owns the editor URL/SHA256, exact upstream source commit, patch
-identity and explicit official export-template version. The candidate has a custom
+identity, candidate tag/asset/build labels, qualified build toolchain, historical
+archive URL/SHA256, official runtime version and explicit export-template version.
+Workflows read setup versions through `read_manifest.ps1`. The candidate has a custom
 4.7.1 build label, never an `official` label. A missing/incorrect hash is fatal
 before any execution. There is no pinned-editor fallback or companion substitution.
 
@@ -17,6 +19,11 @@ editor-driven exports. True runtime invocations keep the official executable.
 Set `EASING_CURVE_EDITOR_GODOT_PATH` and `EASING_CURVE_EDITOR_GODOT_SHA256`, or pass
 `-PinnedEditorPath` and `-PinnedEditorSha256` to `run_godot.ps1`. The names avoid
 PowerShell interpreting Godot's `--editor` as a parameter abbreviation.
+
+The profiler uses the same executable-selection contract. Runtime selection uses
+an explicit path, `EASING_CURVE_GODOT_PATH`, or `godot` on PATH; it has no developer
+installation-directory default. Every Godot identity probe checks native exit status
+before accepting version output and retains output/status on failure.
 
 Windows and Web export runners accept `-ExportTemplateVersion`; the default comes
 from the manifest. Official `4.7.1.stable` templates are independent of the patched
@@ -30,6 +37,17 @@ options, and retains licenses, source/patch identity, logs, toolchain details,
 binary hashes and matching PDBs. Both variants use clean builds to avoid stale
 incremental version strings. Failed preliminary build outputs are preserved.
 
+Supply a Python executable matching `build_toolchain.python_version`, for example
+`./tooling/godot/build_candidate.ps1 -PythonPath <qualified-python.exe> -OutputName <fresh-name>`.
+The recipe pins SCons, passes explicit MSVC/SDK selections, configures a dry run,
+and verifies the resolved compiler/toolset and SDK include paths before compilation.
+It records these resolved values in provenance and checks them again after building.
+The qualified snapshot is Python 3.12.10, MSVC 14.5/toolset 14.51.36231, compiler
+19.51.36256.0, and Windows SDK 10.0.26100.0. These pins were checked against the
+retained SCons configuration from the original qualified build. Changing the recipe
+does not rebuild or replace the published editor; any new executable still needs
+its own hash and complete qualification.
+
 Qualification consumes the exact candidate bytes and compares a same-toolchain
 unpatched control. A private draft release may transport the candidate to GitHub
 runners; it is not published or immutable until qualification passes. Two fresh
@@ -37,6 +55,14 @@ Windows runners perform ten repetitions of each A-E fixture, with first-chance
 ProcDump monitoring. Runner 1 also performs the full Windows, archive, Windows
 export and Web export/runtime validations against official runtime/templates.
 Live extension documentation and synthetic failure/selection tests are included.
+
+`download_historical_archive.ps1` downloads the exact historical ZIP from a separate
+immutable tooling release and verifies its manifest SHA256 before making it available
+for extraction. It replaces the expiring Actions artifact dependency without repacking
+the archive. Candidate transfer archives are also checked before extraction.
+
+`import-crash-diagnostics.yml` is manual-only historical tooling: it intentionally
+uses the official editor to investigate the old failure and is not a normal CI gate.
 
 The candidate's manifest hash is verified throughout qualification. All product
 validation requires both process exit zero and semantic success. The deliberately
@@ -59,7 +85,18 @@ provenance artifacts remain distinct from the addon ZIP.
 
 ## Retirement
 
-Qualify an official release containing the upstream fix, update the central editor
-and template pins, then remove the temporary patch/build/download workflow. Retain
-strict-exit handling and its regression tests permanently. If qualification fails,
-do not publish/activate and do not restore failure tolerance.
+Qualify an official release containing an equivalent or stronger fix against the
+same fixtures, repetition counts, semantic checks, lifecycle, export/runtime and
+documentation criteria. Keep the historical unpatched crash as control evidence;
+the corrected official engine is not expected to reproduce it.
+
+After qualification, update the manifest and replace the custom-editor installer
+with verified official distribution acquisition. Then remove `build_candidate.ps1`,
+`build_toolchain.ps1`, the patch, `qualify_candidate.ps1`, the historical download
+helper, `qualify-godot-editor.yml`, `import-crash-diagnostics.yml`, and its diagnostic
+runner. Remove temporary-only checks from `tooling_contract_test.ps1` at that point.
+Preserve the immutable evidence releases and this qualification history.
+
+Retain the common executable/identity/strict-exit contract, its permanent runner
+regressions, and explicit official runtime/template selection. If qualification
+fails, do not publish/activate and do not restore failure tolerance.

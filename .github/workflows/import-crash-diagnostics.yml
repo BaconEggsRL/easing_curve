@@ -2,11 +2,6 @@ name: Import crash diagnostics
 
 on:
   workflow_dispatch:
-  push:
-    branches: [dev]
-    paths:
-      - .github/workflows/import-crash-diagnostics.yml
-      - test/runners/run_import_crash_diagnostics.ps1
 
 permissions:
   contents: read
@@ -18,16 +13,17 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Read Godot tooling manifest
+        id: godot-tooling
+        shell: pwsh
+        run: ./tooling/godot/read_manifest.ps1
       - uses: chickensoft-games/setup-godot@v2
         with:
-          version: 4.7.1
+          version: ${{ steps.godot-tooling.outputs.official_version }}
           use-dotnet: false
-      - uses: actions/download-artifact@v4
-        with:
-          name: easing-curve-package-diagnostics
-          run-id: 34299688373
-          github-token: ${{ github.token }}
-          path: test/_temp/import-crash-input
+      - name: Download verified historical archive
+        shell: pwsh
+        run: ./tooling/godot/download_historical_archive.ps1
       - name: Prepare official crash capture tool
         shell: pwsh
         run: |
@@ -45,7 +41,7 @@ jobs:
         run: |
           $godotExe = Join-Path $env:RUNNER_TEMP 'easing-curve-godot.exe'
           Copy-Item -LiteralPath (Get-Command godot).Source -Destination $godotExe
-          ./test/runners/run_import_crash_diagnostics.ps1 -GodotPath $godotExe -ProcDumpPath $env:PROCDUMP_PATH -ArchivePath test/_temp/import-crash-input/_exports/_asset_store_builds/easing_curve_v1.2.1-dev.zip
+          ./test/runners/run_import_crash_diagnostics.ps1 -GodotPath $godotExe -ProcDumpPath $env:PROCDUMP_PATH -ArchivePath $env:HISTORICAL_ARCHIVE
       - name: Inspect exception stacks if CDB is installed
         if: always()
         shell: pwsh

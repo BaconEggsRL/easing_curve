@@ -73,43 +73,10 @@ for ($index = 0; $index -lt $GodotArgs.Count; $index += 1) {
 	break
 }
 
-$fallbackGodotPath = "C:\Godot\4.7\engine\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64_console.exe"
-$godotPathSource = "explicit -GodotPath"
-$editorRole = Test-GodotEditorInvocation $GodotArgs
-if (-not $PinnedEditorPath) { $PinnedEditorPath = $env:EASING_CURVE_EDITOR_GODOT_PATH }
-if (-not $PinnedEditorSha256) { $PinnedEditorSha256 = $env:EASING_CURVE_EDITOR_GODOT_SHA256 }
-if ($editorRole -and $PinnedEditorSha256 -and -not $PinnedEditorPath) { throw 'A pinned editor hash was configured without an editor path. No fallback is allowed.' }
-$pinnedEditor = $editorRole -and -not [string]::IsNullOrWhiteSpace($PinnedEditorPath)
-if ($pinnedEditor) {
-	$GodotPath = $PinnedEditorPath
-	$godotPathSource = 'pinned editor invocation'
-	Assert-GodotExecutableHash -Path $GodotPath -ExpectedHash $PinnedEditorSha256 | Out-Null
-}
-if ([string]::IsNullOrWhiteSpace($GodotPath)) {
-	$GodotPath = $env:EASING_CURVE_GODOT_PATH
-	$godotPathSource = "EASING_CURVE_GODOT_PATH"
-}
-if ([string]::IsNullOrWhiteSpace($GodotPath)) {
-	$GodotPath = $fallbackGodotPath
-	$godotPathSource = "local fallback"
-}
-
-if (-not (Test-Path -LiteralPath $GodotPath -PathType Leaf)) {
-	throw (
-		"Godot executable was not found: $GodotPath. Supply -GodotPath '<path-to-godot>' " +
-		"or set EASING_CURVE_GODOT_PATH."
-	)
-}
-
-$Godot = (Resolve-Path -LiteralPath $GodotPath -ErrorAction Stop).Path
-$godotFileName = [IO.Path]::GetFileNameWithoutExtension($Godot)
-if (-not $pinnedEditor -and -not $godotFileName.EndsWith("_console", [StringComparison]::OrdinalIgnoreCase)) {
-	$consoleGodot = Join-Path ([IO.Path]::GetDirectoryName($Godot)) ($godotFileName + "_console.exe")
-	if (Test-Path -LiteralPath $consoleGodot -PathType Leaf) {
-		$Godot = (Resolve-Path -LiteralPath $consoleGodot -ErrorAction Stop).Path
-		$godotPathSource += ", console companion"
-	}
-}
+$selection = Resolve-GodotExecutable -GodotPath $GodotPath -Arguments $GodotArgs -PinnedEditorPath $PinnedEditorPath -PinnedEditorSha256 $PinnedEditorSha256
+$Godot = $selection.Path
+$godotPathSource = $selection.Source
+$editorRole = $selection.IsEditor
 
 $testTempDirectory = Join-Path $projectRoot "test\_temp"
 $testAppDataRoot = Join-Path $testTempDirectory "appdata"
@@ -156,10 +123,7 @@ try {
 
 	Write-Host "Godot executable ($godotPathSource): $Godot"
 	Write-Host "Godot invocation role: $(if ($editorRole) { 'editor' } else { 'runtime' }); SHA256: $((Get-FileHash -LiteralPath $Godot).Hash)"
-	$godotVersion = (& $Godot --version --log-file (Join-Path $AppDataDirectory 'version.log') | Out-String).Trim()
-	if ($LASTEXITCODE -ne 0) {
-		throw "Could not query Godot version from: $Godot"
-	}
+	$godotVersion = Get-GodotVersion -ExecutablePath $Godot -LogPath (Join-Path $AppDataDirectory 'version.log')
 	Write-Host "Godot version: $godotVersion"
 
 	$startInfo = [Diagnostics.ProcessStartInfo]::new()

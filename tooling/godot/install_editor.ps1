@@ -11,8 +11,7 @@ $path = Join-Path (Resolve-Path $Destination).Path 'godot-editor.exe'
 Invoke-WebRequest -Uri $pin.editor_url -OutFile "$path.download"
 Assert-GodotExecutableHash "$path.download" $pin.editor_sha256 | Out-Null
 Move-Item -LiteralPath "$path.download" -Destination $path -Force
-$version = (& $path --version --log-file (Join-Path (Resolve-Path $Destination).Path 'version.log') | Out-String).Trim()
-Assert-GodotProcessExit $LASTEXITCODE 'Pinned editor identity' $Destination
+$version = Get-GodotVersion -ExecutablePath $path -LogPath (Join-Path (Resolve-Path $Destination).Path 'version.log')
 if (-not $version.StartsWith($pin.editor_version_prefix, [StringComparison]::Ordinal)) { throw "Incorrect pinned editor identity: $version" }
 Copy-Item -LiteralPath $ManifestPath -Destination (Join-Path $Destination 'editor-pin.json') -Force
 if ($env:GITHUB_ENV) {

@@ -2,6 +2,7 @@
 param([string[]]$GodotPaths = @())
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $validationRoot = Join-Path $projectRoot ("test\_temp\native-compatibility-" + [guid]::NewGuid().ToString("N"))
@@ -59,7 +60,7 @@ windows.release.x86_64 = "res://addons/easing_curve/bin/libeasing_curve_native.w
 
 	foreach ($godotPath in $GodotPaths) {
 		$resolvedGodot = (Resolve-Path -LiteralPath $godotPath -ErrorAction Stop).Path
-		$versionLabel = (& $resolvedGodot --version | Out-String).Trim()
+		$versionLabel = Get-GodotVersion -ExecutablePath $resolvedGodot -LogPath (Join-Path $validationRoot ('test/_temp/version-' + [guid]::NewGuid().ToString('N') + '.log'))
 		$logPath = Join-Path $validationRoot ("test\_temp\native-abi-" + ($versionLabel -replace '[^0-9A-Za-z.-]', '_') + ".log")
 		$bootstrapLogPath = Join-Path $validationRoot ("test\_temp\native-abi-bootstrap-" + ($versionLabel -replace '[^0-9A-Za-z.-]', '_') + ".log")
 		Write-Host "Validating the pinned 4.4.1 Native ABI with Godot $versionLabel..."

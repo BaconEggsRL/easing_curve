@@ -10,6 +10,7 @@ param(
 
 # Temporary investigation only. This is not a release acceptance gate.
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $outputRoot = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $repo "test/_temp/import-crash-diagnostics" }
 if (Test-Path $outputRoot) { throw "Use a fresh diagnostic output directory: $outputRoot" }
@@ -179,7 +180,7 @@ $startTime = Get-Date
 [ordered]@{
 	os=[Environment]::OSVersion.VersionString; image=$env:ImageOS; image_version=$env:ImageVersion
 	runner_os=$env:RUNNER_OS; runner_arch=$env:RUNNER_ARCH; powershell=$PSVersionTable.PSVersion.ToString()
-	godot_version=(& $GodotPath --version --log-file "$outputRoot/version.log" | Out-String).Trim()
+	godot_version=(Get-GodotVersion -ExecutablePath $GodotPath -LogPath "$outputRoot/version.log")
 	hashes=@($GodotPath, (Join-Path $sourceBin $dllName), $ArchivePath | ForEach-Object { Get-FileHash -LiteralPath $_ -Algorithm SHA256 })
 } | ConvertTo-Json -Depth 5 | Set-Content "$outputRoot/environment.json"
 $results = @(foreach ($case in $Cases) {
