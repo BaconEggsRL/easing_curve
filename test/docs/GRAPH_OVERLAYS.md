@@ -58,13 +58,6 @@ the full-canvas fit. This retains at least about 69% of that fit's linear size
 instead of allowing a narrow clear strip to shrink the whole plot. Partial
 overlap is allowed when that limit is reached.
 
-For compact editors at the square height cap, if controls leave less than half
-the graph height clear, Autofit can take up to two additional zoom-out steps to
-clear the bottom zoom row. It holds the plot's upper edge steady while reducing
-its height, stopping as soon as bottom clearance is recovered. This exception
-keeps low points visible in roughly 190-pixel-wide Inspectors without changing
-the accepted larger framing at ordinary widths.
-
 Curve bounds still include handles, the reference range and sampled Function
 overshoot, with the existing padding and discrete zoom levels. The preferred
 center is kept between the controls unless it would push the larger fit beyond
@@ -106,15 +99,6 @@ measure 168.55 pixels of plot width before the correction and 242.72 after it
 Headless and rendered gesture runs pass all 992 checks. Full correctness remains
 32 of 33 suites passing, with only the two baseline CSS-label assertions failing.
 Logs: `test/_temp/autofit-soft-{gesture,rendered,full}.txt`.
-
-Compact follow-up: 1,014 gesture checks pass headless and rendered, including
-190-pixel widths at scales 1/1.5/2, bounded additional zoom-out, bottom clearance,
-canvas containment and repeatability. Matched actual Editor captures on both
-backends keep the upper edge at y=57.16 and move the lower edge from y=169.84 to
-y=135.41, above the zoom row at y=150, with unchanged 190x190 editor dimensions.
-Artifacts: `test/_temp/overlay-project/test/_temp/autofit-compact-*`.
-Full correctness again passes 32 of 33 suites; only the same two baseline CSS
-label assertions fail (`test/_temp/autofit-compact-full.txt`).
 
 ## Measured result
 
