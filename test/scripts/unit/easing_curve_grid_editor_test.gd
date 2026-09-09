@@ -44,6 +44,12 @@ func _fixture(native: bool) -> EasingCurveEditor:
 func _test_ticks(native: bool) -> void:
 	var editor := _fixture(native)
 	var rect := editor._get_graph_view_rect()
+	var margin := 4.0 * editor._editor_scale
+	_expect(rect.is_equal_approx(Rect2(Vector2.ONE * margin, editor.size - Vector2.ONE * margin * 2.0)), "Graph viewport does not fill the editor")
+	editor.selected_index = 0
+	editor._point_toolbar_panel.hide()
+	_expect(editor._get_graph_view_rect() == rect, "Toolbar visibility or selection changed graph dimensions")
+	editor._point_toolbar_panel.show()
 	for zoom: Vector2 in [Vector2.ONE, Vector2(0.1, 0.1), Vector2(10, 10), Vector2(0.3, 7.0)]:
 		for pan: Vector2 in [Vector2.ZERO, Vector2(-123, 91), Vector2(817, -651)]:
 			editor.set_zoom(zoom)

@@ -7,6 +7,7 @@ extends Control
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
 const SNAP_TOOLBAR_HEIGHT := 32.0
+const OVERLAY_INSET := 8.0
 const GRID_SNAP_COORDINATE_LABEL_MIN_GAP := 8.0
 const SNAP_ENABLED_META := &"_easing_curve_snap_enabled"
 const SNAP_COUNT_META := &"_easing_curve_snap_count"
@@ -24,8 +25,8 @@ const CurveEditorSettings := preload(
 )
 
 var use_pending_add := true
-# True: hide the point-selection toolbar in Function mode and reclaim its height.
-# False: keep the toolbar row visible, with point-only controls inactive.
+# True: hide the point-selection overlay in Function mode.
+# False: keep the overlay visible, with point-only controls inactive.
 var hide_selection_toolbar_for_functions := true
 # True: reorder through the Inspector. False: change graph selection only.
 var point_move_buttons_reorder_points := false
@@ -153,6 +154,7 @@ var _slider: EasingCurveZoomSliderContainer:
 	set = set_slider_container
 var _world_to_view: Transform2D
 var _editor_scale: float = 1.0
+var _overlay_layout_queued := false
 
 var _point_toolbar_panel: VBoxContainer
 var _point_toolbar: GridContainer
@@ -212,9 +214,33 @@ func _ready() -> void:
 	_coordinate_overlay.z_index = 1
 	add_child(_coordinate_overlay)
 	_coordinate_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	move_child(_coordinate_overlay, 0)
 	_coordinate_overlay.draw.connect(_draw_drag_coordinates)
 	_point_toolbar_panel.sort_children.connect(_coordinate_overlay.queue_redraw)
+	_point_toolbar_panel.minimum_size_changed.connect(_queue_overlay_layout)
+	resized.connect(_queue_overlay_layout)
+	theme_changed.connect(_queue_overlay_layout)
+	_update_overlay_layout()
 	_update_point_toolbar()
+
+
+func _queue_overlay_layout() -> void:
+	if _overlay_layout_queued or not is_node_ready():
+		return
+	_overlay_layout_queued = true
+	_update_overlay_layout.call_deferred()
+
+
+func _update_overlay_layout() -> void:
+	_overlay_layout_queued = false
+	if not is_inside_tree():
+		return
+	var inset := OVERLAY_INSET * _editor_scale
+	_point_toolbar_panel.offset_left = inset
+	_point_toolbar_panel.offset_top = inset
+	_point_toolbar_panel.offset_right = -inset
+	_point_toolbar_panel.offset_bottom = inset + _point_toolbar_panel.get_combined_minimum_size().y
+	_coordinate_overlay.queue_redraw()
 
 
 func _exit_tree() -> void:
@@ -265,6 +291,9 @@ func _input(event: InputEvent) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	# Godot keeps mouse focus on the Control where a button press began until
+	# release. Leave held graph gestures here so crossing child overlays cannot
+	# hand a point/handle/pan/add/delete drag to a toolbar control.
 	if _backend == null:
 		return
 
@@ -1539,14 +1568,7 @@ func _format_drag_coordinates(position: Vector2) -> String:
 
 func _get_drag_coordinate_label_position(anchor: Vector2, text_size: Vector2) -> Vector2:
 	var margin := 4.0 * _editor_scale
-	var button_to_overlay := (
-		_coordinate_overlay.get_global_transform().affine_inverse()
-		* _snap_button.get_global_transform()
-	)
-	var button_bottom := button_to_overlay * Vector2(0.0, _snap_button.size.y)
-	# Editor scale is baked into Control sizes, not their canvas transforms.
-	var minimum_gap := GRID_SNAP_COORDINATE_LABEL_MIN_GAP * _editor_scale
-	var minimum := Vector2(margin, button_bottom.y + minimum_gap)
+	var minimum := Vector2(margin, _get_coordinate_minimum_y())
 	var maximum := size - Vector2.ONE * margin - text_size
 	if maximum.x < minimum.x or maximum.y < minimum.y:
 		return Vector2(NAN, NAN)
@@ -1559,11 +1581,15 @@ func _get_drag_coordinate_label_position(anchor: Vector2, text_size: Vector2) ->
 	return position.clamp(minimum, maximum)
 
 
-func _get_coordinate_top_padding() -> float:
-	if _backend == null or not _is_point_graph():
-		return 0.0
-	var font := get_theme_font(&"font", &"Label")
-	return font.get_height(get_theme_font_size(&"font_size", &"Label")) + point_radius + 6.0 * _editor_scale
+func _get_coordinate_minimum_y() -> float:
+	var minimum := 4.0 * _editor_scale
+	var to_overlay := _coordinate_overlay.get_global_transform().affine_inverse()
+	for control: Control in [_point_toolbar, _snap_button, _snap_count_input]:
+		if not control.is_visible_in_tree():
+			continue
+		var bounds := to_overlay * control.get_global_transform() * Rect2(Vector2.ZERO, control.size)
+		minimum = maxf(minimum, bounds.end.y + GRID_SNAP_COORDINATE_LABEL_MIN_GAP * _editor_scale)
+	return minimum
 
 
 func _draw_drag_coordinates() -> void:
@@ -1955,8 +1981,7 @@ func autofit() -> void:
 	pan_offset = Vector2.ZERO
 	update_view_transform()
 
-	# Use a world-space delta so centering does not retain pixel roundoff after
-	# adding the coordinate-text inset to the graph's screen origin.
+	# Use a world-space delta so centering does not retain pixel roundoff.
 	pan_offset = _world_to_view.basis_xform(Vector2(0.5, 0.5) - bounds.get_center())
 	pan_changed.emit(pan_offset)
 	queue_redraw()
@@ -2012,13 +2037,11 @@ func _get_autofit_world_bounds() -> Rect2:
 
 func _get_graph_view_rect() -> Rect2:
 	var margin := 4.0 * _editor_scale
-	var coordinate_padding := _get_coordinate_top_padding()
-	var toolbar_height := _get_graph_toolbar_height()
 	return Rect2(
-		Vector2(margin, toolbar_height + margin + coordinate_padding),
+		Vector2.ONE * margin,
 		Vector2(
 			maxf(size.x - margin * 2.0, 1.0),
-			maxf(size.y - toolbar_height - margin * 2.0 - coordinate_padding, 1.0),
+			maxf(size.y - margin * 2.0, 1.0),
 		),
 	)
 
@@ -2069,9 +2092,8 @@ func _get_minimum_size() -> Vector2:
 		size.x * ASPECT_RATIO,
 	)
 
-	# Keep the overall editor section height stable across Bezier/Function
-	# mode changes. When the selection toolbar is hidden, the graph simply
-	# expands into this reserved height instead of shrinking the Inspector.
+	# Preserve the editor's established outer height across modes. These
+	# allowances are graph space too; overlays do not inset the viewport.
 	return Vector2(
 		64.0,
 		graph_height + SELECTION_TOOLBAR_HEIGHT + SNAP_TOOLBAR_HEIGHT,
@@ -2417,10 +2439,6 @@ func _draw_sampled_curve() -> void:
 		prev = pt
 
 
-func _get_graph_toolbar_height() -> float:
-	return 0.0 if _is_point_toolbar_hidden() else (SELECTION_TOOLBAR_HEIGHT + SNAP_TOOLBAR_HEIGHT) * _editor_scale
-
-
 func _snap_graph_position(position: Vector2, temporary_snap := false) -> Vector2:
 	if not snap_enabled and not temporary_snap:
 		return position
@@ -2430,6 +2448,7 @@ func _snap_graph_position(position: Vector2, temporary_snap := false) -> Vector2
 
 func _create_snap_toolbar() -> void:
 	var toolbar := HBoxContainer.new()
+	toolbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toolbar.custom_minimum_size.y = SNAP_TOOLBAR_HEIGHT * _editor_scale
 	_point_toolbar_panel.add_child(toolbar)
 	_snap_button = Button.new()
@@ -2440,7 +2459,9 @@ func _create_snap_toolbar() -> void:
 	_snap_button.tooltip_text = "Toggle Grid Snap (points only; Ctrl/Cmd temporarily enables snapping)"
 	_snap_button.toggled.connect(_on_snap_toggled)
 	toolbar.add_child(_snap_button)
-	toolbar.add_child(VSeparator.new())
+	var separator := VSeparator.new()
+	separator.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toolbar.add_child(separator)
 	_snap_count_input = EditorSpinSlider.new()
 	_snap_count_input.min_value = 2
 	_snap_count_input.max_value = 100
@@ -2483,6 +2504,8 @@ func _on_snap_count_changed(value: float) -> void:
 
 func _create_point_toolbar() -> void:
 	_point_toolbar_panel = VBoxContainer.new()
+	_point_toolbar_panel.name = &"PointToolbarPanel"
+	_point_toolbar_panel.z_index = 2
 	_point_toolbar_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	_point_toolbar_panel.set_anchors_and_offsets_preset(
@@ -2496,6 +2519,7 @@ func _create_point_toolbar() -> void:
 	add_child(_point_toolbar_panel)
 
 	_point_toolbar = GridContainer.new()
+	_point_toolbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_toolbar.columns = 3
 	_point_toolbar.add_theme_constant_override(
 		"h_separation",
@@ -2509,12 +2533,14 @@ func _create_point_toolbar() -> void:
 	_point_toolbar_panel.add_child(_point_toolbar)
 
 	var point_label_row := HBoxContainer.new()
+	point_label_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	point_label_row.add_theme_constant_override("separation", 0)
 	point_label_row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	point_label_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_point_toolbar.add_child(point_label_row)
 
 	_point_reorder_buttons = HBoxContainer.new()
+	_point_reorder_buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_reorder_buttons.add_theme_constant_override("separation", 0)
 	_point_reorder_buttons.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	point_label_row.add_child(_point_reorder_buttons)
@@ -2539,6 +2565,7 @@ func _create_point_toolbar() -> void:
 	_point_reorder_buttons.add_child(_point_move_left_button)
 
 	_point_label = Label.new()
+	_point_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_label.text = "No Selection"
 	_point_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_point_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -2563,6 +2590,7 @@ func _create_point_toolbar() -> void:
 	_point_reorder_buttons.add_child(_point_move_right_button)
 
 	_point_toolbar_controls = HBoxContainer.new()
+	_point_toolbar_controls.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_toolbar_controls.add_theme_constant_override(
 		"separation",
 		maxi(1, roundi(2.0 * _editor_scale)),
@@ -2605,6 +2633,7 @@ func _create_point_toolbar() -> void:
 	_point_toolbar_controls.add_child(_point_handle_mode)
 
 	_point_left_state_label = Label.new()
+	_point_left_state_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_left_state_label.text = "L"
 	_point_toolbar_controls.add_child(_point_left_state_label)
 	_point_left_state = _create_point_toolbar_control_state_option(
@@ -2613,6 +2642,7 @@ func _create_point_toolbar() -> void:
 	_point_toolbar_controls.add_child(_point_left_state)
 
 	_point_right_state_label = Label.new()
+	_point_right_state_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_right_state_label.text = "R"
 	_point_toolbar_controls.add_child(_point_right_state_label)
 	_reserve_point_toolbar_control_side_label_width()

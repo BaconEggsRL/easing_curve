@@ -213,7 +213,11 @@ func _test_format_and_placement() -> void:
 		var top_anchor := editor.get_view_pos(Vector2(0.5, 1.0))
 		var actual_text_size := Vector2(100, font.get_height(font_size))
 		var top_label := editor._get_drag_coordinate_label_position(top_anchor, actual_text_size)
-		_expect(top_label.y + actual_text_size.y < top_anchor.y, "Top graph padding did not leave label above point")
+		var top_controls_bottom := editor._snap_button.position.y + editor._snap_button.size.y
+		var snap_to_overlay := editor._coordinate_overlay.get_global_transform().affine_inverse() * editor._snap_button.get_global_transform()
+		top_controls_bottom = (snap_to_overlay * Vector2(0, editor._snap_button.size.y)).y
+		_expect(top_label.y >= top_controls_bottom + 8.0 * scale, "Top-edge label overlapped the visible overlay controls")
+		_expect(is_equal_approx(editor._get_graph_view_rect().position.y, 4.0 * scale), "Readout clamp reserved graph height")
 		var text_size := Vector2(100, 20) * scale
 		for anchor: Vector2 in [Vector2.ZERO, Vector2(600, 0), Vector2(0, 300), Vector2(600, 300), Vector2(-300, 800)]:
 			var position := editor._get_drag_coordinate_label_position(anchor, text_size)

@@ -13,6 +13,7 @@ func _init() -> void:
 
 func _run() -> void:
 	await _test_overlay_section_geometry()
+	await _test_overlay_gesture_ownership()
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
 	_test_view_state_update_ownership()
@@ -86,6 +87,90 @@ func _test_overlay_section_geometry() -> void:
 				viewport.free()
 	var output := FileAccess.open("res://test/_temp/overlay-layout.json", FileAccess.WRITE)
 	output.store_string(JSON.stringify(measurements, "\t"))
+
+
+func _overlay_input_fixture(native: bool) -> Dictionary:
+	var curve: Resource
+	var point: Resource
+	if native:
+		curve = ClassDB.instantiate(&"NativeEasingCurve")
+		curve.set(&"transition", 100)
+		point = ClassDB.instantiate(&"NativeEasingCurvePoint")
+		point.set(&"position", Vector2(0.5, 0.4))
+		curve.call(&"insert_point", 1, point)
+	else:
+		var legacy := EasingCurve.new()
+		legacy.trans_type = EasingCurve.TRANS.CUSTOM
+		point = EasingCurvePoint.new(Vector2(0.5, 0.4))
+		legacy.points = [EasingCurvePoint.new(Vector2.ZERO), point, EasingCurvePoint.new(Vector2.ONE)]
+		curve = legacy
+	point.set(&"left_control_point", Vector2(0.3, 0.3))
+	point.set(&"right_control_point", Vector2(0.7, 0.6))
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(1000, 800)
+	root.add_child(viewport)
+	var editor := EasingCurveEditor.new()
+	editor.presentation_owned = true
+	editor.editor_undo_redo = UndoRedo.new()
+	editor.set_curve(curve)
+	editor.size = Vector2(600, 360)
+	viewport.add_child(editor)
+	editor.selected_index = 1
+	editor.update_view_transform()
+	return {"viewport": viewport, "editor": editor, "point": point}
+
+
+func _push_graph_input(viewport: SubViewport, event: InputEventMouse) -> void:
+	event.global_position = event.position
+	viewport.push_input(event, true)
+
+
+func _dispose_overlay_fixture(fixture: Dictionary) -> void:
+	fixture.editor.finish_active_point_edit()
+	fixture.editor.editor_undo_redo.clear_history()
+	fixture.viewport.free()
+
+
+func _test_overlay_gesture_ownership() -> void:
+	for native: bool in [false, true]:
+		for gesture: String in ["point", "left", "right", "pan", "pending", "delete", "immediate"]:
+			var fixture := _overlay_input_fixture(native)
+			var editor: EasingCurveEditor = fixture.editor
+			var viewport: SubViewport = fixture.viewport
+			for frame in range(3):
+				await process_frame
+			var start := Vector2(250, 200)
+			if gesture in ["point", "left", "right"]:
+				var property := &"position" if gesture == "point" else StringName(gesture + "_control_point")
+				start = editor.get_view_pos(fixture.point.get(property))
+			if gesture == "immediate":
+				editor.use_pending_add = false
+			var button := MOUSE_BUTTON_MIDDLE if gesture == "pan" else (MOUSE_BUTTON_RIGHT if gesture == "delete" else MOUSE_BUTTON_LEFT)
+			var mask := MOUSE_BUTTON_MASK_MIDDLE if gesture == "pan" else (MOUSE_BUTTON_MASK_RIGHT if gesture == "delete" else MOUSE_BUTTON_MASK_LEFT)
+			_push_graph_input(viewport, _motion(start))
+			_push_graph_input(viewport, _button(button, start, true))
+			var expected_drag := editor.dragging_point
+			var expected_control := editor.dragging_control
+			var pending := editor.pending_add_point
+			_expect(editor.is_panning or editor.is_right_delete_dragging or expected_drag >= 0 or pending != null, "Viewport press did not begin graph " + gesture)
+			var target := editor._snap_button.get_global_rect().get_center()
+			var snap_before := editor.snap_enabled
+			_push_graph_input(viewport, _motion(target, mask))
+			_expect(editor.dragging_point == expected_drag and editor.dragging_control == expected_control and editor.pending_add_point == pending, "Overlay stole graph " + gesture)
+			if gesture == "pan":
+				_expect(editor.is_panning and editor.pan_offset.is_equal_approx(target - start), "Pan stopped when crossing overlay")
+			elif gesture == "delete":
+				_expect(editor.is_right_delete_dragging, "Overlay cancelled RMB delete gesture")
+			else:
+				_expect(editor._get_drag_coordinate_position().is_finite(), "Overlay dismissed active drag readout")
+			_push_graph_input(viewport, _button(button, target, false))
+			_expect(not editor.is_panning and not editor.is_right_delete_dragging and editor.dragging_point == -1 and editor.pending_add_point == null, "Release over overlay did not finish graph " + gesture)
+			_expect(editor.snap_enabled == snap_before, "Graph release activated Grid Snap")
+			# A new interaction originating on the button must belong to it.
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, target, true))
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, target, false))
+			_expect(editor.snap_enabled != snap_before and editor.dragging_point == -1 and editor.pending_add_point == null, "Grid Snap did not own a fresh button click")
+			_dispose_overlay_fixture(fixture)
 
 
 func _fixture() -> Dictionary:
