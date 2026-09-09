@@ -1,10 +1,5 @@
 name: Qualify patched Godot editor
 on:
-  push:
-    branches: [codex/qualified-godot-editor]
-    paths:
-      - .github/workflows/qualify-godot-editor.yml
-      - tooling/godot/editor-pin.json
   workflow_dispatch:
 permissions:
   contents: read

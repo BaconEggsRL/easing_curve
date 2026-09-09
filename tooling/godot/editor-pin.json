@@ -3,11 +3,11 @@
   "source_tag": "4.7.1-stable",
   "patch": "editor-help-lifetime.patch",
   "patch_sha256": "2338C2925A01FBAEBF6ED417284B4D9EB7B7A1173BBD133C0CAF30F7AEB03603",
-  "editor_url": "",
+  "editor_url": "https://github.com/BaconEggsRL/easing_curve/releases/download/tooling-godot-4.7.1-ec111645-p1/godot-editor.exe",
   "editor_sha256": "A7C0CF8F625A3B24991ED40F77DD1892C35E0DA2AB3185039DF2DAFD994C4272",
   "editor_version_prefix": "4.7.1.stable.ec111645-p1.",
   "export_template_version": "4.7.1.stable",
   "official_version": "4.7.1",
-  "qualification_run": "",
+  "qualification_run": "https://github.com/BaconEggsRL/easing_curve/actions/runs/34304514823",
   "issue": "https://github.com/godotengine/godot/issues/111645"
 }
