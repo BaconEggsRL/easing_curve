@@ -70,6 +70,8 @@ const ZOOM_STEPS := EasingCurve.ZOOM_STEPS
 const DEFAULT_SLIDER_VALUE := EasingCurve.DEFAULT_SLIDER_VALUE
 const ASPECT_RATIO: float = 6. / 13.
 const MIN_GRAPH_HEIGHT := 135.0
+const PREFERRED_GRAPH_HEIGHT := 180.0
+const GRAPH_EDGE_PADDING := 4.0
 const MIN_X: float = 0.0
 const MAX_X: float = 1.0
 const MIN_Y: float = 0.0
@@ -161,6 +163,9 @@ var _slider: EasingCurveZoomSliderContainer:
 var _world_to_view: Transform2D
 var _editor_scale: float = 1.0
 var _overlay_layout_queued := false
+var _layout: VBoxContainer
+var _graph_canvas: Control
+var _graph_ink: Control
 var _zoom_overlay: HBoxContainer
 var _zoom_overlay_slider: EasingCurveZoomSliderContainer
 
@@ -199,6 +204,7 @@ func _ready() -> void:
 	# Intentional graph zoom is accepted explicitly in _handle_wheel().
 	mouse_force_pass_scroll_events = true
 	clip_contents = true
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	if Engine.is_editor_hint():
 		_editor_scale = EditorInterface.get_editor_scale()
@@ -214,15 +220,31 @@ func _ready() -> void:
 	if _backend == null:
 		set_curve(EasingCurve.new())
 
+	_ensure_layout()
 	_create_point_toolbar()
 	_create_snap_toolbar()
+	_graph_canvas = Control.new()
+	_graph_canvas.name = &"GraphCanvas"
+	_graph_canvas.clip_contents = true
+	_graph_canvas.mouse_filter = Control.MOUSE_FILTER_STOP
+	_graph_canvas.mouse_force_pass_scroll_events = true
+	_layout.add_child(_graph_canvas)
+	if _zoom_overlay != null:
+		_layout.move_child(_zoom_overlay, -1)
+	_graph_canvas.gui_input.connect(_on_graph_gui_input)
+	_graph_canvas.resized.connect(queue_redraw)
+	_layout.sort_children.connect(queue_redraw)
+	_graph_ink = Control.new()
+	_graph_ink.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_graph_canvas.add_child(_graph_ink)
+	_graph_ink.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_graph_ink.draw.connect(_draw_graph)
 	_coordinate_overlay = Control.new()
 	_coordinate_overlay.name = "DragCoordinates"
 	_coordinate_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_coordinate_overlay.z_index = 1
-	add_child(_coordinate_overlay)
+	_graph_canvas.add_child(_coordinate_overlay)
 	_coordinate_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	move_child(_coordinate_overlay, 0)
 	_coordinate_overlay.draw.connect(_draw_drag_coordinates)
 	_point_toolbar_panel.sort_children.connect(_coordinate_overlay.queue_redraw)
 	_point_toolbar_panel.minimum_size_changed.connect(_queue_overlay_layout)
@@ -230,6 +252,16 @@ func _ready() -> void:
 	theme_changed.connect(_queue_overlay_layout)
 	_update_overlay_layout()
 	_update_point_toolbar()
+
+
+func _ensure_layout() -> void:
+	if _layout != null:
+		return
+	_layout = VBoxContainer.new()
+	_layout.name = &"EditorLayout"
+	_layout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_layout)
+	_layout.minimum_size_changed.connect(update_minimum_size)
 
 
 func _queue_overlay_layout() -> void:
@@ -243,34 +275,29 @@ func _update_overlay_layout() -> void:
 	_overlay_layout_queued = false
 	if not is_inside_tree():
 		return
+	if _layout == null or _graph_canvas == null:
+		return
 	var inset := OVERLAY_INSET * _editor_scale
 	_reserve_point_toolbar_label_column_width()
-	_point_toolbar_panel.offset_left = 0.0
-	_point_toolbar_panel.offset_top = 0.0
-	_point_toolbar_panel.offset_right = 0.0
-	_point_toolbar_panel.offset_bottom = _point_toolbar_panel.get_combined_minimum_size().y
+	_layout.size.x = size.x
+	_graph_canvas.custom_minimum_size.y = _get_graph_size().y + 2.0 * GRAPH_EDGE_PADDING * _editor_scale
 	for side: StringName in [&"margin_left", &"margin_right"]:
 		if _snap_toolbar_margin.get_theme_constant(side) != roundi(inset):
 			_snap_toolbar_margin.add_theme_constant_override(side, roundi(inset))
-	if _zoom_overlay != null:
-		var bottom_inset := ZOOM_BOTTOM_INSET * _editor_scale
-		_zoom_overlay.offset_left = inset
-		_zoom_overlay.offset_right = -inset
-		_zoom_overlay.offset_top = -bottom_inset - _zoom_overlay.get_combined_minimum_size().y
-		_zoom_overlay.offset_bottom = -bottom_inset
-		update_minimum_size()
+	update_minimum_size()
+	queue_redraw()
 	_coordinate_overlay.queue_redraw()
 
 
 func setup_zoom_overlay() -> void:
 	if _zoom_overlay != null:
 		return
+	_ensure_layout()
 	_zoom_overlay = HBoxContainer.new()
 	_zoom_overlay.name = &"ZoomRow"
 	_zoom_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_zoom_overlay.z_index = 2
-	add_child(_zoom_overlay)
-	_zoom_overlay.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_layout.add_child(_zoom_overlay)
 	var spacer := Control.new()
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -324,6 +351,13 @@ func _sync_default_new_point_handle_mode() -> void:
 # =========================
 # GUI INPUT (DRAGGING)
 # =========================
+func _on_graph_gui_input(event: InputEvent) -> void:
+	var editor_event := event.duplicate() as InputEvent
+	if editor_event is InputEventMouse:
+		editor_event.position += _graph_canvas.position
+	_gui_input(editor_event)
+
+
 func _input(event: InputEvent) -> void:
 	if not is_inside_tree() or not is_visible_in_tree():
 		return
@@ -334,9 +368,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	# Godot keeps mouse focus on the Control where a button press began until
-	# release. Leave held graph gestures here so crossing child overlays cannot
-	# hand a point/handle/pan/add/delete drag to a toolbar control.
+	# The canvas retains mouse capture across sibling controls until release.
 	if _backend == null:
 		return
 
@@ -1349,10 +1381,16 @@ func _restore_right_delete_drag_state() -> void:
 # DRAWING POINTS & CONTROLS
 # =========================
 func _draw():
+	if _graph_ink != null:
+		_graph_ink.queue_redraw()
 	if _coordinate_overlay != null:
 		_coordinate_overlay.queue_redraw()
+
+
+func _draw_graph() -> void:
 	if _backend == null or _graph_render_suppressed:
 		return
+	_graph_ink.draw_set_transform(-_graph_canvas.position)
 
 	update_view_transform()
 	_draw_graph_grid()
@@ -1388,7 +1426,7 @@ func _draw():
 		var point_color = Color(1, 0.5, 0, alpha) if is_selected else Color(1, 0, 0, alpha)
 
 		# ----- Main Point -----
-		draw_circle(pos_view, point_radius, point_color)
+		_graph_ink.draw_circle(pos_view, point_radius, point_color)
 
 		# ----- Control Points -----
 		# LEFT
@@ -1414,8 +1452,8 @@ func _draw():
 				left_alpha,
 			)
 
-			draw_line(pos_view, left_view, left_line_color)
-			draw_circle(left_view, left_radius, left_color)
+			_graph_ink.draw_line(pos_view, left_view, left_line_color)
+			_graph_ink.draw_circle(left_view, left_radius, left_color)
 
 		# RIGHT
 		if i != display_points.size() - 1:
@@ -1440,8 +1478,8 @@ func _draw():
 				right_alpha,
 			)
 
-			draw_line(pos_view, right_view, right_line_color)
-			draw_circle(right_view, right_radius, right_color)
+			_graph_ink.draw_line(pos_view, right_view, right_line_color)
+			_graph_ink.draw_circle(right_view, right_radius, right_color)
 
 
 func begin_point_list_coordinate_drag(input: Control, point: Resource, property_name: StringName) -> void:
@@ -1584,23 +1622,23 @@ func _draw_graph_grid() -> void:
 	if not hide_graph_background:
 		var tick_size := minf(4.0 * _editor_scale, minf(rect.size.x, rect.size.y))
 		var bottom_left := Vector2(rect.position.x, rect.end.y)
-		draw_line(rect.position, bottom_left, grid_color)
-		draw_line(bottom_left, rect.end, grid_color)
+		_graph_ink.draw_line(rect.position, bottom_left, grid_color)
+		_graph_ink.draw_line(bottom_left, rect.end, grid_color)
 		for index in range(GRAPH_GRID_DIVISIONS.x + 1):
 			var anchor := _get_grid_tick_position(Vector2.AXIS_X, index, rect)
-			draw_line(anchor, anchor - Vector2(0, tick_size), reference_color)
+			_graph_ink.draw_line(anchor, anchor - Vector2(0, tick_size), reference_color)
 		for index in range(GRAPH_GRID_DIVISIONS.y + 1):
 			var anchor := _get_grid_tick_position(Vector2.AXIS_Y, index, rect)
-			draw_line(anchor, anchor + Vector2(tick_size, 0), reference_color)
+			_graph_ink.draw_line(anchor, anchor + Vector2(tick_size, 0), reference_color)
 	var reference_lines := _get_reference_box_lines(rect)
 	if not reference_lines.is_empty():
-		draw_multiline(reference_lines, reference_color)
+		_graph_ink.draw_multiline(reference_lines, reference_color)
 	if hide_graph_background:
 		return
 	# Labels cover the grid/box, then _draw() paints curve geometry and points.
 	for label: Dictionary in _get_grid_labels(rect, font, font_size):
 		var baseline: Vector2 = label.bounds.position + Vector2(0, font.get_ascent(font_size))
-		draw_string(font, baseline, label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+		_graph_ink.draw_string(font, baseline, label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
 
 
 func _format_drag_coordinates(position: Vector2) -> String:
@@ -1610,9 +1648,9 @@ func _format_drag_coordinates(position: Vector2) -> String:
 
 
 func _get_drag_coordinate_label_position(anchor: Vector2, text_size: Vector2) -> Vector2:
-	var margin := 4.0 * _editor_scale
-	var minimum := Vector2(margin, _get_coordinate_minimum_y())
-	var maximum := size - Vector2.ONE * margin - text_size
+	var graph := _get_graph_view_rect()
+	var minimum := graph.position
+	var maximum := graph.end - text_size
 	if maximum.x < minimum.x or maximum.y < minimum.y:
 		return Vector2(NAN, NAN)
 	var is_point := pending_add_point != null or dragging_control == ControlIndex.NONE
@@ -1625,7 +1663,7 @@ func _get_drag_coordinate_label_position(anchor: Vector2, text_size: Vector2) ->
 
 
 func _get_coordinate_minimum_y() -> float:
-	return _get_top_controls_minimum_y(_coordinate_overlay)
+	return _get_graph_view_rect().position.y
 
 
 func _get_top_controls_minimum_y(canvas: Control, gap: float = GRID_SNAP_COORDINATE_LABEL_MIN_GAP) -> float:
@@ -1640,6 +1678,7 @@ func _get_top_controls_minimum_y(canvas: Control, gap: float = GRID_SNAP_COORDIN
 
 
 func _draw_drag_coordinates() -> void:
+	_coordinate_overlay.draw_set_transform(-_graph_canvas.position)
 	var position := _get_drag_coordinate_position()
 	if not position.is_finite():
 		return
@@ -2124,14 +2163,14 @@ func _get_autofit_world_bounds() -> Rect2:
 
 
 func _get_graph_view_rect() -> Rect2:
-	var margin := 4.0 * _editor_scale
-	return Rect2(
-		Vector2.ONE * margin,
-		Vector2(
-			maxf(size.x - margin * 2.0, 1.0),
-			maxf(minf(size.y, size.x) - margin * 2.0, 1.0),
-		),
-	)
+	var origin := _graph_canvas.position if _graph_canvas != null else Vector2.ZERO
+	return Rect2(origin + Vector2.ONE * GRAPH_EDGE_PADDING * _editor_scale, _get_graph_size())
+
+
+func _get_graph_size() -> Vector2:
+	# Width is already in scaled pixels; remove edge padding exactly once here.
+	var usable_width := maxf(size.x - 2.0 * GRAPH_EDGE_PADDING * _editor_scale, 1.0)
+	return Vector2(usable_width, clampf(PREFERRED_GRAPH_HEIGHT * _editor_scale, usable_width / 2.0, usable_width))
 
 
 func _on_slider_changed(value: float) -> void:
@@ -2175,17 +2214,17 @@ func _on_curve_changed() -> void:
 
 
 func _get_minimum_size() -> Vector2:
-	var graph_height := maxf(
-		MIN_GRAPH_HEIGHT,
-		size.x * ASPECT_RATIO,
-	)
-
-	# Preserve established sizing until the graph would become taller than wide.
-	var minimum_width := 64.0 * _editor_scale
-	var height := (graph_height + SELECTION_TOOLBAR_HEIGHT + SNAP_TOOLBAR_HEIGHT) * _editor_scale
-	if _zoom_overlay != null:
-		height += _zoom_overlay.get_combined_minimum_size().y + maxi(1, roundi(ZOOM_HEIGHT_ALLOWANCE * _editor_scale))
-	return Vector2(minimum_width, minf(height, maxf(size.x, minimum_width)))
+	var height := _get_graph_size().y + 2.0 * GRAPH_EDGE_PADDING * _editor_scale
+	if _layout != null:
+		var visible_rows := 0
+		for row: Control in _layout.get_children():
+			if not row.visible:
+				continue
+			visible_rows += 1
+			if row != _graph_canvas:
+				height += row.get_combined_minimum_size().y
+		height += maxi(0, visible_rows - 1) * _layout.get_theme_constant(&"separation")
+	return Vector2(64.0 * _editor_scale, height)
 
 
 func _get_display_points() -> Array[Resource]:
@@ -2229,7 +2268,7 @@ func _draw_bezier_curve(point_list: Array[Resource]) -> void:
 		Vector2(0.0, EasingCurve.get_bezier_fallback_value(0.0))
 	).y
 	if point_list.size() < 2:
-		draw_line(
+		_graph_ink.draw_line(
 			get_view_pos(Vector2(0.0, fallback_y)),
 			get_view_pos(Vector2(1.0, fallback_y)),
 			LINE_COLOR,
@@ -2247,13 +2286,13 @@ func _draw_bezier_curve(point_list: Array[Resource]) -> void:
 	)
 
 	if not EasingCurve.is_left_endpoint_x(first_position.x):
-		draw_line(
+		_graph_ink.draw_line(
 			get_view_pos(Vector2(0.0, fallback_y)),
 			get_view_pos(Vector2(first_position.x, fallback_y)),
 			LINE_COLOR,
 			2,
 		)
-		draw_line(
+		_graph_ink.draw_line(
 			get_view_pos(Vector2(first_position.x, fallback_y)),
 			get_view_pos(first_position),
 			LINE_COLOR,
@@ -2270,13 +2309,13 @@ func _draw_bezier_curve(point_list: Array[Resource]) -> void:
 		)
 
 	if not EasingCurve.is_right_endpoint_x(last_position.x):
-		draw_line(
+		_graph_ink.draw_line(
 			get_view_pos(last_position),
 			get_view_pos(Vector2(last_position.x, fallback_y)),
 			LINE_COLOR,
 			2,
 		)
-		draw_line(
+		_graph_ink.draw_line(
 			get_view_pos(Vector2(last_position.x, fallback_y)),
 			get_view_pos(Vector2(1.0, fallback_y)),
 			LINE_COLOR,
@@ -2307,7 +2346,7 @@ func _draw_bezier_segment(
 	var segment_width := b_position.x - a_position.x
 	if absf(segment_width) <= EasingCurve.SEGMENT_X_EPSILON:
 		if a_position.x >= visible_min_x and a_position.x <= visible_max_x:
-			draw_line(get_view_pos(a_position), get_view_pos(b_position), LINE_COLOR, 2)
+			_graph_ink.draw_line(get_view_pos(a_position), get_view_pos(b_position), LINE_COLOR, 2)
 		return
 
 	var segment_min_x := minf(a_position.x, b_position.x)
@@ -2365,7 +2404,7 @@ func _draw_bezier_segment(
 		0,
 		polyline,
 	)
-	draw_polyline(polyline, LINE_COLOR, 2.0)
+	_graph_ink.draw_polyline(polyline, LINE_COLOR, 2.0)
 
 
 func _append_adaptive_bezier_points(
@@ -2522,7 +2561,7 @@ func _draw_sampled_curve() -> void:
 		var pt = get_view_pos(Vector2(x, y))
 
 		if i > 0:
-			draw_line(prev, pt, LINE_COLOR, 2)
+			_graph_ink.draw_line(prev, pt, LINE_COLOR, 2)
 
 		prev = pt
 
@@ -2608,7 +2647,7 @@ func _create_point_toolbar() -> void:
 		SELECTION_TOOLBAR_HEIGHT * _editor_scale
 	)
 
-	add_child(_point_toolbar_panel)
+	_layout.add_child(_point_toolbar_panel)
 
 	_point_toolbar = GridContainer.new()
 	_point_toolbar.mouse_filter = Control.MOUSE_FILTER_IGNORE

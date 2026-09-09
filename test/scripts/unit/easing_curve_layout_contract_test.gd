@@ -22,6 +22,7 @@ func _init() -> void:
 func _run() -> void:
 	await _characterize_grouped_flow()
 	await _test_sibling_capture()
+	await _test_graph_dimensions()
 	_finish("curve layout contract")
 
 
@@ -136,3 +137,30 @@ func _test_sibling_capture() -> void:
 		viewport.push_input(release, true)
 		_expect(graph.events.is_empty() and clicks[0] == 1, "Sibling button did not own its own interaction")
 		viewport.free()
+
+
+func _test_graph_dimensions() -> void:
+	var editor := EasingCurveEditor.new()
+	root.add_child(editor)
+	editor.setup_zoom_overlay()
+	for scale_value: float in [1.0, 1.5, 2.0]:
+		editor._editor_scale = scale_value
+		for width: float in [150.0, 179.0, 180.0, 181.0, 220.0, 359.0, 360.0, 361.0, 600.0]:
+			editor.size.x = (width + 8.0) * scale_value
+			editor._update_overlay_layout()
+			await _settle()
+			var graph := editor._get_graph_view_rect()
+			var expected := Vector2(width, clampf(180.0, width / 2.0, width)) * scale_value
+			_expect(graph.size.is_equal_approx(expected), "Canonical graph size applied padding or scale twice")
+			_expect(graph.size.x >= graph.size.y and graph.size.x <= graph.size.y * 2.0, "Graph aspect escaped 1:1 to 2:1")
+			var shown_height := editor.get_combined_minimum_size().y
+			editor._point_toolbar_panel.hide()
+			await _settle()
+			_expect(editor._get_graph_view_rect().size == graph.size, "Toolbar visibility changed fixed-width graph dimensions")
+			_expect(editor.get_combined_minimum_size().y < shown_height, "Hidden toolbar retained persistent height")
+			editor._point_toolbar_panel.show()
+			await _settle()
+			_expect(editor.get_combined_minimum_size().x == 64.0 * scale_value, "Graph height preference raised horizontal minimum")
+			_expect(editor._point_toolbar_panel.get_rect().end.y <= editor._graph_canvas.position.y, "Point controls overlap graph")
+			_expect(editor._graph_canvas.get_rect().end.y <= editor._zoom_overlay.position.y, "Zoom controls overlap graph")
+	editor.free()
