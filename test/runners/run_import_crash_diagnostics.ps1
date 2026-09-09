@@ -130,7 +130,8 @@ function Invoke-Case {
 					$collectorInfo.RedirectStandardError = $true
 					$collectorInfo.StandardOutputEncoding = [Text.Encoding]::Unicode
 					$collectorInfo.StandardErrorEncoding = [Text.Encoding]::Unicode
-					foreach ($arg in @('-accepteula','-mp','-e',[string]$candidate.Id,$dumps)) { $collectorInfo.ArgumentList.Add($arg) }
+					# Capture the first AV before exception/exit handling discards module/thread state.
+					foreach ($arg in @('-accepteula','-ma','-e','1','-f','C0000005',[string]$candidate.Id,$dumps)) { $collectorInfo.ArgumentList.Add($arg) }
 					$collector = [Diagnostics.Process]::Start($collectorInfo)
 					$collectorOut = $collector.StandardOutput.ReadToEndAsync()
 					$collectorErr = $collector.StandardError.ReadToEndAsync()
