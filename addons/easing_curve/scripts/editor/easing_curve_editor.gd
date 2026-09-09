@@ -8,6 +8,7 @@ extends Control
 const SELECTION_TOOLBAR_HEIGHT := 32.0
 const SNAP_TOOLBAR_HEIGHT := 32.0
 const OVERLAY_INSET := 8.0
+const ZOOM_BOTTOM_INSET := 0.0
 # Retain the former compact gap in the total height, not in graph coordinates.
 const ZOOM_HEIGHT_ALLOWANCE := 2.0
 const GRID_SNAP_COORDINATE_LABEL_MIN_GAP := 8.0
@@ -252,10 +253,11 @@ func _update_overlay_layout() -> void:
 		if _snap_toolbar_margin.get_theme_constant(side) != roundi(inset):
 			_snap_toolbar_margin.add_theme_constant_override(side, roundi(inset))
 	if _zoom_overlay != null:
+		var bottom_inset := ZOOM_BOTTOM_INSET * _editor_scale
 		_zoom_overlay.offset_left = inset
 		_zoom_overlay.offset_right = -inset
-		_zoom_overlay.offset_top = -inset - _zoom_overlay.get_combined_minimum_size().y
-		_zoom_overlay.offset_bottom = -inset
+		_zoom_overlay.offset_top = -bottom_inset - _zoom_overlay.get_combined_minimum_size().y
+		_zoom_overlay.offset_bottom = -bottom_inset
 		update_minimum_size()
 	_coordinate_overlay.queue_redraw()
 
