@@ -7,6 +7,7 @@ extends Control
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
 const SNAP_TOOLBAR_HEIGHT := 32.0
+const GRID_SNAP_COORDINATE_LABEL_MIN_GAP := 8.0
 const SNAP_ENABLED_META := &"_easing_curve_snap_enabled"
 const SNAP_COUNT_META := &"_easing_curve_snap_count"
 const EDITOR_THEME_CACHE = preload(
@@ -212,6 +213,7 @@ func _ready() -> void:
 	add_child(_coordinate_overlay)
 	_coordinate_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_coordinate_overlay.draw.connect(_draw_drag_coordinates)
+	_point_toolbar_panel.sort_children.connect(_coordinate_overlay.queue_redraw)
 	_update_point_toolbar()
 
 
@@ -1537,8 +1539,14 @@ func _format_drag_coordinates(position: Vector2) -> String:
 
 func _get_drag_coordinate_label_position(anchor: Vector2, text_size: Vector2) -> Vector2:
 	var margin := 4.0 * _editor_scale
-	var toolbar_height := _get_graph_toolbar_height()
-	var minimum := Vector2(margin, toolbar_height + margin)
+	var button_to_overlay := (
+		_coordinate_overlay.get_global_transform().affine_inverse()
+		* _snap_button.get_global_transform()
+	)
+	var button_bottom := button_to_overlay * Vector2(0.0, _snap_button.size.y)
+	# Editor scale is baked into Control sizes, not their canvas transforms.
+	var minimum_gap := GRID_SNAP_COORDINATE_LABEL_MIN_GAP * _editor_scale
+	var minimum := Vector2(margin, button_bottom.y + minimum_gap)
 	var maximum := size - Vector2.ONE * margin - text_size
 	if maximum.x < minimum.x or maximum.y < minimum.y:
 		return Vector2(NAN, NAN)

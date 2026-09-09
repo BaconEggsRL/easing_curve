@@ -16,7 +16,9 @@ func _run() -> void:
 				_test_gestures(native, reverse, invert)
 		_test_lifecycle(native)
 		_test_constraints(native)
-	_test_format_and_placement()
+	await _test_format_and_placement()
+	for native: bool in [false, true]:
+		await _test_coordinate_tracking_and_minimum_gap(native)
 	_test_display_space_handle_parity()
 	_test_grid_snapping()
 	await _test_rendered()
@@ -197,11 +199,14 @@ func _test_constraints(native: bool) -> void:
 
 func _test_format_and_placement() -> void:
 	var editor := _fixture(false)
+	await process_frame
+	await process_frame
 	_expect(editor._format_drag_coordinates(Vector2(0.5, 0.91)) == "(0.50, 0.91)", "Precision/trailing zeros")
 	_expect(editor._format_drag_coordinates(Vector2(-0.0001, -0.004)) == "(0.00, 0.00)", "Negative zero")
 	_expect(editor._format_drag_coordinates(Vector2(-0.02, 1.25)) == "(-0.02, 1.25)", "Out-of-range formatting")
 	for scale: float in [1.0, 2.0]:
 		editor._editor_scale = scale
+		editor.set_zoom(Vector2.ONE * editor.step_to_zoom(EasingCurveEditor.DEFAULT_SLIDER_VALUE))
 		editor.update_view_transform()
 		var font := editor.get_theme_font(&"font", &"Label")
 		var font_size := editor.get_theme_font_size(&"font_size", &"Label")
@@ -216,6 +221,142 @@ func _test_format_and_placement() -> void:
 			_expect(position.x + text_size.x <= editor.size.x - 4 * scale and position.y + text_size.y <= editor.size.y - 4 * scale, "Label escaped bottom/right bounds")
 	_expect(not editor._get_drag_coordinate_label_position(Vector2.ZERO, Vector2(900, 900)).is_finite(), "Oversized label was not omitted")
 	_dispose(editor)
+
+
+func _label_bounds(editor: EasingCurveEditor) -> Rect2:
+	var font := editor.get_theme_font(&"font", &"Label")
+	var font_size := editor.get_theme_font_size(&"font_size", &"Label")
+	var coordinate := editor._get_drag_coordinate_position()
+	var text_size := font.get_string_size(editor._format_drag_coordinates(coordinate), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	text_size.y = font.get_height(font_size)
+	return Rect2(editor._get_drag_coordinate_label_position(editor.get_view_pos(coordinate), text_size), text_size)
+
+
+func _expect_coordinate_placement(editor: EasingCurveEditor, expected_coordinate: Vector2, radius := -1.0) -> void:
+	var bounds := _label_bounds(editor)
+	var label_top := editor._coordinate_overlay.get_global_transform() * bounds.position
+	var button_bottom := editor._snap_button.get_global_transform() * Vector2(0, editor._snap_button.size.y)
+	var canvas_scale := editor._coordinate_overlay.get_global_transform().get_scale().y
+	var minimum_gap := EasingCurveEditor.GRID_SNAP_COORDINATE_LABEL_MIN_GAP * editor._editor_scale
+	_expect((label_top.y - button_bottom.y) / canvas_scale >= minimum_gap - 0.01, "Coordinate line crossed the Grid Snap minimum gap")
+	_expect(editor._get_drag_coordinate_position().is_equal_approx(expected_coordinate), "Layout/navigation changed the coordinate value")
+	var margin := 4.0 * editor._editor_scale
+	var expected_x := clampf(editor.get_view_pos(expected_coordinate).x - bounds.size.x * 0.5, margin, editor.size.x - margin - bounds.size.x)
+	_expect(is_equal_approx(bounds.position.x, expected_x), "Y-only fix changed horizontal placement")
+	var minimum_y := (editor._coordinate_overlay.get_global_transform().affine_inverse() * button_bottom).y + minimum_gap
+	var item_radius := float(editor.point_radius) if radius < 0 else radius
+	var candidate_y := editor.get_view_pos(expected_coordinate).y - item_radius - 6.0 * editor._editor_scale - bounds.size.y
+	var expected_y := clampf(candidate_y, minimum_y, editor.size.y - margin - bounds.size.y)
+	_expect(is_equal_approx(bounds.position.y, expected_y), "Coordinate Y lost its original anchor/radius offset or edge clamp")
+
+
+func _coordinate_view_cases() -> Array[Dictionary]:
+	return [
+		{ "name": "default", "width": 414.0, "zoom": EasingCurveEditor.DEFAULT_SLIDER_VALUE },
+		{ "name": "zoom-out-narrow", "width": 320.0, "zoom": 0 },
+		{ "name": "zoom-in-wide", "width": 640.0, "zoom": 21 },
+		{ "name": "pan-up", "width": 414.0, "zoom": 21, "pan": Vector2(160, -120) },
+		{ "name": "pan-down", "width": 414.0, "zoom": 0, "pan": Vector2(-160, 120) },
+		{ "name": "autofit", "width": 414.0 },
+		{ "name": "reset", "width": 414.0, "zoom": EasingCurveEditor.DEFAULT_SLIDER_VALUE },
+	]
+
+
+func _apply_coordinate_view(editor: EasingCurveEditor, view: Dictionary) -> void:
+	if view.name == "autofit":
+		editor.autofit()
+	else:
+		editor.slider_value = view.zoom
+		editor.pan_offset = view.get("pan", Vector2.ZERO)
+	editor.update_view_transform()
+	editor.queue_redraw()
+
+
+func _test_coordinate_tracking_and_minimum_gap(native: bool) -> void:
+	var editor := _fixture(native)
+	editor.position = Vector2(23, 17)
+	var slider := EasingCurveEditor.ZOOM_SLIDER_CONTAINER.instantiate() as EasingCurveZoomSliderContainer
+	root.add_child(slider)
+	slider.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	editor.set_slider_container(slider)
+	_press(editor, _resolved(editor, &"position"))
+	var coordinate := editor._get_drag_coordinate_position()
+	for view: Dictionary in _coordinate_view_cases():
+		editor.size = Vector2(view.width, 300)
+		await process_frame
+		await process_frame
+		var graph_rect := editor._get_graph_view_rect()
+		var button_rect := editor._snap_button.get_global_rect()
+		var slider_rect := slider.get_global_rect()
+		_apply_coordinate_view(editor, view)
+		await process_frame
+		_expect_coordinate_placement(editor, coordinate)
+		_expect(editor._get_graph_view_rect() == graph_rect, "Coordinate layout/navigation changed graph rectangle")
+		_expect(editor._snap_button.get_global_rect() == button_rect, "Coordinate layout/navigation moved Grid Snap")
+		_expect(slider.get_global_rect() == slider_rect, "Coordinate layout/navigation moved zoom controls")
+	_test_leaving_top_clamp(editor)
+	# The same placement applies to handles, pending points, and Inspector inputs.
+	editor._handle_left_released()
+	for property: StringName in [&"left_control_point", &"right_control_point"]:
+		_press(editor, _resolved(editor, property))
+		_expect_coordinate_placement(editor, _resolved(editor, property), editor.control_radius)
+		editor._handle_left_released()
+	_press(editor, Vector2(0.73, 0.18))
+	_expect(editor.pending_add_point != null, "Layout fixture did not start pending add")
+	_expect_coordinate_placement(editor, Vector2(0.73, 0.18))
+	editor._cancel_pending_add()
+	var input := EditorSpinSlider.new()
+	root.add_child(input)
+	editor.begin_point_list_coordinate_drag(input, editor._point(1), &"position")
+	_expect_coordinate_placement(editor, _resolved(editor, &"position"))
+	editor.begin_point_list_coordinate_drag(input, editor._point(1), &"left_control_point")
+	_expect_coordinate_placement(editor, _resolved(editor, &"left_control_point"), editor.control_radius)
+	editor.begin_point_list_coordinate_drag(input, editor._point(1), &"position")
+	# Put the label on its top clamp before testing toolbar-only relayout.
+	editor.pan_offset.y = -1000
+	editor.queue_redraw()
+	var draws := [0]
+	editor._coordinate_overlay.draw.connect(func(): draws[0] += 1)
+	await process_frame
+	await process_frame
+	var previous_draws: int = draws[0]
+	var previous_top := _label_bounds(editor).position.y
+	var separation := editor._point_toolbar_panel.get_theme_constant(&"separation")
+	editor._point_toolbar_panel.add_theme_constant_override(&"separation", separation - 2)
+	await process_frame
+	await process_frame
+	await process_frame
+	_expect(draws[0] > previous_draws, "Toolbar-only relayout did not redraw the coordinate overlay")
+	_expect(is_equal_approx(_label_bounds(editor).position.y, previous_top - 2), "Coordinate label did not follow the actual toolbar bottom")
+	# Canvas scaling must not be applied twice when converting the button bounds.
+	editor.scale = Vector2(1.5, 1.5)
+	_expect_coordinate_placement(editor, _resolved(editor, &"position"))
+	editor._editor_scale = 2.0
+	_expect_coordinate_placement(editor, _resolved(editor, &"position"))
+	editor.end_point_list_coordinate_drag()
+	input.free()
+	slider.free()
+	_dispose(editor)
+
+
+func _test_leaving_top_clamp(editor: EasingCurveEditor) -> void:
+	var coordinate := editor._get_drag_coordinate_position()
+	var original_top := _label_bounds(editor).position.y
+	var original_anchor := editor.get_view_pos(coordinate)
+	_motion(editor, coordinate + Vector2(0, -0.1))
+	coordinate = editor._get_drag_coordinate_position()
+	var moved_top := _label_bounds(editor).position.y
+	var anchor_delta := editor.get_view_pos(coordinate).y - original_anchor.y
+	_expect(anchor_delta > 1.0 and is_equal_approx(moved_top - original_top, anchor_delta), "Unclamped point movement did not move the readout vertically")
+	_expect_coordinate_placement(editor, coordinate)
+	var minimum_y := editor._get_drag_coordinate_label_position(Vector2(0, -1000), _label_bounds(editor).size).y
+	editor.pan_offset.y += minimum_y - moved_top - 20.0
+	_expect(is_equal_approx(_label_bounds(editor).position.y, minimum_y), "Readout did not enter the top clamp")
+	_expect_coordinate_placement(editor, coordinate)
+	editor.pan_offset.y += 40.0
+	_expect(is_equal_approx(_label_bounds(editor).position.y, minimum_y + 20.0), "Readout did not immediately leave the top clamp")
+	_expect_coordinate_placement(editor, coordinate)
+	editor.pan_offset = Vector2.ZERO
 
 
 func _test_display_space_handle_parity() -> void:
@@ -367,6 +508,7 @@ func _test_rendered() -> void:
 	await process_frame
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-snapping.png")
+	await _capture_coordinate_views(editors, canvas)
 	for editor: EasingCurveEditor in editors:
 		editor._handle_left_released()
 		var press := InputEventMouseButton.new()
@@ -384,6 +526,51 @@ func _test_rendered() -> void:
 		_expect(not editor._get_drag_coordinate_position().is_finite(), "Outside-graph viewport release retained overlay")
 		_dispose(editor)
 	canvas.free()
+
+
+func _capture_coordinate_views(editors: Array[EasingCurveEditor], canvas: Control) -> void:
+	var input := EditorSpinSlider.new()
+	canvas.add_child(input)
+	input.hide()
+	var sliders: Array[EasingCurveZoomSliderContainer] = []
+	for editor: EasingCurveEditor in editors:
+		editor._handle_left_released()
+		editor.theme = null
+		editor._editor_scale = EditorInterface.get_editor_scale()
+		editor.snap_enabled = false
+		editor._point(0).set(&"position", Vector2(0, 1))
+		editor._point(2).set(&"position", Vector2(1, 1))
+		editor.selected_index = 0
+		var slider := EasingCurveEditor.ZOOM_SLIDER_CONTAINER.instantiate() as EasingCurveZoomSliderContainer
+		canvas.add_child(slider)
+		slider.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		editor.set_slider_container(slider)
+		sliders.append(slider)
+	for view: Dictionary in _coordinate_view_cases():
+		for index in range(editors.size()):
+			var editor := editors[index]
+			editor.size = Vector2(view.width, 300)
+			_apply_coordinate_view(editor, view)
+			editor.begin_point_list_coordinate_drag(input, editor._point(0), &"position")
+		await process_frame
+		await process_frame
+		editors[1].position.y = editors[0].position.y + editors[0].size.y + 55
+		for index in range(editors.size()):
+			sliders[index].position = editors[index].position + Vector2(0, editors[index].size.y + 8)
+			sliders[index].size = Vector2(editors[index].size.x, 32.0 * editors[index]._editor_scale)
+		await process_frame
+		await RenderingServer.frame_post_draw
+		_expect_coordinate_placement(editors[0], Vector2(0, 1))
+		_expect_coordinate_placement(editors[1], Vector2(0, 1))
+		_expect(is_equal_approx(_label_bounds(editors[0]).position.y, _label_bounds(editors[1]).position.y), "Legacy/Native coordinate rows differ")
+		var capture_size := Vector2i(int(view.width) + 40, int(editors[1].position.y + editors[1].size.y + 45))
+		var capture := root.get_texture().get_image().get_region(Rect2i(Vector2i.ZERO, capture_size))
+		_expect(capture.save_png("res://test/_temp/coordinate-gap-%s.png" % view.name) == OK, "Coordinate layout capture failed")
+	for editor: EasingCurveEditor in editors:
+		editor.end_point_list_coordinate_drag()
+	for slider: EasingCurveZoomSliderContainer in sliders:
+		slider.free()
+	input.free()
 
 
 func _dispose(editor: EasingCurveEditor) -> void:
