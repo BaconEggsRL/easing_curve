@@ -96,6 +96,18 @@ the isolated project's `test/_temp/toolbar-width-after-*.png` files.
 Full correctness passes 32 of 33 suites, with only the two existing CSS-label
 assertions failing (`test/_temp/toolbar-width-full.txt`).
 
+Point labels display the zero-based numeric index without a `P` prefix. Their
+reserved width is measured directly from `999` in the current Label font and
+refreshed with overlay layout/theme changes. This avoids stale text minimums
+and reserves three digits; it does not impose a point-count limit or truncate
+larger existing indices. The unselected `No Selection` label is retained.
+Matched actual Editor captures measure the selected label at 28 pixels wide
+instead of 44 at scale 1.0, returning 16 pixels to the dropdown row. Focused
+checks pass 1,474 navigation/Shift-swap and 1,048 gesture assertions. Artifacts:
+`test/_temp/overlay-project/test/_temp/point-number-{before,after}*`.
+Full correctness passes 32 of 33 suites, retaining only the two baseline CSS
+label assertion failures (`test/_temp/point-number-full.txt`).
+
 The editor's established minimum-height budget is capped at its width. The
 canonical graph rectangle also caps height at width if a caller supplies a tall
 Control. Ordinary section heights below the cap remain unchanged; narrow or

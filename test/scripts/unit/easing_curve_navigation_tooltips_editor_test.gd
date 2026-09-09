@@ -90,6 +90,8 @@ func _buttons(node: Node, tooltip: String) -> Array[Button]:
 
 
 func _expect_labels(editor: EasingCurveEditor, swap: bool) -> void:
+	if editor.selected_index >= 0:
+		_expect(editor._point_label.text == str(editor.selected_index), "Point label must show only the numeric index")
 	var prefix := "Swap" if swap else "Select"
 	_expect(editor._point_move_left_button.tooltip_text == prefix + " Previous Point", "Incorrect Previous tooltip")
 	_expect(editor._point_move_right_button.tooltip_text == prefix + " Next Point", "Incorrect Next tooltip")

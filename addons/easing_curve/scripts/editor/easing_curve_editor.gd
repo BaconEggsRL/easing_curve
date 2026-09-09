@@ -243,6 +243,7 @@ func _update_overlay_layout() -> void:
 	if not is_inside_tree():
 		return
 	var inset := OVERLAY_INSET * _editor_scale
+	_reserve_point_toolbar_label_column_width()
 	_point_toolbar_panel.offset_left = 0.0
 	_point_toolbar_panel.offset_top = 0.0
 	_point_toolbar_panel.offset_right = 0.0
@@ -2758,12 +2759,9 @@ func _create_point_toolbar() -> void:
 
 
 func _reserve_point_toolbar_label_column_width() -> void:
-	var original_text := _point_label.text
-	_point_label.text = "P99"
-	_point_label.custom_minimum_size.x = (
-		_point_label.get_combined_minimum_size().x
-	)
-	_point_label.text = original_text
+	var font := _point_label.get_theme_font(&"font")
+	var font_size := _point_label.get_theme_font_size(&"font_size")
+	_point_label.custom_minimum_size.x = ceilf(font.get_string_size("999", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
 
 
 func _reserve_point_toolbar_control_side_label_width() -> void:
@@ -2862,7 +2860,7 @@ func _update_point_toolbar() -> void:
 
 	var point := _point(selected_index)
 
-	_point_label.text = "P%d" % selected_index
+	_point_label.text = str(selected_index)
 	_point_label.modulate.a = 1.0
 	_point_handle_mode.visible = true
 	_point_handle_mode.self_modulate.a = 1.0
