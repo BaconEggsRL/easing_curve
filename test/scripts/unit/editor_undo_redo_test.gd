@@ -591,13 +591,9 @@ func _test_responsive_graph_layout() -> void:
 		else:
 			sizes_by_width[width] = minimum
 
-	var narrow: Vector2 = sizes_by_width[180.0]
-	var proportional: Vector2 = sizes_by_width[390.0]
-	var wide: Vector2 = sizes_by_width[600.0]
-	_expect(is_equal_approx(narrow.y, EasingCurveEditor.MIN_GRAPH_HEIGHT), "Narrow graph became too short to use")
-	_expect(proportional.y > narrow.y and wide.y > proportional.y, "Graph height did not grow with available width")
-	_expect(is_equal_approx(proportional.y / 390.0, EasingCurveEditor.ASPECT_RATIO), "Graph lost its intended aspect ratio")
-	_expect(is_equal_approx(wide.y / 600.0, EasingCurveEditor.ASPECT_RATIO), "Wide graph lost its intended aspect ratio")
+	_expect(is_equal_approx(sizes_by_width[180.0].y, 180.0), "Narrow graph failed square sizing including padding")
+	_expect(is_equal_approx(sizes_by_width[390.0].y, 199.0), "Medium graph failed 2:1 sizing after padding")
+	_expect(is_equal_approx(sizes_by_width[600.0].y, 304.0), "Wide graph failed 2:1 sizing after padding")
 	editor.free()
 
 

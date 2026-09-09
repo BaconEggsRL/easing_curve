@@ -919,6 +919,7 @@ var _legacy_selection_by_resource: Dictionary[int, Dictionary] = {}
 class AutofitRequest:
 	var editor: WeakRef
 	var section: WeakRef
+	var last_graph_rect := Rect2()
 
 
 var _autofit_requests: Dictionary[int, AutofitRequest] = {}
@@ -3651,6 +3652,13 @@ func _defer_autofit_frames(request_id: int, frames_remaining: int) -> void:
 	var section_ref := _autofit_requests[request_id].section
 	var section := section_ref.get_ref() as PointsFoldableSection if section_ref != null else null
 	if is_instance_valid(section) and section.folded:
+		return
+	var request := _autofit_requests[request_id]
+	var editor := request.editor.get_ref() as EasingCurveEditor
+	var graph_rect := editor._get_graph_view_rect()
+	if request.last_graph_rect != graph_rect:
+		request.last_graph_rect = graph_rect
+		_defer_autofit_frames(request_id, 1)
 		return
 	_complete_autofit(request_id)
 

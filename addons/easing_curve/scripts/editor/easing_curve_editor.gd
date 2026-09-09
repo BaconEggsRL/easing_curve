@@ -8,7 +8,6 @@ extends Control
 const SELECTION_TOOLBAR_HEIGHT := 32.0
 const SNAP_TOOLBAR_HEIGHT := 32.0
 const CONTROL_ROW_INSET := 8.0
-const GRID_SNAP_COORDINATE_LABEL_MIN_GAP := 8.0
 const SNAP_ENABLED_META := &"_easing_curve_snap_enabled"
 const SNAP_COUNT_META := &"_easing_curve_snap_count"
 const EDITOR_THEME_CACHE = preload(
@@ -65,8 +64,6 @@ const ZOOM_MAX := EasingCurve.ZOOM_MAX
 const ZOOM_FACTOR := EasingCurve.ZOOM_FACTOR
 const ZOOM_STEPS := EasingCurve.ZOOM_STEPS
 const DEFAULT_SLIDER_VALUE := EasingCurve.DEFAULT_SLIDER_VALUE
-const ASPECT_RATIO: float = 6. / 13.
-const MIN_GRAPH_HEIGHT := 135.0
 const PREFERRED_GRAPH_HEIGHT := 180.0
 const GRAPH_EDGE_PADDING := 4.0
 const MIN_X: float = 0.0
@@ -83,8 +80,6 @@ const CONTROL_LINE_COLOR = Color(1, 1, 1, 0.4)
 const BEZIER_DRAW_TOLERANCE_PIXELS := 0.75
 const BEZIER_DRAW_MAX_DEPTH := 12
 const AUTOFIT_PADDING_RATIO := 0.10
-const AUTOFIT_CONTROL_GAP := 12.0
-const AUTOFIT_MAX_OVERLAY_ZOOM_STEPS := 2
 const FUNCTION_DRAW_STEPS := 120
 const GRAPH_GRID_DIVISIONS := Vector2i(4, 2)
 
@@ -1663,17 +1658,6 @@ func _get_coordinate_minimum_y() -> float:
 	return _get_graph_view_rect().position.y
 
 
-func _get_top_controls_minimum_y(canvas: Control, gap: float = GRID_SNAP_COORDINATE_LABEL_MIN_GAP) -> float:
-	var minimum := 4.0 * _editor_scale
-	var to_canvas := canvas.get_global_transform().affine_inverse()
-	for control: Control in [_point_toolbar, _snap_button, _snap_count_input]:
-		if control == null or not control.is_visible_in_tree():
-			continue
-		var bounds := to_canvas * control.get_global_transform() * Rect2(Vector2.ZERO, control.size)
-		minimum = maxf(minimum, bounds.end.y + gap * _editor_scale)
-	return minimum
-
-
 func _draw_drag_coordinates() -> void:
 	_coordinate_readout.draw_set_transform(-_graph_canvas.position)
 	var position := _get_drag_coordinate_position()
@@ -2053,62 +2037,21 @@ func autofit() -> void:
 	padded_size.x = maxf(padded_size.x, 0.001)
 	padded_size.y = maxf(padded_size.y, 0.001)
 
-	var graph_rect := _get_graph_view_rect()
-	var fit_rect := _get_autofit_view_rect()
-	var target_zoom := minf(
-		fit_rect.size.x / (graph_rect.size.x * padded_size.x),
-		fit_rect.size.y / (graph_rect.size.y * padded_size.y),
-	)
-	var full_zoom := minf(1.0 / padded_size.x, 1.0 / padded_size.y)
-	var fit_step := 0
-	var full_step := 0
+	var target_zoom := minf(1.0 / padded_size.x, 1.0 / padded_size.y)
+	_zoom_step = 0
 	for step in range(ZOOM_STEPS + 1):
-		if step_to_zoom(step) > full_zoom + 0.000001:
+		if step_to_zoom(step) > target_zoom + 0.000001:
 			break
-		full_step = step
-		if step_to_zoom(step) <= target_zoom + 0.000001:
-			fit_step = step
-
-	# Fit between both control rows when the zoom overlay is present.
-	_zoom_step = maxi(fit_step, full_step - AUTOFIT_MAX_OVERLAY_ZOOM_STEPS)
-	if _zoom_row != null and _zoom_row.is_visible_in_tree():
-		_zoom_step = fit_step
+		_zoom_step = step
 	_apply_zoom_from_step()
-	pan_offset = Vector2.ZERO
 	update_view_transform()
-
-	var fitted_size := padded_size * graph_rect.size * step_to_zoom(_zoom_step)
-	var center_allowance := ((graph_rect.size - fitted_size) * 0.5).max(Vector2.ZERO)
-	var fit_center := fit_rect.get_center().clamp(
-		graph_rect.get_center() - center_allowance,
-		graph_rect.get_center() + center_allowance,
-	)
-	# Keep the world-space centering delta exact when the bounds are centered.
 	pan_offset = _world_to_view.basis_xform(Vector2(0.5, 0.5) - bounds.get_center())
-	pan_offset += fit_center - graph_rect.get_center()
-	var toolbar_gap := float(_point_toolbar_panel.get_theme_constant(&"separation")) / _editor_scale
-	var minimum_y := _get_top_controls_minimum_y(self, toolbar_gap) + point_radius
-	var bounds_top := get_view_pos(Vector2(bounds.position.x, bounds.end.y)).y
-	pan_offset.y += maxf(0.0, minimum_y - bounds_top)
-	if _zoom_row != null and _zoom_row.is_visible_in_tree():
-		var maximum_y := _zoom_row.position.y - toolbar_gap * _editor_scale - point_radius
-		var bounds_bottom := get_view_pos(bounds.position).y
-		var top_clearance := get_view_pos(Vector2(bounds.position.x, bounds.end.y)).y - minimum_y
-		pan_offset.y -= minf(maxf(0.0, bounds_bottom - maximum_y), maxf(0.0, top_clearance))
 	pan_changed.emit(pan_offset)
 	queue_redraw()
 
 
 func _get_autofit_view_rect() -> Rect2:
-	var graph_rect := _get_graph_view_rect()
-	var top := maxf(graph_rect.position.y, _get_top_controls_minimum_y(self, AUTOFIT_CONTROL_GAP))
-	var bottom := graph_rect.end.y
-	if _zoom_row != null and _zoom_row.is_visible_in_tree():
-		bottom = minf(bottom, _zoom_row.position.y - AUTOFIT_CONTROL_GAP * _editor_scale)
-	# Prefer clear space, but retain a usable fit when controls fill the canvas.
-	if top >= bottom:
-		return graph_rect
-	return Rect2(Vector2(graph_rect.position.x, top), Vector2(graph_rect.size.x, bottom - top))
+	return _get_graph_view_rect()
 
 
 func _get_autofit_world_bounds() -> Rect2:
@@ -2321,8 +2264,9 @@ func _draw_bezier_curve(point_list: Array[Resource]) -> void:
 
 
 func _get_visible_world_x_bounds() -> Vector2:
-	var left_x := get_world_pos(Vector2(0.0, 0.0)).x
-	var right_x := get_world_pos(Vector2(size.x, 0.0)).x
+	var graph := _get_graph_view_rect()
+	var left_x := get_world_pos(graph.position).x
+	var right_x := get_world_pos(graph.end).x
 	if not is_finite(left_x) or not is_finite(right_x):
 		return Vector2(MIN_X, MAX_X)
 	return Vector2(minf(left_x, right_x), maxf(left_x, right_x))

@@ -82,6 +82,18 @@ func _test_grouped_toolbar() -> void:
 				_expect(editor._snap_toolbar_margin.get_parent() == editor._graph_canvas.get_parent(), "Grid Snap is not a graph sibling")
 				_expect(editor._snap_toolbar_margin.get_rect().end.y <= editor._graph_canvas.position.y, "Grid Snap overlaps graph")
 				_expect(editor._slider.get_global_rect().end.x <= editor.get_global_rect().end.x + 0.01, "Zoom row overflowed Inspector width")
+				editor.autofit()
+				var graph := editor._get_graph_view_rect()
+				_expect(editor._get_autofit_view_rect() == graph, "Auto Fit still subtracts control obstructions")
+				var bounds := editor._get_autofit_world_bounds()
+				_expect(graph.has_point(editor.get_view_pos(bounds.position)) and graph.has_point(editor.get_view_pos(bounds.end)), "Auto Fit clipped world bounds")
+				var fitted_pan := editor.pan_offset
+				editor.autofit()
+				_expect(editor.pan_offset.is_equal_approx(fitted_pan), "Repeated Auto Fit drifted")
+				for anchor: Vector2 in [graph.position - Vector2(100, 100), graph.end + Vector2(100, 100)]:
+					var extent := Vector2(50, 20)
+					var label := editor._get_drag_coordinate_label_position(anchor, extent)
+					_expect(graph.encloses(Rect2(label, extent)), "Transient readout escaped the graph")
 			print("WRAP_GATE backend=%s scale=%s presentation_min=%s" % ["native" if native else "legacy", scale_value, baseline_width])
 		presentation.free()
 		await _settle()
