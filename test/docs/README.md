@@ -1,5 +1,11 @@
 # Development testing
 
+## Full graph overlays
+
+See [graph overlay validation](GRAPH_OVERLAYS.md) for the before/after section
+measurements, shared layout, gesture ownership tests, scale captures and the
+pre-existing CSS-label failures in the full correctness gate.
+
 ## Fixed graph grid and reference box
 
 See [the grid validation report](FIXED_GRAPH_GRID.md) for the shared rendering

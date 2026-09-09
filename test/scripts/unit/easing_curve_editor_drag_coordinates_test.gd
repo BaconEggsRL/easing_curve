@@ -213,9 +213,8 @@ func _test_format_and_placement() -> void:
 		var top_anchor := editor.get_view_pos(Vector2(0.5, 1.0))
 		var actual_text_size := Vector2(100, font.get_height(font_size))
 		var top_label := editor._get_drag_coordinate_label_position(top_anchor, actual_text_size)
-		var top_controls_bottom := editor._snap_button.position.y + editor._snap_button.size.y
 		var snap_to_overlay := editor._coordinate_overlay.get_global_transform().affine_inverse() * editor._snap_button.get_global_transform()
-		top_controls_bottom = (snap_to_overlay * Vector2(0, editor._snap_button.size.y)).y
+		var top_controls_bottom := (snap_to_overlay * Vector2(0, editor._snap_button.size.y)).y
 		_expect(top_label.y >= top_controls_bottom + 8.0 * scale, "Top-edge label overlapped the visible overlay controls")
 		_expect(is_equal_approx(editor._get_graph_view_rect().position.y, 4.0 * scale), "Readout clamp reserved graph height")
 		var text_size := Vector2(100, 20) * scale
@@ -515,6 +514,10 @@ func _test_rendered() -> void:
 	await _capture_coordinate_views(editors, canvas)
 	for editor: EasingCurveEditor in editors:
 		editor._handle_left_released()
+		# The top-edge fixture can now lie behind real toolbar controls. Start
+		# this outside-release check on exposed graph geometry instead.
+		editor._point(1).set(&"position", Vector2(0.35, 0.4))
+		editor.update_view_transform()
 		var press := InputEventMouseButton.new()
 		press.button_index = MOUSE_BUTTON_LEFT
 		press.pressed = true

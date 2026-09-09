@@ -15,6 +15,7 @@ func _run() -> void:
 	await _test_overlay_section_geometry()
 	await _test_overlay_gesture_ownership()
 	await _test_overlay_input_routing()
+	await _test_overlay_resize_and_theme()
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
 	_test_view_state_update_ownership()
@@ -233,6 +234,12 @@ func _test_overlay_input_routing() -> void:
 			var world_before := editor.get_world_pos(position)
 			_push_graph_input(viewport, _button(MOUSE_BUTTON_WHEEL_UP, position, true, false, true))
 			_expect(editor._zoom_step == zoom_before + 1 and editor.get_world_pos(position).is_equal_approx(world_before), "Empty overlay space blocked pointer-anchored zoom")
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, position, true))
+			_expect(editor.pending_add_point != null, "Empty overlay space blocked pending point addition")
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_RIGHT, position, true))
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_RIGHT, position, false))
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, position, false))
+			_expect(editor.pending_add_point == null, "Pending addition could not be cancelled in empty overlay space")
 		# Numeric control and slider own presses; their parents and gaps do not.
 		editor.snap_enabled = true
 		await process_frame
@@ -249,6 +256,69 @@ func _test_overlay_input_routing() -> void:
 		editor.set_slider_value(4)
 		_push_graph_input(viewport, _button(MOUSE_BUTTON_WHEEL_UP, slider_position, true))
 		_expect(editor._zoom_step == 5, "Plain wheel over embedded slider did not zoom")
+		_dispose_overlay_fixture(fixture)
+		# EditorSpinSlider can open a text-entry popup, so verify a fresh Autofit
+		# click in its own viewport rather than clicking through that popup.
+		fixture = _overlay_input_fixture(native)
+		editor = fixture.editor
+		viewport = fixture.viewport
+		for frame in range(3):
+			await process_frame
+		editor.set_slider_value(4)
+		var fit_position := editor._slider.autofit_btn.get_global_rect().get_center()
+		_push_graph_input(viewport, _motion(fit_position))
+		_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, fit_position, true))
+		_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, fit_position, false))
+		var fitted_step := editor._zoom_step
+		var fitted_pan := editor.pan_offset
+		editor.autofit()
+		_expect(editor._zoom_step == fitted_step and editor.pan_offset.is_equal_approx(fitted_pan) and editor.dragging_point == -1 and editor.pending_add_point == null, "Fresh Autofit click did not belong to the overlay")
+		_dispose_overlay_fixture(fixture)
+
+
+func _test_overlay_resize_and_theme() -> void:
+	for native: bool in [false, true]:
+		var fixture := _overlay_input_fixture(native)
+		var editor: EasingCurveEditor = fixture.editor
+		for scale_value: float in [1.0, 1.5, 2.0]:
+			editor._editor_scale = scale_value
+			var theme := Theme.new()
+			theme.set_font_size(&"font_size", &"Label", roundi(16 * scale_value))
+			theme.set_font_size(&"font_size", &"Button", roundi(16 * scale_value))
+			editor.theme = theme
+			for logical_width: float in [320.0, 450.0, 700.0]:
+				editor.size = Vector2(logical_width, 360) * scale_value
+				for frame in range(4):
+					await process_frame
+				var inset := 8.0 * scale_value
+				var top := editor._point_toolbar_panel.get_rect()
+				var bottom := editor._zoom_overlay.get_rect()
+				_expect(top.position.is_equal_approx(Vector2.ONE * inset), "Top overlay lost logical insets after resize/theme change")
+				_expect(is_equal_approx(top.end.x, editor.size.x - inset), "Top overlay width did not follow resize")
+				_expect(is_equal_approx(bottom.position.x, inset) and is_equal_approx(bottom.end.x, editor.size.x - inset) and is_equal_approx(bottom.end.y, editor.size.y - inset), "Bottom overlay lost logical insets after resize/theme change")
+				_expect(is_equal_approx(bottom.size.y, editor._zoom_overlay.get_combined_minimum_size().y), "Bottom overlay height ignored widget minimum size")
+				var graph := editor._get_graph_view_rect()
+				_expect(graph.is_equal_approx(Rect2(Vector2.ONE * 4.0 * scale_value, editor.size - Vector2.ONE * 8.0 * scale_value)), "Scaled graph shrank around overlays")
+				var minimum := editor.get_combined_minimum_size()
+				editor.selected_index = -1
+				editor._point_toolbar_panel.hide()
+				_expect(editor._get_graph_view_rect() == graph and editor.get_combined_minimum_size() == minimum, "Hidden top controls changed graph or section height")
+				_expect(is_equal_approx(editor._get_coordinate_minimum_y(), 4.0 * scale_value), "Hidden top controls retained the readout clamp")
+				editor._point_toolbar_panel.show()
+				editor.selected_index = 1
+		# A taller numeric field must participate in the top clamp independently
+		# of the Snap button; changing only chrome must not change the viewport.
+		editor.snap_enabled = true
+		editor._snap_count_input.custom_minimum_size.y = 100
+		for frame in range(4):
+			await process_frame
+		var graph_before := editor._get_graph_view_rect()
+		var count_bottom := editor._snap_count_input.get_global_rect().end.y
+		_expect(editor._get_coordinate_minimum_y() >= count_bottom + 8.0 * editor._editor_scale, "Readout clamp ignored the numeric Snap field")
+		editor._point_toolbar_panel.add_theme_constant_override(&"separation", 10)
+		for frame in range(4):
+			await process_frame
+		_expect(editor._get_graph_view_rect() == graph_before, "Toolbar-only relayout changed graph coordinates")
 		_dispose_overlay_fixture(fixture)
 
 

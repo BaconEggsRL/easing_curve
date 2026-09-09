@@ -379,8 +379,8 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	if editor.hide_selection_toolbar_for_functions:
 		_expect(not toolbar_panel.visible, "Point-selection toolbar panel remained visible in Function mode")
 		_expect(
-			function_graph_rect.size.y > bezier_graph_rect.size.y,
-			"Hidden Function toolbar did not give its vertical space to the graph",
+			function_graph_rect.is_equal_approx(bezier_graph_rect),
+			"Hiding the Function overlay changed the full graph rectangle",
 		)
 	else:
 		_expect(toolbar_panel.visible, "Point-selection toolbar panel was hidden with Function-mode hiding disabled")
