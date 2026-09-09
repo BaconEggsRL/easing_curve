@@ -2027,9 +2027,6 @@ func autofit() -> void:
 
 	# Overlays are a preference: do not sacrifice most of the plot to avoid them.
 	_zoom_step = maxi(fit_step, full_step - AUTOFIT_MAX_OVERLAY_ZOOM_STEPS)
-	_apply_zoom_from_step()
-	pan_offset = Vector2.ZERO
-	update_view_transform()
 
 	var fitted_size := padded_size * graph_rect.size * step_to_zoom(_zoom_step)
 	var center_allowance := ((graph_rect.size - fitted_size) * 0.5).max(Vector2.ZERO)
@@ -2037,6 +2034,21 @@ func autofit() -> void:
 		graph_rect.get_center() - center_allowance,
 		graph_rect.get_center() + center_allowance,
 	)
+	# At the square height cap, cramped controls can cover the lower points.
+	# Keep the upper edge steady and recover bottom clearance with at most
+	# two extra steps; ordinary Inspector framing keeps its larger fit.
+	if graph_rect.size.y >= graph_rect.size.x and fit_rect.size.y < graph_rect.size.y * 0.5:
+		var plot_height := bounds.size.y * graph_rect.size.y * step_to_zoom(_zoom_step)
+		var plot_top := fit_center.y - plot_height * 0.5
+		var minimum_step := maxi(0, _zoom_step - AUTOFIT_MAX_OVERLAY_ZOOM_STEPS)
+		while _zoom_step > minimum_step and plot_top + plot_height > fit_rect.end.y:
+			_zoom_step -= 1
+			plot_height = bounds.size.y * graph_rect.size.y * step_to_zoom(_zoom_step)
+		fit_center.y = plot_top + plot_height * 0.5
+
+	_apply_zoom_from_step()
+	pan_offset = Vector2.ZERO
+	update_view_transform()
 	# Keep the world-space centering delta exact when the bounds are centered.
 	pan_offset = _world_to_view.basis_xform(Vector2(0.5, 0.5) - bounds.get_center())
 	pan_offset += fit_center - graph_rect.get_center()

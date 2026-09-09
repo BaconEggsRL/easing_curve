@@ -18,6 +18,7 @@ func _run() -> void:
 	await _test_overlay_resize_and_theme()
 	await _test_autofit_avoids_overlays()
 	await _test_autofit_limits_overlay_shrinkage()
+	await _test_compact_autofit_bottom_clearance()
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
 	_test_view_state_update_ownership()
@@ -425,6 +426,39 @@ func _test_autofit_limits_overlay_shrinkage() -> void:
 		var pan := editor.pan_offset
 		editor.autofit()
 		_expect(editor.pan_offset.is_equal_approx(pan), "Soft overlay fitting drifted on repeat")
+		_dispose_overlay_fixture(fixture)
+
+
+func _test_compact_autofit_bottom_clearance() -> void:
+	for native: bool in [false, true]:
+		var fixture := _overlay_input_fixture(native)
+		var editor: EasingCurveEditor = fixture.editor
+		for scale_value: float in [1.0, 1.5, 2.0]:
+			editor._editor_scale = scale_value
+			editor.size = Vector2(190, 190) * scale_value
+			for frame in range(4):
+				await process_frame
+			var graph := editor._get_graph_view_rect()
+			var fit := editor._get_autofit_view_rect()
+			editor._point_toolbar_panel.hide()
+			editor._zoom_overlay.hide()
+			editor.autofit()
+			var full_step := editor._zoom_step
+			editor._point_toolbar_panel.show()
+			editor._zoom_overlay.show()
+			editor.autofit()
+			var bounds := editor._get_autofit_world_bounds()
+			var top := editor.get_view_pos(Vector2(bounds.position.x, bounds.end.y))
+			var bottom := editor.get_view_pos(Vector2(bounds.end.x, bounds.position.y))
+			_expect(editor._zoom_step >= full_step - 4, "Compact fit exceeded two extra zoom-out steps")
+			_expect(graph.grow(0.01).has_point(top) and graph.grow(0.01).has_point(bottom), "Compact fit escaped the graph")
+			if fit.size.y < graph.size.y * 0.5:
+				_expect(bottom.y <= editor._zoom_overlay.position.y, "Compact plot still crossed the zoom bar")
+				_expect(editor._zoom_step < full_step - 2, "Compact fixture did not exercise the clearance correction")
+			var pan := editor.pan_offset
+			var step := editor._zoom_step
+			editor.autofit()
+			_expect(editor.pan_offset.is_equal_approx(pan) and editor._zoom_step == step, "Compact Autofit drifted on repeat")
 		_dispose_overlay_fixture(fixture)
 
 
