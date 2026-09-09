@@ -83,6 +83,13 @@ func _test_ticks(native: bool) -> void:
 	var resized := editor._get_graph_view_rect()
 	_expect(not resized.is_equal_approx(rect), "Resize fixture did not resize plot")
 	_expect(editor._get_grid_tick_position(0, 2, resized).x == resized.get_center().x, "Resize lost proportional divisions")
+	editor.size = Vector2(320, 900)
+	editor.update_view_transform()
+	var square := editor._get_graph_view_rect()
+	_expect(square.size.is_equal_approx(Vector2.ONE * (320.0 - margin * 2.0)), "An externally tall editor escaped the square graph cap")
+	var square_tick := editor._get_grid_tick_position(1, 1, square)
+	_expect(is_equal_approx(square_tick.y, square.get_center().y), "Height cap moved proportional grid ticks")
+	_expect(editor.get_view_pos(editor.get_world_pos(square_tick)).distance_to(square_tick) < 0.01, "Height cap broke canonical transform round trip")
 	_dispose(editor)
 
 

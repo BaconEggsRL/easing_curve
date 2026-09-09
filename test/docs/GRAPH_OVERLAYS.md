@@ -29,7 +29,7 @@ Log: `test/_temp/overlay-baseline-gesture.txt`.
 ## Implemented layout
 
 The shared `EasingCurveEditor` draws into its entire rectangle, apart from the
-existing four-logical-pixel edge margin. The point/Grid Snap panel is anchored
+existing four-logical-pixel edge margin and a square height cap. The point/Grid Snap panel is anchored
 eight logical pixels from the top and sides; the shared zoom row is anchored
 eight logical pixels from the bottom and sides. Passive containers, labels and
 separators ignore input. Interactive descendants retain their existing behavior.
@@ -47,6 +47,36 @@ controls. No global input interception or synthetic event forwarding was added.
 The readout follows its original anchor in both axes, clamps below actual visible
 top controls, and draws above graph content but below toolbar chrome. The fixed
 grid, reference box and transforms share the expanded graph rectangle.
+
+## Autofit and height cap follow-up
+
+The zoom row remains an overlay. Autofit and automatic initial fitting prefer
+the clear vertical space between the actual visible top controls and the zoom
+row, with eight logical pixels of clearance. Hidden controls reserve no space.
+Curve bounds still include handles, the reference range and sampled Function
+overshoot, with the existing padding and discrete zoom levels. If controls fill
+the canvas, fitting falls back to the full graph; zoom limits can also allow
+overlap. This is a fitting preference, not a clipping or input boundary.
+
+Manual pan and pointer-anchored zoom continue using the full canonical graph
+rectangle. Readout placement shares the same measurement of visible top
+controls but keeps its independent canvas-edge clamps.
+
+The editor's established minimum-height budget is capped at its width. The
+canonical graph rectangle also caps height at width if a caller supplies a tall
+Control. Ordinary section heights below the cap remain unchanged; narrow or
+enlarged-scale sections that previously became taller than wide now shorten.
+
+Follow-up focused checks: 980 gesture checks headless and rendered, 1,038 grid
+checks, and 955 readout checks. Tests cover both backends, Custom/Elastic modes,
+oversized handles, widths 320/450/700, scales 1/1.5/2, actual control bounds,
+repeated Autofit, hidden/taller controls, crowded-layout fallback, the square
+cap, and unrestricted manual navigation. Logs: `test/_temp/autofit-*.txt`.
+The full follow-up correctness run also passes 32 of 33 suites, with only the
+same two baseline CSS-label assertions failing (`autofit-full.txt`). Actual
+Editor captures at scale 1.0 (dark) and 2.0 (light) confirm clear Custom/Elastic
+fits and permitted manual overlap. Images are in the isolated project's
+`test/_temp/autofit-editor-*.png` files.
 
 ## Measured result
 
@@ -103,8 +133,9 @@ Artifacts are under `test/_temp/overlay-project/test/_temp/`:
 The standalone rendered host emits existing window/graphics cleanup diagnostics;
 full Editor captures emitted only the environment's certificate-store diagnostic.
 These runs validate synthetic viewport input and real Editor scaling, not physical
-mouse input or movement between monitors. Existing width-dependent height policy
-and graph color choices were intentionally preserved.
+mouse input or movement between monitors. The original overlay migration
+preserved width-dependent sizing; the follow-up above adds the requested square
+cap. Graph color choices remain unchanged.
 
 ## Repeating the checks
 

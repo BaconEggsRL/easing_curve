@@ -16,6 +16,7 @@ func _run() -> void:
 	await _test_overlay_gesture_ownership()
 	await _test_overlay_input_routing()
 	await _test_overlay_resize_and_theme()
+	await _test_autofit_avoids_overlays()
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
 	_test_view_state_update_ownership()
@@ -95,6 +96,12 @@ func _test_overlay_section_geometry() -> void:
 				editor.setup_zoom_overlay()
 				_expect(editor._slider == zoom_before and editor.get_combined_minimum_size() == minimum_before, "Repeated overlay setup changed controls or height")
 				_expect(editor._slider.slider_changed.get_connections().size() == 1 and editor._slider.autofit_pressed.get_connections().size() == 1, "Repeated overlay setup duplicated callbacks")
+				editor.autofit()
+				var fit := editor._get_autofit_view_rect()
+				var bounds := editor._get_autofit_world_bounds()
+				_expect(fit.grow(0.01).has_point(editor.get_view_pos(bounds.position)) and fit.grow(0.01).has_point(editor.get_view_pos(bounds.end)), "Inspector Autofit clipped Custom/Elastic bounds against controls")
+				if function_mode:
+					_expect(is_equal_approx(fit.position.y, graph_rect.position.y), "Function Autofit reserved hidden top controls")
 				if DisplayServer.get_name() != "headless":
 					viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 					await RenderingServer.frame_post_draw
@@ -298,7 +305,9 @@ func _test_overlay_resize_and_theme() -> void:
 				_expect(is_equal_approx(bottom.position.x, inset) and is_equal_approx(bottom.end.x, editor.size.x - inset) and is_equal_approx(bottom.end.y, editor.size.y - inset), "Bottom overlay lost logical insets after resize/theme change")
 				_expect(is_equal_approx(bottom.size.y, editor._zoom_overlay.get_combined_minimum_size().y), "Bottom overlay height ignored widget minimum size")
 				var graph := editor._get_graph_view_rect()
-				_expect(graph.is_equal_approx(Rect2(Vector2.ONE * 4.0 * scale_value, editor.size - Vector2.ONE * 8.0 * scale_value)), "Scaled graph shrank around overlays")
+				var canvas_size := Vector2(editor.size.x, minf(editor.size.x, editor.size.y))
+				_expect(graph.is_equal_approx(Rect2(Vector2.ONE * 4.0 * scale_value, canvas_size - Vector2.ONE * 8.0 * scale_value)), "Scaled graph lost its edge margins or square height cap")
+				_expect(graph.size.y <= graph.size.x and editor.get_combined_minimum_size().y <= editor.size.x, "Graph became taller than wide")
 				var minimum := editor.get_combined_minimum_size()
 				editor.selected_index = -1
 				editor._point_toolbar_panel.hide()
@@ -319,6 +328,59 @@ func _test_overlay_resize_and_theme() -> void:
 		for frame in range(4):
 			await process_frame
 		_expect(editor._get_graph_view_rect() == graph_before, "Toolbar-only relayout changed graph coordinates")
+		_dispose_overlay_fixture(fixture)
+
+
+func _test_autofit_avoids_overlays() -> void:
+	for native: bool in [false, true]:
+		var fixture := _overlay_input_fixture(native)
+		var editor: EasingCurveEditor = fixture.editor
+		# Fit bounds must continue to include handles outside the reference box.
+		fixture.point.set(&"left_control_point", Vector2(0.15, -0.25))
+		fixture.point.set(&"right_control_point", Vector2(0.85, 1.25))
+		for scale_value: float in [1.0, 1.5, 2.0]:
+			editor._editor_scale = scale_value
+			for width: float in [320.0, 450.0, 700.0]:
+				editor.size = Vector2(width, width * 0.8) * scale_value
+				for frame in range(4):
+					await process_frame
+				var graph := editor._get_graph_view_rect()
+				editor.autofit()
+				var fit := editor._get_autofit_view_rect()
+				_expect(fit.position.y >= editor._snap_button.get_global_rect().end.y + 8.0 * scale_value, "Autofit ignored visible top controls")
+				_expect(fit.end.y <= editor._zoom_overlay.position.y - 8.0 * scale_value, "Autofit ignored the zoom overlay")
+				var bounds := editor._get_autofit_world_bounds()
+				for world: Vector2 in [bounds.position, bounds.end, Vector2(bounds.position.x, bounds.end.y), Vector2(bounds.end.x, bounds.position.y)]:
+					_expect(fit.grow(0.01).has_point(editor.get_view_pos(world)), "Autofit left curve or handle bounds under controls")
+				_expect(editor.get_view_pos(bounds.get_center()).is_equal_approx(fit.get_center()), "Autofit did not center in the clear area")
+				var pan := editor.pan_offset
+				var step := editor._zoom_step
+				editor.autofit()
+				_expect(editor.pan_offset.is_equal_approx(pan) and editor._zoom_step == step, "Repeated Autofit drifted")
+				editor.pan_offset += Vector2(0, -fit.position.y)
+				_expect(editor.get_view_pos(bounds.get_center()).y < fit.get_center().y and editor._get_graph_view_rect() == graph, "Preferred fit area constrained manual pan or graph geometry")
+				var pointer := editor._snap_button.get_global_rect().get_center()
+				var world_before := editor.get_world_pos(pointer)
+				editor._zoom_at_view_pos(1, pointer)
+				_expect(editor.get_world_pos(pointer).is_equal_approx(world_before), "Preferred fit area broke pointer-anchored zoom under controls")
+		# Actual minimum size changes must affect the preference, not the canvas.
+		editor.snap_enabled = true
+		editor._snap_count_input.custom_minimum_size.y = 100
+		for frame in range(4):
+			await process_frame
+		_expect(editor._get_autofit_view_rect().position.y >= editor._snap_count_input.get_global_rect().end.y + 8.0 * editor._editor_scale, "Autofit ignored the taller Snap field")
+		editor._point_toolbar_panel.hide()
+		_expect(is_equal_approx(editor._get_autofit_view_rect().position.y, editor._get_graph_view_rect().position.y), "Hidden top controls still reduced Autofit space")
+		editor._zoom_overlay.hide()
+		_expect(editor._get_autofit_view_rect() == editor._get_graph_view_rect(), "Hidden overlays still reduced Autofit space")
+		editor._point_toolbar_panel.show()
+		editor._zoom_overlay.show()
+		editor._snap_count_input.custom_minimum_size.y = editor.size.y * 2.0
+		for frame in range(4):
+			await process_frame
+		_expect(editor._get_autofit_view_rect() == editor._get_graph_view_rect(), "Controls filling the canvas did not fall back to a usable Autofit")
+		editor.autofit()
+		_expect(editor.pan_offset.is_finite(), "Crowded Autofit produced invalid coordinates")
 		_dispose_overlay_fixture(fixture)
 
 

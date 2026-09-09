@@ -1616,12 +1616,16 @@ func _get_drag_coordinate_label_position(anchor: Vector2, text_size: Vector2) ->
 
 
 func _get_coordinate_minimum_y() -> float:
+	return _get_top_controls_minimum_y(_coordinate_overlay)
+
+
+func _get_top_controls_minimum_y(canvas: Control) -> float:
 	var minimum := 4.0 * _editor_scale
-	var to_overlay := _coordinate_overlay.get_global_transform().affine_inverse()
+	var to_canvas := canvas.get_global_transform().affine_inverse()
 	for control: Control in [_point_toolbar, _snap_button, _snap_count_input]:
-		if not control.is_visible_in_tree():
+		if control == null or not control.is_visible_in_tree():
 			continue
-		var bounds := to_overlay * control.get_global_transform() * Rect2(Vector2.ZERO, control.size)
+		var bounds := to_canvas * control.get_global_transform() * Rect2(Vector2.ZERO, control.size)
 		minimum = maxf(minimum, bounds.end.y + GRID_SNAP_COORDINATE_LABEL_MIN_GAP * _editor_scale)
 	return minimum
 
@@ -2004,9 +2008,11 @@ func autofit() -> void:
 	padded_size.x = maxf(padded_size.x, 0.001)
 	padded_size.y = maxf(padded_size.y, 0.001)
 
+	var graph_rect := _get_graph_view_rect()
+	var fit_rect := _get_autofit_view_rect()
 	var target_zoom := minf(
-		1.0 / padded_size.x,
-		1.0 / padded_size.y,
+		fit_rect.size.x / (graph_rect.size.x * padded_size.x),
+		fit_rect.size.y / (graph_rect.size.y * padded_size.y),
 	)
 	var fit_step := 0
 	for step in range(ZOOM_STEPS + 1):
@@ -2020,10 +2026,23 @@ func autofit() -> void:
 	pan_offset = Vector2.ZERO
 	update_view_transform()
 
-	# Use a world-space delta so centering does not retain pixel roundoff.
+	# Keep the world-space centering delta exact when the bounds are centered.
 	pan_offset = _world_to_view.basis_xform(Vector2(0.5, 0.5) - bounds.get_center())
+	pan_offset += fit_rect.get_center() - graph_rect.get_center()
 	pan_changed.emit(pan_offset)
 	queue_redraw()
+
+
+func _get_autofit_view_rect() -> Rect2:
+	var graph_rect := _get_graph_view_rect()
+	var top := maxf(graph_rect.position.y, _get_top_controls_minimum_y(self))
+	var bottom := graph_rect.end.y
+	if _zoom_overlay != null and _zoom_overlay.is_visible_in_tree():
+		bottom = minf(bottom, _zoom_overlay.position.y - OVERLAY_INSET * _editor_scale)
+	# Prefer clear space, but retain a usable fit when controls fill the canvas.
+	if top >= bottom:
+		return graph_rect
+	return Rect2(Vector2(graph_rect.position.x, top), Vector2(graph_rect.size.x, bottom - top))
 
 
 func _get_autofit_world_bounds() -> Rect2:
@@ -2080,7 +2099,7 @@ func _get_graph_view_rect() -> Rect2:
 		Vector2.ONE * margin,
 		Vector2(
 			maxf(size.x - margin * 2.0, 1.0),
-			maxf(size.y - margin * 2.0, 1.0),
+			maxf(minf(size.y, size.x) - margin * 2.0, 1.0),
 		),
 	)
 
@@ -2131,15 +2150,12 @@ func _get_minimum_size() -> Vector2:
 		size.x * ASPECT_RATIO,
 	)
 
-	# Preserve the editor's established outer height across modes. These
-	# allowances are graph space too; overlays do not inset the viewport.
-	var zoom_height := 0.0
+	# Preserve established sizing until the graph would become taller than wide.
+	var minimum_width := 64.0 * _editor_scale
+	var height := (graph_height + SELECTION_TOOLBAR_HEIGHT + SNAP_TOOLBAR_HEIGHT) * _editor_scale
 	if _zoom_overlay != null:
-		zoom_height = _zoom_overlay.get_combined_minimum_size().y + maxi(1, roundi(ZOOM_HEIGHT_ALLOWANCE * _editor_scale))
-	return Vector2(
-		64.0,
-		graph_height + SELECTION_TOOLBAR_HEIGHT + SNAP_TOOLBAR_HEIGHT,
-	) * _editor_scale + Vector2(0, zoom_height)
+		height += _zoom_overlay.get_combined_minimum_size().y + maxi(1, roundi(ZOOM_HEIGHT_ALLOWANCE * _editor_scale))
+	return Vector2(minimum_width, minf(height, maxf(size.x, minimum_width)))
 
 
 func _get_display_points() -> Array[Resource]:
