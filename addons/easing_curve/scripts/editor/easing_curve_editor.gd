@@ -2033,8 +2033,10 @@ func autofit() -> void:
 		if step_to_zoom(step) <= target_zoom + 0.000001:
 			fit_step = step
 
-	# Overlays are a preference: do not sacrifice most of the plot to avoid them.
+	# Fit between both control rows when the zoom overlay is present.
 	_zoom_step = maxi(fit_step, full_step - AUTOFIT_MAX_OVERLAY_ZOOM_STEPS)
+	if _zoom_overlay != null and _zoom_overlay.is_visible_in_tree():
+		_zoom_step = fit_step
 	_apply_zoom_from_step()
 	pan_offset = Vector2.ZERO
 	update_view_transform()
@@ -2052,6 +2054,11 @@ func autofit() -> void:
 	var minimum_y := _get_top_controls_minimum_y(self, toolbar_gap) + point_radius
 	var bounds_top := get_view_pos(Vector2(bounds.position.x, bounds.end.y)).y
 	pan_offset.y += maxf(0.0, minimum_y - bounds_top)
+	if _zoom_overlay != null and _zoom_overlay.is_visible_in_tree():
+		var maximum_y := _zoom_overlay.position.y - toolbar_gap * _editor_scale - point_radius
+		var bounds_bottom := get_view_pos(bounds.position).y
+		var top_clearance := get_view_pos(Vector2(bounds.position.x, bounds.end.y)).y - minimum_y
+		pan_offset.y -= minf(maxf(0.0, bounds_bottom - maximum_y), maxf(0.0, top_clearance))
 	pan_changed.emit(pan_offset)
 	queue_redraw()
 
