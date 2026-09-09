@@ -170,12 +170,13 @@ var _zoom_overlay: HBoxContainer
 var _zoom_overlay_slider: EasingCurveZoomSliderContainer
 
 var _point_toolbar_panel: VBoxContainer
-var _point_toolbar: GridContainer
+var _point_toolbar: HFlowContainer
 var _point_label: Label
 var _point_reorder_buttons: HBoxContainer
 var _point_move_left_button: Button
 var _point_move_right_button: Button
-var _point_toolbar_controls: HBoxContainer
+var _point_left_group: HBoxContainer
+var _point_right_group: HBoxContainer
 var _point_handle_mode: OptionButton
 var _point_left_state_label: Label
 var _point_left_state: OptionButton
@@ -2649,9 +2650,8 @@ func _create_point_toolbar() -> void:
 
 	_layout.add_child(_point_toolbar_panel)
 
-	_point_toolbar = GridContainer.new()
+	_point_toolbar = HFlowContainer.new()
 	_point_toolbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_toolbar.columns = 3
 	_point_toolbar.add_theme_constant_override(
 		"h_separation",
 		maxi(1, roundi(2.0 * _editor_scale)),
@@ -2697,6 +2697,7 @@ func _create_point_toolbar() -> void:
 
 	_point_label = Label.new()
 	_point_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_point_label.clip_text = true
 	_point_label.text = "No Selection"
 	_point_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_point_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -2720,18 +2721,9 @@ func _create_point_toolbar() -> void:
 		)
 	_point_reorder_buttons.add_child(_point_move_right_button)
 
-	_point_toolbar_controls = HBoxContainer.new()
-	_point_toolbar_controls.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_toolbar_controls.add_theme_constant_override(
-		"separation",
-		maxi(1, roundi(2.0 * _editor_scale)),
-	)
-	_point_toolbar_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_point_toolbar.add_child(_point_toolbar_controls)
-
 	_point_handle_mode = OptionButton.new()
 	_point_handle_mode.fit_to_longest_item = false
-	_point_handle_mode.clip_text = true
+	_point_handle_mode.clip_text = false
 	_point_handle_mode.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_point_handle_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_point_handle_mode.size_flags_stretch_ratio = 1.2
@@ -2761,26 +2753,32 @@ func _create_point_toolbar() -> void:
 		_on_point_toolbar_handle_mode_selected
 	)
 
-	_point_toolbar_controls.add_child(_point_handle_mode)
+	_point_toolbar.add_child(_point_handle_mode)
 
 	_point_left_state_label = Label.new()
 	_point_left_state_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_left_state_label.text = "L"
-	_point_toolbar_controls.add_child(_point_left_state_label)
+	_point_left_group = HBoxContainer.new()
+	_point_left_group.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_point_toolbar.add_child(_point_left_group)
+	_point_left_group.add_child(_point_left_state_label)
 	_point_left_state = _create_point_toolbar_control_state_option(
 		EasingCurvePoint.ControlSide.LEFT
 	)
-	_point_toolbar_controls.add_child(_point_left_state)
+	_point_left_group.add_child(_point_left_state)
 
 	_point_right_state_label = Label.new()
 	_point_right_state_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_right_state_label.text = "R"
-	_point_toolbar_controls.add_child(_point_right_state_label)
+	_point_right_group = HBoxContainer.new()
+	_point_right_group.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_point_toolbar.add_child(_point_right_group)
+	_point_right_group.add_child(_point_right_state_label)
 	_reserve_point_toolbar_control_side_label_width()
 	_point_right_state = _create_point_toolbar_control_state_option(
 		EasingCurvePoint.ControlSide.RIGHT
 	)
-	_point_toolbar_controls.add_child(_point_right_state)
+	_point_right_group.add_child(_point_right_state)
 
 	_point_reset_button = Button.new()
 	_point_reset_button.icon = EDITOR_THEME_CACHE.get_icon(
@@ -2830,7 +2828,7 @@ func _create_point_toolbar_control_state_option(
 ) -> OptionButton:
 	var option := OptionButton.new()
 	option.fit_to_longest_item = false
-	option.clip_text = true
+	option.clip_text = false
 	option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	option.size_flags_stretch_ratio = 1.0
@@ -2965,6 +2963,8 @@ func _set_point_toolbar_control_state_visible(
 		if side == EasingCurvePoint.ControlSide.LEFT
 		else _point_right_state
 	)
+	var group := _point_left_group if side == EasingCurvePoint.ControlSide.LEFT else _point_right_group
+	group.visible = visible
 	label.visible = visible
 	option.visible = visible
 

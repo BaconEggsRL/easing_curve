@@ -20,7 +20,7 @@ func _init() -> void:
 
 
 func _run() -> void:
-	await _characterize_grouped_flow()
+	await _test_grouped_toolbar()
 	await _test_sibling_capture()
 	await _test_graph_dimensions()
 	_finish("curve layout contract")
@@ -31,7 +31,7 @@ func _settle() -> void:
 		await process_frame
 
 
-func _characterize_grouped_flow() -> void:
+func _test_grouped_toolbar() -> void:
 	for native: bool in [false, true]:
 		var curve: Resource
 		if native:
@@ -51,48 +51,35 @@ func _characterize_grouped_flow() -> void:
 		var editor: EasingCurveEditor = context.easing_curve_editor
 		editor.selected_index = 1
 		await _settle()
-		var baseline_width := presentation.get_combined_minimum_size().x
-		var flow := HFlowContainer.new()
-		root.add_child(flow)
-		editor._point_reorder_buttons.reparent(flow)
-		editor._point_handle_mode.reparent(flow)
-		for pair: Array in [[editor._point_left_state_label, editor._point_left_state], [editor._point_right_state_label, editor._point_right_state]]:
-			var group := HBoxContainer.new()
-			flow.add_child(group)
-			for control: Control in pair:
-				control.reparent(group)
-		editor._point_reset_button.reparent(flow)
-		editor._point_reset_button.show()
-		var largest_width := 0.0
-		for group: Control in flow.get_children():
-			largest_width = maxf(largest_width, group.get_combined_minimum_size().x)
-		for width: float in [150.0, 220.0, 360.0, 600.0, 220.0]:
-			flow.size = Vector2(width, 1.0)
-			await _settle()
-			var positions: Array[Vector2] = []
-			for group: Control in flow.get_children():
-				positions.append(group.position)
-			await _settle()
-			for index in range(flow.get_child_count()):
-				_expect(flow.get_child(index).position == positions[index], "Native flow layout did not settle")
-		_expect(flow.get_combined_minimum_size().x >= largest_width, "Flow minimum did not include largest actual group")
-		print("FLOW_GATE backend=%s presentation_min=%s graph_min=%s flow_min=%s largest_group=%s" % ["native" if native else "legacy", baseline_width, editor.get_combined_minimum_size().x, flow.get_combined_minimum_size().x, largest_width])
-		# Probe whether adding the candidate can raise the existing presentation minimum.
-		flow.reparent(presentation)
-		await _settle()
-		print("FLOW_GATE wrapped_presentation_min=%s baseline=%s" % [presentation.get_combined_minimum_size().x, baseline_width])
-		_expect(presentation.get_combined_minimum_size().x == baseline_width, "Grouped flow raised the presentation minimum")
+		var flow := editor._point_toolbar
+		_expect(flow is HFlowContainer, "Toolbar lost its characterized native wrapping container")
+		_expect(editor._point_left_state.get_parent() == editor._point_left_state_label.get_parent(), "Left label split from its field")
+		_expect(editor._point_right_state.get_parent() == editor._point_right_state_label.get_parent(), "Right label split from its field")
 		for scale_value: float in [1.0, 1.5, 2.0]:
 			var theme := Theme.new()
 			theme.default_font_size = roundi(16.0 * scale_value)
 			presentation.theme = theme
-			flow.reparent(root)
+			editor._editor_scale = scale_value
 			await _settle()
-			var reference_width := presentation.get_combined_minimum_size().x
-			flow.reparent(presentation)
-			await _settle()
-			_expect(presentation.get_combined_minimum_size().x == reference_width, "Scaled grouped flow raised the presentation minimum")
-			print("FLOW_SCALE scale=%s presentation_min=%s flow_min=%s" % [scale_value, reference_width, flow.get_combined_minimum_size().x])
+			var baseline_width := presentation.get_combined_minimum_size().x
+			var arrangements := {}
+			for width: float in [180.0, 220.0, 270.0, 359.0, 360.0, 361.0, 600.0, 220.0, 180.0]:
+				presentation.size.x = width * scale_value
+				await _settle()
+				var positions: Array[Vector2] = []
+				for group: Control in flow.get_children():
+					positions.append(group.position)
+					if group.visible:
+						_expect(group.position.x >= 0 and group.get_rect().end.x <= flow.size.x + 0.01, "Toolbar group overflowed allocated width")
+				await _settle()
+				for index in range(flow.get_child_count()):
+					_expect(flow.get_child(index).position == positions[index], "Toolbar layout oscillated at fixed width")
+				if arrangements.has(width):
+					_expect(arrangements[width] == positions, "Returning to a width changed row arrangement")
+				arrangements[width] = positions
+				_expect(presentation.get_combined_minimum_size().x == baseline_width, "Toolbar wrapping changed presentation minimum width")
+				_expect(editor._graph_canvas.size.x == editor.size.x, "Control minimum widened the graph canvas")
+			print("WRAP_GATE backend=%s scale=%s presentation_min=%s" % ["native" if native else "legacy", scale_value, baseline_width])
 		presentation.free()
 		await _settle()
 
