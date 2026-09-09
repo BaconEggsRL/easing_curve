@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param([string]$GodotPath = "")
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 
 function Resolve-ProjectRoot {
     $candidate = (Resolve-Path $PSScriptRoot).Path
@@ -17,7 +18,7 @@ function Invoke-GodotRunner {
     $runnerArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $godotRunner)
     if (-not [string]::IsNullOrWhiteSpace($GodotPath)) { $runnerArguments += @("-GodotPath", $GodotPath) }
     $runnerArguments += $Arguments
-    & $powerShellExecutable @runnerArguments
+    & $powerShellExecutable @runnerArguments | ForEach-Object { Write-Host $_ }
     return $LASTEXITCODE
 }
 
@@ -77,6 +78,7 @@ Write-IsolatedProjectConfig -Path $projectConfigPath -EnableBenchmark $false
 
 Write-Host "Bootstrapping isolated editor class cache..."
 $bootstrapExit = Invoke-GodotRunner @("--editor", "--headless", "--path", $tempProject, "--import", "--log-file", $bootstrapLogPath)
+Assert-GodotProcessExit $bootstrapExit 'Native Inspector bootstrap' $bootstrapLogPath
 $classCachePath = Join-Path $tempProject ".godot\global_script_class_cache.cfg"
 $bootstrapLog = if (Test-Path -LiteralPath $bootstrapLogPath -PathType Leaf) { Get-Content -Raw -LiteralPath $bootstrapLogPath } else { "" }
 $bootstrapHasScriptError = $bootstrapLog -match '(?m)^(?:SCRIPT ERROR:|.*Parse Error:|ERROR: Failed to load script)'
@@ -85,7 +87,6 @@ if (-not (Test-Path -LiteralPath $classCachePath -PathType Leaf) -or $bootstrapH
     Write-Host "Preserved failed benchmark project: $tempProject" -ForegroundColor Yellow
     throw "Native Inspector benchmark bootstrap was invalid (exit code $bootstrapExit)."
 }
-if ($bootstrapExit -ne 0) { Write-Warning "Bootstrap returned $bootstrapExit, but the class cache exists and no script/parse error was reported; continuing." }
 
 Write-IsolatedProjectConfig -Path $projectConfigPath -EnableBenchmark $true
 Write-Host "Running native Inspector crossing benchmark..."

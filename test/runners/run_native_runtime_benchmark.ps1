@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 if ($RunCount -lt 1 -or $RunCount % 2 -eq 0) {
 	throw "RunCount must be a positive odd number so the aggregate has a true median."
 }
@@ -47,6 +48,7 @@ renderer/rendering_method.mobile="gl_compatibility"
 	[Text.UTF8Encoding]::new($false)
 )
 
+$succeeded = $false
 try {
 	$bootstrapLog = Join-Path $isolatedProject "test\_temp\bootstrap.log"
 	$bootstrapArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner)
@@ -58,22 +60,12 @@ try {
 		"--log-file", $bootstrapLog
 	)
 	& (Get-Process -Id $PID).Path @bootstrapArguments
-	if ($LASTEXITCODE -ne 0) {
-		$classCache = Join-Path $isolatedProject ".godot\global_script_class_cache.cfg"
-		$bootstrapOutput = if (Test-Path -LiteralPath $bootstrapLog) {
-			Get-Content -Raw -LiteralPath $bootstrapLog
-		} else {
-			""
-		}
-		if (
-			-not (Test-Path -LiteralPath $classCache) -or
-			$bootstrapOutput -match '(?im)(SCRIPT ERROR|Parse Error)'
-		) {
-			throw "Could not initialize the isolated runtime benchmark project. Log: $bootstrapLog"
-		}
-		Write-Warning (
-			"Bootstrap returned $LASTEXITCODE after producing a clean class cache; continuing."
-		)
+	$bootstrapExit = $LASTEXITCODE
+	Assert-GodotProcessExit $bootstrapExit 'Native runtime benchmark bootstrap' $bootstrapLog
+	$classCache = Join-Path $isolatedProject ".godot\global_script_class_cache.cfg"
+	$bootstrapOutput = if (Test-Path -LiteralPath $bootstrapLog) { Get-Content -Raw -LiteralPath $bootstrapLog } else { '' }
+	if (-not (Test-Path -LiteralPath $classCache) -or $bootstrapOutput -match '(?im)(SCRIPT ERROR|Parse Error)') {
+		throw "Could not initialize the isolated runtime benchmark project. Log: $bootstrapLog"
 	}
 
 	for ($run = 1; $run -le $RunCount; $run += 1) {
@@ -98,11 +90,12 @@ try {
 		}
 		Write-Host "Native runtime benchmark log: $logPath"
 	}
+	$succeeded = $true
 } finally {
 	$resolvedBenchmarkRoot = (Resolve-Path -LiteralPath $benchmarkTempRoot).Path
 	$resolvedIsolatedProject = (Resolve-Path -LiteralPath $isolatedProject -ErrorAction SilentlyContinue).Path
 	if (
-		-not [string]::IsNullOrWhiteSpace($resolvedIsolatedProject) -and
+		$succeeded -and -not [string]::IsNullOrWhiteSpace($resolvedIsolatedProject) -and
 		$resolvedIsolatedProject.StartsWith($resolvedBenchmarkRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)
 	) {
 		Remove-Item -LiteralPath $resolvedIsolatedProject -Recurse -Force

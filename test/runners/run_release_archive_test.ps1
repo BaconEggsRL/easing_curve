@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $pluginConfig = Join-Path $projectRoot "addons\easing_curve\plugin.cfg"
@@ -111,14 +112,12 @@ function Invoke-EditorLifecycle {
 		"--log-file", $LogPath
 	)
 	Write-EditorImportDiagnostics -Phase $Phase -LogPath $LogPath -ExitCode $exitCode
+	Assert-GodotProcessExit -ExitCode $exitCode -Phase $Phase -LogPath $LogPath
 	$logText = if (Test-Path -LiteralPath $LogPath) { Get-Content -Raw -LiteralPath $LogPath } else { "" }
 	$classCache = Join-Path $validationRoot ".godot\global_script_class_cache.cfg"
 	$failed = (-not (Test-Path -LiteralPath $classCache -PathType Leaf)) -or ($logText -match '(?m)^(?:SCRIPT ERROR:|.*Parse Error:|ERROR: Failed to load extension)')
 	if ($failed) {
 		Stop-ArchivePhase -Phase $Phase -LogPath $LogPath -ExitCode $exitCode
-	}
-	if ($exitCode -ne 0) {
-		Write-Warning "$Phase returned $exitCode after producing a clean class cache; continuing."
 	}
 }
 

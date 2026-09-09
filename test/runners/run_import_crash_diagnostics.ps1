@@ -3,6 +3,7 @@ param(
 	[Parameter(Mandatory)][string]$GodotPath,
 	[Parameter(Mandatory)][string]$ArchivePath,
 	[string]$ProcDumpPath = "",
+	[switch]$CaptureOnly,
 	[string]$OutputDirectory = "",
 	[ValidateSet('A','B','C','D','E')][string[]]$Cases = @('A','B','C','D','E')
 )
@@ -182,7 +183,7 @@ $startTime = Get-Date
 	hashes=@($GodotPath, (Join-Path $sourceBin $dllName), $ArchivePath | ForEach-Object { Get-FileHash -LiteralPath $_ -Algorithm SHA256 })
 } | ConvertTo-Json -Depth 5 | Set-Content "$outputRoot/environment.json"
 $results = @(foreach ($case in $Cases) {
-	Invoke-Case $case $false
+	if (-not $CaptureOnly) { Invoke-Case $case $false }
 	if ($ProcDumpPath) { Invoke-Case $case $true }
 })
 $results | ConvertTo-Json -Depth 5 | Set-Content "$outputRoot/results.json"

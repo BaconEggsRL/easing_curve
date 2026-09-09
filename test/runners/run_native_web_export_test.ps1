@@ -1,11 +1,13 @@
 [CmdletBinding()]
 param(
 	[string]$GodotPath = "",
+	[string]$ExportTemplateVersion = "",
 	[switch]$SkipBuild,
 	[string]$BrowserPath = ""
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 
 function Resolve-ProjectRoot {
 	$candidate = (Resolve-Path $PSScriptRoot).Path
@@ -275,7 +277,8 @@ $godotVersion = (& $selectedGodotPath --version | Out-String).Trim()
 if ([string]::IsNullOrWhiteSpace($godotVersion)) {
 	throw "Could not determine the selected Godot version: $selectedGodotPath"
 }
-$templateVersion = ($godotVersion -replace '\.official\..*$', '')
+if (-not $ExportTemplateVersion) { $ExportTemplateVersion = (Get-Content "$PSScriptRoot/../../tooling/godot/editor-pin.json" -Raw | ConvertFrom-Json).export_template_version }
+$templateVersion = $ExportTemplateVersion
 $installedTemplateDirectory = Join-Path $env:APPDATA "Godot\export_templates\$templateVersion"
 $debugTemplate = Join-Path $installedTemplateDirectory "web_dlink_nothreads_debug.zip"
 $releaseTemplate = Join-Path $installedTemplateDirectory "web_dlink_nothreads_release.zip"
@@ -397,14 +400,12 @@ progressive_web_app/enabled=false
 	$bootstrapLog = Join-Path $projectTempDirectory "bootstrap.log"
 	& $powerShellExecutable @runnerBaseArguments "--editor" "--headless" "--path" $tempProject "--import" "--log-file" $bootstrapLog
 	$bootstrapExit = $LASTEXITCODE
+	Assert-GodotProcessExit $bootstrapExit 'Native Web bootstrap' $bootstrapLog
 	$classCache = Join-Path $tempProject ".godot\global_script_class_cache.cfg"
 	$bootstrapText = if (Test-Path -LiteralPath $bootstrapLog) { Get-Content -Raw -LiteralPath $bootstrapLog } else { "" }
 	$bootstrapHasFatalDiagnostic = $bootstrapText -match '(?m)^(?:SCRIPT ERROR:|.*Parse Error:|ERROR: Failed to load extension)'
 	if (-not (Test-Path -LiteralPath $classCache -PathType Leaf) -or $bootstrapHasFatalDiagnostic) {
 		throw "Native Web fixture bootstrap did not produce a valid class cache."
-	}
-	if ($bootstrapExit -ne 0) {
-		Write-Warning "Bootstrap returned $bootstrapExit after producing a clean class cache; continuing."
 	}
 	$prepareLog = Join-Path $projectTempDirectory "prepare.log"
 	& $powerShellExecutable @runnerBaseArguments "--headless" "--path" $tempProject "--script" "res://prepare.gd" "--log-file" $prepareLog

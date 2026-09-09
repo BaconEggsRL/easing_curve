@@ -1,0 +1,84 @@
+name: Qualify patched Godot editor
+on:
+  push:
+    branches: [codex/qualified-godot-editor]
+    paths:
+      - .github/workflows/qualify-godot-editor.yml
+      - tooling/godot/editor-pin.json
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [1, 2]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.1
+          use-dotnet: false
+          include-templates: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: easing-curve-package-diagnostics
+          run-id: 34299688373
+          github-token: ${{ github.token }}
+          path: test/_temp/historical-input
+      - name: Obtain unpublished candidate bytes and capture tool
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download tooling-godot-4.7.1-ec111645-p1 --repo "$env:GITHUB_REPOSITORY" --pattern candidate.zip --dir test/_temp/candidate-download
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate staging download failed.' }
+          Expand-Archive test/_temp/candidate-download/candidate.zip test/_temp/candidate
+          $pin = Get-Content tooling/godot/editor-pin.json -Raw | ConvertFrom-Json
+          . ./test/runners/godot_process_contract.ps1
+          Assert-GodotExecutableHash test/_temp/candidate/godot-editor.exe $pin.editor_sha256
+          Invoke-WebRequest https://download.sysinternals.com/files/Procdump.zip -OutFile test/_temp/procdump.zip
+          Expand-Archive test/_temp/procdump.zip test/_temp/procdump
+          $signature = Get-AuthenticodeSignature test/_temp/procdump/procdump64.exe
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*Microsoft Corporation*') { throw 'Invalid ProcDump signature.' }
+          $archive = Get-ChildItem test/_temp/historical-input -Filter easing_curve_v1.2.1-dev.zip -Recurse | Select-Object -First 1
+          Expand-Archive $archive.FullName test/_temp/release-input
+          Copy-Item test/_temp/release-input/addons/easing_curve/bin/* addons/easing_curve/bin -Force
+          "HISTORICAL_ARCHIVE=$($archive.FullName)" >> $env:GITHUB_ENV
+          $official = Join-Path $env:RUNNER_TEMP 'official-godot.exe'
+          Copy-Item (Get-Command godot).Source $official
+          "OFFICIAL_GODOT=$official" >> $env:GITHUB_ENV
+      - name: Qualify exact candidate with strict runners
+        shell: pwsh
+        run: |
+          $qualificationArgs = @{CandidateDirectory='test/_temp/candidate'; ArchivePath=$env:HISTORICAL_ARCHIVE; ProcDumpPath=(Resolve-Path test/_temp/procdump/procdump64.exe).Path; OfficialGodotPath=$env:OFFICIAL_GODOT}
+          if ('${{ matrix.runner }}' -eq '1') { $qualificationArgs.FullSuite = $true }
+          ./tooling/godot/qualify_candidate.ps1 @qualificationArgs
+      - name: Preserve qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-editor-qualification-${{ matrix.runner }}
+          include-hidden-files: true
+          compression-level: 7
+          path: |
+            test/_temp/editor-qualification/**/*.json
+            test/_temp/editor-qualification/**/*.txt
+            test/_temp/editor-qualification/**/*.log
+            test/_temp/editor-qualification/**/*.dmp
+            test/_temp/editor-qualification/docs/**
+            test/_temp/runner/**/*.txt
+            test/_temp/runner/**/*.log
+            test/_temp/release-archive-*/test/_temp/*
+            test/_temp/native-release-export/**/test/_temp/*
+            test/_temp/native-web-export/**/test/_temp/*
+            tooling/godot/editor-pin.json

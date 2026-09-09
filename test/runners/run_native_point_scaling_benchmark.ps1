@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param([string]$GodotPath = "")
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $godotRunner = Join-Path $PSScriptRoot "run_godot.ps1"
@@ -18,8 +19,8 @@ function Invoke-GodotRunner {
 		$runnerArguments += @("-GodotPath", $GodotPath)
 	}
 	$runnerArguments += $Arguments
-	& $powerShellExecutable @runnerArguments
-	return [int]$LASTEXITCODE
+	& $powerShellExecutable @runnerArguments | ForEach-Object { Write-Host $_ }
+	return $LASTEXITCODE
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $tempProject "addons") | Out-Null
@@ -41,9 +42,11 @@ renderer/rendering_method.mobile="gl_compatibility"
 '@
 [IO.File]::WriteAllText((Join-Path $tempProject "project.godot"), $projectConfig, [Text.UTF8Encoding]::new($false))
 
+$succeeded = $false
 try {
 	$bootstrapLog = Join-Path $isolatedTemp "bootstrap.log"
 	$bootstrapExit = Invoke-GodotRunner @("--editor", "--headless", "--quit", "--path", $tempProject, "--log-file", $bootstrapLog)
+	Assert-GodotProcessExit $bootstrapExit 'Native point scaling bootstrap' $bootstrapLog
 	$classCache = Join-Path $tempProject ".godot\global_script_class_cache.cfg"
 	$bootstrapText = if (Test-Path -LiteralPath $bootstrapLog) { Get-Content -Raw -LiteralPath $bootstrapLog } else { "" }
 	$bootstrapFailed = (
@@ -53,9 +56,6 @@ try {
 	if ($bootstrapFailed) {
 		throw "Could not initialize the isolated scaling project. Log: $bootstrapLog"
 	}
-	if ($bootstrapExit -ne 0) {
-		Write-Warning "Bootstrap returned $bootstrapExit after producing a clean class cache; continuing."
-	}
 
 	$benchmarkExit = Invoke-GodotRunner @(
 		"--headless", "--path", $tempProject,
@@ -63,7 +63,6 @@ try {
 		"--log-file", $benchmarkLog
 	)
 	$benchmarkText = if (Test-Path -LiteralPath $benchmarkLog) { Get-Content -Raw -LiteralPath $benchmarkLog } else { "" }
-	[IO.File]::WriteAllText($outputLog, $benchmarkText, [Text.UTF8Encoding]::new($false))
 	$resultRows = @([regex]::Matches($benchmarkText, '(?m)^NATIVE_POINT_SCALING\|points=')).Count
 	$hasComplete = $benchmarkText -match '(?m)^NATIVE_POINT_SCALING_COMPLETE\|cases=15\r?$'
 	$hasScriptFailure = $benchmarkText -match '(?m)^(?:SCRIPT ERROR:|.*Parse Error:|ERROR: Failed to load script)'
@@ -71,18 +70,19 @@ try {
 		if ($benchmarkText) { Write-Host $benchmarkText.TrimEnd() }
 		throw "Native point-scaling characterization was incomplete. Log: $benchmarkLog"
 	}
-	if ($benchmarkExit -ne 0) {
-		Write-Warning "Benchmark returned $benchmarkExit after producing all 15 clean result rows; continuing."
-	}
+	Assert-GodotProcessExit $benchmarkExit 'Native point scaling benchmark' $benchmarkLog
 	$slowerRows = @([regex]::Matches($benchmarkText, '(?m)^NATIVE_POINT_SCALING\|[^\r\n]+\|advantage=0[.]')).Count
 	if ($slowerRows -gt 0) {
 		throw "Native was slower than Legacy in $slowerRows large-curve scaling cases. Log: $benchmarkLog"
 	}
+	[IO.File]::WriteAllText($outputLog, $benchmarkText, [Text.UTF8Encoding]::new($false))
 	$benchmarkText -split "`r?`n" | Where-Object { $_ -match '^NATIVE_POINT_SCALING\|points=' } | ForEach-Object { Write-Host $_ }
 	Write-Host "NATIVE_POINT_SCALING_PASS|cases=15"
 	Write-Host "Native point-scaling log: $outputLog"
+	$succeeded = $true
 } finally {
-	if (Test-Path -LiteralPath $tempProject -PathType Container) {
+	if (-not $succeeded) { Write-Host "Preserved failed benchmark project: $tempProject" }
+	if ($succeeded -and (Test-Path -LiteralPath $tempProject -PathType Container)) {
 		Remove-Item -LiteralPath $tempProject -Recurse -Force -ErrorAction SilentlyContinue
 	}
 	if ((Test-Path -LiteralPath $tempBase -PathType Container) -and -not (Get-ChildItem -LiteralPath $tempBase -Force | Select-Object -First 1)) {

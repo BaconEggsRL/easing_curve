@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param([string]$GodotPath = "")
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 
 function Resolve-ProjectRoot {
     $candidate = (Resolve-Path $PSScriptRoot).Path
@@ -17,7 +18,7 @@ function Invoke-GodotRunner {
     $runnerArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $godotRunner)
     if (-not [string]::IsNullOrWhiteSpace($GodotPath)) { $runnerArguments += @("-GodotPath", $GodotPath) }
     $runnerArguments += $Arguments
-    & $powerShellExecutable @runnerArguments
+    & $powerShellExecutable @runnerArguments | ForEach-Object { Write-Host $_ }
     return $LASTEXITCODE
 }
 
@@ -57,13 +58,13 @@ renderer/rendering_method.mobile="gl_compatibility"
 
 Write-Host "Bootstrapping isolated native-editor test host..."
 $bootstrapExit = Invoke-GodotRunner @("--editor", "--headless", "--path", $tempProject, "--import", "--log-file", $bootstrapLog)
+Assert-GodotProcessExit $bootstrapExit 'Editor script bootstrap' $bootstrapLog
 $classCache = Join-Path $tempProject ".godot\global_script_class_cache.cfg"
 $bootstrapText = if (Test-Path -LiteralPath $bootstrapLog) { Get-Content -Raw -LiteralPath $bootstrapLog } else { "" }
 if (-not (Test-Path -LiteralPath $classCache) -or $bootstrapText -match '(?m)^(?:SCRIPT ERROR:|.*Parse Error:|ERROR: Failed to load script)') {
     Write-Host "Preserved failed validation project: $tempProject" -ForegroundColor Yellow
     exit 1
 }
-if ($bootstrapExit -ne 0) { Write-Warning "Bootstrap returned $bootstrapExit; cache and script diagnostics are clean, continuing." }
 
 Write-Host "Replaying non-headless --editor --script position-X test..."
 $testExit = Invoke-GodotRunner @(

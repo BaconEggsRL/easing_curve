@@ -1,0 +1,13 @@
+{
+  "source_commit": "a13da4feb8d8aefc283c3763d33a2f170a18d541",
+  "source_tag": "4.7.1-stable",
+  "patch": "editor-help-lifetime.patch",
+  "patch_sha256": "2338C2925A01FBAEBF6ED417284B4D9EB7B7A1173BBD133C0CAF30F7AEB03603",
+  "editor_url": "",
+  "editor_sha256": "A7C0CF8F625A3B24991ED40F77DD1892C35E0DA2AB3185039DF2DAFD994C4272",
+  "editor_version_prefix": "4.7.1.stable.ec111645-p1.",
+  "export_template_version": "4.7.1.stable",
+  "official_version": "4.7.1",
+  "qualification_run": "",
+  "issue": "https://github.com/godotengine/godot/issues/111645"
+}

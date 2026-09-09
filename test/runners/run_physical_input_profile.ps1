@@ -13,6 +13,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 
 function Resolve-ProjectRoot {
     $candidate = (Resolve-Path $PSScriptRoot).Path
@@ -30,6 +31,12 @@ function Resolve-ProjectRoot {
 
 function Resolve-GodotExecutables {
     param([string]$RequestedPath)
+
+    if ($env:EASING_CURVE_EDITOR_GODOT_PATH) {
+        Assert-GodotExecutableHash $env:EASING_CURVE_EDITOR_GODOT_PATH $env:EASING_CURVE_EDITOR_GODOT_SHA256 | Out-Null
+        $pinned = (Resolve-Path -LiteralPath $env:EASING_CURVE_EDITOR_GODOT_PATH).Path
+        return @{ Gui = $pinned; Console = $pinned }
+    }
 
     $fallback = "C:\Godot\4.7\engine\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64.exe"
     $gui = $RequestedPath
@@ -339,6 +346,9 @@ function Invoke-ProfileHostSmokeTest {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
         throw "Physical-input host smoke test timed out for '$Label'."
     }
+    $process.WaitForExit()
+    $process.ExitCode | Set-Content -LiteralPath "$editorLog.exitcode.txt"
+    Assert-GodotProcessExit $process.ExitCode "Physical-input smoke test '$Label'" $editorLog
 
     $text = if (Test-Path -LiteralPath $editorLog -PathType Leaf) {
         Get-Content -Raw -LiteralPath $editorLog
@@ -440,6 +450,9 @@ function Invoke-SingleCapture {
         -Started $started `
         -Ended $ended `
         -TracePath $tracePath
+    $process.WaitForExit()
+    $process.ExitCode | Set-Content -LiteralPath "$editorLog.exitcode.txt"
+    Assert-GodotProcessExit $process.ExitCode "Physical-input capture '$Label'" $editorLog
 }
 
 function Read-KeyValueSummary {

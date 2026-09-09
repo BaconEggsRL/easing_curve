@@ -1,7 +1,8 @@
 [CmdletBinding()]
-param([string]$GodotPath = "", [switch]$SkipBuild)
+param([string]$GodotPath = "", [switch]$SkipBuild, [string]$ExportTemplateVersion = "")
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 
 function Resolve-ProjectRoot {
 	$candidate = (Resolve-Path $PSScriptRoot).Path
@@ -32,7 +33,7 @@ function Invoke-GodotRunner {
 	if ($commandOutput) {
 		$commandOutput | ForEach-Object { Write-Host $_ }
 	}
-	return [int]$commandExitCode
+	return $commandExitCode
 }
 
 $projectRoot = Resolve-ProjectRoot
@@ -61,7 +62,8 @@ $godotVersion = (& $selectedGodotPath --version | Out-String).Trim()
 if ([string]::IsNullOrWhiteSpace($godotVersion)) {
 	throw "Could not determine the selected Godot version: $selectedGodotPath"
 }
-$templateVersion = ($godotVersion -replace '\.official\..*$', '')
+if (-not $ExportTemplateVersion) { $ExportTemplateVersion = (Get-Content "$PSScriptRoot/../../tooling/godot/editor-pin.json" -Raw | ConvertFrom-Json).export_template_version }
+$templateVersion = $ExportTemplateVersion
 $installedTemplateDirectory = Join-Path $env:APPDATA "Godot\export_templates\$templateVersion"
 $debugTemplate = Join-Path $installedTemplateDirectory "windows_debug_x86_64.exe"
 $releaseTemplate = Join-Path $installedTemplateDirectory "windows_release_x86_64.exe"
@@ -171,14 +173,12 @@ application/modify_resources=false
 
 	Write-Host "Bootstrapping the isolated export project..."
 	$bootstrapExit = Invoke-GodotRunner @("--editor", "--headless", "--path", $tempProject, "--import", "--log-file", $bootstrapLog)
+	Assert-GodotProcessExit $bootstrapExit 'Native release bootstrap' $bootstrapLog
 	$classCache = Join-Path $tempProject ".godot\global_script_class_cache.cfg"
 	$bootstrapText = if (Test-Path -LiteralPath $bootstrapLog) { Get-Content -Raw -LiteralPath $bootstrapLog } else { "" }
 	$bootstrapHasFatalDiagnostic = $bootstrapText -match '(?m)^(?:SCRIPT ERROR:|.*Parse Error:|ERROR: Failed to load extension)'
 	if (-not (Test-Path -LiteralPath $classCache -PathType Leaf) -or $bootstrapHasFatalDiagnostic) {
 		throw "Isolated export project bootstrap did not produce a valid class cache."
-	}
-	if ($bootstrapExit -ne 0) {
-		Write-Warning "Bootstrap returned $bootstrapExit after producing a clean class cache; continuing."
 	}
 
 	Write-Host "Creating built-in and custom Native resource fixtures..."

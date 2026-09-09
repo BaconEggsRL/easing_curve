@@ -62,6 +62,9 @@ jobs:
           version: 4.7.1
           use-dotnet: false
           include-templates: true
+      - name: Install qualified editor for editor invocation roles
+        shell: pwsh
+        run: ./tooling/godot/install_editor.ps1
       - uses: actions/download-artifact@v4
         with:
           name: easing-curve-native-windows-x86_64
@@ -79,10 +82,20 @@ jobs:
           if ($versionProcess.ExitCode -ne 0) {
             throw "Copied Godot executable validation failed with exit code $($versionProcess.ExitCode)."
           }
+          ./test/runners/godot_process_contract_test.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Godot process contract tests failed." }
+          ./test/runners/runner_hardening_test.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Runner hardening tests failed." }
           ./test/runners/run_all_tests.ps1 --run -GodotPath $godotExe
           if ($LASTEXITCODE -ne 0) { throw "Windows correctness suites failed." }
           ./test/runners/run_native_release_export_test.ps1 -SkipBuild -GodotPath $godotExe
           if ($LASTEXITCODE -ne 0) { throw "Windows release export validation failed." }
+      - name: Preserve editor tooling provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-editor-provenance
+          path: test/_temp/pinned-editor/*.json
       - name: Preserve Windows test failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
@@ -108,6 +121,9 @@ jobs:
           version: 4.7.1
           use-dotnet: false
           include-templates: true
+      - name: Install qualified editor for editor invocation roles
+        shell: pwsh
+        run: ./tooling/godot/install_editor.ps1
       - uses: actions/download-artifact@v4
         with:
           name: easing-curve-native-windows-x86_64
@@ -130,6 +146,13 @@ jobs:
             throw "Copied Godot executable validation failed with exit code $($versionProcess.ExitCode)."
           }
           ./test/runners/run_native_web_export_test.ps1 -SkipBuild -GodotPath $godotExe
+          if ($LASTEXITCODE -ne 0) { throw "Native Web validation failed." }
+      - name: Preserve editor tooling provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-editor-provenance
+          path: test/_temp/pinned-editor/*.json
 
   package:
     needs: [windows-tests, web-runtime]
@@ -142,6 +165,9 @@ jobs:
         with:
           version: 4.7.1
           use-dotnet: false
+      - name: Install qualified editor for editor invocation roles
+        shell: pwsh
+        run: ./tooling/godot/install_editor.ps1
       - uses: actions/download-artifact@v4
         with:
           name: easing-curve-native-windows-x86_64
@@ -161,8 +187,17 @@ jobs:
             throw "Copied Godot executable validation failed with exit code $($versionProcess.ExitCode)."
           }
           ./build_asset_store.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Archive build failed." }
           ./test/runners/release_archive_diagnostics_test.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Archive diagnostic contract failed." }
           ./test/runners/run_release_archive_test.ps1 -GodotPath $godotExe
+          if ($LASTEXITCODE -ne 0) { throw "Exact archive validation failed." }
+      - name: Preserve editor tooling provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-editor-provenance
+          path: test/_temp/pinned-editor/*.json
       - name: Record package Windows crash events
         if: failure()
         shell: pwsh

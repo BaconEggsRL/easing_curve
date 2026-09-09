@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param([string]$GodotPath = "")
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/godot_process_contract.ps1"
 
 function Resolve-ProjectRoot {
     $candidate = (Resolve-Path $PSScriptRoot).Path
@@ -28,7 +29,7 @@ function Invoke-GodotRunner {
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
     }
-    return [int]$exitCode
+    return $exitCode
 }
 
 $projectRoot = Resolve-ProjectRoot
@@ -65,13 +66,13 @@ renderer/rendering_method.mobile="gl_compatibility"
 
 Write-Host "Bootstrapping isolated point-scaling benchmark host..."
 $bootstrapExit = Invoke-GodotRunner @("--editor", "--headless", "--path", $tempProject, "--import", "--log-file", $bootstrapLog)
+Assert-GodotProcessExit $bootstrapExit 'Point scaling bootstrap' $bootstrapLog
 $classCache = Join-Path $tempProject ".godot\global_script_class_cache.cfg"
 $bootstrapText = if (Test-Path -LiteralPath $bootstrapLog) { Get-Content -Raw -LiteralPath $bootstrapLog } else { "" }
 if (-not (Test-Path -LiteralPath $classCache) -or $bootstrapText -match '(?m)^(?:SCRIPT ERROR:|.*Parse Error:|ERROR: Failed to load script)') {
     Write-Host "Preserved failed benchmark project: $tempProject" -ForegroundColor Yellow
     exit 1
 }
-if ($bootstrapExit -ne 0) { Write-Warning "Bootstrap returned $bootstrapExit; cache and script diagnostics are clean, continuing." }
 
 $previousScaling = $env:EASING_CURVE_POINT_SCALING_ONLY
 try {
@@ -88,7 +89,6 @@ try {
 }
 
 $benchmarkText = if (Test-Path -LiteralPath $benchmarkLog) { Get-Content -Raw -LiteralPath $benchmarkLog } else { "" }
-[IO.File]::WriteAllText($outputLog, $benchmarkText, [Text.UTF8Encoding]::new($false))
 $hasScalingMarker = $benchmarkText -match 'INTERACTION_POINT_SCALING\|enabled=true'
 $pointPattern = '(?:9|13|17|25|33|49|65|97|129)'
 $updateToDrawRows = [regex]::Matches($benchmarkText, "(?m)^INTERACTION_BENCH\|[^\r\n]+\|crossing\|$pointPattern\|(?:1|4)\|update_to_draw\|").Count
@@ -104,9 +104,8 @@ if (-not $completeResults) {
     Write-Host "Preserved failed benchmark project: $tempProject" -ForegroundColor Yellow
     exit 1
 }
-if ($benchmarkExit -ne 0) {
-    Write-Warning "Benchmark process returned $benchmarkExit after producing the complete semantic result set; treating this as the established standalone Editor-host teardown artifact."
-}
+Assert-GodotProcessExit $benchmarkExit 'Point scaling benchmark' $outputLog
+[IO.File]::WriteAllText($outputLog, $benchmarkText, [Text.UTF8Encoding]::new($false))
 
 $measurements = @{}
 $benchmarkText -split "`r?`n" |
