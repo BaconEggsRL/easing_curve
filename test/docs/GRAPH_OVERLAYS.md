@@ -30,7 +30,10 @@ Log: `test/_temp/overlay-baseline-gesture.txt`.
 
 The shared `EasingCurveEditor` draws into its entire rectangle, apart from the
 existing four-logical-pixel edge margin and a square height cap. The point/Grid Snap panel is anchored
-flush with the top and eight logical pixels from the sides; the shared zoom row is anchored
+flush with the top and sides. The point properties row uses the full width,
+aligning its reset button with the Ease/Trans reset column. Grid Snap keeps its
+eight-logical-pixel side insets through an input-transparent MarginContainer.
+The shared zoom row is anchored
 eight logical pixels from the bottom and sides. Passive containers, labels and
 separators ignore input. Interactive descendants retain their existing behavior.
 
@@ -83,6 +86,15 @@ project's `test/_temp/spacing-{before,after}*` files. Focused checks pass 994
 gesture assertions headless/rendered and 955 readout assertions.
 Full correctness passes 32 of 33 suites, with only the same two baseline CSS
 label assertions failing (`test/_temp/spacing-full.txt`).
+
+Full-width point-toolbar follow-up: 1,048 gesture checks pass headless/rendered,
+including actual alignment with both Ease/Trans reset buttons for Legacy and
+Native at widths 320/450/700. Resize/theme checks at scales 1/1.5/2 retain the
+full-width point row, trailing reset alignment and the original Grid Snap and
+zoom insets. The readout suite passes 955 checks. Actual Editor captures are in
+the isolated project's `test/_temp/toolbar-width-after-*.png` files.
+Full correctness passes 32 of 33 suites, with only the two existing CSS-label
+assertions failing (`test/_temp/toolbar-width-full.txt`).
 
 The editor's established minimum-height budget is capped at its width. The
 canonical graph rectangle also caps height at width if a caller supplies a tall

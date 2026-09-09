@@ -72,6 +72,13 @@ func _test_overlay_section_geometry() -> void:
 				var zoom_row := editor._slider.get_parent() as HBoxContainer
 				var separation := graph_content.get_theme_constant(&"separation")
 				var graph_rect := editor._get_graph_view_rect()
+				if not function_mode:
+					var reset_count := 0
+					for button: Button in content.find_children("*", "Button", true, false):
+						if button.tooltip_text in ["Reset Ease to In", "Restore selected preset geometry"]:
+							reset_count += 1
+							_expect(is_equal_approx(button.get_global_rect().get_center().x, editor._point_reset_button.get_global_rect().get_center().x), "Point reset is not aligned with the Ease/Trans reset column")
+					_expect(reset_count == 2, "Inspector alignment fixture did not find both header resets")
 				var measurement := {
 					"native": native, "function": function_mode, "width": editor.size.x,
 					"scale": editor._editor_scale,
@@ -301,8 +308,10 @@ func _test_overlay_resize_and_theme() -> void:
 				var inset := 8.0 * scale_value
 				var top := editor._point_toolbar_panel.get_rect()
 				var bottom := editor._zoom_overlay.get_rect()
-				_expect(top.position.is_equal_approx(Vector2(inset, 0)), "Top overlay lost its compact top edge or logical side insets")
-				_expect(is_equal_approx(top.end.x, editor.size.x - inset), "Top overlay width did not follow resize")
+				_expect(top.position.is_equal_approx(Vector2.ZERO), "Point toolbar did not use the available top-left corner")
+				_expect(is_equal_approx(top.end.x, editor.size.x), "Point toolbar did not use the full editor width")
+				_expect(is_equal_approx(editor._point_reset_button.get_global_rect().end.x, editor.get_global_rect().end.x), "Point reset lost its trailing alignment after resize/theme change")
+				_expect(is_equal_approx(editor._snap_button.get_global_rect().position.x - editor.global_position.x, inset), "Widening the point toolbar moved Grid Snap's side inset")
 				_expect(is_equal_approx(bottom.position.x, inset) and is_equal_approx(bottom.end.x, editor.size.x - inset) and is_equal_approx(bottom.end.y, editor.size.y - inset), "Bottom overlay lost logical insets after resize/theme change")
 				_expect(is_equal_approx(bottom.size.y, editor._zoom_overlay.get_combined_minimum_size().y), "Bottom overlay height ignored widget minimum size")
 				var graph := editor._get_graph_view_rect()

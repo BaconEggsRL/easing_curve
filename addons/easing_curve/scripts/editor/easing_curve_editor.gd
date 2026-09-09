@@ -147,6 +147,7 @@ var snap_count: int = 10:
 		snap_count = clampi(value, 2, 100)
 		_sync_snap_controls()
 var _snap_button: Button
+var _snap_toolbar_margin: MarginContainer
 var _snap_count_input: EditorSpinSlider
 var _coordinate_overlay: Control
 var _zoom_x: float = 1.0 # horizontal zoom
@@ -242,10 +243,13 @@ func _update_overlay_layout() -> void:
 	if not is_inside_tree():
 		return
 	var inset := OVERLAY_INSET * _editor_scale
-	_point_toolbar_panel.offset_left = inset
+	_point_toolbar_panel.offset_left = 0.0
 	_point_toolbar_panel.offset_top = 0.0
-	_point_toolbar_panel.offset_right = -inset
+	_point_toolbar_panel.offset_right = 0.0
 	_point_toolbar_panel.offset_bottom = _point_toolbar_panel.get_combined_minimum_size().y
+	for side: StringName in [&"margin_left", &"margin_right"]:
+		if _snap_toolbar_margin.get_theme_constant(side) != roundi(inset):
+			_snap_toolbar_margin.add_theme_constant_override(side, roundi(inset))
 	if _zoom_overlay != null:
 		_zoom_overlay.offset_left = inset
 		_zoom_overlay.offset_right = -inset
@@ -2517,10 +2521,14 @@ func _snap_graph_position(position: Vector2, temporary_snap := false) -> Vector2
 
 
 func _create_snap_toolbar() -> void:
+	_snap_toolbar_margin = MarginContainer.new()
+	_snap_toolbar_margin.name = &"GridSnapMargin"
+	_snap_toolbar_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_point_toolbar_panel.add_child(_snap_toolbar_margin)
 	var toolbar := HBoxContainer.new()
 	toolbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toolbar.custom_minimum_size.y = SNAP_TOOLBAR_HEIGHT * _editor_scale
-	_point_toolbar_panel.add_child(toolbar)
+	_snap_toolbar_margin.add_child(toolbar)
 	_snap_button = Button.new()
 	_snap_button.icon = EDITOR_THEME_CACHE.get_icon(&"SnapGrid")
 	if _snap_button.icon == null:
