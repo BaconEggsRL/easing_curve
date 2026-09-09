@@ -46,3 +46,13 @@ locally; the qualified candidate came from a clean build with the correct custom
 The manual qualification workflow is retained for a future replacement. It does
 not run the 100-launch matrix on routine CI pushes. Strict process-exit handling
 and its synthetic regression tests remain permanent.
+
+## Publication and hosted verification
+
+The [immutable tooling release](https://github.com/BaconEggsRL/easing_curve/releases/tag/tooling-godot-4.7.1-ec111645-p1)
+was published at `2026-09-09T03:06:00Z`. GitHub confirmed `immutable: true`.
+At `2026-09-09T03:06:24Z`, `install_editor.ps1` downloaded the public executable,
+verified its SHA256 against the qualified candidate before execution, and confirmed
+the expected custom version. The hosted hash was exactly
+`A7C0CF8F625A3B24991ED40F77DD1892C35E0DA2AB3185039DF2DAFD994C4272`.
+This verification preceded the atomic `dev` activation of the pin and strict runners.
