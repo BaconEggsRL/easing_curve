@@ -1,0 +1,68 @@
+name: Import crash diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - .github/workflows/import-crash-diagnostics.yml
+      - test/runners/run_import_crash_diagnostics.ps1
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  import-ab:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.1
+          use-dotnet: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: easing-curve-package-diagnostics
+          run-id: 34299688373
+          github-token: ${{ github.token }}
+          path: test/_temp/import-crash-input
+      - name: Prepare official crash capture tool
+        shell: pwsh
+        run: |
+          $tools = Join-Path $env:RUNNER_TEMP 'import-crash-tools'
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          Invoke-WebRequest https://download.sysinternals.com/files/Procdump.zip -OutFile "$tools/Procdump.zip"
+          Expand-Archive "$tools/Procdump.zip" -DestinationPath $tools
+          $signature = Get-AuthenticodeSignature "$tools/procdump64.exe"
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*Microsoft Corporation*') {
+            throw 'ProcDump signature validation failed.'
+          }
+          "PROCDUMP_PATH=$tools/procdump64.exe" >> $env:GITHUB_ENV
+      - name: Run isolated import A-B cases and capture exceptions
+        shell: pwsh
+        run: |
+          $godotExe = Join-Path $env:RUNNER_TEMP 'easing-curve-godot.exe'
+          Copy-Item -LiteralPath (Get-Command godot).Source -Destination $godotExe
+          ./test/runners/run_import_crash_diagnostics.ps1 -GodotPath $godotExe -ProcDumpPath $env:PROCDUMP_PATH -ArchivePath test/_temp/import-crash-input/_exports/_asset_store_builds/easing_curve_v1.2.1-dev.zip
+      - name: Inspect exception stacks if CDB is installed
+        if: always()
+        shell: pwsh
+        run: |
+          $cdb = Get-ChildItem 'C:/Program Files (x86)/Windows Kits' -Filter cdb.exe -Recurse -ErrorAction SilentlyContinue |
+            Where-Object FullName -like '*x64*' | Select-Object -First 1
+          if ($cdb) {
+            foreach ($dump in Get-ChildItem test/_temp/import-crash-diagnostics -Filter '*.dmp' -Recurse) {
+              & $cdb.FullName -z $dump.FullName -y 'srv*C:\symbols*https://msdl.microsoft.com/download/symbols' -c '.ecxr; kP; lm; !analyze -v; q' *> "$($dump.FullName).analysis.txt"
+            }
+          } else {
+            'CDB is unavailable; raw dumps retained for local analysis.' | Set-Content test/_temp/import-crash-diagnostics/debugger-status.txt
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: import-crash-ab-diagnostics
+          include-hidden-files: true
+          compression-level: 7
+          path: test/_temp/import-crash-diagnostics
