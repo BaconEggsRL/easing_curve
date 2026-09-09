@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
 	[string]$ArchivePath = "",
-	[string]$GodotPath = ""
+	[string]$GodotPath = "",
+	[switch]$KeepArtifacts
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,15 +31,74 @@ $runtimeLog = Join-Path $logDirectory "runtime.log"
 $succeeded = $false
 
 function Invoke-Runner {
-	param([string[]]$Arguments)
-	$runnerArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner)
+	param([string[]]$Arguments, [string]$LogPath)
+	$runnerArguments = @(
+		"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner,
+		"-ExitCodeFile", "$LogPath.exitcode.txt"
+	)
 	if (-not [string]::IsNullOrWhiteSpace($GodotPath)) {
 		$runnerArguments += @("-GodotPath", $GodotPath)
 	}
 	$runnerArguments += $Arguments
-	& $powerShellExecutable @runnerArguments | Out-Host
+	& $powerShellExecutable @runnerArguments *> "$LogPath.process.txt"
 	$exitCode = $LASTEXITCODE
 	return $exitCode
+}
+
+function Write-EditorImportDiagnostics {
+	param([string]$Phase, [string]$LogPath, [int]$ExitCode)
+	$logText = if (Test-Path -LiteralPath $LogPath) { Get-Content -Raw -LiteralPath $LogPath } else { "" }
+	$logText = $logText -replace "$([char]27)\[[0-9;]*m", ''
+	$godotExit = if (Test-Path -LiteralPath "$LogPath.exitcode.txt") {
+		(Get-Content -Raw -LiteralPath "$LogPath.exitcode.txt").Trim()
+	} else { "unreported" }
+	$svgImports = @(foreach ($relativePath in Get-Content -LiteralPath (Join-Path $projectRoot "release/addon_files.txt")) {
+		$relativePath = $relativePath.Trim()
+		if (-not $relativePath.EndsWith('.svg')) { continue }
+		$sourcePath = Join-Path $validationRoot "addons/easing_curve/$relativePath"
+		$importText = if (Test-Path -LiteralPath "$sourcePath.import") {
+			Get-Content -Raw -LiteralPath "$sourcePath.import"
+		} else { "" }
+		$resourcePath = ""
+		$resourceExists = $false
+		if ($importText -match '(?m)^path="(res://\.godot/imported/[^"\r\n]+\.ctex)"') {
+			$resourcePath = $Matches[1]
+			$resourceFile = Get-Item -LiteralPath (Join-Path $validationRoot $resourcePath.Substring(6)) -ErrorAction SilentlyContinue
+			$resourceExists = $null -ne $resourceFile -and $resourceFile.Length -gt 0
+		}
+		[ordered]@{
+			source = $relativePath
+			source_exists = Test-Path -LiteralPath $sourcePath -PathType Leaf
+			import_metadata_exists = Test-Path -LiteralPath "$sourcePath.import" -PathType Leaf
+			imported_resource = $resourcePath
+			imported_resource_exists = $resourceExists
+		}
+	})
+	# Diagnostic evidence only: do not infer a harmless shutdown from a clean log.
+	# In particular, a native access violation may leave no error line in Godot's log.
+	$diagnostics = [ordered]@{
+		phase = $Phase
+		runner_exit_code = $ExitCode
+		godot_exit_code = $godotExit
+		log_path = $LogPath
+		class_cache_exists = Test-Path -LiteralPath (Join-Path $validationRoot ".godot/global_script_class_cache.cfg") -PathType Leaf
+		import_completion_count = [regex]::Matches($logText, '(?m)^\[ DONE \] reimport\s*$').Count
+		error_lines = @($logText -split '\r?\n' | Where-Object { $_ -match '(?i)\bERROR:|Parse Error:|crash|assert|failed' })
+		svg_imports = $svgImports
+	}
+	$diagnostics | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath "$LogPath.diagnostics.json" -Encoding utf8
+	Write-Host "${Phase}: Godot exit $godotExit; runner exit $ExitCode; diagnostics: $LogPath.diagnostics.json"
+}
+
+function Stop-ArchivePhase {
+	param([string]$Phase, [string]$LogPath, [int]$ExitCode)
+	foreach ($path in @("$LogPath.diagnostics.json", "$LogPath.process.txt", $LogPath)) {
+		if (Test-Path -LiteralPath $path) {
+			Write-Host "Failed phase diagnostics: $path"
+			Write-Host (Get-Content -Raw -LiteralPath $path)
+		}
+	}
+	throw "Exact-archive $Phase failed (runner exit $ExitCode). Godot exit: $LogPath.exitcode.txt. Log: $LogPath. Artifacts retained at $validationRoot"
 }
 
 function Invoke-EditorLifecycle {
@@ -46,15 +106,16 @@ function Invoke-EditorLifecycle {
 		[string]$Phase,
 		[string]$LogPath
 	)
-	$exitCode = Invoke-Runner -Arguments @(
+	$exitCode = Invoke-Runner -LogPath $LogPath -Arguments @(
 		"--editor", "--headless", "--path", $validationRoot, "--import", "--quit-after", "2",
 		"--log-file", $LogPath
 	)
+	Write-EditorImportDiagnostics -Phase $Phase -LogPath $LogPath -ExitCode $exitCode
 	$logText = if (Test-Path -LiteralPath $LogPath) { Get-Content -Raw -LiteralPath $LogPath } else { "" }
 	$classCache = Join-Path $validationRoot ".godot\global_script_class_cache.cfg"
 	$failed = (-not (Test-Path -LiteralPath $classCache -PathType Leaf)) -or ($logText -match '(?m)^(?:SCRIPT ERROR:|.*Parse Error:|ERROR: Failed to load extension)')
 	if ($failed) {
-		throw "Exact-archive $Phase failed. Artifacts retained at $validationRoot"
+		Stop-ArchivePhase -Phase $Phase -LogPath $LogPath -ExitCode $exitCode
 	}
 	if ($exitCode -ne 0) {
 		Write-Warning "$Phase returned $exitCode after producing a clean class cache; continuing."
@@ -157,23 +218,25 @@ func _init() -> void:
 		'enabled=PackedStringArray()'
 	)
 	[IO.File]::WriteAllText((Join-Path $validationRoot "project.godot"), $disabledConfig, [Text.UTF8Encoding]::new($false))
-	$importExit = Invoke-Runner -Arguments @(
+	$importLog = Join-Path $logDirectory "initial-import.log"
+	$importExit = Invoke-Runner -LogPath $importLog -Arguments @(
 		"--editor", "--headless", "--path", $validationRoot, "--import",
-		"--log-file", (Join-Path $logDirectory "initial-import.log")
+		"--log-file", $importLog
 	)
+	Write-EditorImportDiagnostics -Phase "initial import" -LogPath $importLog -ExitCode $importExit
 	if ($importExit -ne 0) {
-		throw "Exact-archive initial import failed. Artifacts retained at $validationRoot"
+		Stop-ArchivePhase -Phase "initial import" -LogPath $importLog -ExitCode $importExit
 	}
 	[IO.File]::WriteAllText((Join-Path $validationRoot "project.godot"), $projectConfig, [Text.UTF8Encoding]::new($false))
 	Invoke-EditorLifecycle -Phase "install/enable bootstrap" -LogPath $bootstrapLog
 
-	$runtimeExit = Invoke-Runner -Arguments @(
+	$runtimeExit = Invoke-Runner -LogPath $runtimeLog -Arguments @(
 		"--headless", "--path", $validationRoot, "--script", "res://main.gd",
 		"--log-file", $runtimeLog
 	)
 	$runtimeText = if (Test-Path -LiteralPath $runtimeLog) { Get-Content -Raw -LiteralPath $runtimeLog } else { "" }
 	if ($runtimeExit -ne 0 -or $runtimeText -notmatch '(?m)^PASS: exact archive loaded, sampled, saved, and reloaded both APIs$') {
-		throw "Exact-archive runtime validation failed. Artifacts retained at $validationRoot"
+		Stop-ArchivePhase -Phase "runtime validation" -LogPath $runtimeLog -ExitCode $runtimeExit
 	}
 
 	[IO.File]::WriteAllText((Join-Path $validationRoot "project.godot"), $disabledConfig, [Text.UTF8Encoding]::new($false))
@@ -185,7 +248,9 @@ func _init() -> void:
 	$succeeded = $true
 }
 finally {
-	if ($succeeded -and (Test-Path -LiteralPath $validationRoot)) {
+	if ($succeeded -and -not $KeepArtifacts -and (Test-Path -LiteralPath $validationRoot)) {
 		Remove-Item -LiteralPath $validationRoot -Recurse -Force
+	} else {
+		Write-Host "Archive validation artifacts retained at $validationRoot"
 	}
 }

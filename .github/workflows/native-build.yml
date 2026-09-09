@@ -161,7 +161,36 @@ jobs:
             throw "Copied Godot executable validation failed with exit code $($versionProcess.ExitCode)."
           }
           ./build_asset_store.ps1
+          ./test/runners/release_archive_diagnostics_test.ps1
           ./test/runners/run_release_archive_test.ps1 -GodotPath $godotExe
+      - name: Record package Windows crash events
+        if: failure()
+        shell: pwsh
+        run: |
+          $events = Get-WinEvent -FilterHashtable @{
+            LogName = 'Application'
+            Id = 1000, 1001
+            StartTime = (Get-Date).AddMinutes(-30)
+          } -ErrorAction SilentlyContinue | Where-Object { $_.Message -like '*easing-curve-godot*' }
+          New-Item -ItemType Directory -Force -Path test/_temp | Out-Null
+          $events | Format-List TimeCreated, Id, Message | Out-String |
+            Set-Content -LiteralPath test/_temp/package-windows-crashes.txt
+      - name: Preserve exact archive failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: easing-curve-package-diagnostics
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: |
+            test/_temp/package-windows-crashes.txt
+            test/_temp/release-archive-*/test/_temp/*.log
+            test/_temp/release-archive-*/test/_temp/*.txt
+            test/_temp/release-archive-*/test/_temp/*.json
+            test/_temp/release-archive-*/.godot/global_script_class_cache.cfg
+            test/_temp/release-archive-*/.godot/imported/**
+            test/_temp/release-archive-*/addons/easing_curve/**
+            _exports/_asset_store_builds/easing_curve_v*.zip
       - uses: actions/upload-artifact@v4
         with:
           name: easing-curve-dual-api-package
