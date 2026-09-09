@@ -14,6 +14,7 @@ func _init() -> void:
 func _run() -> void:
 	await _test_overlay_section_geometry()
 	await _test_overlay_gesture_ownership()
+	await _test_overlay_input_routing()
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
 	_test_view_state_update_ownership()
@@ -78,7 +79,21 @@ func _test_overlay_section_geometry() -> void:
 				}
 				measurements.append(measurement)
 				print("OVERLAY_LAYOUT: ", JSON.stringify(measurement))
-				_expect(is_equal_approx(graph_content.size.y, editor.size.y + zoom_row.size.y + separation), "Baseline graph section height does not equal its layout rows")
+				# Recorded before migration, for both backends and both modes at 1x.
+				var old_heights := {320.0: Vector3(270, 212, 109), 450.0: Vector3(330, 272, 169), 700.0: Vector3(446, 388, 285)}
+				var baseline: Vector3 = old_heights[width]
+				if is_equal_approx(editor._editor_scale, 1.0):
+					_expect(absf(inspector._curve_editor_section.size.y - baseline.x) <= 1.0, "Overlay migration changed the measured outer section height")
+					_expect(absf(editor.size.y - baseline.y - 34.0) <= 1.0, "Zoom row height was not transferred to the graph")
+					var old_graph_height := baseline.y - 8.0 if function_mode else baseline.z
+					_expect(graph_rect.size.y > old_graph_height + 33.0, "Overlay migration did not recover graph height")
+				_expect(is_equal_approx(graph_content.size.y, editor.size.y), "An external row still reserves graph section height")
+				_expect(is_zero_approx(graph_rect.position.y - 4.0 * editor._editor_scale), "Graph still reserves top overlay height")
+				var zoom_before := editor._slider
+				var minimum_before := editor.get_combined_minimum_size()
+				editor.setup_zoom_overlay()
+				_expect(editor._slider == zoom_before and editor.get_combined_minimum_size() == minimum_before, "Repeated overlay setup changed controls or height")
+				_expect(editor._slider.slider_changed.get_connections().size() == 1 and editor._slider.autofit_pressed.get_connections().size() == 1, "Repeated overlay setup duplicated callbacks")
 				if DisplayServer.get_name() != "headless":
 					viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 					await RenderingServer.frame_post_draw
@@ -115,6 +130,7 @@ func _overlay_input_fixture(native: bool) -> Dictionary:
 	editor.set_curve(curve)
 	editor.size = Vector2(600, 360)
 	viewport.add_child(editor)
+	editor.setup_zoom_overlay()
 	editor.selected_index = 1
 	editor.update_view_transform()
 	return {"viewport": viewport, "editor": editor, "point": point}
@@ -155,7 +171,14 @@ func _test_overlay_gesture_ownership() -> void:
 			_expect(editor.is_panning or editor.is_right_delete_dragging or expected_drag >= 0 or pending != null, "Viewport press did not begin graph " + gesture)
 			var target := editor._snap_button.get_global_rect().get_center()
 			var snap_before := editor.snap_enabled
-			_push_graph_input(viewport, _motion(target, mask))
+			var zoom_before := editor._zoom_step
+			var slider_inputs := [0]
+			editor._slider.slider.gui_input.connect(func(_event): slider_inputs[0] += 1)
+			for control: Control in [editor._snap_button, editor._point_handle_mode, editor._slider.slider, editor._slider.autofit_btn]:
+				target = control.get_global_rect().get_center()
+				_push_graph_input(viewport, _motion(target, mask))
+				_expect(editor.dragging_point == expected_drag and editor.dragging_control == expected_control and editor.pending_add_point == pending, "Control crossing stole graph " + gesture)
+			_expect(slider_inputs[0] == 0 and editor._zoom_step == zoom_before, "Slider received a graph-owned drag")
 			_expect(editor.dragging_point == expected_drag and editor.dragging_control == expected_control and editor.pending_add_point == pending, "Overlay stole graph " + gesture)
 			if gesture == "pan":
 				_expect(editor.is_panning and editor.pan_offset.is_equal_approx(target - start), "Pan stopped when crossing overlay")
@@ -163,14 +186,70 @@ func _test_overlay_gesture_ownership() -> void:
 				_expect(editor.is_right_delete_dragging, "Overlay cancelled RMB delete gesture")
 			else:
 				_expect(editor._get_drag_coordinate_position().is_finite(), "Overlay dismissed active drag readout")
+				var expected_position := editor.get_world_pos(target)
+				if gesture not in ["left", "right"]:
+					expected_position = expected_position.clamp(Vector2.ZERO, Vector2.ONE)
+				_expect(editor._get_drag_coordinate_position().is_equal_approx(expected_position), "Graph geometry stopped following the pointer over a control")
 			_push_graph_input(viewport, _button(button, target, false))
 			_expect(not editor.is_panning and not editor.is_right_delete_dragging and editor.dragging_point == -1 and editor.pending_add_point == null, "Release over overlay did not finish graph " + gesture)
 			_expect(editor.snap_enabled == snap_before, "Graph release activated Grid Snap")
+			_expect(editor._zoom_step == zoom_before, "Graph release activated Autofit")
 			# A new interaction originating on the button must belong to it.
+			target = editor._snap_button.get_global_rect().get_center()
 			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, target, true))
 			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, target, false))
 			_expect(editor.snap_enabled != snap_before and editor.dragging_point == -1 and editor.pending_add_point == null, "Grid Snap did not own a fresh button click")
 			_dispose_overlay_fixture(fixture)
+
+
+func _test_overlay_input_routing() -> void:
+	for native: bool in [false, true]:
+		var fixture := _overlay_input_fixture(native)
+		var editor: EasingCurveEditor = fixture.editor
+		var viewport: SubViewport = fixture.viewport
+		editor.selected_index = -1
+		for frame in range(3):
+			await process_frame
+		var separator := editor._snap_button.get_parent().get_child(1) as Control
+		var empty_positions: Array[Vector2] = [
+			editor._point_label.get_global_rect().get_center(),
+			editor._point_move_left_button.get_global_rect().get_center(),
+			editor._point_handle_mode.get_global_rect().get_center(),
+			separator.get_global_rect().get_center(),
+			Vector2(450, editor._snap_button.get_global_rect().get_center().y),
+			Vector2(100, editor._slider.get_global_rect().get_center().y),
+		]
+		for position: Vector2 in empty_positions:
+			_push_graph_input(viewport, _motion(position))
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_MIDDLE, position, true))
+			_expect(editor.is_panning, "Empty overlay space blocked a graph press")
+			_push_graph_input(viewport, _motion(position + Vector2(3, 4), MOUSE_BUTTON_MASK_MIDDLE))
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_MIDDLE, position + Vector2(3, 4), false))
+			_expect(not editor.is_panning, "Empty overlay space blocked graph release")
+			editor.pan_offset = Vector2.ZERO
+			var zoom_before := editor._zoom_step
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_WHEEL_UP, position, true))
+			_expect(editor._zoom_step == zoom_before, "Plain wheel in empty overlay space zoomed graph")
+			var world_before := editor.get_world_pos(position)
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_WHEEL_UP, position, true, false, true))
+			_expect(editor._zoom_step == zoom_before + 1 and editor.get_world_pos(position).is_equal_approx(world_before), "Empty overlay space blocked pointer-anchored zoom")
+		# Numeric control and slider own presses; their parents and gaps do not.
+		editor.snap_enabled = true
+		await process_frame
+		await process_frame
+		for control: Control in [editor._snap_count_input, editor._slider.slider]:
+			var position := control.get_global_rect().get_center()
+			_push_graph_input(viewport, _motion(position))
+			var hovered := viewport.gui_get_hovered_control()
+			_expect(hovered == control or (hovered != null and control.is_ancestor_of(hovered)), "Viewport did not target the overlay field")
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, position, true))
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, position, false))
+			_expect(editor.pending_add_point == null and editor.dragging_point == -1, "Overlay field click reached graph editing")
+		var slider_position := editor._slider.slider.get_global_rect().get_center()
+		editor.set_slider_value(4)
+		_push_graph_input(viewport, _button(MOUSE_BUTTON_WHEEL_UP, slider_position, true))
+		_expect(editor._zoom_step == 5, "Plain wheel over embedded slider did not zoom")
+		_dispose_overlay_fixture(fixture)
 
 
 func _fixture() -> Dictionary:

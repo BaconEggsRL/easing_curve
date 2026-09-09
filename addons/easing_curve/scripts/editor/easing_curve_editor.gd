@@ -8,6 +8,8 @@ extends Control
 const SELECTION_TOOLBAR_HEIGHT := 32.0
 const SNAP_TOOLBAR_HEIGHT := 32.0
 const OVERLAY_INSET := 8.0
+# Retain the former compact gap in the total height, not in graph coordinates.
+const ZOOM_HEIGHT_ALLOWANCE := 2.0
 const GRID_SNAP_COORDINATE_LABEL_MIN_GAP := 8.0
 const SNAP_ENABLED_META := &"_easing_curve_snap_enabled"
 const SNAP_COUNT_META := &"_easing_curve_snap_count"
@@ -155,6 +157,8 @@ var _slider: EasingCurveZoomSliderContainer:
 var _world_to_view: Transform2D
 var _editor_scale: float = 1.0
 var _overlay_layout_queued := false
+var _zoom_overlay: HBoxContainer
+var _zoom_overlay_slider: EasingCurveZoomSliderContainer
 
 var _point_toolbar_panel: VBoxContainer
 var _point_toolbar: GridContainer
@@ -240,7 +244,37 @@ func _update_overlay_layout() -> void:
 	_point_toolbar_panel.offset_top = inset
 	_point_toolbar_panel.offset_right = -inset
 	_point_toolbar_panel.offset_bottom = inset + _point_toolbar_panel.get_combined_minimum_size().y
+	if _zoom_overlay != null:
+		_zoom_overlay.offset_left = inset
+		_zoom_overlay.offset_right = -inset
+		_zoom_overlay.offset_top = -inset - _zoom_overlay.get_combined_minimum_size().y
+		_zoom_overlay.offset_bottom = -inset
+		update_minimum_size()
 	_coordinate_overlay.queue_redraw()
+
+
+func setup_zoom_overlay() -> void:
+	if _zoom_overlay != null:
+		return
+	_zoom_overlay = HBoxContainer.new()
+	_zoom_overlay.name = &"ZoomRow"
+	_zoom_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_zoom_overlay.z_index = 2
+	add_child(_zoom_overlay)
+	_zoom_overlay.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	var spacer := Control.new()
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.size_flags_stretch_ratio = 0.6
+	_zoom_overlay.add_child(spacer)
+	_zoom_overlay_slider = ZOOM_SLIDER_CONTAINER.instantiate() as EasingCurveZoomSliderContainer
+	_zoom_overlay_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_zoom_overlay_slider.size_flags_stretch_ratio = 0.4
+	_zoom_overlay.add_child(_zoom_overlay_slider)
+	set_slider_container(_zoom_overlay_slider)
+	_zoom_overlay.minimum_size_changed.connect(_queue_overlay_layout)
+	_queue_overlay_layout()
+	update_minimum_size()
 
 
 func _exit_tree() -> void:
@@ -1656,6 +1690,11 @@ func zoom_to_step(zoom: float) -> int:
 
 
 func set_slider_container(value: EasingCurveZoomSliderContainer) -> void:
+	if _slider == value:
+		return
+	if is_instance_valid(_slider):
+		_slider.slider_changed.disconnect(_on_slider_changed)
+		_slider.autofit_pressed.disconnect(_on_autofit_pressed)
 	_slider = value
 
 	_slider.slider.min_value = 0
@@ -2094,10 +2133,13 @@ func _get_minimum_size() -> Vector2:
 
 	# Preserve the editor's established outer height across modes. These
 	# allowances are graph space too; overlays do not inset the viewport.
+	var zoom_height := 0.0
+	if _zoom_overlay != null:
+		zoom_height = _zoom_overlay.get_combined_minimum_size().y + maxi(1, roundi(ZOOM_HEIGHT_ALLOWANCE * _editor_scale))
 	return Vector2(
 		64.0,
 		graph_height + SELECTION_TOOLBAR_HEIGHT + SNAP_TOOLBAR_HEIGHT,
-	) * _editor_scale
+	) * _editor_scale + Vector2(0, zoom_height)
 
 
 func _get_display_points() -> Array[Resource]:

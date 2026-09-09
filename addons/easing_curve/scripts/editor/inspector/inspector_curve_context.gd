@@ -20,9 +20,6 @@ const CurveEditorSettings = preload(
 const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
-const ZOOM_SLIDER_CONTAINER = preload(
-	"res://addons/easing_curve/scripts/editor/widgets/zoom_slider_container.tscn"
-)
 const PointEditTransactionController = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/point_edit_transaction_controller.gd"
 )
@@ -1354,23 +1351,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		curve_editor_content.add_child(easing_curve_editor)
 		easing_curve_editor.resized.connect(easing_curve_editor.update_minimum_size)
 
-		########################################
-		# Add zoom slider
-		var zoom_row := HBoxContainer.new()
-		zoom_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		curve_editor_content.add_child(zoom_row)
-
-		var zoom_spacer := Control.new()
-		zoom_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		zoom_spacer.size_flags_stretch_ratio = 0.6
-		zoom_row.add_child(zoom_spacer)
-
-		var zoom_slider_container := ZOOM_SLIDER_CONTAINER.instantiate()
-		zoom_slider_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		zoom_slider_container.size_flags_stretch_ratio = 0.4
-		zoom_row.add_child(zoom_slider_container)
-
-		easing_curve_editor.set_slider_container(zoom_slider_container)
+		easing_curve_editor.setup_zoom_overlay()
 		easing_curve_editor.set_slider_value(
 			view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]
 		)
@@ -1472,18 +1453,7 @@ func _handle_native_curve_editor(
 	content.add_child(easing_curve_editor)
 	easing_curve_editor.resized.connect(easing_curve_editor.update_minimum_size)
 
-	var zoom_row := HBoxContainer.new()
-	zoom_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_child(zoom_row)
-	var zoom_spacer := Control.new()
-	zoom_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	zoom_spacer.size_flags_stretch_ratio = 0.6
-	zoom_row.add_child(zoom_spacer)
-	var zoom_slider_container := ZOOM_SLIDER_CONTAINER.instantiate()
-	zoom_slider_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	zoom_slider_container.size_flags_stretch_ratio = 0.4
-	zoom_row.add_child(zoom_slider_container)
-	easing_curve_editor.set_slider_container(zoom_slider_container)
+	easing_curve_editor.setup_zoom_overlay()
 	easing_curve_editor.set_slider_value(EasingCurve.DEFAULT_SLIDER_VALUE)
 
 	_curve_editor_section = _create_foldable_section(
