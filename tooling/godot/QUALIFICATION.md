@@ -2,6 +2,10 @@
 
 Qualification completed on 2026-09-09 UTC, before publication or CI activation.
 
+**Retirement condition:** This patched editor is temporary. Replace it only after
+an official Godot release containing an equivalent or stronger fix passes the same
+qualification criteria. Strict process-exit validation remains permanent.
+
 - Version: `4.7.1.stable.ec111645-p1.a13da4feb` (custom, not upstream official).
 - Source commit: `a13da4feb8d8aefc283c3763d33a2f170a18d541`.
 - Executable SHA256: `A7C0CF8F625A3B24991ED40F77DD1892C35E0DA2AB3185039DF2DAFD994C4272`.
@@ -57,6 +61,11 @@ the expected custom version. The hosted hash was exactly
 `A7C0CF8F625A3B24991ED40F77DD1892C35E0DA2AB3185039DF2DAFD994C4272`.
 This verification preceded the atomic `dev` activation of the pin and strict runners.
 
+Activation commits:
+
+- Atomic patched-editor pin and strict-exit activation: `8afcde4`.
+- Harness-only follow-up: `d24c17f`.
+
 ## Normal CI activation follow-up
 
 [The first activated run](https://github.com/BaconEggsRL/easing_curve/actions/runs/34305887138)
@@ -72,3 +81,10 @@ pass. An inline caller reproduced the failure before this correction and passed
 afterward; runner hardening tests still rejected real simulated process crashes.
 The failed CI run and logs remain preserved. This harness correction changes neither
 the qualified editor bytes nor product acceptance rules.
+
+The [corrected normal CI run](https://github.com/BaconEggsRL/easing_curve/actions/runs/34306612306)
+at commit `d24c17f` passed all jobs, including both native builds, all 30 Windows
+suites, Windows release export/runtime, Web debug/release export/runtime, and the
+exact release-archive lifecycle/package gate. The package archive was uploaded
+successfully. This completed end-to-end activation validation; qualification and
+activation are complete and closed for this exact editor binary.
