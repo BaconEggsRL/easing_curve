@@ -36,6 +36,7 @@ func _run() -> void:
 	await _test_mixed_resource_toolbar_isolation()
 	await _test_mixed_resource_point_list_isolation()
 	await _test_presentation_ownership()
+	await _test_curve_presentation_minimum_width()
 	await _test_context_gesture_teardown()
 	await _test_context_point_actions()
 	_test_transition_control_parity()
@@ -54,6 +55,64 @@ func _run() -> void:
 	await _test_native_property_clipboard_and_lifecycle()
 	_test_clipboard_text_parsing()
 	_finish("shared curve editor vertical slice")
+
+
+func _test_curve_presentation_minimum_width() -> void:
+	for native: bool in [false, true]:
+		var curve: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+		var context := INSPECTOR_PLUGIN.new()
+		context._parse_begin(curve)
+		var presentation := context.handle_easing_curve_editor(curve)
+		var wrapper := POINTS_EDITOR_PROPERTY.new()
+		wrapper.set_content(presentation)
+		root.add_child(wrapper)
+		var native_reference := EditorProperty.new()
+		native_reference.draw_label = false
+		native_reference.label = ""
+		var reference_content := Control.new()
+		native_reference.add_child(reference_content)
+		root.add_child(native_reference)
+		for frame in range(5):
+			await process_frame
+		var toolbar := presentation.get_child(0) as GridContainer
+		print("WIDTH_GATE backend=%s toolbar=%s presentation=%s wrapper=%s" % [
+			"native" if native else "legacy",
+			toolbar.get_combined_minimum_size(),
+			presentation.get_combined_minimum_size(), wrapper.get_combined_minimum_size(),
+		])
+		var clean_width := wrapper.get_combined_minimum_size().x
+		_expect(not curve.call(&"is_selected_preset_modified"), "Width fixture did not begin with a clean preset")
+		context.easing_curve_editor.edit_point_property(0, &"position", Vector2(0, 0.2))
+		_expect(curve.call(&"is_selected_preset_modified"), "Width fixture did not modify its preset")
+		for folded: bool in [true, false]:
+			context._curve_editor_section.call(&"fold" if folded else &"expand")
+			for frame in range(5):
+				await process_frame
+			var minimum := presentation.get_combined_minimum_size()
+			reference_content.custom_minimum_size = minimum
+			_expect(is_equal_approx(wrapper.get_combined_minimum_size().x, minimum.x + 1.0),
+				"Hidden property chrome increased the curve presentation minimum width")
+			_expect(is_equal_approx(wrapper.get_combined_minimum_size().y, native_reference.get_combined_minimum_size().y),
+				"Width compensation changed native EditorProperty minimum height")
+			_expect(is_equal_approx(wrapper.get_combined_minimum_size().x, clean_width),
+				"Modified preset or graph folding changed the minimum width")
+			_expect(is_equal_approx(presentation.global_position.x - wrapper.global_position.x, 1.0),
+				"Width compensation changed native content placement")
+		# A new theme and a larger child minimum must invalidate the compensation.
+		var enlarged_theme := Theme.new()
+		enlarged_theme.default_font_size = 28
+		wrapper.theme = enlarged_theme
+		native_reference.theme = enlarged_theme
+		presentation.custom_minimum_size = Vector2(300, 400)
+		for frame in range(5):
+			await process_frame
+		reference_content.custom_minimum_size = presentation.get_combined_minimum_size()
+		_expect(is_equal_approx(wrapper.get_combined_minimum_size().x, presentation.get_combined_minimum_size().x + 1.0),
+			"Theme or content minimum change left stale chrome compensation")
+		_expect(is_equal_approx(wrapper.get_combined_minimum_size().y, native_reference.get_combined_minimum_size().y),
+			"Theme change altered native minimum height")
+		wrapper.free()
+		native_reference.free()
 
 
 func _test_clipboard_text_parsing() -> void:

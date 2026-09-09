@@ -1,5 +1,11 @@
 # Development testing
 
+## Inspector minimum width
+
+See [Inspector minimum-width validation](INSPECTOR_MINIMUM_WIDTH.md) for the
+measured hidden EditorProperty chrome allowance, horizontal-only compensation,
+native height parity, and creation/rebuild checks at actual Editor scales.
+
 ## Full graph overlays
 
 See [graph overlay validation](GRAPH_OVERLAYS.md) for the before/after section
