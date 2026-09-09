@@ -150,6 +150,21 @@ func _init() -> void:
 '@
 	[IO.File]::WriteAllText((Join-Path $validationRoot "main.gd"), $runtimeScript, [Text.UTF8Encoding]::new($false))
 
+	# A fresh install imports SVG textures before the user enables the plugin.
+	# Keep first-import diagnostics separate from the strict enabled-plugin check.
+	$disabledConfig = $projectConfig.Replace(
+		'enabled=PackedStringArray("res://addons/easing_curve/plugin.cfg")',
+		'enabled=PackedStringArray()'
+	)
+	[IO.File]::WriteAllText((Join-Path $validationRoot "project.godot"), $disabledConfig, [Text.UTF8Encoding]::new($false))
+	$importExit = Invoke-Runner -Arguments @(
+		"--editor", "--headless", "--path", $validationRoot, "--import",
+		"--log-file", (Join-Path $logDirectory "initial-import.log")
+	)
+	if ($importExit -ne 0) {
+		throw "Exact-archive initial import failed. Artifacts retained at $validationRoot"
+	}
+	[IO.File]::WriteAllText((Join-Path $validationRoot "project.godot"), $projectConfig, [Text.UTF8Encoding]::new($false))
 	Invoke-EditorLifecycle -Phase "install/enable bootstrap" -LogPath $bootstrapLog
 
 	$runtimeExit = Invoke-Runner -Arguments @(
@@ -161,10 +176,6 @@ func _init() -> void:
 		throw "Exact-archive runtime validation failed. Artifacts retained at $validationRoot"
 	}
 
-	$disabledConfig = $projectConfig.Replace(
-		'enabled=PackedStringArray("res://addons/easing_curve/plugin.cfg")',
-		'enabled=PackedStringArray()'
-	)
 	[IO.File]::WriteAllText((Join-Path $validationRoot "project.godot"), $disabledConfig, [Text.UTF8Encoding]::new($false))
 	Invoke-EditorLifecycle -Phase "disable restart" -LogPath (Join-Path $logDirectory "disabled.log")
 	[IO.File]::WriteAllText((Join-Path $validationRoot "project.godot"), $projectConfig, [Text.UTF8Encoding]::new($false))
