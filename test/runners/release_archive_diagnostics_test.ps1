@@ -66,3 +66,6 @@ finally {
 	}
 	Remove-Item -LiteralPath $resolvedRoot -Recurse -Force
 }
+# The synthetic crash is expected and asserted above; report the regression
+# test's own success instead of leaking its child process's native exit code.
+exit 0

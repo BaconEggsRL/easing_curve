@@ -56,3 +56,19 @@ verified its SHA256 against the qualified candidate before execution, and confir
 the expected custom version. The hosted hash was exactly
 `A7C0CF8F625A3B24991ED40F77DD1892C35E0DA2AB3185039DF2DAFD994C4272`.
 This verification preceded the atomic `dev` activation of the pin and strict runners.
+
+## Normal CI activation follow-up
+
+[The first activated run](https://github.com/BaconEggsRL/easing_curve/actions/runs/34305887138)
+passed both native builds, all 30 Windows suites, Windows release export/runtime,
+and Web debug/release export/runtime. The package job then stopped before archive
+lifecycle validation: the diagnostic regression test passed its assertions but
+leaked the deliberately simulated `-1073741819` child exit through `$LASTEXITCODE`.
+Qualification launched that regression script in a separate PowerShell process;
+normal CI invoked it inline, exposing the missing explicit test-success exit.
+
+The regression script now returns zero only after all its crash-detection assertions
+pass. An inline caller reproduced the failure before this correction and passed
+afterward; runner hardening tests still rejected real simulated process crashes.
+The failed CI run and logs remain preserved. This harness correction changes neither
+the qualified editor bytes nor product acceptance rules.
