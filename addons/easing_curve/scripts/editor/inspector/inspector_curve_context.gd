@@ -92,8 +92,11 @@ var _point_edit_transaction_controller := PointEditTransactionController.new()
 var _native_curve: Resource
 var _native_points_content: VBoxContainer
 var _native_points_refresh_queued := false
+var _native_points_generation := 0
 var _native_point_identity_signature := PackedInt64Array()
 var _native_point_transform_flags := Vector2i.ZERO
+var _native_point_storage_indices: Dictionary[int, int] = {}
+var _native_panel_reverse := false
 var _native_editor_generation := 0
 var _native_point_edit_finish_request_id := 0
 var _point_edit_finish_request_id := 0
@@ -403,6 +406,7 @@ func _on_presentation_root_exiting(root_id: int, is_graph: bool) -> void:
 		points_root_ref = null
 		_native_points_content = null
 		_native_points_refresh_queued = false
+		_native_points_generation += 1
 		_point_list_controller.clear_input_bindings()
 		_detach_selected_point_property_header()
 	presentation_root.remove_meta(&"_inspector_context")
@@ -525,10 +529,20 @@ func _remove_native_point(point: Resource) -> void:
 		easing_curve_editor.remove_point_from_list(point)
 	else:
 		var editor := _native_list_editor()
-		editor.mutate("Remove Easing Curve Point", editor.backend.remove_point.bind(editor.backend.find_point(point)))
+		editor.mutate("Remove Easing Curve Point", func() -> void:
+			editor.backend.remove_point(editor.backend.find_point(point))
+		)
 
 
 func _move_native_point(from_index: int, to_index: int) -> void:
+	var backend := BackendFactory.create(_native_curve)
+	var source: Resource = backend.get_point(from_index)
+	var target: Resource = backend.get_point(to_index)
+	_finish_applied_point_edit()
+	from_index = backend.find_point(source) if source != null else -1
+	to_index = backend.find_point(target) if target != null else -1
+	if from_index < 0 or to_index < 0:
+		return
 	if is_instance_valid(easing_curve_editor):
 		easing_curve_editor.move_point_from_list(from_index, to_index)
 	else:
@@ -814,8 +828,7 @@ func _create_native_point_property_header(
 	property_header.set_meta(&"point_resource_id", point.get_instance_id())
 	property_header.set_meta(&"point_property_name", property_name)
 
-	var backend := BackendFactory.create(_native_curve)
-	var point_index: int = backend.find_point(point) if backend != null else -1
+	var point_index: int = _native_point_storage_indices.get(point.get_instance_id(), -1)
 	var property_path := _point_property_path(point_index, property_name)
 	property_header.tooltip_text = property_path
 
@@ -858,6 +871,7 @@ func _create_native_point_property_header(
 	property_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_configure_compact_label(property_label)
 	property_header.add_child(property_label)
+	property_header.set_meta(&"point_label", property_label)
 	return property_header
 
 
@@ -1435,7 +1449,7 @@ func _handle_native_curve_editor(
 	easing_curve_editor.set_curve(object)
 	_connect_graph_swap_request()
 	_sync_graph_selected_point_index(_selected_point_index_for_resource(object))
-	easing_curve_editor.point_selection_changed.connect(native_selection_changed.emit)
+	easing_curve_editor.point_selection_changed.connect(_on_native_graph_selection_changed)
 	var resource_editor := easing_curve_editor
 	preset_reset.pressed.connect(easing_curve_editor.reset_native_preset)
 	ease_reset.pressed.connect(
@@ -1504,6 +1518,8 @@ func _handle_native_curve_editor(
 
 
 func _handle_native_points(object: Resource) -> Control:
+	_native_points_generation += 1
+	_native_points_refresh_queued = false
 	_native_points_content = PointsListContainer.new()
 	_native_points_content.connect(
 		&"point_swap_requested",
@@ -1555,13 +1571,24 @@ func _on_native_points_changed(object: Resource) -> void:
 		if backend != null
 		else PackedInt64Array()
 	)
-	if identity_signature != _native_point_identity_signature and not _native_points_refresh_queued:
-		_native_points_refresh_queued = true
-		_refresh_native_point_list.call_deferred(object)
 	var transform_flags := Vector2i(int(object.get(&"reverse")), int(object.get(&"invert")))
+	if (identity_signature != _native_point_identity_signature or bool(transform_flags.x) != _native_panel_reverse) and not _native_points_refresh_queued:
+		_native_points_refresh_queued = true
+		_refresh_native_point_list_if_current.call_deferred(object, _native_points_generation)
 	if transform_flags != _native_point_transform_flags:
 		_native_point_transform_flags = transform_flags
 		native_point_display_changed.emit()
+
+
+func _on_native_graph_selection_changed(point: Resource) -> void:
+	if disposed or not is_instance_valid(easing_curve_editor) or easing_curve_editor.get_curve() != _native_curve:
+		return
+	var backend := BackendFactory.create(_native_curve)
+	_point_list_controller.assign_logical_selection(
+		_native_curve, backend.find_point(point) if point != null else -1,
+		_point_list_controller.selected_point_property_name,
+	)
+	native_selection_changed.emit(point)
 
 
 func _disconnect_native_curve_changed(object: Resource, callback: Callable) -> void:
@@ -1603,14 +1630,29 @@ func _update_native_preset_state_ui(
 	_set_preset_reset_button_available(reset_button, modified)
 
 
+func _refresh_native_point_list_if_current(object: Resource, generation: int) -> void:
+	if generation == _native_points_generation:
+		_refresh_native_point_list(object)
+
+
 func _refresh_native_point_list(object: Resource) -> void:
-	_native_points_refresh_queued = false
 	if disposed or not is_instance_valid(_native_points_content) or object != _native_curve:
 		return
-	for child in _native_points_content.get_children():
-		_native_points_content.remove_child(child)
-		child.free()
-	_build_native_point_list(object)
+	# Reverse changes stored-side bindings, so it is an editing boundary.
+	if bool(object.get(&"reverse")) != _native_panel_reverse:
+		_finish_applied_point_edit()
+	_native_points_refresh_queued = false
+	# A queued refresh must not end a newer gesture or free its focused inputs.
+	if (
+		(is_instance_valid(easing_curve_editor) and easing_curve_editor._backend_point_edit_active)
+		or (_detached_native_editor != null and not _detached_native_editor._before.is_empty())
+	):
+		_native_points_refresh_queued = true
+		_native_points_content.get_tree().process_frame.connect(
+			_refresh_native_point_list_if_current.bind(object, _native_points_generation), CONNECT_ONE_SHOT,
+		)
+		return
+	_reconcile_native_point_panels(object)
 
 
 func _build_native_point_list(object: Resource) -> void:
@@ -1620,12 +1662,111 @@ func _build_native_point_list(object: Resource) -> void:
 	if backend == null:
 		return
 	var points: Array[Resource] = backend.get_display_points()
+	_cache_native_storage_indices(backend.get_points())
 	for index in range(points.size()):
 		var panel := _create_native_point_panel(points[index], index, points.size())
 		_native_points_content.add_child(panel)
 		_native_points_content.call(&"enable_drop_forwarding", panel)
 	_native_point_identity_signature = _get_native_point_identity_signature(points)
 	_native_point_transform_flags = Vector2i(int(object.get(&"reverse")), int(object.get(&"invert")))
+	_native_panel_reverse = bool(object.get(&"reverse"))
+
+
+func _cache_native_storage_indices(points: Array[Resource]) -> void:
+	_native_point_storage_indices.clear()
+	for index in range(points.size()):
+		_native_point_storage_indices[points[index].get_instance_id()] = index
+
+
+static func _native_panel_shape(index: int, count: int) -> Vector2i:
+	return Vector2i(int(index > 0), int(index < count - 1))
+
+
+func _reconcile_native_point_panels(object: Resource) -> void:
+	var backend := BackendFactory.create(object)
+	if backend == null:
+		return
+	var storage_points: Array[Resource] = backend.get_points()
+	_cache_native_storage_indices(storage_points)
+	# Native's display order is storage order with the Reverse transform applied.
+	var points: Array[Resource] = storage_points.duplicate()
+	var reverse := bool(object.get(&"reverse"))
+	if reverse:
+		points.reverse()
+	var replace_bindings := reverse != _native_panel_reverse
+	var panels: Dictionary[int, Control] = {}
+	for child in _native_points_content.get_children():
+		var point: Resource = child.get_meta(&"point_resource", null)
+		if point == null or replace_bindings or not _native_point_storage_indices.has(point.get_instance_id()):
+			_remove_native_point_panel(child)
+		else:
+			panels[point.get_instance_id()] = child
+
+	var selected_point: Resource
+	var selected_index: int = _native_point_storage_indices.get(_point_list_controller.selected_point_resource_id, -1)
+	if selected_index >= 0:
+		selected_point = storage_points[selected_index]
+	var selected_id := selected_point.get_instance_id() if selected_point != null else 0
+	_point_list_controller.selected_point_index = _native_point_storage_indices.get(selected_id, -1)
+	_point_list_controller.selected_point_resource_id = selected_id
+	if is_instance_valid(_selected_point_property_header):
+		_set_point_property_selected(_selected_point_property_header, false)
+	_detach_selected_point_property_header()
+
+	for index in range(points.size()):
+		var point := points[index]
+		var id := point.get_instance_id()
+		var panel: Control = panels.get(id)
+		if panel != null and panel.get_meta(&"point_shape") != _native_panel_shape(index, points.size()):
+			_remove_native_point_panel(panel)
+			panel = null
+		if panel == null:
+			panel = _create_native_point_panel(point, index, points.size())
+			_native_points_content.add_child(panel)
+			_native_points_content.enable_drop_forwarding(panel)
+		if panel.get_index() != index:
+			_native_points_content.move_child(panel, index)
+		_refresh_native_point_panel_metadata(panel, index, _native_point_storage_indices[id])
+	_native_point_identity_signature = _get_native_point_identity_signature(points)
+	_native_panel_reverse = reverse
+	_native_point_transform_flags = Vector2i(int(reverse), int(object.get(&"invert")))
+	# Neighbor changes can affect Linear aliases without changing a point's stored state.
+	native_point_display_changed.emit()
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.selected_index = selected_index
+	else:
+		native_selection_changed.emit(selected_point)
+
+
+func _remove_native_point_panel(panel: Control) -> void:
+	if is_instance_valid(_selected_point_property_header) and panel.is_ancestor_of(_selected_point_property_header):
+		_detach_selected_point_property_header()
+	_disconnect_native_panel_callbacks(panel)
+	if panel.get_parent() != null:
+		panel.get_parent().remove_child(panel)
+	panel.free()
+
+
+func _disconnect_native_panel_callbacks(panel: Control) -> void:
+	for callback: Callable in panel.get_meta(&"point_cleanup", []):
+		callback.call()
+	panel.set_meta(&"point_cleanup", [])
+
+
+func _refresh_native_point_panel_metadata(panel: Control, display_index: int, storage_index: int) -> void:
+	var drag_handle: EasingCurveDragHandle = panel.get_meta(&"point_drag_handle")
+	drag_handle.index = display_index
+	for header: PanelContainer in panel.get_meta(&"point_headers", []):
+		var property_name: StringName = header.get_meta(&"point_property_name")
+		var path := _point_property_path(storage_index, property_name)
+		header.tooltip_text = path
+		var label: Label = header.get_meta(&"point_label")
+		label.tooltip_text = path
+		if (
+			header.get_meta(&"point_resource_id") == _point_list_controller.selected_point_resource_id
+			and property_name == _point_list_controller.selected_point_property_name
+		):
+			_attach_selected_point_property_header(header)
 
 
 func _create_transition_generate_action(object: Resource) -> EditorProperty:
@@ -1669,10 +1810,15 @@ func _create_native_point_panel(
 ) -> Control:
 	var panel := PanelContainer.new()
 	panel.set_meta(&"point_resource", point)
+	panel.set_meta(&"point_shape", _native_panel_shape(index, point_count))
+	panel.set_meta(&"point_headers", [])
+	panel.set_meta(&"point_cleanup", [])
+	panel.tree_exiting.connect(_disconnect_native_panel_callbacks.bind(panel))
 	panel.add_theme_stylebox_override(&"panel", _zero_margin_panel_stylebox)
 	var selection_callback := func(selected_point: Resource) -> void:
 		_update_native_point_panel_selection(selected_point, panel, point)
 	native_selection_changed.connect(selection_callback)
+	panel.get_meta(&"point_cleanup").append(_disconnect_native_selection_callback.bind(selection_callback))
 	panel.tree_exiting.connect(
 		_disconnect_native_selection_callback.bind(selection_callback)
 	)
@@ -1704,6 +1850,7 @@ func _create_native_point_panel(
 	drag_handle.index = index
 	drag_handle.point_panel = panel
 	drag_handle.point_list = _native_points_content
+	panel.set_meta(&"point_drag_handle", drag_handle)
 	move_buttons.add_child(drag_handle)
 	var move_down := Button.new()
 	move_down.flat = true
@@ -1716,6 +1863,7 @@ func _create_native_point_panel(
 	row.add_child(move_buttons)
 
 	var properties := GridContainer.new()
+	properties.set_meta(&"point_panel", panel)
 	properties.columns = 2
 	properties.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	properties.add_theme_constant_override(&"h_separation", _compact_separation())
@@ -1757,6 +1905,8 @@ func _add_native_vector_property(
 		property_name,
 		label_text,
 	)
+	var panel: Control = grid.get_meta(&"point_panel")
+	panel.get_meta(&"point_headers").append(property_header)
 	grid.add_child(property_header)
 	var values := HBoxContainer.new()
 	values.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1813,6 +1963,7 @@ func _add_native_vector_property(
 		_refresh_native_vector_inputs(point, property_name, inputs)
 	point.changed.connect(changed_callback)
 	native_point_display_changed.connect(changed_callback)
+	panel.get_meta(&"point_cleanup").append(_disconnect_native_point_callback.bind(point, changed_callback))
 	values.tree_exiting.connect(_disconnect_native_point_callback.bind(point, changed_callback))
 	_refresh_native_vector_inputs(point, property_name, inputs)
 
@@ -2010,6 +2161,8 @@ func _add_native_handle_mode_property(
 		&"handle_mode",
 		"Handle Mode",
 	)
+	var panel: Control = grid.get_meta(&"point_panel")
+	panel.get_meta(&"point_headers").append(property_header)
 	grid.add_child(property_header)
 	var option := OptionButton.new()
 	_configure_compact_option(option)
@@ -2045,6 +2198,7 @@ func _add_native_handle_mode_property(
 		if is_instance_valid(option):
 			option.select(int(point.get(&"handle_mode")))
 	point.changed.connect(changed_callback)
+	panel.get_meta(&"point_cleanup").append(_disconnect_native_point_callback.bind(point, changed_callback))
 	option.tree_exiting.connect(_disconnect_native_point_callback.bind(point, changed_callback))
 	grid.add_child(option)
 

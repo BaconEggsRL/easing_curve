@@ -24,6 +24,12 @@ func _on_mouse_exited():
 
 
 func _get_drag_data(at_position: Vector2) -> Variant:
+	if not is_instance_valid(point_panel) or not is_instance_valid(point_list):
+		return null
+	if point_list.has_method(&"get_point_panel_index"):
+		index = point_list.get_point_panel_index(point_panel)
+	if index < 0:
+		return null
 	var drag_data = { "index": index, "point": point_panel }
 	var preview = TextureRect.new()
 	preview.texture = texture

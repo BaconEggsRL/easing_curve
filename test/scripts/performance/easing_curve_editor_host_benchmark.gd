@@ -11,7 +11,7 @@ const INSPECTOR_PLUGIN = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/inspector_curve_context.gd"
 )
 const PLUGIN_CONFIG_PATH := "res://addons/easing_curve/plugin.cfg"
-const POINT_COUNTS := [9, 65]
+const POINT_COUNTS := [9, 65, 129, 257]
 const BUILD_WARMUP_COUNT := 2
 const BUILD_TRIAL_COUNT := 7
 const DRAG_WARMUP_STEPS := 8
@@ -22,6 +22,18 @@ const HORIZONTAL_LEFT_X := 0.04
 const HORIZONTAL_RIGHT_X := 0.96
 const MAX_DRAW_WAIT_FRAMES := 8
 const EDITOR_SIZE := Vector2(800.0, 420.0)
+const BackendFactory = preload("res://addons/easing_curve/scripts/editor/backend/curve_editor_backend_factory.gd")
+
+var _native := false
+var _drag_context: MeasuredContext
+
+class MeasuredContext extends INSPECTOR_PLUGIN:
+	var refresh_generation := 0
+
+	func _refresh_native_point_list(target: Resource) -> void:
+		super(target)
+		if not _native_points_refresh_queued and not disposed:
+			refresh_generation += 1
 
 
 class MeasuredCurveEditor extends EasingCurveEditor:
@@ -66,10 +78,12 @@ func _run() -> void:
 		RenderingServer.get_video_adapter_name(),
 	])
 
-	for point_count in POINT_COUNTS:
-		await _benchmark_inspector_build(version, point_count)
-		await _benchmark_drag(version, point_count)
-		await _benchmark_horizontal_crossing(version, point_count)
+	for native in [false, true]:
+		_native = native
+		for point_count in POINT_COUNTS:
+			await _benchmark_inspector_build(version, point_count)
+			await _benchmark_drag(version, point_count)
+			await _benchmark_horizontal_crossing(version, point_count)
 
 	for _frame in range(3):
 		await process_frame
@@ -89,13 +103,14 @@ func _benchmark_inspector_build(version: String, point_count: int) -> void:
 		get_root().add_child(host)
 
 		var started := Time.get_ticks_usec()
-		var inspector := INSPECTOR_PLUGIN.new()
-		inspector.set(&"curve", curve)
+		var inspector := MeasuredContext.new()
+		if not _native:
+			inspector.set(&"curve", curve)
 		var curve_content := inspector.call(
 			&"handle_easing_curve_editor",
 			curve,
 		) as Control
-		var points_content := inspector.call(&"handle_points", curve) as Control
+		var points_content := inspector.call(&"_handle_native_points" if _native else &"handle_points", curve) as Control
 		host.add_child(curve_content)
 		host.add_child(points_content)
 		var cpu_elapsed := float(Time.get_ticks_usec() - started)
@@ -115,7 +130,7 @@ func _benchmark_inspector_build(version: String, point_count: int) -> void:
 
 func _benchmark_drag(version: String, point_count: int) -> void:
 	var fixture := await _create_drag_fixture(point_count)
-	var curve: EasingCurve = fixture[&"curve"]
+	var curve: Resource = fixture[&"curve"]
 	var editor: MeasuredCurveEditor = fixture[&"editor"]
 	var host: Control = fixture[&"host"]
 	var point_index := point_count / 2
@@ -126,8 +141,8 @@ func _benchmark_drag(version: String, point_count: int) -> void:
 	var commit_to_draw_samples: Array[float] = []
 
 	for trial in range(DRAG_TRIAL_COUNT):
-		var point := curve.points[point_index]
-		var start_world := point.position
+		var point: Resource = curve.get(&"points")[point_index]
+		var start_world: Vector2 = point.get(&"position")
 		editor.update_view_transform()
 		editor._gui_input(_mouse_button(
 			MOUSE_BUTTON_LEFT,
@@ -176,10 +191,10 @@ func _benchmark_horizontal_crossing(
 	point_count: int,
 ) -> void:
 	var fixture := await _create_drag_fixture(point_count)
-	var curve: EasingCurve = fixture[&"curve"]
+	var curve: Resource = fixture[&"curve"]
 	var editor: MeasuredCurveEditor = fixture[&"editor"]
 	var host: Control = fixture[&"host"]
-	var dragged_point := curve.points[1]
+	var dragged_point: Resource = curve.get(&"points")[1]
 	var cpu_samples: Array[float] = []
 	var draw_samples: Array[float] = []
 	var to_draw_samples: Array[float] = []
@@ -187,8 +202,8 @@ func _benchmark_horizontal_crossing(
 	var commit_to_draw_samples: Array[float] = []
 
 	for _trial in range(DRAG_TRIAL_COUNT):
-		var start_index := curve.points.find(dragged_point)
-		var start_world := dragged_point.position
+		var start_index: int = curve.get(&"points").find(dragged_point)
+		var start_world: Vector2 = dragged_point.get(&"position")
 		editor.update_view_transform()
 		editor._gui_input(_mouse_button(
 			MOUSE_BUTTON_LEFT,
@@ -209,7 +224,7 @@ func _benchmark_horizontal_crossing(
 			)
 			await _drag_step(editor, editor.get_view_pos(warmup_world))
 
-		var crossing_start := dragged_point.position
+		var crossing_start: Vector2 = dragged_point.get(&"position")
 		var target_x := (
 			HORIZONTAL_LEFT_X
 			if crossing_start.x > 0.5
@@ -236,7 +251,7 @@ func _benchmark_horizontal_crossing(
 		commit_cpu_samples.append(commit_sample[&"cpu_usec"])
 		commit_to_draw_samples.append(commit_sample[&"to_draw_usec"])
 
-		var end_index := curve.points.find(dragged_point)
+		var end_index: int = curve.get(&"points").find(dragged_point)
 		if absi(end_index - start_index) < point_count / 2:
 			push_error("Horizontal benchmark did not cross enough curve points")
 			host.free()
@@ -269,7 +284,8 @@ func _benchmark_horizontal_crossing(
 
 func _create_drag_fixture(point_count: int) -> Dictionary:
 	var curve := _make_curve(point_count)
-	var inspector := INSPECTOR_PLUGIN.new()
+	var inspector := MeasuredContext.new()
+	_drag_context = inspector
 	var editor := MeasuredCurveEditor.new()
 	var host := VBoxContainer.new()
 
@@ -277,23 +293,30 @@ func _create_drag_fixture(point_count: int) -> Dictionary:
 	host.size = Vector2(820.0, 900.0)
 	get_root().add_child(host)
 
-	inspector.set(&"curve", curve)
+	if not _native:
+		inspector.set(&"curve", curve)
 	inspector.set(&"easing_curve_editor", editor)
 	editor.custom_minimum_size = EDITOR_SIZE
 	editor.size = EDITOR_SIZE
 	editor.set_curve(curve)
-	editor.point_property_change_requested.connect(
-		Callable(inspector, &"_apply_point_property_change")
-	)
-	editor.point_edit_finished.connect(
-		Callable(inspector, &"_commit_point_edit")
-	)
-	editor.point_changed.connect(
-		Callable(inspector, &"_on_curve_editor_point_changed")
-	)
+	if not _native:
+		editor.point_property_change_requested.connect(
+			Callable(inspector, &"_apply_point_property_change")
+		)
+		editor.point_edit_finished.connect(
+			Callable(inspector, &"_commit_point_edit")
+		)
+		editor.point_changed.connect(
+			Callable(inspector, &"_on_curve_editor_point_changed")
+		)
 
-	host.add_child(editor)
-	host.add_child(inspector.call(&"handle_points", curve) as Control)
+	if _native:
+		inspector.resource = curve
+		host.add_child(inspector._handle_native_curve_editor(curve, editor))
+		host.add_child(inspector._handle_native_points(curve))
+	else:
+		host.add_child(editor)
+		host.add_child(inspector.handle_points(curve))
 	await process_frame
 	editor.queue_redraw()
 	await _wait_for_draw(editor, editor.draw_count)
@@ -330,6 +353,8 @@ func _finish_drag(
 	view_position: Vector2,
 ) -> Dictionary:
 	var draw_count_before := editor.draw_count
+	var generation_before := _drag_context.refresh_generation
+	var before_order := _native_panel_order() if _native else []
 	var started := Time.get_ticks_usec()
 	editor._gui_input(_mouse_button(
 		MOUSE_BUTTON_LEFT,
@@ -337,14 +362,35 @@ func _finish_drag(
 		false,
 	))
 	var cpu_elapsed := float(Time.get_ticks_usec() - started)
+	if _native:
+		var expected: Array = BackendFactory.create(_drag_context.resource).get_display_points()
+		if expected != before_order:
+			var complete := false
+			for _frame in range(120):
+				if _drag_context.refresh_generation > generation_before and _native_panel_order() == expected:
+					complete = true
+					break
+				await process_frame
+			if not complete:
+				push_error("Horizontal commit did not install its expected topology generation")
+				quit(1)
+		# Even if the graph drew earlier, sample a frame after final point-list state.
+		await RenderingServer.frame_post_draw
 	var drew := await _wait_for_draw(editor, draw_count_before)
 	if not drew:
 		push_error("Timed out waiting for the committed drag to redraw")
 		quit(1)
 	return {
 		&"cpu_usec": cpu_elapsed,
-		&"to_draw_usec": float(editor.last_draw_finished_usec - started),
+		&"to_draw_usec": float(Time.get_ticks_usec() - started) if _native else float(editor.last_draw_finished_usec - started),
 	}
+
+
+func _native_panel_order() -> Array:
+	var points := []
+	for panel in _drag_context._native_points_content.get_children():
+		points.append(panel.get_meta(&"point_resource"))
+	return points
 
 
 func _wait_for_draw(editor: MeasuredCurveEditor, previous_count: int) -> bool:
@@ -355,7 +401,17 @@ func _wait_for_draw(editor: MeasuredCurveEditor, previous_count: int) -> bool:
 	return editor.draw_count > previous_count
 
 
-func _make_curve(point_count: int) -> EasingCurve:
+func _make_curve(point_count: int) -> Resource:
+	if _native:
+		var native: Resource = ClassDB.instantiate(&"NativeEasingCurve")
+		native.set(&"transition", 100)
+		var backend := BackendFactory.create(native)
+		var points: Array[Resource] = []
+		for index in range(point_count):
+			var x := float(index) / float(point_count - 1)
+			points.append(backend.create_point(Vector2(x, 0.15 + 0.7 * x)))
+		native.set(&"points", points)
+		return native
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.CUSTOM
 	var point_values: Array[EasingCurvePoint] = []
@@ -388,6 +444,7 @@ func _report(
 	point_count: int,
 	samples: Array[float],
 ) -> void:
+	print("EDITOR_BENCH_RAW|", JSON.stringify({"backend": "native" if _native else "legacy", "count": point_count, "metric": metric, "usec": samples}))
 	samples.sort()
 	var median := _percentile(samples, 0.5)
 	var p95 := _percentile(samples, 0.95)

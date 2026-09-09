@@ -152,6 +152,7 @@ $suites = @(
 	@{ Name = "easing_curve_editor_gesture_characterization_test.gd"; Editor = $true },
 	@{ Name = "editor_undo_redo_test.gd"; Editor = $true },
 	@{ Name = "inspector_ownership_test.gd"; Editor = $true },
+	@{ Name = "native_point_reconciliation_test.gd"; Editor = $true },
 	@{ Name = "easing_curve_editor_drag_coordinates_test.gd"; Editor = $true }
 )
 

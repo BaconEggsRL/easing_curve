@@ -1,0 +1,4417 @@
+{
+  "environment": {
+    "base_revision": "adb3188",
+    "working_tree_revision": "c7fa408",
+    "date": "2026-09-09",
+    "godot": "4.7.1.stable.official.a13da4feb",
+    "cpu": "AMD Ryzen 9 7950X",
+    "gpu": "NVIDIA GeForce RTX 4070 Ti",
+    "renderer": "Compatibility/OpenGL",
+    "inspector_size": [
+      820,
+      900
+    ],
+    "warmups": 2,
+    "trials": 7,
+    "context_sha256": {
+      "before": "e8c38c7628a282361e492614788454e2c2595ed6693d1d35fd0c1a4a76fa8413",
+      "after": "30eec38a42140653ad3730ced1a6cd173d8c836566f566ad1d84f095f0326caa"
+    }
+  },
+  "phases": {
+    "baseline_native": [
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 9,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 79,
+          "p95": 88
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 9,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 49,
+          "p95": 54
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 9,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 57,
+          "p95": 62
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 65,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 662,
+          "p95": 679
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 65,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 445,
+          "p95": 450
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 65,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 461,
+          "p95": 465
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 129,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 1542,
+          "p95": 1563
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 129,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 1122,
+          "p95": 1181
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 129,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 1165,
+          "p95": 1172
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 257,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 4001,
+          "p95": 4043
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 257,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 3168,
+          "p95": 3279
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 257,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 3223,
+          "p95": 3262
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 37670,
+          "p95": 39252
+        },
+        "ui_usec": {
+          "median": 37599,
+          "p95": 39173
+        },
+        "to_frame_usec": {
+          "median": 51413,
+          "p95": 53899
+        },
+        "post_completion_to_frame_usec": {
+          "median": 13749,
+          "p95": 14655
+        },
+        "constructed": {
+          "median": 9,
+          "p95": 9
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 652,
+          "p95": 696
+        },
+        "ui_usec": {
+          "median": 47455,
+          "p95": 51915
+        },
+        "to_frame_usec": {
+          "median": 58203,
+          "p95": 63637
+        },
+        "constructed": {
+          "median": 10,
+          "p95": 10
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 662,
+          "p95": 750
+        },
+        "ui_usec": {
+          "median": 44695,
+          "p95": 45477
+        },
+        "to_frame_usec": {
+          "median": 55460,
+          "p95": 57143
+        },
+        "constructed": {
+          "median": 10,
+          "p95": 10
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 300,
+          "p95": 320
+        },
+        "ui_usec": {
+          "median": 42486,
+          "p95": 43500
+        },
+        "to_frame_usec": {
+          "median": 52899,
+          "p95": 54092
+        },
+        "constructed": {
+          "median": 10,
+          "p95": 10
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 465,
+          "p95": 492
+        },
+        "ui_usec": {
+          "median": 36626,
+          "p95": 37173
+        },
+        "to_frame_usec": {
+          "median": 44453,
+          "p95": 45480
+        },
+        "constructed": {
+          "median": 8,
+          "p95": 8
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 788,
+          "p95": 808
+        },
+        "ui_usec": {
+          "median": 40645,
+          "p95": 42045
+        },
+        "to_frame_usec": {
+          "median": 49694,
+          "p95": 51747
+        },
+        "constructed": {
+          "median": 9,
+          "p95": 9
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 565,
+          "p95": 607
+        },
+        "ui_usec": {
+          "median": 39242,
+          "p95": 40723
+        },
+        "to_frame_usec": {
+          "median": 47751,
+          "p95": 49357
+        },
+        "constructed": {
+          "median": 9,
+          "p95": 9
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 269,
+          "p95": 338
+        },
+        "ui_usec": {
+          "median": 36537,
+          "p95": 38204
+        },
+        "to_frame_usec": {
+          "median": 45802,
+          "p95": 47260
+        },
+        "constructed": {
+          "median": 8,
+          "p95": 8
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 239967,
+          "p95": 241658
+        },
+        "ui_usec": {
+          "median": 239895,
+          "p95": 241585
+        },
+        "to_frame_usec": {
+          "median": 322054,
+          "p95": 327538
+        },
+        "post_completion_to_frame_usec": {
+          "median": 82948,
+          "p95": 85887
+        },
+        "constructed": {
+          "median": 65,
+          "p95": 65
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 2651,
+          "p95": 3053
+        },
+        "ui_usec": {
+          "median": 300158,
+          "p95": 308971
+        },
+        "to_frame_usec": {
+          "median": 355717,
+          "p95": 370982
+        },
+        "constructed": {
+          "median": 66,
+          "p95": 66
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 2700,
+          "p95": 3184
+        },
+        "ui_usec": {
+          "median": 297679,
+          "p95": 300203
+        },
+        "to_frame_usec": {
+          "median": 352954,
+          "p95": 357813
+        },
+        "constructed": {
+          "median": 66,
+          "p95": 66
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 899,
+          "p95": 969
+        },
+        "ui_usec": {
+          "median": 296907,
+          "p95": 302727
+        },
+        "to_frame_usec": {
+          "median": 355712,
+          "p95": 360289
+        },
+        "constructed": {
+          "median": 66,
+          "p95": 66
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 2175,
+          "p95": 2418
+        },
+        "ui_usec": {
+          "median": 288081,
+          "p95": 298869
+        },
+        "to_frame_usec": {
+          "median": 341026,
+          "p95": 354717
+        },
+        "constructed": {
+          "median": 64,
+          "p95": 64
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 2576,
+          "p95": 2629
+        },
+        "ui_usec": {
+          "median": 291178,
+          "p95": 297692
+        },
+        "to_frame_usec": {
+          "median": 342383,
+          "p95": 349576
+        },
+        "constructed": {
+          "median": 65,
+          "p95": 65
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 2527,
+          "p95": 2620
+        },
+        "ui_usec": {
+          "median": 290708,
+          "p95": 303854
+        },
+        "to_frame_usec": {
+          "median": 344121,
+          "p95": 357341
+        },
+        "constructed": {
+          "median": 65,
+          "p95": 65
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 800,
+          "p95": 869
+        },
+        "ui_usec": {
+          "median": 287466,
+          "p95": 294918
+        },
+        "to_frame_usec": {
+          "median": 342342,
+          "p95": 352341
+        },
+        "constructed": {
+          "median": 64,
+          "p95": 64
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 466420,
+          "p95": 467340
+        },
+        "ui_usec": {
+          "median": 466346,
+          "p95": 467267
+        },
+        "to_frame_usec": {
+          "median": 630569,
+          "p95": 637352
+        },
+        "post_completion_to_frame_usec": {
+          "median": 166491,
+          "p95": 170940
+        },
+        "constructed": {
+          "median": 129,
+          "p95": 129
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 5048,
+          "p95": 5516
+        },
+        "ui_usec": {
+          "median": 581186,
+          "p95": 587763
+        },
+        "to_frame_usec": {
+          "median": 691287,
+          "p95": 710279
+        },
+        "constructed": {
+          "median": 130,
+          "p95": 130
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 5394,
+          "p95": 5885
+        },
+        "ui_usec": {
+          "median": 586423,
+          "p95": 604674
+        },
+        "to_frame_usec": {
+          "median": 700648,
+          "p95": 721972
+        },
+        "constructed": {
+          "median": 130,
+          "p95": 130
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 1717,
+          "p95": 1801
+        },
+        "ui_usec": {
+          "median": 589259,
+          "p95": 615685
+        },
+        "to_frame_usec": {
+          "median": 706254,
+          "p95": 756046
+        },
+        "constructed": {
+          "median": 130,
+          "p95": 130
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 4522,
+          "p95": 5475
+        },
+        "ui_usec": {
+          "median": 582046,
+          "p95": 592409
+        },
+        "to_frame_usec": {
+          "median": 689413,
+          "p95": 701320
+        },
+        "constructed": {
+          "median": 128,
+          "p95": 128
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 4967,
+          "p95": 5203
+        },
+        "ui_usec": {
+          "median": 585870,
+          "p95": 592159
+        },
+        "to_frame_usec": {
+          "median": 687059,
+          "p95": 693415
+        },
+        "constructed": {
+          "median": 129,
+          "p95": 129
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 5068,
+          "p95": 5178
+        },
+        "ui_usec": {
+          "median": 584467,
+          "p95": 588215
+        },
+        "to_frame_usec": {
+          "median": 684876,
+          "p95": 689276
+        },
+        "constructed": {
+          "median": 129,
+          "p95": 129
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 1550,
+          "p95": 1568
+        },
+        "ui_usec": {
+          "median": 583852,
+          "p95": 609019
+        },
+        "to_frame_usec": {
+          "median": 693702,
+          "p95": 731466
+        },
+        "constructed": {
+          "median": 128,
+          "p95": 128
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 970221,
+          "p95": 984485
+        },
+        "ui_usec": {
+          "median": 970148,
+          "p95": 984412
+        },
+        "to_frame_usec": {
+          "median": 1329253,
+          "p95": 1335568
+        },
+        "post_completion_to_frame_usec": {
+          "median": 348975,
+          "p95": 359594
+        },
+        "constructed": {
+          "median": 257,
+          "p95": 257
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 11720,
+          "p95": 11865
+        },
+        "ui_usec": {
+          "median": 1170921,
+          "p95": 1189813
+        },
+        "to_frame_usec": {
+          "median": 1393114,
+          "p95": 1411107
+        },
+        "constructed": {
+          "median": 258,
+          "p95": 258
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 12835,
+          "p95": 13570
+        },
+        "ui_usec": {
+          "median": 1196364,
+          "p95": 1212285
+        },
+        "to_frame_usec": {
+          "median": 1420618,
+          "p95": 1448945
+        },
+        "constructed": {
+          "median": 258,
+          "p95": 258
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 3911,
+          "p95": 4024
+        },
+        "ui_usec": {
+          "median": 1184960,
+          "p95": 1205659
+        },
+        "to_frame_usec": {
+          "median": 1411962,
+          "p95": 1442364
+        },
+        "constructed": {
+          "median": 258,
+          "p95": 258
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 11039,
+          "p95": 12649
+        },
+        "ui_usec": {
+          "median": 1173475,
+          "p95": 1194044
+        },
+        "to_frame_usec": {
+          "median": 1396459,
+          "p95": 1414274
+        },
+        "constructed": {
+          "median": 256,
+          "p95": 256
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 11327,
+          "p95": 13486
+        },
+        "ui_usec": {
+          "median": 1158866,
+          "p95": 1190860
+        },
+        "to_frame_usec": {
+          "median": 1361380,
+          "p95": 1396664
+        },
+        "constructed": {
+          "median": 257,
+          "p95": 257
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 11646,
+          "p95": 12952
+        },
+        "ui_usec": {
+          "median": 1198691,
+          "p95": 1218445
+        },
+        "to_frame_usec": {
+          "median": 1408420,
+          "p95": 1429243
+        },
+        "constructed": {
+          "median": 257,
+          "p95": 257
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 3590,
+          "p95": 3606
+        },
+        "ui_usec": {
+          "median": 1151766,
+          "p95": 1154710
+        },
+        "to_frame_usec": {
+          "median": 1368088,
+          "p95": 1373136
+        },
+        "constructed": {
+          "median": 256,
+          "p95": 256
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      }
+    ],
+    "after_native": [
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 9,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 78,
+          "p95": 84
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 9,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 49,
+          "p95": 53
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 9,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 57,
+          "p95": 61
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 65,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 656,
+          "p95": 678
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 65,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 454,
+          "p95": 465
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 65,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 472,
+          "p95": 484
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 129,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 1561,
+          "p95": 1583
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 129,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 1111,
+          "p95": 1142
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 129,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 1162,
+          "p95": 1183
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 257,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 4064,
+          "p95": 4115
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 257,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 3087,
+          "p95": 3120
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 257,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 3132,
+          "p95": 3154
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 38724,
+          "p95": 41669
+        },
+        "ui_usec": {
+          "median": 38651,
+          "p95": 41590
+        },
+        "to_frame_usec": {
+          "median": 53372,
+          "p95": 89351
+        },
+        "post_completion_to_frame_usec": {
+          "median": 14774,
+          "p95": 47727
+        },
+        "constructed": {
+          "median": 9,
+          "p95": 9
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 751,
+          "p95": 910
+        },
+        "ui_usec": {
+          "median": 4703,
+          "p95": 5733
+        },
+        "to_frame_usec": {
+          "median": 12192,
+          "p95": 442629
+        },
+        "post_completion_to_frame_usec": {
+          "median": 5865,
+          "p95": 436718
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 731,
+          "p95": 832
+        },
+        "ui_usec": {
+          "median": 4379,
+          "p95": 5035
+        },
+        "to_frame_usec": {
+          "median": 10241,
+          "p95": 12368
+        },
+        "post_completion_to_frame_usec": {
+          "median": 5170,
+          "p95": 6485
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 265,
+          "p95": 317
+        },
+        "ui_usec": {
+          "median": 4028,
+          "p95": 4305
+        },
+        "to_frame_usec": {
+          "median": 10345,
+          "p95": 11246
+        },
+        "post_completion_to_frame_usec": {
+          "median": 5610,
+          "p95": 6221
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 587,
+          "p95": 700
+        },
+        "ui_usec": {
+          "median": 1803,
+          "p95": 1822
+        },
+        "to_frame_usec": {
+          "median": 5829,
+          "p95": 5878
+        },
+        "post_completion_to_frame_usec": {
+          "median": 3329,
+          "p95": 3440
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 8,
+          "p95": 8
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 855,
+          "p95": 928
+        },
+        "ui_usec": {
+          "median": 453,
+          "p95": 585
+        },
+        "to_frame_usec": {
+          "median": 4958,
+          "p95": 5294
+        },
+        "post_completion_to_frame_usec": {
+          "median": 3008,
+          "p95": 3551
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 608,
+          "p95": 850
+        },
+        "ui_usec": {
+          "median": 4452,
+          "p95": 4618
+        },
+        "to_frame_usec": {
+          "median": 8853,
+          "p95": 9263
+        },
+        "post_completion_to_frame_usec": {
+          "median": 3703,
+          "p95": 3965
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 8,
+          "p95": 8
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 240,
+          "p95": 257
+        },
+        "ui_usec": {
+          "median": 1601,
+          "p95": 1647
+        },
+        "to_frame_usec": {
+          "median": 5710,
+          "p95": 6166
+        },
+        "post_completion_to_frame_usec": {
+          "median": 3792,
+          "p95": 4130
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 8,
+          "p95": 8
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 238746,
+          "p95": 240991
+        },
+        "ui_usec": {
+          "median": 238674,
+          "p95": 240918
+        },
+        "to_frame_usec": {
+          "median": 328162,
+          "p95": 331919
+        },
+        "post_completion_to_frame_usec": {
+          "median": 89100,
+          "p95": 93193
+        },
+        "constructed": {
+          "median": 65,
+          "p95": 65
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 2472,
+          "p95": 3427
+        },
+        "ui_usec": {
+          "median": 6867,
+          "p95": 7678
+        },
+        "to_frame_usec": {
+          "median": 27105,
+          "p95": 30210
+        },
+        "post_completion_to_frame_usec": {
+          "median": 16918,
+          "p95": 19774
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 2489,
+          "p95": 2617
+        },
+        "ui_usec": {
+          "median": 6075,
+          "p95": 6502
+        },
+        "to_frame_usec": {
+          "median": 24008,
+          "p95": 25716
+        },
+        "post_completion_to_frame_usec": {
+          "median": 15526,
+          "p95": 16612
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 802,
+          "p95": 910
+        },
+        "ui_usec": {
+          "median": 5750,
+          "p95": 6212
+        },
+        "to_frame_usec": {
+          "median": 27242,
+          "p95": 29597
+        },
+        "post_completion_to_frame_usec": {
+          "median": 18482,
+          "p95": 20129
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 2034,
+          "p95": 2316
+        },
+        "ui_usec": {
+          "median": 3892,
+          "p95": 4172
+        },
+        "to_frame_usec": {
+          "median": 19466,
+          "p95": 20495
+        },
+        "post_completion_to_frame_usec": {
+          "median": 13445,
+          "p95": 14013
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 64,
+          "p95": 64
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 2537,
+          "p95": 2561
+        },
+        "ui_usec": {
+          "median": 2517,
+          "p95": 2556
+        },
+        "to_frame_usec": {
+          "median": 15931,
+          "p95": 16020
+        },
+        "post_completion_to_frame_usec": {
+          "median": 10446,
+          "p95": 10542
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 2449,
+          "p95": 2757
+        },
+        "ui_usec": {
+          "median": 6735,
+          "p95": 6944
+        },
+        "to_frame_usec": {
+          "median": 21544,
+          "p95": 21629
+        },
+        "post_completion_to_frame_usec": {
+          "median": 12177,
+          "p95": 12466
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 64,
+          "p95": 64
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 736,
+          "p95": 755
+        },
+        "ui_usec": {
+          "median": 3631,
+          "p95": 3746
+        },
+        "to_frame_usec": {
+          "median": 20577,
+          "p95": 21908
+        },
+        "post_completion_to_frame_usec": {
+          "median": 16186,
+          "p95": 17434
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 64,
+          "p95": 64
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 448815,
+          "p95": 453906
+        },
+        "ui_usec": {
+          "median": 448741,
+          "p95": 453835
+        },
+        "to_frame_usec": {
+          "median": 615579,
+          "p95": 620519
+        },
+        "post_completion_to_frame_usec": {
+          "median": 165670,
+          "p95": 169901
+        },
+        "constructed": {
+          "median": 129,
+          "p95": 129
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 4741,
+          "p95": 4939
+        },
+        "ui_usec": {
+          "median": 8724,
+          "p95": 8945
+        },
+        "to_frame_usec": {
+          "median": 42118,
+          "p95": 42517
+        },
+        "post_completion_to_frame_usec": {
+          "median": 28674,
+          "p95": 29221
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 5343,
+          "p95": 5993
+        },
+        "ui_usec": {
+          "median": 9141,
+          "p95": 9403
+        },
+        "to_frame_usec": {
+          "median": 44333,
+          "p95": 48018
+        },
+        "post_completion_to_frame_usec": {
+          "median": 29918,
+          "p95": 32777
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 1746,
+          "p95": 1956
+        },
+        "ui_usec": {
+          "median": 8916,
+          "p95": 10383
+        },
+        "to_frame_usec": {
+          "median": 51546,
+          "p95": 55523
+        },
+        "post_completion_to_frame_usec": {
+          "median": 36334,
+          "p95": 37871
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 4217,
+          "p95": 4384
+        },
+        "ui_usec": {
+          "median": 6554,
+          "p95": 6883
+        },
+        "to_frame_usec": {
+          "median": 36540,
+          "p95": 37978
+        },
+        "post_completion_to_frame_usec": {
+          "median": 25852,
+          "p95": 27364
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 128,
+          "p95": 128
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 4881,
+          "p95": 5402
+        },
+        "ui_usec": {
+          "median": 5211,
+          "p95": 5550
+        },
+        "to_frame_usec": {
+          "median": 30855,
+          "p95": 32942
+        },
+        "post_completion_to_frame_usec": {
+          "median": 20408,
+          "p95": 21756
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 5034,
+          "p95": 5074
+        },
+        "ui_usec": {
+          "median": 9375,
+          "p95": 9611
+        },
+        "to_frame_usec": {
+          "median": 36657,
+          "p95": 36970
+        },
+        "post_completion_to_frame_usec": {
+          "median": 22316,
+          "p95": 22715
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 128,
+          "p95": 128
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 1533,
+          "p95": 1554
+        },
+        "ui_usec": {
+          "median": 6384,
+          "p95": 6766
+        },
+        "to_frame_usec": {
+          "median": 40990,
+          "p95": 44535
+        },
+        "post_completion_to_frame_usec": {
+          "median": 33170,
+          "p95": 36442
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 128,
+          "p95": 128
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 925499,
+          "p95": 933793
+        },
+        "ui_usec": {
+          "median": 925427,
+          "p95": 933718
+        },
+        "to_frame_usec": {
+          "median": 1279868,
+          "p95": 1287110
+        },
+        "post_completion_to_frame_usec": {
+          "median": 352187,
+          "p95": 362153
+        },
+        "constructed": {
+          "median": 257,
+          "p95": 257
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 11873,
+          "p95": 12130
+        },
+        "ui_usec": {
+          "median": 14819,
+          "p95": 15481
+        },
+        "to_frame_usec": {
+          "median": 83912,
+          "p95": 89737
+        },
+        "post_completion_to_frame_usec": {
+          "median": 57273,
+          "p95": 63320
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 12343,
+          "p95": 13046
+        },
+        "ui_usec": {
+          "median": 14947,
+          "p95": 15304
+        },
+        "to_frame_usec": {
+          "median": 83649,
+          "p95": 92956
+        },
+        "post_completion_to_frame_usec": {
+          "median": 56460,
+          "p95": 65044
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 4071,
+          "p95": 4199
+        },
+        "ui_usec": {
+          "median": 14774,
+          "p95": 15375
+        },
+        "to_frame_usec": {
+          "median": 102465,
+          "p95": 110503
+        },
+        "post_completion_to_frame_usec": {
+          "median": 73167,
+          "p95": 80807
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 10515,
+          "p95": 13341
+        },
+        "ui_usec": {
+          "median": 12277,
+          "p95": 12821
+        },
+        "to_frame_usec": {
+          "median": 73444,
+          "p95": 86608
+        },
+        "post_completion_to_frame_usec": {
+          "median": 50959,
+          "p95": 62111
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 256,
+          "p95": 256
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 11364,
+          "p95": 12798
+        },
+        "ui_usec": {
+          "median": 10818,
+          "p95": 11151
+        },
+        "to_frame_usec": {
+          "median": 61890,
+          "p95": 64916
+        },
+        "post_completion_to_frame_usec": {
+          "median": 38986,
+          "p95": 40762
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 12179,
+          "p95": 12559
+        },
+        "ui_usec": {
+          "median": 15043,
+          "p95": 15262
+        },
+        "to_frame_usec": {
+          "median": 69381,
+          "p95": 70473
+        },
+        "post_completion_to_frame_usec": {
+          "median": 42363,
+          "p95": 42974
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 256,
+          "p95": 256
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 3633,
+          "p95": 3830
+        },
+        "ui_usec": {
+          "median": 11678,
+          "p95": 12886
+        },
+        "to_frame_usec": {
+          "median": 85557,
+          "p95": 95472
+        },
+        "post_completion_to_frame_usec": {
+          "median": 70022,
+          "p95": 79060
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 256,
+          "p95": 256
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      }
+    ],
+    "legacy_reference": [
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 347,
+          "p95": 357
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 271,
+          "p95": 275
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 32,
+          "p95": 35
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 2251,
+          "p95": 2275
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 1940,
+          "p95": 1953
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 131,
+          "p95": 134
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 4423,
+          "p95": 4494
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 3838,
+          "p95": 3863
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 261,
+          "p95": 262
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 8859,
+          "p95": 8905
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "remove",
+        "samples": 7,
+        "usec": {
+          "median": 7844,
+          "p95": 7866
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 575,
+          "p95": 592
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 61698,
+          "p95": 62321
+        },
+        "ui_usec": {
+          "median": 57277,
+          "p95": 57892
+        },
+        "to_frame_usec": {
+          "median": 82172,
+          "p95": 83344
+        },
+        "post_completion_to_frame_usec": {
+          "median": 20401,
+          "p95": 21075
+        },
+        "constructed": {
+          "median": 9,
+          "p95": 9
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 1147,
+          "p95": 1152
+        },
+        "ui_usec": {
+          "median": 64029,
+          "p95": 65184
+        },
+        "to_frame_usec": {
+          "median": 106485,
+          "p95": 108853
+        },
+        "post_completion_to_frame_usec": {
+          "median": 16951,
+          "p95": 18528
+        },
+        "constructed": {
+          "median": 10,
+          "p95": 10
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 1181,
+          "p95": 1208
+        },
+        "ui_usec": {
+          "median": 63655,
+          "p95": 65598
+        },
+        "to_frame_usec": {
+          "median": 107579,
+          "p95": 108146
+        },
+        "post_completion_to_frame_usec": {
+          "median": 17456,
+          "p95": 18583
+        },
+        "constructed": {
+          "median": 10,
+          "p95": 10
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 939,
+          "p95": 1150
+        },
+        "ui_usec": {
+          "median": 65744,
+          "p95": 69690
+        },
+        "to_frame_usec": {
+          "median": 109417,
+          "p95": 118377
+        },
+        "post_completion_to_frame_usec": {
+          "median": 17639,
+          "p95": 21962
+        },
+        "constructed": {
+          "median": 10,
+          "p95": 10
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 925,
+          "p95": 954
+        },
+        "ui_usec": {
+          "median": 51737,
+          "p95": 52821
+        },
+        "to_frame_usec": {
+          "median": 90411,
+          "p95": 91185
+        },
+        "post_completion_to_frame_usec": {
+          "median": 14183,
+          "p95": 14603
+        },
+        "constructed": {
+          "median": 8,
+          "p95": 8
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 864,
+          "p95": 917
+        },
+        "ui_usec": {
+          "median": 60057,
+          "p95": 63993
+        },
+        "to_frame_usec": {
+          "median": 102445,
+          "p95": 107352
+        },
+        "post_completion_to_frame_usec": {
+          "median": 15966,
+          "p95": 17828
+        },
+        "constructed": {
+          "median": 9,
+          "p95": 9
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 1361,
+          "p95": 1386
+        },
+        "ui_usec": {
+          "median": 57882,
+          "p95": 59055
+        },
+        "to_frame_usec": {
+          "median": 97535,
+          "p95": 99868
+        },
+        "post_completion_to_frame_usec": {
+          "median": 14314,
+          "p95": 15909
+        },
+        "constructed": {
+          "median": 9,
+          "p95": 9
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 9,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 818,
+          "p95": 861
+        },
+        "ui_usec": {
+          "median": 52352,
+          "p95": 53662
+        },
+        "to_frame_usec": {
+          "median": 91377,
+          "p95": 92789
+        },
+        "post_completion_to_frame_usec": {
+          "median": 15544,
+          "p95": 16210
+        },
+        "constructed": {
+          "median": 8,
+          "p95": 8
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 409530,
+          "p95": 415697
+        },
+        "ui_usec": {
+          "median": 390423,
+          "p95": 396541
+        },
+        "to_frame_usec": {
+          "median": 564541,
+          "p95": 568561
+        },
+        "post_completion_to_frame_usec": {
+          "median": 153540,
+          "p95": 157346
+        },
+        "constructed": {
+          "median": 65,
+          "p95": 65
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 4234,
+          "p95": 6622
+        },
+        "ui_usec": {
+          "median": 401373,
+          "p95": 411893
+        },
+        "to_frame_usec": {
+          "median": 657730,
+          "p95": 670853
+        },
+        "post_completion_to_frame_usec": {
+          "median": 99556,
+          "p95": 106665
+        },
+        "constructed": {
+          "median": 66,
+          "p95": 66
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 4332,
+          "p95": 4415
+        },
+        "ui_usec": {
+          "median": 397014,
+          "p95": 403154
+        },
+        "to_frame_usec": {
+          "median": 644625,
+          "p95": 654983
+        },
+        "post_completion_to_frame_usec": {
+          "median": 92822,
+          "p95": 101681
+        },
+        "constructed": {
+          "median": 66,
+          "p95": 66
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 3480,
+          "p95": 3576
+        },
+        "ui_usec": {
+          "median": 407520,
+          "p95": 413672
+        },
+        "to_frame_usec": {
+          "median": 660027,
+          "p95": 667808
+        },
+        "post_completion_to_frame_usec": {
+          "median": 99122,
+          "p95": 101972
+        },
+        "constructed": {
+          "median": 66,
+          "p95": 66
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 3656,
+          "p95": 3819
+        },
+        "ui_usec": {
+          "median": 385297,
+          "p95": 395845
+        },
+        "to_frame_usec": {
+          "median": 630919,
+          "p95": 640283
+        },
+        "post_completion_to_frame_usec": {
+          "median": 95870,
+          "p95": 100019
+        },
+        "constructed": {
+          "median": 64,
+          "p95": 64
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 1295,
+          "p95": 1360
+        },
+        "ui_usec": {
+          "median": 389513,
+          "p95": 393297
+        },
+        "to_frame_usec": {
+          "median": 622854,
+          "p95": 627227
+        },
+        "post_completion_to_frame_usec": {
+          "median": 83208,
+          "p95": 89583
+        },
+        "constructed": {
+          "median": 65,
+          "p95": 65
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 6208,
+          "p95": 6513
+        },
+        "ui_usec": {
+          "median": 400371,
+          "p95": 424252
+        },
+        "to_frame_usec": {
+          "median": 648254,
+          "p95": 682785
+        },
+        "post_completion_to_frame_usec": {
+          "median": 86713,
+          "p95": 94580
+        },
+        "constructed": {
+          "median": 65,
+          "p95": 65
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 65,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 3438,
+          "p95": 3515
+        },
+        "ui_usec": {
+          "median": 395268,
+          "p95": 401515
+        },
+        "to_frame_usec": {
+          "median": 639229,
+          "p95": 655159
+        },
+        "post_completion_to_frame_usec": {
+          "median": 92194,
+          "p95": 96836
+        },
+        "constructed": {
+          "median": 64,
+          "p95": 64
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 808337,
+          "p95": 817509
+        },
+        "ui_usec": {
+          "median": 772774,
+          "p95": 781181
+        },
+        "to_frame_usec": {
+          "median": 1113806,
+          "p95": 1130482
+        },
+        "post_completion_to_frame_usec": {
+          "median": 306986,
+          "p95": 315162
+        },
+        "constructed": {
+          "median": 129,
+          "p95": 129
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 7665,
+          "p95": 7802
+        },
+        "ui_usec": {
+          "median": 783453,
+          "p95": 795297
+        },
+        "to_frame_usec": {
+          "median": 1277325,
+          "p95": 1289407
+        },
+        "post_completion_to_frame_usec": {
+          "median": 192176,
+          "p95": 198096
+        },
+        "constructed": {
+          "median": 130,
+          "p95": 130
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 8064,
+          "p95": 8276
+        },
+        "ui_usec": {
+          "median": 778797,
+          "p95": 789748
+        },
+        "to_frame_usec": {
+          "median": 1274590,
+          "p95": 1299295
+        },
+        "post_completion_to_frame_usec": {
+          "median": 192055,
+          "p95": 200398
+        },
+        "constructed": {
+          "median": 130,
+          "p95": 130
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 6435,
+          "p95": 6583
+        },
+        "ui_usec": {
+          "median": 777720,
+          "p95": 794663
+        },
+        "to_frame_usec": {
+          "median": 1263357,
+          "p95": 1284190
+        },
+        "post_completion_to_frame_usec": {
+          "median": 191341,
+          "p95": 195626
+        },
+        "constructed": {
+          "median": 130,
+          "p95": 130
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 6793,
+          "p95": 6977
+        },
+        "ui_usec": {
+          "median": 761204,
+          "p95": 790248
+        },
+        "to_frame_usec": {
+          "median": 1240906,
+          "p95": 1290020
+        },
+        "post_completion_to_frame_usec": {
+          "median": 186101,
+          "p95": 196741
+        },
+        "constructed": {
+          "median": 128,
+          "p95": 128
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 1812,
+          "p95": 1950
+        },
+        "ui_usec": {
+          "median": 760346,
+          "p95": 771098
+        },
+        "to_frame_usec": {
+          "median": 1212894,
+          "p95": 1223034
+        },
+        "post_completion_to_frame_usec": {
+          "median": 163668,
+          "p95": 164896
+        },
+        "constructed": {
+          "median": 129,
+          "p95": 129
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 11529,
+          "p95": 11707
+        },
+        "ui_usec": {
+          "median": 768001,
+          "p95": 773459
+        },
+        "to_frame_usec": {
+          "median": 1239031,
+          "p95": 1252139
+        },
+        "post_completion_to_frame_usec": {
+          "median": 163694,
+          "p95": 167077
+        },
+        "constructed": {
+          "median": 129,
+          "p95": 129
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 129,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 6180,
+          "p95": 6337
+        },
+        "ui_usec": {
+          "median": 762735,
+          "p95": 769734
+        },
+        "to_frame_usec": {
+          "median": 1241513,
+          "p95": 1258382
+        },
+        "post_completion_to_frame_usec": {
+          "median": 184352,
+          "p95": 196002
+        },
+        "constructed": {
+          "median": 128,
+          "p95": 128
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 1586649,
+          "p95": 1605692
+        },
+        "ui_usec": {
+          "median": 1517105,
+          "p95": 1536421
+        },
+        "to_frame_usec": {
+          "median": 2201793,
+          "p95": 2220389
+        },
+        "post_completion_to_frame_usec": {
+          "median": 616222,
+          "p95": 619717
+        },
+        "constructed": {
+          "median": 257,
+          "p95": 257
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 14855,
+          "p95": 15816
+        },
+        "ui_usec": {
+          "median": 1546790,
+          "p95": 1608129
+        },
+        "to_frame_usec": {
+          "median": 2525341,
+          "p95": 2614188
+        },
+        "post_completion_to_frame_usec": {
+          "median": 377151,
+          "p95": 392706
+        },
+        "constructed": {
+          "median": 258,
+          "p95": 258
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 16096,
+          "p95": 17058
+        },
+        "ui_usec": {
+          "median": 1587239,
+          "p95": 1607467
+        },
+        "to_frame_usec": {
+          "median": 2601433,
+          "p95": 2626186
+        },
+        "post_completion_to_frame_usec": {
+          "median": 398872,
+          "p95": 408918
+        },
+        "constructed": {
+          "median": 258,
+          "p95": 258
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "redo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 12494,
+          "p95": 12686
+        },
+        "ui_usec": {
+          "median": 1587477,
+          "p95": 1620425
+        },
+        "to_frame_usec": {
+          "median": 2570429,
+          "p95": 2615915
+        },
+        "post_completion_to_frame_usec": {
+          "median": 381480,
+          "p95": 403520
+        },
+        "constructed": {
+          "median": 258,
+          "p95": 258
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "remove",
+        "samples": 7,
+        "request_usec": {
+          "median": 13795,
+          "p95": 14141
+        },
+        "ui_usec": {
+          "median": 1576523,
+          "p95": 1591839
+        },
+        "to_frame_usec": {
+          "median": 2581233,
+          "p95": 2604510
+        },
+        "post_completion_to_frame_usec": {
+          "median": 386131,
+          "p95": 405238
+        },
+        "constructed": {
+          "median": 256,
+          "p95": 256
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 3074,
+          "p95": 3541
+        },
+        "ui_usec": {
+          "median": 1554314,
+          "p95": 1718697
+        },
+        "to_frame_usec": {
+          "median": 2492230,
+          "p95": 2653193
+        },
+        "post_completion_to_frame_usec": {
+          "median": 330389,
+          "p95": 338407
+        },
+        "constructed": {
+          "median": 257,
+          "p95": 257
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "takeover",
+        "samples": 7,
+        "request_usec": {
+          "median": 22877,
+          "p95": 22940
+        },
+        "ui_usec": {
+          "median": 1521175,
+          "p95": 1561904
+        },
+        "to_frame_usec": {
+          "median": 2521826,
+          "p95": 2763232
+        },
+        "post_completion_to_frame_usec": {
+          "median": 324715,
+          "p95": 368762
+        },
+        "constructed": {
+          "median": 257,
+          "p95": 257
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "legacy",
+        "count": 257,
+        "workload": "undo_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 12432,
+          "p95": 12637
+        },
+        "ui_usec": {
+          "median": 1571829,
+          "p95": 1595365
+        },
+        "to_frame_usec": {
+          "median": 2591835,
+          "p95": 2996812
+        },
+        "post_completion_to_frame_usec": {
+          "median": 372979,
+          "p95": 452075
+        },
+        "constructed": {
+          "median": 256,
+          "p95": 256
+        },
+        "retained": {
+          "median": 0,
+          "p95": 0
+        },
+        "parses": {
+          "median": 1,
+          "p95": 1
+        }
+      }
+    ],
+    "cost_hooks_off_native": [
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 9,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 79,
+          "p95": 88
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 65,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 654,
+          "p95": 666
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 129,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 1568,
+          "p95": 1645
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 257,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 4322,
+          "p95": 4571
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 38169,
+          "p95": 39627
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 52427,
+          "p95": 90870
+        },
+        "post_completion_to_frame_usec": {
+          "median": 14456,
+          "p95": 52707
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 664,
+          "p95": 852
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 9549,
+          "p95": 237373
+        },
+        "post_completion_to_frame_usec": {
+          "median": 4816,
+          "p95": 231962
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 668,
+          "p95": 727
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 9386,
+          "p95": 9602
+        },
+        "post_completion_to_frame_usec": {
+          "median": 4732,
+          "p95": 4796
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 237795,
+          "p95": 241469
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 323375,
+          "p95": 333067
+        },
+        "post_completion_to_frame_usec": {
+          "median": 82718,
+          "p95": 92582
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 2402,
+          "p95": 2499
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 24399,
+          "p95": 25423
+        },
+        "post_completion_to_frame_usec": {
+          "median": 15642,
+          "p95": 16236
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 2578,
+          "p95": 2839
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 24493,
+          "p95": 25219
+        },
+        "post_completion_to_frame_usec": {
+          "median": 15517,
+          "p95": 16177
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 452931,
+          "p95": 579389
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 630420,
+          "p95": 749953
+        },
+        "post_completion_to_frame_usec": {
+          "median": 170570,
+          "p95": 187497
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 5064,
+          "p95": 5147
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 42666,
+          "p95": 43567
+        },
+        "post_completion_to_frame_usec": {
+          "median": 28595,
+          "p95": 29239
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 5304,
+          "p95": 5455
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 43358,
+          "p95": 44457
+        },
+        "post_completion_to_frame_usec": {
+          "median": 29035,
+          "p95": 29307
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "build",
+        "samples": 7,
+        "request_usec": {
+          "median": 905136,
+          "p95": 924139
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 1256012,
+          "p95": 1280116
+        },
+        "post_completion_to_frame_usec": {
+          "median": 352445,
+          "p95": 358268
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 11421,
+          "p95": 12015
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 81487,
+          "p95": 88932
+        },
+        "post_completion_to_frame_usec": {
+          "median": 55062,
+          "p95": 62814
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "list_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 12178,
+          "p95": 14229
+        },
+        "ui_usec": {
+          "median": 0,
+          "p95": 0
+        },
+        "to_frame_usec": {
+          "median": 81392,
+          "p95": 98172
+        },
+        "post_completion_to_frame_usec": {
+          "median": 54341,
+          "p95": 67587
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      }
+    ],
+    "after_native_reorder_repeat": [
+      {
+        "kind": "TOPOLOGY_CHILD_MOVEMENT",
+        "backend": "native",
+        "count": 9,
+        "workload": "adjacent_move",
+        "samples": 7,
+        "usec": {
+          "median": 9,
+          "p95": 25
+        }
+      },
+      {
+        "kind": "TOPOLOGY_CHILD_MOVEMENT",
+        "backend": "native",
+        "count": 65,
+        "workload": "adjacent_move",
+        "samples": 7,
+        "usec": {
+          "median": 16,
+          "p95": 19
+        }
+      },
+      {
+        "kind": "TOPOLOGY_CHILD_MOVEMENT",
+        "backend": "native",
+        "count": 129,
+        "workload": "adjacent_move",
+        "samples": 7,
+        "usec": {
+          "median": 18,
+          "p95": 21
+        }
+      },
+      {
+        "kind": "TOPOLOGY_CHILD_MOVEMENT",
+        "backend": "native",
+        "count": 257,
+        "workload": "adjacent_move",
+        "samples": 7,
+        "usec": {
+          "median": 22,
+          "p95": 24
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 9,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 60,
+          "p95": 64
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 65,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 468,
+          "p95": 477
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 129,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 1146,
+          "p95": 1172
+        }
+      },
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 257,
+        "workload": "reorder",
+        "samples": 7,
+        "usec": {
+          "median": 3160,
+          "p95": 3183
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 814,
+          "p95": 855
+        },
+        "ui_usec": {
+          "median": 413,
+          "p95": 538
+        },
+        "to_frame_usec": {
+          "median": 5173,
+          "p95": 1021373
+        },
+        "post_completion_to_frame_usec": {
+          "median": 3362,
+          "p95": 1019079
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 65,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 2769,
+          "p95": 2781
+        },
+        "ui_usec": {
+          "median": 2566,
+          "p95": 2755
+        },
+        "to_frame_usec": {
+          "median": 16497,
+          "p95": 17375
+        },
+        "post_completion_to_frame_usec": {
+          "median": 10705,
+          "p95": 11160
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 65,
+          "p95": 65
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 129,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 5270,
+          "p95": 5471
+        },
+        "ui_usec": {
+          "median": 5247,
+          "p95": 5345
+        },
+        "to_frame_usec": {
+          "median": 31215,
+          "p95": 31661
+        },
+        "post_completion_to_frame_usec": {
+          "median": 20037,
+          "p95": 20353
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 129,
+          "p95": 129
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 257,
+        "workload": "reorder",
+        "samples": 7,
+        "request_usec": {
+          "median": 11555,
+          "p95": 12324
+        },
+        "ui_usec": {
+          "median": 10789,
+          "p95": 10917
+        },
+        "to_frame_usec": {
+          "median": 62216,
+          "p95": 63024
+        },
+        "post_completion_to_frame_usec": {
+          "median": 39211,
+          "p95": 39388
+        },
+        "constructed": {
+          "median": 0,
+          "p95": 0
+        },
+        "retained": {
+          "median": 257,
+          "p95": 257
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      }
+    ],
+    "repeat_native_nine": [
+      {
+        "kind": "TOPOLOGY_MODEL",
+        "backend": "native",
+        "count": 9,
+        "workload": "graph_add",
+        "samples": 7,
+        "usec": {
+          "median": 80,
+          "p95": 98
+        }
+      },
+      {
+        "kind": "TOPOLOGY_SAMPLE",
+        "backend": "native",
+        "count": 9,
+        "workload": "graph_add",
+        "samples": 7,
+        "request_usec": {
+          "median": 621,
+          "p95": 684
+        },
+        "ui_usec": {
+          "median": 3923,
+          "p95": 4186
+        },
+        "to_frame_usec": {
+          "median": 9576,
+          "p95": 31323
+        },
+        "post_completion_to_frame_usec": {
+          "median": 4898,
+          "p95": 6751
+        },
+        "constructed": {
+          "median": 1,
+          "p95": 1
+        },
+        "retained": {
+          "median": 9,
+          "p95": 9
+        },
+        "parses": {
+          "median": 0,
+          "p95": 0
+        }
+      }
+    ]
+  }
+}

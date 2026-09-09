@@ -14,6 +14,9 @@ var drop_after := false
 var _debug_drag_id := 0
 var _pending_swap_from := -1
 var _pending_swap_to := -1
+var _pending_source: Resource
+var _pending_target: Resource
+var _quarantined_controls: Dictionary[int, Dictionary] = {}
 
 
 func _debug_drag_event(event: String, details: String = "") -> void:
@@ -57,7 +60,8 @@ func _notification(what: int) -> void:
 				"drag=%d" % _debug_drag_id,
 			)
 
-			_disable_mouse_for_subtree(self)
+			if _quarantined_controls.is_empty():
+				_disable_mouse_for_subtree(self)
 
 			call_deferred(
 				"_arm_pending_point_swap_next_frame",
@@ -66,6 +70,11 @@ func _notification(what: int) -> void:
 
 
 func _exit_tree() -> void:
+	_restore_mouse_filters()
+	_pending_source = null
+	_pending_target = null
+	_pending_swap_from = -1
+	_pending_swap_to = -1
 	_debug_drag_event(
 		"TREE_EXIT",
 		"drag=%d" % _debug_drag_id,
@@ -73,14 +82,42 @@ func _exit_tree() -> void:
 
 
 func _disable_mouse_for_subtree(control: Control) -> void:
-	control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_quarantine_mouse(control)
 
 	for child in control.get_children():
 		if child is Control:
 			_disable_mouse_for_subtree(child)
 
 
+func _quarantine_mouse(control: Control) -> void:
+	var id := control.get_instance_id()
+	if not _quarantined_controls.has(id):
+		_quarantined_controls[id] = {"control": weakref(control), "filter": control.mouse_filter}
+	control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+func _restore_mouse_filters() -> void:
+	for entry in _quarantined_controls.values():
+		var control := entry.control.get_ref() as Control
+		if is_instance_valid(control):
+			control.mouse_filter = entry.filter
+	_quarantined_controls.clear()
+
+
+func get_point_panel_index(panel: Control) -> int:
+	var index := 0
+	for child in get_children():
+		if child is PanelContainer:
+			if child == panel:
+				return index
+			index += 1
+	return -1
+
+
 func enable_drop_forwarding(control: Control) -> void:
+	# A topology change during a pending drop may introduce new Controls.
+	if not _quarantined_controls.is_empty():
+		_quarantine_mouse(control)
 	control.set_drag_forwarding(
 		Callable(),
 		_forward_can_drop_data,
@@ -139,7 +176,7 @@ func _can_drop_data(position: Vector2, data) -> bool:
 	if point_panels.is_empty():
 		return false
 
-	var from_index: int = data["index"]
+	var from_index: int = point_panels.find(source_panel)
 	var to_index := _get_drop_target_index(position.y, point_panels)
 
 	if to_index < 0:
@@ -177,7 +214,7 @@ func _drop_data(position: Vector2, data) -> void:
 		if child is PanelContainer:
 			point_panels.append(child)
 
-	var from_index: int = data["index"]
+	var from_index: int = point_panels.find(source_panel)
 	var to_index := _get_drop_target_index(position.y, point_panels)
 
 	_debug_drag_event(
@@ -188,9 +225,11 @@ func _drop_data(position: Vector2, data) -> void:
 
 	clear_drop_index()
 
-	if to_index >= 0 and from_index != to_index:
+	if from_index >= 0 and to_index >= 0 and from_index != to_index:
 		_pending_swap_from = from_index
 		_pending_swap_to = to_index
+		_pending_source = source_panel.get_meta(&"point_resource", null)
+		_pending_target = point_panels[to_index].get_meta(&"point_resource", null)
 
 		_debug_drag_event(
 			"PENDING_SWAP",
@@ -200,7 +239,8 @@ func _drop_data(position: Vector2, data) -> void:
 
 
 func _arm_pending_point_swap_next_frame(drag_id: int) -> void:
-	if _pending_swap_from < 0 or _pending_swap_to < 0:
+	if not is_inside_tree() or _pending_swap_from < 0 or _pending_swap_to < 0:
+		_restore_mouse_filters()
 		return
 
 	_debug_drag_event(
@@ -220,6 +260,13 @@ func _arm_pending_point_swap_next_frame(drag_id: int) -> void:
 
 
 func _emit_pending_point_swap(drag_id: int) -> void:
+	if not is_inside_tree() or drag_id != _debug_drag_id:
+		_restore_mouse_filters()
+		_pending_swap_from = -1
+		_pending_swap_to = -1
+		_pending_source = null
+		_pending_target = null
+		return
 	var hovered := get_viewport().gui_get_hovered_control()
 	var hover_is_inside_list := (
 		hovered == self
@@ -253,9 +300,25 @@ func _emit_pending_point_swap(drag_id: int) -> void:
 
 	var from_index := _pending_swap_from
 	var to_index := _pending_swap_to
+	if _pending_source != null or _pending_target != null:
+		from_index = -1
+		to_index = -1
+		var index := 0
+		for child in get_children():
+			if child is PanelContainer:
+				var point: Resource = child.get_meta(&"point_resource", null)
+				if point == _pending_source:
+					from_index = index
+				if point == _pending_target:
+					to_index = index
+				index += 1
 
 	_pending_swap_from = -1
 	_pending_swap_to = -1
+	_pending_source = null
+	_pending_target = null
+	# Restore before emission: listeners may synchronously dispose this list.
+	_restore_mouse_filters()
 
 	if from_index < 0 or to_index < 0:
 		return
