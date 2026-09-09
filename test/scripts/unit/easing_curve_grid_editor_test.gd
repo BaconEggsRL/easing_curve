@@ -148,6 +148,7 @@ func _test_drawing_is_read_only(native: bool) -> void:
 	var history := editor.editor_undo_redo as UndoRedo
 	var history_count := history.get_history_count()
 	for index in range(3):
+		editor.hide_graph_background = index % 2 == 1
 		editor.pan_offset += Vector2(13, -21)
 		editor.queue_redraw()
 		await process_frame
@@ -181,13 +182,15 @@ func _capture_views() -> void:
 		caption.position = editor.position - Vector2(0, 25)
 		canvas.add_child(caption)
 		editors.append(editor)
-	for scenario: String in ["default", "panned", "zoomed_out", "zoomed_in", "resized", "dragging", "light"]:
+	for scenario: String in ["default", "panned", "zoomed_out", "hidden", "zoomed_in", "resized", "dragging", "light"]:
 		for editor: EasingCurveEditor in editors:
+			editor.hide_graph_background = scenario == "hidden"
 			editor.set_zoom(Vector2.ONE)
 			editor.pan_offset = Vector2.ZERO
 			match scenario:
 				"panned": editor.pan_offset = Vector2(83, -47)
 				"zoomed_out": editor.set_zoom(Vector2(0.2, 0.2))
+				"hidden": editor.set_zoom(Vector2(0.2, 0.2))
 				"zoomed_in": editor.set_zoom(Vector2(8, 5))
 				"resized": editor.size = Vector2(240, 360)
 				"dragging":

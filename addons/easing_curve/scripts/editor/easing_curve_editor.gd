@@ -28,6 +28,11 @@ var use_pending_add := true
 var hide_selection_toolbar_for_functions := true
 # True: reorder through the Inspector. False: change graph selection only.
 var point_move_buttons_reorder_points := false
+# Hide the viewport borders, ticks, and labels; keep the world-space reference box.
+@export var hide_graph_background := true:
+	set(value):
+		hide_graph_background = value
+		queue_redraw()
 
 static var _selected_index_by_curve: Dictionary[int, int] = {}
 static var _right_delete_drag_state_by_curve: Dictionary[int, Dictionary] = {}
@@ -1502,19 +1507,22 @@ func _draw_graph_grid() -> void:
 	var mono := EDITOR_THEME_CACHE.get_color(&"mono_color", &"Editor", text_color)
 	var grid_color := mono * Color(1, 1, 1, 0.1)
 	var reference_color := mono * Color(1, 1, 1, 0.25)
-	var tick_size := minf(4.0 * _editor_scale, minf(rect.size.x, rect.size.y))
-	var bottom_left := Vector2(rect.position.x, rect.end.y)
-	draw_line(rect.position, bottom_left, grid_color)
-	draw_line(bottom_left, rect.end, grid_color)
-	for index in range(GRAPH_GRID_DIVISIONS.x + 1):
-		var anchor := _get_grid_tick_position(Vector2.AXIS_X, index, rect)
-		draw_line(anchor, anchor - Vector2(0, tick_size), reference_color)
-	for index in range(GRAPH_GRID_DIVISIONS.y + 1):
-		var anchor := _get_grid_tick_position(Vector2.AXIS_Y, index, rect)
-		draw_line(anchor, anchor + Vector2(tick_size, 0), reference_color)
+	if not hide_graph_background:
+		var tick_size := minf(4.0 * _editor_scale, minf(rect.size.x, rect.size.y))
+		var bottom_left := Vector2(rect.position.x, rect.end.y)
+		draw_line(rect.position, bottom_left, grid_color)
+		draw_line(bottom_left, rect.end, grid_color)
+		for index in range(GRAPH_GRID_DIVISIONS.x + 1):
+			var anchor := _get_grid_tick_position(Vector2.AXIS_X, index, rect)
+			draw_line(anchor, anchor - Vector2(0, tick_size), reference_color)
+		for index in range(GRAPH_GRID_DIVISIONS.y + 1):
+			var anchor := _get_grid_tick_position(Vector2.AXIS_Y, index, rect)
+			draw_line(anchor, anchor + Vector2(tick_size, 0), reference_color)
 	var reference_lines := _get_reference_box_lines(rect)
 	if not reference_lines.is_empty():
 		draw_multiline(reference_lines, reference_color)
+	if hide_graph_background:
+		return
 	# Labels cover the grid/box, then _draw() paints curve geometry and points.
 	for label: Dictionary in _get_grid_labels(rect, font, font_size):
 		var baseline: Vector2 = label.bounds.position + Vector2(0, font.get_ascent(font_size))
