@@ -83,6 +83,7 @@ const CONTROL_LINE_COLOR = Color(1, 1, 1, 0.4)
 const BEZIER_DRAW_TOLERANCE_PIXELS := 0.75
 const BEZIER_DRAW_MAX_DEPTH := 12
 const AUTOFIT_PADDING_RATIO := 0.10
+const AUTOFIT_MAX_OVERLAY_ZOOM_STEPS := 2
 const FUNCTION_DRAW_STEPS := 120
 const GRAPH_GRID_DIVISIONS := Vector2i(4, 2)
 
@@ -2014,21 +2015,31 @@ func autofit() -> void:
 		fit_rect.size.x / (graph_rect.size.x * padded_size.x),
 		fit_rect.size.y / (graph_rect.size.y * padded_size.y),
 	)
+	var full_zoom := minf(1.0 / padded_size.x, 1.0 / padded_size.y)
 	var fit_step := 0
+	var full_step := 0
 	for step in range(ZOOM_STEPS + 1):
+		if step_to_zoom(step) > full_zoom + 0.000001:
+			break
+		full_step = step
 		if step_to_zoom(step) <= target_zoom + 0.000001:
 			fit_step = step
-		else:
-			break
 
-	_zoom_step = fit_step
+	# Overlays are a preference: do not sacrifice most of the plot to avoid them.
+	_zoom_step = maxi(fit_step, full_step - AUTOFIT_MAX_OVERLAY_ZOOM_STEPS)
 	_apply_zoom_from_step()
 	pan_offset = Vector2.ZERO
 	update_view_transform()
 
+	var fitted_size := padded_size * graph_rect.size * step_to_zoom(_zoom_step)
+	var center_allowance := ((graph_rect.size - fitted_size) * 0.5).max(Vector2.ZERO)
+	var fit_center := fit_rect.get_center().clamp(
+		graph_rect.get_center() - center_allowance,
+		graph_rect.get_center() + center_allowance,
+	)
 	# Keep the world-space centering delta exact when the bounds are centered.
 	pan_offset = _world_to_view.basis_xform(Vector2(0.5, 0.5) - bounds.get_center())
-	pan_offset += fit_rect.get_center() - graph_rect.get_center()
+	pan_offset += fit_center - graph_rect.get_center()
 	pan_changed.emit(pan_offset)
 	queue_redraw()
 

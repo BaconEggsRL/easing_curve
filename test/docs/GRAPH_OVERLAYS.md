@@ -52,11 +52,17 @@ grid, reference box and transforms share the expanded graph rectangle.
 
 The zoom row remains an overlay. Autofit and automatic initial fitting prefer
 the clear vertical space between the actual visible top controls and the zoom
-row, with eight logical pixels of clearance. Hidden controls reserve no space.
+row, with eight logical pixels of preferred clearance. Hidden controls reserve
+no space. Avoiding overlays may reduce zoom by at most two slider steps from
+the full-canvas fit. This retains at least about 69% of that fit's linear size
+instead of allowing a narrow clear strip to shrink the whole plot. Partial
+overlap is allowed when that limit is reached.
+
 Curve bounds still include handles, the reference range and sampled Function
-overshoot, with the existing padding and discrete zoom levels. If controls fill
-the canvas, fitting falls back to the full graph; zoom limits can also allow
-overlap. This is a fitting preference, not a clipping or input boundary.
+overshoot, with the existing padding and discrete zoom levels. The preferred
+center is kept between the controls unless it would push the larger fit beyond
+the canvas edges. If controls fill the canvas, fitting falls back to the full
+graph. This is a fitting preference, not a clipping or input boundary.
 
 Manual pan and pointer-anchored zoom continue using the full canonical graph
 rectangle. Readout placement shares the same measurement of visible top
@@ -77,6 +83,22 @@ same two baseline CSS-label assertions failing (`autofit-full.txt`). Actual
 Editor captures at scale 1.0 (dark) and 2.0 (light) confirm clear Custom/Elastic
 fits and permitted manual overlap. Images are in the isolated project's
 `test/_temp/autofit-editor-*.png` files.
+
+The soft-avoidance correction adds a flat-curve regression at width 400 and
+height 280. It requires a plot at least 60% of canvas width, a maximum two-step
+overlay penalty, retained control avoidance, canvas-edge containment with a
+taller Snap field, and repeatable fitting. The gesture suite now has 992 checks.
+The strict-clear-area assertions were replaced with canvas containment; the
+readout still uses its original strict top-control clamp.
+
+Actual Editor captures of the same flat Native curve at width 400 and scale 1.0
+measure 168.55 pixels of plot width before the correction and 242.72 after it
+(zoom steps 8 and 10). Both captures retain the same 307-pixel outer section,
+283-pixel editor and 275-pixel graph height. Artifacts are
+`test/_temp/overlay-project/test/_temp/autofit-soft-{before,after}-1.0-*`.
+Headless and rendered gesture runs pass all 992 checks. Full correctness remains
+32 of 33 suites passing, with only the two baseline CSS-label assertions failing.
+Logs: `test/_temp/autofit-soft-{gesture,rendered,full}.txt`.
 
 ## Measured result
 

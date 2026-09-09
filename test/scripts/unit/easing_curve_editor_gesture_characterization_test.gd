@@ -17,6 +17,7 @@ func _run() -> void:
 	await _test_overlay_input_routing()
 	await _test_overlay_resize_and_theme()
 	await _test_autofit_avoids_overlays()
+	await _test_autofit_limits_overlay_shrinkage()
 	_test_zoom_metadata_contract()
 	_test_loaded_resource_initial_autofit_gate()
 	_test_view_state_update_ownership()
@@ -99,7 +100,7 @@ func _test_overlay_section_geometry() -> void:
 				editor.autofit()
 				var fit := editor._get_autofit_view_rect()
 				var bounds := editor._get_autofit_world_bounds()
-				_expect(fit.grow(0.01).has_point(editor.get_view_pos(bounds.position)) and fit.grow(0.01).has_point(editor.get_view_pos(bounds.end)), "Inspector Autofit clipped Custom/Elastic bounds against controls")
+				_expect(graph_rect.grow(0.01).has_point(editor.get_view_pos(bounds.position)) and graph_rect.grow(0.01).has_point(editor.get_view_pos(bounds.end)), "Inspector Autofit clipped Custom/Elastic bounds against canvas edges")
 				if function_mode:
 					_expect(is_equal_approx(fit.position.y, graph_rect.position.y), "Function Autofit reserved hidden top controls")
 				if DisplayServer.get_name() != "headless":
@@ -351,7 +352,7 @@ func _test_autofit_avoids_overlays() -> void:
 				_expect(fit.end.y <= editor._zoom_overlay.position.y - 8.0 * scale_value, "Autofit ignored the zoom overlay")
 				var bounds := editor._get_autofit_world_bounds()
 				for world: Vector2 in [bounds.position, bounds.end, Vector2(bounds.position.x, bounds.end.y), Vector2(bounds.end.x, bounds.position.y)]:
-					_expect(fit.grow(0.01).has_point(editor.get_view_pos(world)), "Autofit left curve or handle bounds under controls")
+					_expect(graph.grow(0.01).has_point(editor.get_view_pos(world)), "Autofit left curve or handle bounds outside the canvas")
 				_expect(editor.get_view_pos(bounds.get_center()).is_equal_approx(fit.get_center()), "Autofit did not center in the clear area")
 				var pan := editor.pan_offset
 				var step := editor._zoom_step
@@ -381,6 +382,49 @@ func _test_autofit_avoids_overlays() -> void:
 		_expect(editor._get_autofit_view_rect() == editor._get_graph_view_rect(), "Controls filling the canvas did not fall back to a usable Autofit")
 		editor.autofit()
 		_expect(editor.pan_offset.is_finite(), "Crowded Autofit produced invalid coordinates")
+		_dispose_overlay_fixture(fixture)
+
+
+func _test_autofit_limits_overlay_shrinkage() -> void:
+	for native: bool in [false, true]:
+		var fixture := _overlay_input_fixture(native)
+		var editor: EasingCurveEditor = fixture.editor
+		# Match the narrow Inspector and flat curve from the reported regression.
+		for index in range(editor._point_count()):
+			var point := editor._point(index)
+			var position: Vector2 = point.get(&"position")
+			position.y = 1.0
+			point.set(&"position", position)
+			point.set(&"left_control_point", position)
+			point.set(&"right_control_point", position)
+		editor.size = Vector2(400, 280)
+		for frame in range(4):
+			await process_frame
+		var graph := editor._get_graph_view_rect()
+		editor._point_toolbar_panel.hide()
+		editor._zoom_overlay.hide()
+		editor.autofit()
+		var full_step := editor._zoom_step
+		editor._point_toolbar_panel.show()
+		editor._zoom_overlay.show()
+		editor.autofit()
+		_expect(editor._zoom_step == full_step - 2, "Narrow Inspector Autofit did not retain the requested larger framing")
+		var plot_width := absf(editor.get_view_pos(Vector2.ONE).x - editor.get_view_pos(Vector2(0, 1)).x)
+		_expect(plot_width >= graph.size.x * 0.60, "Overlay avoidance shrank the reference plot below 60 percent of canvas width")
+		_expect(editor._zoom_step < full_step, "Autofit stopped considering visible controls")
+		# A tall Snap field may push the preferred center down, but must neither
+		# force more zoom-out nor push the fitted bounds past the canvas edge.
+		editor.snap_enabled = true
+		editor._snap_count_input.custom_minimum_size.y = 150
+		for frame in range(4):
+			await process_frame
+		editor.autofit()
+		_expect(editor._zoom_step >= full_step - 2, "Taller controls exceeded the overlay zoom penalty")
+		var bounds := editor._get_autofit_world_bounds()
+		_expect(graph.grow(0.01).has_point(editor.get_view_pos(bounds.position)) and graph.grow(0.01).has_point(editor.get_view_pos(bounds.end)), "Preferred center pushed a larger fit outside the graph")
+		var pan := editor.pan_offset
+		editor.autofit()
+		_expect(editor.pan_offset.is_equal_approx(pan), "Soft overlay fitting drifted on repeat")
 		_dispose_overlay_fixture(fixture)
 
 
