@@ -2,6 +2,31 @@
 
 [ext_resource type="Script" uid="uid://cjoavnop3pyl2" path="res://addons/easing_curve/_test_scene/test.gd" id="1_37kl0"]
 
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_hmtgg"]
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_5p28q"]
+position = Vector2(0.3337977, 0.74033564)
+left_control_point = Vector2(0.3337977, 0.74033564)
+right_control_point = Vector2(0.3337977, 0.74033564)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_bjlf6"]
+position = Vector2(0.6112001, 0.2658267)
+left_control_point = Vector2(0.6112001, 0.2658267)
+right_control_point = Vector2(0.6112001, 0.2658267)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_r8b5h"]
+position = Vector2(1, 1)
+left_control_point = Vector2(1, 1)
+right_control_point = Vector2(1, 1)
+
+[sub_resource type="NativeEasingCurve" id="NativeEasingCurve_d0y58"]
+points = Array[NativeEasingCurvePoint]([SubResource("NativeEasingCurvePoint_hmtgg"), SubResource("NativeEasingCurvePoint_5p28q"), SubResource("NativeEasingCurvePoint_bjlf6"), SubResource("NativeEasingCurvePoint_r8b5h")])
+preset_override_active = true
+
+[sub_resource type="Curve" id="Curve_6pruj"]
+
 [node name="TestScene" type="Control" unique_id=198225181]
 layout_mode = 3
 anchors_preset = 15
@@ -11,6 +36,8 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_37kl0")
+native_curve = SubResource("NativeEasingCurve_d0y58")
+debug_curve = SubResource("Curve_6pruj")
 
 [node name="NodeContainer" type="Node2D" parent="." unique_id=1843378729]
 position = Vector2(0, 367)

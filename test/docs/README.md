@@ -1,5 +1,11 @@
 # Development testing
 
+## Fixed graph grid and reference box
+
+See [the grid validation report](FIXED_GRAPH_GRID.md) for the shared rendering
+behavior, 1,016 focused checks, 32-suite correctness results, visual comparison,
+and remaining differences from the supplied references.
+
 ## DRAG-COORDS-01 — shared drag-coordinate overlay
 
 Implemented in `EasingCurveEditor` only, using its existing drag indices and

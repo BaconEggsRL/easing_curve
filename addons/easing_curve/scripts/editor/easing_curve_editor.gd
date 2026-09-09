@@ -75,6 +75,7 @@ const BEZIER_DRAW_TOLERANCE_PIXELS := 0.75
 const BEZIER_DRAW_MAX_DEPTH := 12
 const AUTOFIT_PADDING_RATIO := 0.10
 const FUNCTION_DRAW_STEPS := 120
+const GRAPH_GRID_DIVISIONS := Vector2i(4, 2)
 
 var presentation_owned := false
 var editor_undo_redo: Object
@@ -1275,52 +1276,7 @@ func _draw():
 		return
 
 	update_view_transform()
-	var value_range := _value_range()
-
-	# --- Draw Grid ---
-	var grid_color_primary: Color = Color(0.3, 0.3, 0.3, 0.8)
-	var grid_color: Color = Color(0.2, 0.2, 0.2, 0.3)
-
-	var grid_steps: Vector2 = Vector2i(4, 2)
-	var step_size: Vector2 = Vector2(1, value_range.y - value_range.x) / grid_steps
-
-	# Primary borders
-	draw_line(
-		get_view_pos(Vector2(MIN_X, value_range.x)),
-		get_view_pos(Vector2(MAX_X, value_range.x)),
-		grid_color_primary,
-	)
-	draw_line(
-		get_view_pos(Vector2(MAX_X, value_range.y)),
-		get_view_pos(Vector2(MIN_X, value_range.y)),
-		grid_color_primary,
-	)
-	draw_line(
-		get_view_pos(Vector2(MIN_X, value_range.x)),
-		get_view_pos(Vector2(MIN_X, value_range.y)),
-		grid_color_primary,
-	)
-	draw_line(
-		get_view_pos(Vector2(MAX_X, value_range.x)),
-		get_view_pos(Vector2(MAX_X, value_range.y)),
-		grid_color_primary,
-	)
-
-	# Internal grid
-	for i in range(1, grid_steps.x):
-		var x = MIN_X + i * step_size.x
-		draw_line(
-			get_view_pos(Vector2(x, value_range.x)),
-			get_view_pos(Vector2(x, value_range.y)),
-			grid_color,
-		)
-	for i in range(1, grid_steps.y):
-		var y = value_range.x + i * step_size.y
-		draw_line(
-			get_view_pos(Vector2(MIN_X, y)),
-			get_view_pos(Vector2(MAX_X, y)),
-			grid_color,
-		)
+	_draw_graph_grid()
 
 	# --- Draw function or point-backed curve ---
 	if not _is_point_graph():
@@ -1456,6 +1412,113 @@ func _get_drag_coordinate_position() -> Vector2:
 	# All three properties are absolute curve coordinates. Pending-add press/motion
 	# already convert display input to curve space; apply Native transforms only once.
 	return _backend.curve_to_display_position(point.get(property_name) as Vector2)
+
+
+func _get_grid_tick_position(axis: int, index: int, rect: Rect2) -> Vector2:
+	var fraction := float(index) / GRAPH_GRID_DIVISIONS[axis]
+	if axis == Vector2.AXIS_X:
+		return Vector2(lerpf(rect.position.x, rect.end.x, fraction), rect.end.y)
+	return Vector2(rect.position.x, lerpf(rect.end.y, rect.position.y, fraction))
+
+
+func _format_grid_label(value: float) -> String:
+	var text := "%.1f" % value
+	return "0.0" if text == "-0.0" else text
+
+
+func _get_grid_labels(rect: Rect2, font: Font, font_size: int) -> Array[Dictionary]:
+	var labels: Array[Dictionary] = []
+	var padding := 4.0 * _editor_scale
+	var available := rect.grow(-padding)
+	if available.size.x <= 0.0 or available.size.y <= 0.0:
+		return labels
+	for axis in [Vector2.AXIS_X, Vector2.AXIS_Y]:
+		for index in range(GRAPH_GRID_DIVISIONS[axis] + 1):
+			var anchor := _get_grid_tick_position(axis, index, rect)
+			var value := get_world_pos(anchor)[axis]
+			if not is_finite(value):
+				continue
+			var text := _format_grid_label(value)
+			var extent := Vector2(font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x, font.get_height(font_size))
+			if extent.x > available.size.x or extent.y > available.size.y:
+				continue
+			var position := anchor - Vector2(0, extent.y + padding)
+			if axis == Vector2.AXIS_X:
+				# Interior labels have fixed left anchors; the right endpoint is
+				# right-aligned so changing text widths never move its tick.
+				position.x += padding
+				if index == GRAPH_GRID_DIVISIONS.x:
+					position.x = available.end.x - extent.x
+			else:
+				position.x = available.position.x
+			position.y = clampf(position.y, available.position.y, available.end.y - extent.y)
+			var bounds := Rect2(position, extent)
+			if not available.encloses(bounds):
+				continue
+			var overlaps := false
+			for previous: Dictionary in labels:
+				if bounds.grow(padding * 0.5).intersects(previous.bounds):
+					overlaps = true
+					break
+			if not overlaps:
+				labels.append({"text": text, "bounds": bounds, "axis": axis, "index": index})
+	return labels
+
+
+func _get_reference_box_lines(rect: Rect2) -> PackedVector2Array:
+	var lines := PackedVector2Array()
+	var first := get_view_pos(Vector2.ZERO)
+	var last := get_view_pos(Vector2.ONE)
+	if not first.is_finite() or not last.is_finite():
+		return lines
+	var minimum := first.min(last)
+	var maximum := first.max(last)
+	# Clip each original edge separately: outlining the intersection would
+	# incorrectly turn viewport boundaries into reference-box edges.
+	var top := maxf(minimum.y, rect.position.y)
+	var bottom := minf(maximum.y, rect.end.y)
+	if bottom > top:
+		for x: float in [minimum.x, maximum.x]:
+			if x >= rect.position.x and x <= rect.end.x:
+				lines.append(Vector2(x, top))
+				lines.append(Vector2(x, bottom))
+	var left := maxf(minimum.x, rect.position.x)
+	var right := minf(maximum.x, rect.end.x)
+	if right > left:
+		for y: float in [minimum.y, maximum.y]:
+			if y >= rect.position.y and y <= rect.end.y:
+				lines.append(Vector2(left, y))
+				lines.append(Vector2(right, y))
+	return lines
+
+
+func _draw_graph_grid() -> void:
+	var rect := _get_graph_view_rect().intersection(Rect2(Vector2.ZERO, size))
+	if not rect.has_area() or not get_world_pos(rect.position).is_finite():
+		return
+	var font := get_theme_font(&"font", &"Label")
+	var font_size := get_theme_font_size(&"font_size", &"Label")
+	var text_color := EDITOR_THEME_CACHE.get_color(&"font_color", &"Editor", get_theme_color(&"font_color", &"Label"))
+	var mono := EDITOR_THEME_CACHE.get_color(&"mono_color", &"Editor", text_color)
+	var grid_color := mono * Color(1, 1, 1, 0.1)
+	var reference_color := mono * Color(1, 1, 1, 0.25)
+	var tick_size := minf(4.0 * _editor_scale, minf(rect.size.x, rect.size.y))
+	var bottom_left := Vector2(rect.position.x, rect.end.y)
+	draw_line(rect.position, bottom_left, grid_color)
+	draw_line(bottom_left, rect.end, grid_color)
+	for index in range(GRAPH_GRID_DIVISIONS.x + 1):
+		var anchor := _get_grid_tick_position(Vector2.AXIS_X, index, rect)
+		draw_line(anchor, anchor - Vector2(0, tick_size), reference_color)
+	for index in range(GRAPH_GRID_DIVISIONS.y + 1):
+		var anchor := _get_grid_tick_position(Vector2.AXIS_Y, index, rect)
+		draw_line(anchor, anchor + Vector2(tick_size, 0), reference_color)
+	var reference_lines := _get_reference_box_lines(rect)
+	if not reference_lines.is_empty():
+		draw_multiline(reference_lines, reference_color)
+	# Labels cover the grid/box, then _draw() paints curve geometry and points.
+	for label: Dictionary in _get_grid_labels(rect, font, font_size):
+		var baseline: Vector2 = label.bounds.position + Vector2(0, font.get_ascent(font_size))
+		draw_string(font, baseline, label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
 
 
 func _format_drag_coordinates(position: Vector2) -> String:
