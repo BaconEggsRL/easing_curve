@@ -1351,7 +1351,7 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		curve_editor_content.add_child(easing_curve_editor)
 		easing_curve_editor.resized.connect(easing_curve_editor.update_minimum_size)
 
-		easing_curve_editor.setup_zoom_overlay()
+		easing_curve_editor.setup_zoom_row()
 		easing_curve_editor.set_slider_value(
 			view_state[EasingCurve.CURVE_EDITOR_VIEW_SLIDER_VALUE]
 		)
@@ -1453,7 +1453,7 @@ func _handle_native_curve_editor(
 	content.add_child(easing_curve_editor)
 	easing_curve_editor.resized.connect(easing_curve_editor.update_minimum_size)
 
-	easing_curve_editor.setup_zoom_overlay()
+	easing_curve_editor.setup_zoom_row()
 	easing_curve_editor.set_slider_value(EasingCurve.DEFAULT_SLIDER_VALUE)
 
 	_curve_editor_section = _create_foldable_section(

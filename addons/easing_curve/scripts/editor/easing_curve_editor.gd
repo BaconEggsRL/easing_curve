@@ -7,10 +7,7 @@ extends Control
 
 const SELECTION_TOOLBAR_HEIGHT := 32.0
 const SNAP_TOOLBAR_HEIGHT := 32.0
-const OVERLAY_INSET := 8.0
-const ZOOM_BOTTOM_INSET := 0.0
-# Retain the former compact gap in the total height, not in graph coordinates.
-const ZOOM_HEIGHT_ALLOWANCE := 2.0
+const CONTROL_ROW_INSET := 8.0
 const GRID_SNAP_COORDINATE_LABEL_MIN_GAP := 8.0
 const SNAP_ENABLED_META := &"_easing_curve_snap_enabled"
 const SNAP_COUNT_META := &"_easing_curve_snap_count"
@@ -28,8 +25,8 @@ const CurveEditorSettings := preload(
 )
 
 var use_pending_add := true
-# True: hide the point-selection overlay in Function mode.
-# False: keep the overlay visible, with point-only controls inactive.
+# True: hide point controls and snapping in Function mode.
+# False: show those rows with point-only controls inactive.
 var hide_selection_toolbar_for_functions := true
 # True: reorder through the Inspector. False: change graph selection only.
 var point_move_buttons_reorder_points := false
@@ -152,7 +149,7 @@ var snap_count: int = 10:
 var _snap_button: Button
 var _snap_toolbar_margin: MarginContainer
 var _snap_count_input: EditorSpinSlider
-var _coordinate_overlay: Control
+var _coordinate_readout: Control
 var _zoom_x: float = 1.0 # horizontal zoom
 var _zoom_y: float = 1.0 # vertical zoom
 var _zoom_step := 0
@@ -162,12 +159,12 @@ var _slider: EasingCurveZoomSliderContainer:
 	set = set_slider_container
 var _world_to_view: Transform2D
 var _editor_scale: float = 1.0
-var _overlay_layout_queued := false
+var _layout_queued := false
 var _layout: VBoxContainer
 var _graph_canvas: Control
 var _graph_ink: Control
-var _zoom_overlay: HBoxContainer
-var _zoom_overlay_slider: EasingCurveZoomSliderContainer
+var _zoom_row: HBoxContainer
+var _zoom_row_slider: EasingCurveZoomSliderContainer
 
 var _point_toolbar_panel: VBoxContainer
 var _point_toolbar: HFlowContainer
@@ -230,8 +227,8 @@ func _ready() -> void:
 	_graph_canvas.mouse_filter = Control.MOUSE_FILTER_STOP
 	_graph_canvas.mouse_force_pass_scroll_events = true
 	_layout.add_child(_graph_canvas)
-	if _zoom_overlay != null:
-		_layout.move_child(_zoom_overlay, -1)
+	if _zoom_row != null:
+		_layout.move_child(_zoom_row, -1)
 	_graph_canvas.gui_input.connect(_on_graph_gui_input)
 	_graph_canvas.resized.connect(queue_redraw)
 	_layout.sort_children.connect(queue_redraw)
@@ -240,18 +237,18 @@ func _ready() -> void:
 	_graph_canvas.add_child(_graph_ink)
 	_graph_ink.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_graph_ink.draw.connect(_draw_graph)
-	_coordinate_overlay = Control.new()
-	_coordinate_overlay.name = "DragCoordinates"
-	_coordinate_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_coordinate_overlay.z_index = 1
-	_graph_canvas.add_child(_coordinate_overlay)
-	_coordinate_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_coordinate_overlay.draw.connect(_draw_drag_coordinates)
-	_point_toolbar_panel.sort_children.connect(_coordinate_overlay.queue_redraw)
-	_point_toolbar_panel.minimum_size_changed.connect(_queue_overlay_layout)
-	resized.connect(_queue_overlay_layout)
-	theme_changed.connect(_queue_overlay_layout)
-	_update_overlay_layout()
+	_coordinate_readout = Control.new()
+	_coordinate_readout.name = "DragCoordinates"
+	_coordinate_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_coordinate_readout.z_index = 1
+	_graph_canvas.add_child(_coordinate_readout)
+	_coordinate_readout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_coordinate_readout.draw.connect(_draw_drag_coordinates)
+	_point_toolbar_panel.sort_children.connect(_coordinate_readout.queue_redraw)
+	_point_toolbar_panel.minimum_size_changed.connect(_queue_layout)
+	resized.connect(_queue_layout)
+	theme_changed.connect(_queue_layout)
+	_update_layout()
 	_update_point_toolbar()
 
 
@@ -265,20 +262,20 @@ func _ensure_layout() -> void:
 	_layout.minimum_size_changed.connect(update_minimum_size)
 
 
-func _queue_overlay_layout() -> void:
-	if _overlay_layout_queued or not is_node_ready():
+func _queue_layout() -> void:
+	if _layout_queued or not is_node_ready():
 		return
-	_overlay_layout_queued = true
-	_update_overlay_layout.call_deferred()
+	_layout_queued = true
+	_update_layout.call_deferred()
 
 
-func _update_overlay_layout() -> void:
-	_overlay_layout_queued = false
+func _update_layout() -> void:
+	_layout_queued = false
 	if not is_inside_tree():
 		return
 	if _layout == null or _graph_canvas == null:
 		return
-	var inset := OVERLAY_INSET * _editor_scale
+	var inset := CONTROL_ROW_INSET * _editor_scale
 	_reserve_point_toolbar_label_column_width()
 	_layout.size.x = size.x
 	_graph_canvas.custom_minimum_size.y = _get_graph_size().y + 2.0 * GRAPH_EDGE_PADDING * _editor_scale
@@ -287,30 +284,29 @@ func _update_overlay_layout() -> void:
 			_snap_toolbar_margin.add_theme_constant_override(side, roundi(inset))
 	update_minimum_size()
 	queue_redraw()
-	_coordinate_overlay.queue_redraw()
+	_coordinate_readout.queue_redraw()
 
 
-func setup_zoom_overlay() -> void:
-	if _zoom_overlay != null:
+func setup_zoom_row() -> void:
+	if _zoom_row != null:
 		return
 	_ensure_layout()
-	_zoom_overlay = HBoxContainer.new()
-	_zoom_overlay.name = &"ZoomRow"
-	_zoom_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_zoom_overlay.z_index = 2
-	_layout.add_child(_zoom_overlay)
+	_zoom_row = HBoxContainer.new()
+	_zoom_row.name = &"ZoomRow"
+	_zoom_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_layout.add_child(_zoom_row)
 	var spacer := Control.new()
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.size_flags_stretch_ratio = 0.6
-	_zoom_overlay.add_child(spacer)
-	_zoom_overlay_slider = ZOOM_SLIDER_CONTAINER.instantiate() as EasingCurveZoomSliderContainer
-	_zoom_overlay_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_zoom_overlay_slider.size_flags_stretch_ratio = 0.4
-	_zoom_overlay.add_child(_zoom_overlay_slider)
-	set_slider_container(_zoom_overlay_slider)
-	_zoom_overlay.minimum_size_changed.connect(_queue_overlay_layout)
-	_queue_overlay_layout()
+	_zoom_row.add_child(spacer)
+	_zoom_row_slider = ZOOM_SLIDER_CONTAINER.instantiate() as EasingCurveZoomSliderContainer
+	_zoom_row_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_zoom_row_slider.size_flags_stretch_ratio = 0.4
+	_zoom_row.add_child(_zoom_row_slider)
+	set_slider_container(_zoom_row_slider)
+	_zoom_row.minimum_size_changed.connect(_queue_layout)
+	_queue_layout()
 	update_minimum_size()
 
 
@@ -1384,8 +1380,8 @@ func _restore_right_delete_drag_state() -> void:
 func _draw():
 	if _graph_ink != null:
 		_graph_ink.queue_redraw()
-	if _coordinate_overlay != null:
-		_coordinate_overlay.queue_redraw()
+	if _coordinate_readout != null:
+		_coordinate_readout.queue_redraw()
 
 
 func _draw_graph() -> void:
@@ -1679,7 +1675,7 @@ func _get_top_controls_minimum_y(canvas: Control, gap: float = GRID_SNAP_COORDIN
 
 
 func _draw_drag_coordinates() -> void:
-	_coordinate_overlay.draw_set_transform(-_graph_canvas.position)
+	_coordinate_readout.draw_set_transform(-_graph_canvas.position)
 	var position := _get_drag_coordinate_position()
 	if not position.is_finite():
 		return
@@ -1701,11 +1697,11 @@ func _draw_drag_coordinates() -> void:
 	if is_zero_approx(outline.a):
 		outline = Color.BLACK if color.get_luminance() > 0.5 else Color.WHITE
 	var baseline := label_position + Vector2(0, font.get_ascent(font_size))
-	_coordinate_overlay.draw_string_outline(
+	_coordinate_readout.draw_string_outline(
 		font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size,
 		maxi(1, roundi(2.0 * _editor_scale)), outline,
 	)
-	_coordinate_overlay.draw_string(
+	_coordinate_readout.draw_string(
 		font, baseline, text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color,
 	)
@@ -2075,7 +2071,7 @@ func autofit() -> void:
 
 	# Fit between both control rows when the zoom overlay is present.
 	_zoom_step = maxi(fit_step, full_step - AUTOFIT_MAX_OVERLAY_ZOOM_STEPS)
-	if _zoom_overlay != null and _zoom_overlay.is_visible_in_tree():
+	if _zoom_row != null and _zoom_row.is_visible_in_tree():
 		_zoom_step = fit_step
 	_apply_zoom_from_step()
 	pan_offset = Vector2.ZERO
@@ -2094,8 +2090,8 @@ func autofit() -> void:
 	var minimum_y := _get_top_controls_minimum_y(self, toolbar_gap) + point_radius
 	var bounds_top := get_view_pos(Vector2(bounds.position.x, bounds.end.y)).y
 	pan_offset.y += maxf(0.0, minimum_y - bounds_top)
-	if _zoom_overlay != null and _zoom_overlay.is_visible_in_tree():
-		var maximum_y := _zoom_overlay.position.y - toolbar_gap * _editor_scale - point_radius
+	if _zoom_row != null and _zoom_row.is_visible_in_tree():
+		var maximum_y := _zoom_row.position.y - toolbar_gap * _editor_scale - point_radius
 		var bounds_bottom := get_view_pos(bounds.position).y
 		var top_clearance := get_view_pos(Vector2(bounds.position.x, bounds.end.y)).y - minimum_y
 		pan_offset.y -= minf(maxf(0.0, bounds_bottom - maximum_y), maxf(0.0, top_clearance))
@@ -2107,8 +2103,8 @@ func _get_autofit_view_rect() -> Rect2:
 	var graph_rect := _get_graph_view_rect()
 	var top := maxf(graph_rect.position.y, _get_top_controls_minimum_y(self, AUTOFIT_CONTROL_GAP))
 	var bottom := graph_rect.end.y
-	if _zoom_overlay != null and _zoom_overlay.is_visible_in_tree():
-		bottom = minf(bottom, _zoom_overlay.position.y - AUTOFIT_CONTROL_GAP * _editor_scale)
+	if _zoom_row != null and _zoom_row.is_visible_in_tree():
+		bottom = minf(bottom, _zoom_row.position.y - AUTOFIT_CONTROL_GAP * _editor_scale)
 	# Prefer clear space, but retain a usable fit when controls fill the canvas.
 	if top >= bottom:
 		return graph_rect
@@ -2578,7 +2574,7 @@ func _create_snap_toolbar() -> void:
 	_snap_toolbar_margin = MarginContainer.new()
 	_snap_toolbar_margin.name = &"GridSnapMargin"
 	_snap_toolbar_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_toolbar_panel.add_child(_snap_toolbar_margin)
+	_layout.add_child(_snap_toolbar_margin)
 	var toolbar := HBoxContainer.new()
 	toolbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toolbar.custom_minimum_size.y = SNAP_TOOLBAR_HEIGHT * _editor_scale
@@ -2602,7 +2598,6 @@ func _create_snap_toolbar() -> void:
 	_snap_count_input.tooltip_text = "Grid subdivisions on both X and Y (2–100)"
 	_snap_count_input.value_changed.connect(_on_snap_count_changed)
 	toolbar.add_child(_snap_count_input)
-	_point_toolbar_panel.custom_minimum_size.y += SNAP_TOOLBAR_HEIGHT * _editor_scale
 	_sync_snap_controls()
 
 
@@ -2637,12 +2632,7 @@ func _on_snap_count_changed(value: float) -> void:
 func _create_point_toolbar() -> void:
 	_point_toolbar_panel = VBoxContainer.new()
 	_point_toolbar_panel.name = &"PointToolbarPanel"
-	_point_toolbar_panel.z_index = 2
 	_point_toolbar_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	_point_toolbar_panel.set_anchors_and_offsets_preset(
-		Control.PRESET_TOP_WIDE
-	)
 
 	_point_toolbar_panel.custom_minimum_size.y = (
 		SELECTION_TOOLBAR_HEIGHT * _editor_scale
@@ -2868,6 +2858,7 @@ func _update_point_toolbar() -> void:
 
 	var hide_toolbar := _is_point_toolbar_hidden()
 	_point_toolbar_panel.visible = not hide_toolbar
+	_snap_toolbar_margin.visible = not hide_toolbar
 
 	if hide_toolbar:
 		_set_point_toolbar_reorder_available(false, false)

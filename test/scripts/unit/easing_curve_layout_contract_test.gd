@@ -63,7 +63,7 @@ func _test_grouped_toolbar() -> void:
 			await _settle()
 			var baseline_width := presentation.get_combined_minimum_size().x
 			var arrangements := {}
-			for width: float in [180.0, 220.0, 270.0, 359.0, 360.0, 361.0, 600.0, 220.0, 180.0]:
+			for width: float in [150.0, 180.0, 220.0, 270.0, 359.0, 360.0, 361.0, 600.0, 220.0, 180.0, 150.0]:
 				presentation.size.x = width * scale_value
 				await _settle()
 				var positions: Array[Vector2] = []
@@ -79,6 +79,9 @@ func _test_grouped_toolbar() -> void:
 				arrangements[width] = positions
 				_expect(presentation.get_combined_minimum_size().x == baseline_width, "Toolbar wrapping changed presentation minimum width")
 				_expect(editor._graph_canvas.size.x == editor.size.x, "Control minimum widened the graph canvas")
+				_expect(editor._snap_toolbar_margin.get_parent() == editor._graph_canvas.get_parent(), "Grid Snap is not a graph sibling")
+				_expect(editor._snap_toolbar_margin.get_rect().end.y <= editor._graph_canvas.position.y, "Grid Snap overlaps graph")
+				_expect(editor._slider.get_global_rect().end.x <= editor.get_global_rect().end.x + 0.01, "Zoom row overflowed Inspector width")
 			print("WRAP_GATE backend=%s scale=%s presentation_min=%s" % ["native" if native else "legacy", scale_value, baseline_width])
 		presentation.free()
 		await _settle()
@@ -129,12 +132,12 @@ func _test_sibling_capture() -> void:
 func _test_graph_dimensions() -> void:
 	var editor := EasingCurveEditor.new()
 	root.add_child(editor)
-	editor.setup_zoom_overlay()
+	editor.setup_zoom_row()
 	for scale_value: float in [1.0, 1.5, 2.0]:
 		editor._editor_scale = scale_value
 		for width: float in [150.0, 179.0, 180.0, 181.0, 220.0, 359.0, 360.0, 361.0, 600.0]:
 			editor.size.x = (width + 8.0) * scale_value
-			editor._update_overlay_layout()
+			editor._update_layout()
 			await _settle()
 			var graph := editor._get_graph_view_rect()
 			var expected := Vector2(width, clampf(180.0, width / 2.0, width)) * scale_value
@@ -149,5 +152,5 @@ func _test_graph_dimensions() -> void:
 			await _settle()
 			_expect(editor.get_combined_minimum_size().x == 64.0 * scale_value, "Graph height preference raised horizontal minimum")
 			_expect(editor._point_toolbar_panel.get_rect().end.y <= editor._graph_canvas.position.y, "Point controls overlap graph")
-			_expect(editor._graph_canvas.get_rect().end.y <= editor._zoom_overlay.position.y, "Zoom controls overlap graph")
+			_expect(editor._graph_canvas.get_rect().end.y <= editor._zoom_row.position.y, "Zoom controls overlap graph")
 	editor.free()

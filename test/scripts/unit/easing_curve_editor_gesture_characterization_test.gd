@@ -102,7 +102,7 @@ func _test_overlay_section_geometry() -> void:
 				_expect(is_zero_approx(graph_rect.position.y - 4.0 * editor._editor_scale), "Graph still reserves top overlay height")
 				var zoom_before := editor._slider
 				var minimum_before := editor.get_combined_minimum_size()
-				editor.setup_zoom_overlay()
+				editor.setup_zoom_row()
 				_expect(editor._slider == zoom_before and editor.get_combined_minimum_size() == minimum_before, "Repeated overlay setup changed controls or height")
 				_expect(editor._slider.slider_changed.get_connections().size() == 1 and editor._slider.autofit_pressed.get_connections().size() == 1, "Repeated overlay setup duplicated callbacks")
 				editor.autofit()
@@ -147,7 +147,7 @@ func _overlay_input_fixture(native: bool) -> Dictionary:
 	editor.set_curve(curve)
 	editor.size = Vector2(600, 360)
 	viewport.add_child(editor)
-	editor.setup_zoom_overlay()
+	editor.setup_zoom_row()
 	editor.selected_index = 1
 	editor.update_view_transform()
 	return {"viewport": viewport, "editor": editor, "point": point}
@@ -308,14 +308,14 @@ func _test_overlay_resize_and_theme() -> void:
 					await process_frame
 				var inset := 8.0 * scale_value
 				var top := editor._point_toolbar_panel.get_rect()
-				var bottom := editor._zoom_overlay.get_rect()
+				var bottom := editor._zoom_row.get_rect()
 				_expect(top.position.is_equal_approx(Vector2.ZERO), "Point toolbar did not use the available top-left corner")
 				_expect(is_equal_approx(top.end.x, editor.size.x), "Point toolbar did not use the full editor width")
 				_expect(is_equal_approx(editor._point_reset_button.get_global_rect().end.x, editor.get_global_rect().end.x), "Point reset lost its trailing alignment after resize/theme change")
 				_expect(is_equal_approx(editor._snap_button.get_global_rect().position.x - editor.global_position.x, inset), "Widening the point toolbar moved Grid Snap's side inset")
 				_expect(is_equal_approx(bottom.position.x, inset) and is_equal_approx(bottom.end.x, editor.size.x - inset), "Bottom overlay lost its side insets after resize/theme change")
 				_expect(is_equal_approx(bottom.end.y, editor.size.y), "Zoom overlay was not flush with the bottom after resize/theme change")
-				_expect(is_equal_approx(bottom.size.y, editor._zoom_overlay.get_combined_minimum_size().y), "Bottom overlay height ignored widget minimum size")
+				_expect(is_equal_approx(bottom.size.y, editor._zoom_row.get_combined_minimum_size().y), "Bottom overlay height ignored widget minimum size")
 				var graph := editor._get_graph_view_rect()
 				var canvas_size := Vector2(editor.size.x, minf(editor.size.x, editor.size.y))
 				_expect(graph.is_equal_approx(Rect2(Vector2.ONE * 4.0 * scale_value, canvas_size - Vector2.ONE * 8.0 * scale_value)), "Scaled graph lost its edge margins or square height cap")
@@ -361,7 +361,7 @@ func _test_autofit_avoids_overlays() -> void:
 				editor.autofit()
 				var fit := editor._get_autofit_view_rect()
 				_expect(fit.position.y >= editor._snap_button.get_global_rect().end.y + 12.0 * scale_value, "Autofit lost the preferred gap below Grid Snap")
-				_expect(fit.end.y <= editor._zoom_overlay.position.y - 12.0 * scale_value, "Autofit lost the preferred gap above the zoom overlay")
+				_expect(fit.end.y <= editor._zoom_row.position.y - 12.0 * scale_value, "Autofit lost the preferred gap above the zoom overlay")
 				var bounds := editor._get_autofit_world_bounds()
 				for world: Vector2 in [bounds.position, bounds.end, Vector2(bounds.position.x, bounds.end.y), Vector2(bounds.end.x, bounds.position.y)]:
 					_expect(graph.grow(0.01).has_point(editor.get_view_pos(world)), "Autofit left curve or handle bounds outside the canvas")
@@ -384,10 +384,10 @@ func _test_autofit_avoids_overlays() -> void:
 		_expect(editor._get_autofit_view_rect().position.y >= editor._snap_count_input.get_global_rect().end.y + 8.0 * editor._editor_scale, "Autofit ignored the taller Snap field")
 		editor._point_toolbar_panel.hide()
 		_expect(is_equal_approx(editor._get_autofit_view_rect().position.y, editor._get_graph_view_rect().position.y), "Hidden top controls still reduced Autofit space")
-		editor._zoom_overlay.hide()
+		editor._zoom_row.hide()
 		_expect(editor._get_autofit_view_rect() == editor._get_graph_view_rect(), "Hidden overlays still reduced Autofit space")
 		editor._point_toolbar_panel.show()
-		editor._zoom_overlay.show()
+		editor._zoom_row.show()
 		editor._snap_count_input.custom_minimum_size.y = editor.size.y * 2.0
 		for frame in range(4):
 			await process_frame
@@ -414,11 +414,11 @@ func _test_autofit_limits_overlay_shrinkage() -> void:
 			await process_frame
 		var graph := editor._get_graph_view_rect()
 		editor._point_toolbar_panel.hide()
-		editor._zoom_overlay.hide()
+		editor._zoom_row.hide()
 		editor.autofit()
 		var full_step := editor._zoom_step
 		editor._point_toolbar_panel.show()
-		editor._zoom_overlay.show()
+		editor._zoom_row.show()
 		editor.autofit()
 		_expect(editor._zoom_step == full_step - 2, "Narrow Inspector Autofit did not retain the requested larger framing")
 		var plot_width := absf(editor.get_view_pos(Vector2.ONE).x - editor.get_view_pos(Vector2(0, 1)).x)

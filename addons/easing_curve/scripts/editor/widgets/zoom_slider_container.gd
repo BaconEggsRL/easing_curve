@@ -14,6 +14,7 @@ const ZOOM_MAX := EasingCurve.ZOOM_MAX
 const ZOOM_FACTOR := EasingCurve.ZOOM_FACTOR
 const ZOOM_STEPS := EasingCurve.ZOOM_STEPS
 const DEFAULT_SLIDER_VALUE := EasingCurve.DEFAULT_SLIDER_VALUE
+const MINIMUM_SLIDER_WIDTH := 32.0
 const EDITOR_THEME_CACHE = preload(
 	"res://addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd"
 )
@@ -24,6 +25,8 @@ const EDITOR_THEME_CACHE = preload(
 
 
 func _ready():
+	var editor_scale := EditorInterface.get_editor_scale() if Engine.is_editor_hint() else 1.0
+	slider.custom_minimum_size.x = MINIMUM_SLIDER_WIDTH * editor_scale
 	zoom_icon.texture = EDITOR_THEME_CACHE.get_icon(
 		EDITOR_THEME_CACHE.ICON_ZOOM
 	)
@@ -33,12 +36,19 @@ func _ready():
 
 	var controls := slider.get_parent() as HBoxContainer
 	if controls != null:
-		custom_minimum_size.x = controls.get_combined_minimum_size().x
+		controls.minimum_size_changed.connect(_update_minimum_size)
+	_update_minimum_size()
 
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.gui_input.connect(_on_slider_gui_input)
 	autofit_btn.pressed.connect(_on_autofit_btn_pressed)
 	slider.value_changed.connect(_on_slider_value_changed)
+
+
+func _update_minimum_size() -> void:
+	var controls := slider.get_parent() as HBoxContainer
+	if controls != null:
+		custom_minimum_size = controls.get_combined_minimum_size()
 
 
 func _on_slider_value_changed(value: float) -> void:
