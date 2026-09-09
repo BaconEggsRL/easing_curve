@@ -10,7 +10,32 @@ permissions:
   contents: read
   actions: read
 jobs:
+  stage-candidate:
+    runs-on: windows-latest
+    # GitHub requires write access to see unpublished draft releases. Only this
+    # acquisition job has it; the two engine qualification jobs remain read-only.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read unpublished candidate staging
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download tooling-godot-4.7.1-ec111645-p1 --repo "$env:GITHUB_REPOSITORY" --pattern candidate.zip --dir test/_temp/candidate-download
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate staging download failed.' }
+          Expand-Archive test/_temp/candidate-download/candidate.zip test/_temp/candidate
+          . ./test/runners/godot_process_contract.ps1
+          $pin = Get-Content tooling/godot/editor-pin.json -Raw | ConvertFrom-Json
+          Assert-GodotExecutableHash test/_temp/candidate/godot-editor.exe $pin.editor_sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unpublished-godot-candidate
+          compression-level: 0
+          path: test/_temp/candidate-download/candidate.zip
   qualify:
+    needs: stage-candidate
     strategy:
       fail-fast: false
       matrix:
@@ -35,13 +60,13 @@ jobs:
           run-id: 34299688373
           github-token: ${{ github.token }}
           path: test/_temp/historical-input
+      - uses: actions/download-artifact@v4
+        with:
+          name: unpublished-godot-candidate
+          path: test/_temp/candidate-download
       - name: Obtain unpublished candidate bytes and capture tool
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download tooling-godot-4.7.1-ec111645-p1 --repo "$env:GITHUB_REPOSITORY" --pattern candidate.zip --dir test/_temp/candidate-download
-          if ($LASTEXITCODE -ne 0) { throw 'Candidate staging download failed.' }
           Expand-Archive test/_temp/candidate-download/candidate.zip test/_temp/candidate
           $pin = Get-Content tooling/godot/editor-pin.json -Raw | ConvertFrom-Json
           . ./test/runners/godot_process_contract.ps1
