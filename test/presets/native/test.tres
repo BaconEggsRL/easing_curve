@@ -1,0 +1,861 @@
+[gd_resource type="NativeEasingCurve" format=3 uid="uid://bokqy6jlhk8mk"]
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_1ygnv"]
+position = Vector2(0, 0.954689)
+left_control_point = Vector2(0, 0.954689)
+right_control_point = Vector2(0, 0.954689)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_ib1u4"]
+position = Vector2(0.012854934, 0)
+left_control_point = Vector2(0.012854934, 0)
+right_control_point = Vector2(0.012854934, 0)
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_fruq2"]
+position = Vector2(0.021351647, 0.8372277)
+left_control_point = Vector2(0.021351647, 0.8372277)
+right_control_point = Vector2(0.021351647, 0.8372277)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_4ipkg"]
+position = Vector2(0.024183884, 0.29538977)
+left_control_point = Vector2(0.024183884, 0.29538977)
+right_control_point = Vector2(0.024183884, 0.29538977)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_4dlbu"]
+position = Vector2(0.02984836, 0.7197664)
+left_control_point = Vector2(0.02984836, 0.7197664)
+right_control_point = Vector2(0.02984836, 0.7197664)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_x2js3"]
+position = Vector2(0.038345076, 0.13624859)
+left_control_point = Vector2(0.038345076, 0.13624859)
+right_control_point = Vector2(0.038345076, 0.13624859)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_ayd4p"]
+position = Vector2(0.041177318, 0.5985159)
+left_control_point = Vector2(0.041177318, 0.5985159)
+right_control_point = Vector2(0.041177318, 0.5985159)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_xkvqf"]
+position = Vector2(0.04400956, 0.89406383)
+left_control_point = Vector2(0.04400956, 0.89406383)
+right_control_point = Vector2(0.04400956, 0.89406383)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_d1drc"]
+position = Vector2(0.052506275, 0.47726548)
+left_control_point = Vector2(0.052506275, 0.47726548)
+right_control_point = Vector2(0.052506275, 0.47726548)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_ov36j"]
+position = Vector2(0.061002992, 0.25749904)
+left_control_point = Vector2(0.061002992, 0.25749904)
+right_control_point = Vector2(0.061002992, 0.25749904)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_agfos"]
+position = Vector2(0.06949971, 0.0377326)
+left_control_point = Vector2(0.06949971, 0.0377326)
+right_control_point = Vector2(0.06949971, 0.0377326)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_7u2rj"]
+position = Vector2(0.08082866, 0.84101677)
+left_control_point = Vector2(0.08082866, 0.84101677)
+right_control_point = Vector2(0.08082866, 0.84101677)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_e6qy5"]
+position = Vector2(0.09215761, 0.5341016)
+left_control_point = Vector2(0.09215761, 0.5341016)
+right_control_point = Vector2(0.09215761, 0.5341016)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_kyiin"]
+position = Vector2(0.10348656, 0.22718644)
+left_control_point = Vector2(0.10348656, 0.22718644)
+right_control_point = Vector2(0.10348656, 0.22718644)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_qj0hl"]
+position = Vector2(0.10915104, 0.4621092)
+left_control_point = Vector2(0.10915104, 0.4621092)
+right_control_point = Vector2(0.10915104, 0.4621092)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_an358"]
+position = Vector2(0.11198328, 0.8789075)
+left_control_point = Vector2(0.11198328, 0.8789075)
+right_control_point = Vector2(0.11198328, 0.8789075)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_w36jf"]
+position = Vector2(0.11835581, 0.3635933)
+left_control_point = Vector2(0.11835581, 0.3635933)
+right_control_point = Vector2(0.11835581, 0.3635933)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_nj3ka"]
+position = Vector2(0.12047999, 0.7197664)
+left_control_point = Vector2(0.12047999, 0.7197664)
+right_control_point = Vector2(0.12047999, 0.7197664)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_u6xmp"]
+position = Vector2(0.12756059, 0.2650773)
+left_control_point = Vector2(0.12756059, 0.2650773)
+right_control_point = Vector2(0.12756059, 0.2650773)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_ry2x4"]
+position = Vector2(0.13676536, 0.16656128)
+left_control_point = Vector2(0.13676536, 0.16656128)
+right_control_point = Vector2(0.13676536, 0.16656128)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_566tt"]
+position = Vector2(0.14597014, 0.06804526)
+left_control_point = Vector2(0.14597014, 0.06804526)
+right_control_point = Vector2(0.14597014, 0.06804526)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_8xw71"]
+position = Vector2(0.15163463, 0.8485949)
+left_control_point = Vector2(0.15163463, 0.8485949)
+right_control_point = Vector2(0.15163463, 0.8485949)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_n80ar"]
+position = Vector2(0.1643797, 0.52273434)
+left_control_point = Vector2(0.1643797, 0.52273434)
+right_control_point = Vector2(0.1643797, 0.52273434)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_lhxk8"]
+position = Vector2(0.17712477, 0.19687378)
+left_control_point = Vector2(0.17712477, 0.19687378)
+right_control_point = Vector2(0.17712477, 0.19687378)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_aht5i"]
+position = Vector2(0.18278924, 0.09077966)
+left_control_point = Vector2(0.18278924, 0.09077966)
+right_control_point = Vector2(0.18278924, 0.09077966)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_kk83s"]
+position = Vector2(0.18562149, 0.27454984)
+left_control_point = Vector2(0.18562149, 0.27454984)
+right_control_point = Vector2(0.18562149, 0.27454984)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_woqhe"]
+position = Vector2(0.19128597, 0.82586044)
+left_control_point = Vector2(0.19128597, 0.82586044)
+right_control_point = Vector2(0.19128597, 0.82586044)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_n8jg8"]
+position = Vector2(0.1941182, 0.3522259)
+left_control_point = Vector2(0.1941182, 0.3522259)
+right_control_point = Vector2(0.1941182, 0.3522259)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_4ml23"]
+position = Vector2(0.20261492, 0.42990196)
+left_control_point = Vector2(0.20261492, 0.42990196)
+right_control_point = Vector2(0.20261492, 0.42990196)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_44cwb"]
+position = Vector2(0.20544714, 0.18929565)
+left_control_point = Vector2(0.20544714, 0.18929565)
+right_control_point = Vector2(0.20544714, 0.18929565)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_6u13w"]
+position = Vector2(0.20827937, 0.9167983)
+left_control_point = Vector2(0.20827937, 0.9167983)
+right_control_point = Vector2(0.20827937, 0.9167983)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_brinb"]
+position = Vector2(0.21111163, 0.507578)
+left_control_point = Vector2(0.21111163, 0.507578)
+right_control_point = Vector2(0.21111163, 0.507578)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_sj2i8"]
+position = Vector2(0.21960834, 0.507578)
+left_control_point = Vector2(0.21960834, 0.507578)
+right_control_point = Vector2(0.21960834, 0.507578)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_0gbsr"]
+position = Vector2(0.22668894, 0.60230494)
+left_control_point = Vector2(0.22668894, 0.60230494)
+right_control_point = Vector2(0.22668894, 0.60230494)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_dj7oj"]
+position = Vector2(0.22810507, 0.14382672)
+left_control_point = Vector2(0.22810507, 0.14382672)
+right_control_point = Vector2(0.22810507, 0.14382672)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_r34sq"]
+position = Vector2(0.23376954, 0.69703186)
+left_control_point = Vector2(0.23376954, 0.69703186)
+right_control_point = Vector2(0.23376954, 0.69703186)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_fb0s2"]
+position = Vector2(0.24085014, 0.7917588)
+left_control_point = Vector2(0.24085014, 0.7917588)
+right_control_point = Vector2(0.24085014, 0.7917588)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_e1acr"]
+position = Vector2(0.24793074, 0.8864857)
+left_control_point = Vector2(0.24793074, 0.8864857)
+right_control_point = Vector2(0.24793074, 0.8864857)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_aeskk"]
+position = Vector2(0.25784355, 0.5719931)
+left_control_point = Vector2(0.25784355, 0.5719931)
+right_control_point = Vector2(0.25784355, 0.5719931)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_elr7a"]
+position = Vector2(0.2677564, 0.2574991)
+left_control_point = Vector2(0.2677564, 0.2574991)
+right_control_point = Vector2(0.2677564, 0.2574991)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_mhwq4"]
+position = Vector2(0.27766925, 0.17035012)
+left_control_point = Vector2(0.27766925, 0.17035012)
+right_control_point = Vector2(0.27766925, 0.17035012)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_256eu"]
+position = Vector2(0.2819176, 0.7197664)
+left_control_point = Vector2(0.2819176, 0.7197664)
+right_control_point = Vector2(0.2819176, 0.7197664)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_5vu4b"]
+position = Vector2(0.28758207, 0.08320153)
+left_control_point = Vector2(0.28758207, 0.08320153)
+right_control_point = Vector2(0.28758207, 0.08320153)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_wmvsv"]
+position = Vector2(0.29324654, 0.10593605)
+left_control_point = Vector2(0.29324654, 0.10593605)
+right_control_point = Vector2(0.29324654, 0.10593605)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_xybeo"]
+position = Vector2(0.31023997, 0.90164196)
+left_control_point = Vector2(0.31023997, 0.90164196)
+right_control_point = Vector2(0.31023997, 0.90164196)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_1ripn"]
+position = Vector2(0.3130722, 0.61367226)
+left_control_point = Vector2(0.3130722, 0.61367226)
+right_control_point = Vector2(0.3130722, 0.61367226)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_fo6mv"]
+position = Vector2(0.32015282, 0.6023043)
+left_control_point = Vector2(0.32015282, 0.6023043)
+right_control_point = Vector2(0.32015282, 0.6023043)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_y8ovl"]
+position = Vector2(0.33006564, 0.3029679)
+left_control_point = Vector2(0.33006564, 0.3029679)
+right_control_point = Vector2(0.33006564, 0.3029679)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_dg17v"]
+position = Vector2(0.33006564, 0.20445204)
+left_control_point = Vector2(0.33006564, 0.20445204)
+right_control_point = Vector2(0.33006564, 0.20445204)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_gdk5x"]
+position = Vector2(0.34422684, 0.5682033)
+left_control_point = Vector2(0.34422684, 0.5682033)
+right_control_point = Vector2(0.34422684, 0.5682033)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_n12nq"]
+position = Vector2(0.35838804, 0.83343863)
+left_control_point = Vector2(0.35838804, 0.83343863)
+right_control_point = Vector2(0.35838804, 0.83343863)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_lwsew"]
+position = Vector2(0.36688474, 0.23476458)
+left_control_point = Vector2(0.36688474, 0.23476458)
+right_control_point = Vector2(0.36688474, 0.23476458)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_qei2t"]
+position = Vector2(0.37254924, 0.4621092)
+left_control_point = Vector2(0.37254924, 0.4621092)
+right_control_point = Vector2(0.37254924, 0.4621092)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_c6cm0"]
+position = Vector2(0.3803379, 0.55683625)
+left_control_point = Vector2(0.3803379, 0.55683625)
+right_control_point = Vector2(0.3803379, 0.55683625)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_iwgbw"]
+position = Vector2(0.38104594, 0.0983578)
+left_control_point = Vector2(0.38104594, 0.0983578)
+right_control_point = Vector2(0.38104594, 0.0983578)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_pvdfh"]
+position = Vector2(0.3867104, 0.9319546)
+left_control_point = Vector2(0.3867104, 0.9319546)
+right_control_point = Vector2(0.3867104, 0.9319546)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_vce2n"]
+position = Vector2(0.38812655, 0.6515633)
+left_control_point = Vector2(0.38812655, 0.6515633)
+right_control_point = Vector2(0.38812655, 0.6515633)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_8k4la"]
+position = Vector2(0.3959152, 0.7462903)
+left_control_point = Vector2(0.3959152, 0.7462903)
+right_control_point = Vector2(0.3959152, 0.7462903)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_h48dc"]
+position = Vector2(0.40370384, 0.84101677)
+left_control_point = Vector2(0.40370384, 0.84101677)
+right_control_point = Vector2(0.40370384, 0.84101677)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_u86de"]
+position = Vector2(0.41220057, 0.29538977)
+left_control_point = Vector2(0.41220057, 0.29538977)
+right_control_point = Vector2(0.41220057, 0.29538977)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_bpn0x"]
+position = Vector2(0.4150328, 0.08320153)
+left_control_point = Vector2(0.4150328, 0.08320153)
+right_control_point = Vector2(0.4150328, 0.08320153)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_8e2c4"]
+position = Vector2(0.42423758, 0.23476475)
+left_control_point = Vector2(0.42423758, 0.23476475)
+right_control_point = Vector2(0.42423758, 0.23476475)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_58eor"]
+position = Vector2(0.42636177, 0.9167983)
+left_control_point = Vector2(0.42636177, 0.9167983)
+right_control_point = Vector2(0.42636177, 0.9167983)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_5hn7g"]
+position = Vector2(0.43344235, 0.38632798)
+left_control_point = Vector2(0.43344235, 0.38632798)
+right_control_point = Vector2(0.43344235, 0.38632798)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_djmjt"]
+position = Vector2(0.4426471, 0.5378905)
+left_control_point = Vector2(0.4426471, 0.5378905)
+right_control_point = Vector2(0.4426471, 0.5378905)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_uc60e"]
+position = Vector2(0.45185187, 0.12109232)
+left_control_point = Vector2(0.45185187, 0.12109232)
+right_control_point = Vector2(0.45185187, 0.12109232)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_dipwt"]
+position = Vector2(0.45185187, 0.6894537)
+left_control_point = Vector2(0.45185187, 0.6894537)
+right_control_point = Vector2(0.45185187, 0.6894537)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_o0dtm"]
+position = Vector2(0.4575164, 0.86375123)
+left_control_point = Vector2(0.4575164, 0.86375123)
+right_control_point = Vector2(0.4575164, 0.86375123)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_ln77v"]
+position = Vector2(0.46530503, 0.79744273)
+left_control_point = Vector2(0.46530503, 0.79744273)
+right_control_point = Vector2(0.46530503, 0.79744273)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_k64t6"]
+position = Vector2(0.4660131, 0.06804526)
+left_control_point = Vector2(0.4660131, 0.06804526)
+right_control_point = Vector2(0.4660131, 0.06804526)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_nf5tw"]
+position = Vector2(0.4730937, 0.7311339)
+left_control_point = Vector2(0.4730937, 0.7311339)
+right_control_point = Vector2(0.4730937, 0.7311339)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_cnt32"]
+position = Vector2(0.48088235, 0.66482496)
+left_control_point = Vector2(0.48088235, 0.66482496)
+right_control_point = Vector2(0.48088235, 0.66482496)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_onklr"]
+position = Vector2(0.488671, 0.5985161)
+left_control_point = Vector2(0.488671, 0.5985161)
+right_control_point = Vector2(0.488671, 0.5985161)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_j1vrw"]
+position = Vector2(0.4943355, 0.8182823)
+left_control_point = Vector2(0.4943355, 0.8182823)
+right_control_point = Vector2(0.4943355, 0.8182823)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_d7hyh"]
+position = Vector2(0.49645966, 0.53220725)
+left_control_point = Vector2(0.49645966, 0.53220725)
+right_control_point = Vector2(0.49645966, 0.53220725)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_r1rsn"]
+position = Vector2(0.49999997, 0.2196083)
+left_control_point = Vector2(0.49999997, 0.2196083)
+right_control_point = Vector2(0.49999997, 0.2196083)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_7ki72"]
+position = Vector2(0.5042483, 0.46589833)
+left_control_point = Vector2(0.5042483, 0.46589833)
+right_control_point = Vector2(0.5042483, 0.46589833)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_dd7jh"]
+position = Vector2(0.512037, 0.39958945)
+left_control_point = Vector2(0.512037, 0.39958945)
+right_control_point = Vector2(0.512037, 0.39958945)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_sfcob"]
+position = Vector2(0.51982564, 0.33328056)
+left_control_point = Vector2(0.51982564, 0.33328056)
+right_control_point = Vector2(0.51982564, 0.33328056)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_jd85s"]
+position = Vector2(0.53115463, 0.84101677)
+left_control_point = Vector2(0.53115463, 0.84101677)
+right_control_point = Vector2(0.53115463, 0.84101677)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_db3hj"]
+position = Vector2(0.53965133, 0.46589822)
+left_control_point = Vector2(0.53965133, 0.46589822)
+right_control_point = Vector2(0.53965133, 0.46589822)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_npvfu"]
+position = Vector2(0.53965133, 0.9243764)
+left_control_point = Vector2(0.53965133, 0.9243764)
+right_control_point = Vector2(0.53965133, 0.9243764)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_7nhf4"]
+position = Vector2(0.54814804, 0.09077966)
+left_control_point = Vector2(0.54814804, 0.09077966)
+right_control_point = Vector2(0.54814804, 0.09077966)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_u0cvf"]
+position = Vector2(0.559477, 0.6818756)
+left_control_point = Vector2(0.559477, 0.6818756)
+right_control_point = Vector2(0.559477, 0.6818756)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_730hy"]
+position = Vector2(0.5651415, 0.954689)
+left_control_point = Vector2(0.5651415, 0.954689)
+right_control_point = Vector2(0.5651415, 0.954689)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_fxl5p"]
+position = Vector2(0.5736382, 0.6439848)
+left_control_point = Vector2(0.5736382, 0.6439848)
+right_control_point = Vector2(0.5736382, 0.6439848)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_hf7of"]
+position = Vector2(0.5821349, 0.33328056)
+left_control_point = Vector2(0.5821349, 0.33328056)
+right_control_point = Vector2(0.5821349, 0.33328056)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_wpt0m"]
+position = Vector2(0.58496714, 0.14382672)
+left_control_point = Vector2(0.58496714, 0.14382672)
+right_control_point = Vector2(0.58496714, 0.14382672)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_1ole6"]
+position = Vector2(0.5906316, 0.7500789)
+left_control_point = Vector2(0.5906316, 0.7500789)
+right_control_point = Vector2(0.5906316, 0.7500789)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_egbfd"]
+position = Vector2(0.59983635, 0.58904374)
+left_control_point = Vector2(0.59983635, 0.58904374)
+right_control_point = Vector2(0.59983635, 0.58904374)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_04bhf"]
+position = Vector2(0.60904115, 0.42800748)
+left_control_point = Vector2(0.60904115, 0.42800748)
+right_control_point = Vector2(0.60904115, 0.42800748)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_ithao"]
+position = Vector2(0.61824596, 0.26697126)
+left_control_point = Vector2(0.61824596, 0.26697126)
+right_control_point = Vector2(0.61824596, 0.26697126)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_h2f1g"]
+position = Vector2(0.6274507, 0.10593605)
+left_control_point = Vector2(0.6274507, 0.10593605)
+right_control_point = Vector2(0.6274507, 0.10593605)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_bh20g"]
+position = Vector2(0.63028294, 0.10593605)
+left_control_point = Vector2(0.63028294, 0.10593605)
+right_control_point = Vector2(0.63028294, 0.10593605)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_8ufhy"]
+position = Vector2(0.6331152, 0.6212504)
+left_control_point = Vector2(0.6331152, 0.6212504)
+right_control_point = Vector2(0.6331152, 0.6212504)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_pr577"]
+position = Vector2(0.63594747, 0.9622672)
+left_control_point = Vector2(0.63594747, 0.9622672)
+right_control_point = Vector2(0.63594747, 0.9622672)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_rpngp"]
+position = Vector2(0.6458603, 0.954689)
+left_control_point = Vector2(0.6458603, 0.954689)
+right_control_point = Vector2(0.6458603, 0.954689)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_h0sem"]
+position = Vector2(0.65294087, 0.21203017)
+left_control_point = Vector2(0.65294087, 0.21203017)
+right_control_point = Vector2(0.65294087, 0.21203017)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_scr2h"]
+position = Vector2(0.65577316, 0.9471109)
+left_control_point = Vector2(0.65577316, 0.9471109)
+right_control_point = Vector2(0.65577316, 0.9471109)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_16h81"]
+position = Vector2(0.65860534, 0.606094)
+left_control_point = Vector2(0.65860534, 0.606094)
+right_control_point = Vector2(0.65860534, 0.606094)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_6spem"]
+position = Vector2(0.665686, 0.93953276)
+left_control_point = Vector2(0.665686, 0.93953276)
+right_control_point = Vector2(0.665686, 0.93953276)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_l31c8"]
+position = Vector2(0.6755988, 0.9319546)
+left_control_point = Vector2(0.6755988, 0.9319546)
+right_control_point = Vector2(0.6755988, 0.9319546)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_4b83e"]
+position = Vector2(0.68126327, 0.09077966)
+left_control_point = Vector2(0.68126327, 0.09077966)
+right_control_point = Vector2(0.68126327, 0.09077966)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_whbq0"]
+position = Vector2(0.6840955, 0.4393747)
+left_control_point = Vector2(0.6840955, 0.4393747)
+right_control_point = Vector2(0.6840955, 0.4393747)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_85xjq"]
+position = Vector2(0.69330025, 0.39580047)
+left_control_point = Vector2(0.69330025, 0.39580047)
+right_control_point = Vector2(0.69330025, 0.39580047)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_bfeqc"]
+position = Vector2(0.70250505, 0.35222596)
+left_control_point = Vector2(0.70250505, 0.35222596)
+right_control_point = Vector2(0.70250505, 0.35222596)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_iy6p7"]
+position = Vector2(0.7067534, 0.77281344)
+left_control_point = Vector2(0.7067534, 0.77281344)
+right_control_point = Vector2(0.7067534, 0.77281344)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_ywhar"]
+position = Vector2(0.71170986, 0.30865145)
+left_control_point = Vector2(0.71170986, 0.30865145)
+right_control_point = Vector2(0.71170986, 0.30865145)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_urbyj"]
+position = Vector2(0.71808237, 0.10593605)
+left_control_point = Vector2(0.71808237, 0.10593605)
+right_control_point = Vector2(0.71808237, 0.10593605)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_qvgtf"]
+position = Vector2(0.7209146, 0.26507723)
+left_control_point = Vector2(0.7209146, 0.26507723)
+right_control_point = Vector2(0.7209146, 0.26507723)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_yqau3"]
+position = Vector2(0.7350758, 0.90922016)
+left_control_point = Vector2(0.7350758, 0.90922016)
+right_control_point = Vector2(0.7350758, 0.90922016)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_vi2hb"]
+position = Vector2(0.7435725, 0.5075795)
+left_control_point = Vector2(0.7435725, 0.5075795)
+right_control_point = Vector2(0.7435725, 0.5075795)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_rmhtw"]
+position = Vector2(0.75206923, 0.10593605)
+left_control_point = Vector2(0.75206923, 0.10593605)
+right_control_point = Vector2(0.75206923, 0.10593605)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_6bm0r"]
+position = Vector2(0.7633982, 0.4734764)
+left_control_point = Vector2(0.7633982, 0.4734764)
+right_control_point = Vector2(0.7633982, 0.4734764)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_c7j6u"]
+position = Vector2(0.7747271, 0.84101677)
+left_control_point = Vector2(0.7747271, 0.84101677)
+right_control_point = Vector2(0.7747271, 0.84101677)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_gcvof"]
+position = Vector2(0.78605604, 0.49242267)
+left_control_point = Vector2(0.78605604, 0.49242267)
+right_control_point = Vector2(0.78605604, 0.49242267)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_0764s"]
+position = Vector2(0.79738504, 0.14382672)
+left_control_point = Vector2(0.79738504, 0.14382672)
+right_control_point = Vector2(0.79738504, 0.14382672)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_p746r"]
+position = Vector2(0.8101301, 0.5113671)
+left_control_point = Vector2(0.8101301, 0.5113671)
+right_control_point = Vector2(0.8101301, 0.5113671)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_2nuoq"]
+position = Vector2(0.8228752, 0.8789075)
+left_control_point = Vector2(0.8228752, 0.8789075)
+right_control_point = Vector2(0.8228752, 0.8789075)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_2ohtj"]
+position = Vector2(0.8313719, 0.5341016)
+left_control_point = Vector2(0.8313719, 0.5341016)
+right_control_point = Vector2(0.8313719, 0.5341016)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_ryl0y"]
+position = Vector2(0.8398686, 0.18929565)
+left_control_point = Vector2(0.8398686, 0.18929565)
+right_control_point = Vector2(0.8398686, 0.18929565)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_b003l"]
+position = Vector2(0.8483653, 0.4014839)
+left_control_point = Vector2(0.8483653, 0.4014839)
+right_control_point = Vector2(0.8483653, 0.4014839)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_hfxdl"]
+position = Vector2(0.85686207, 0.0983578)
+left_control_point = Vector2(0.85686207, 0.0983578)
+right_control_point = Vector2(0.85686207, 0.0983578)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_khbqo"]
+position = Vector2(0.85827816, 0.5947268)
+left_control_point = Vector2(0.85827816, 0.5947268)
+right_control_point = Vector2(0.85827816, 0.5947268)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_weklk"]
+position = Vector2(0.868191, 0.7879697)
+left_control_point = Vector2(0.868191, 0.7879697)
+right_control_point = Vector2(0.868191, 0.7879697)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_1w6yl"]
+position = Vector2(0.87102324, 0.41664028)
+left_control_point = Vector2(0.87102324, 0.41664028)
+right_control_point = Vector2(0.87102324, 0.41664028)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_8u5vq"]
+position = Vector2(0.8738555, 0.9167983)
+left_control_point = Vector2(0.8738555, 0.9167983)
+right_control_point = Vector2(0.8738555, 0.9167983)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_q4ecj"]
+position = Vector2(0.87951994, 0.35033154)
+left_control_point = Vector2(0.87951994, 0.35033154)
+right_control_point = Vector2(0.87951994, 0.35033154)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_5nnlt"]
+position = Vector2(0.8880167, 0.28402233)
+left_control_point = Vector2(0.8880167, 0.28402233)
+right_control_point = Vector2(0.8880167, 0.28402233)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_d3fxc"]
+position = Vector2(0.8965134, 0.2177136)
+left_control_point = Vector2(0.8965134, 0.2177136)
+right_control_point = Vector2(0.8965134, 0.2177136)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_yqk7t"]
+position = Vector2(0.9050101, 0.15140486)
+left_control_point = Vector2(0.9050101, 0.15140486)
+right_control_point = Vector2(0.9050101, 0.15140486)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_f8ume"]
+position = Vector2(0.9191713, 0.87132937)
+left_control_point = Vector2(0.9191713, 0.87132937)
+right_control_point = Vector2(0.9191713, 0.87132937)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_fdc0a"]
+position = Vector2(0.9283761, 0.6970316)
+left_control_point = Vector2(0.9283761, 0.6970316)
+right_control_point = Vector2(0.9283761, 0.6970316)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_b6ucn"]
+position = Vector2(0.9375808, 0.52273494)
+left_control_point = Vector2(0.9375808, 0.52273494)
+right_control_point = Vector2(0.9375808, 0.52273494)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_0juod"]
+position = Vector2(0.9467856, 0.34843716)
+left_control_point = Vector2(0.9467856, 0.34843716)
+right_control_point = Vector2(0.9467856, 0.34843716)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_6f5l8"]
+position = Vector2(0.95032597, 0.89406383)
+left_control_point = Vector2(0.95032597, 0.89406383)
+right_control_point = Vector2(0.95032597, 0.89406383)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_pnde2"]
+position = Vector2(0.95599043, 0.17413938)
+left_control_point = Vector2(0.95599043, 0.17413938)
+right_control_point = Vector2(0.95599043, 0.17413938)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_e4r3w"]
+position = Vector2(0.9588226, 0.4621092)
+left_control_point = Vector2(0.9588226, 0.4621092)
+right_control_point = Vector2(0.9588226, 0.4621092)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_titg6"]
+position = Vector2(0.9691169, 0.5965815)
+left_control_point = Vector2(0.9691169, 0.5965815)
+right_control_point = Vector2(0.9691169, 0.5965815)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_qakx8"]
+position = Vector2(0.9794113, 0.7310546)
+left_control_point = Vector2(0.9794113, 0.7310546)
+right_control_point = Vector2(0.9794113, 0.7310546)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_xelfh"]
+position = Vector2(0.9843128, 0.15140486)
+left_control_point = Vector2(0.9843128, 0.15140486)
+right_control_point = Vector2(0.9843128, 0.15140486)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_c83oe"]
+position = Vector2(0.9897057, 0.8655277)
+left_control_point = Vector2(0.9897057, 0.8655277)
+right_control_point = Vector2(0.9897057, 0.8655277)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_qveal"]
+position = Vector2(1, 1)
+left_control_point = Vector2(1, 1)
+right_control_point = Vector2(1, 1)
+
+[resource]
+transition = 100
+points = Array[NativeEasingCurvePoint]([SubResource("NativeEasingCurvePoint_1ygnv"), SubResource("NativeEasingCurvePoint_ib1u4"), SubResource("NativeEasingCurvePoint_fruq2"), SubResource("NativeEasingCurvePoint_4ipkg"), SubResource("NativeEasingCurvePoint_4dlbu"), SubResource("NativeEasingCurvePoint_x2js3"), SubResource("NativeEasingCurvePoint_ayd4p"), SubResource("NativeEasingCurvePoint_xkvqf"), SubResource("NativeEasingCurvePoint_d1drc"), SubResource("NativeEasingCurvePoint_ov36j"), SubResource("NativeEasingCurvePoint_agfos"), SubResource("NativeEasingCurvePoint_7u2rj"), SubResource("NativeEasingCurvePoint_e6qy5"), SubResource("NativeEasingCurvePoint_kyiin"), SubResource("NativeEasingCurvePoint_qj0hl"), SubResource("NativeEasingCurvePoint_an358"), SubResource("NativeEasingCurvePoint_w36jf"), SubResource("NativeEasingCurvePoint_nj3ka"), SubResource("NativeEasingCurvePoint_u6xmp"), SubResource("NativeEasingCurvePoint_ry2x4"), SubResource("NativeEasingCurvePoint_566tt"), SubResource("NativeEasingCurvePoint_8xw71"), SubResource("NativeEasingCurvePoint_n80ar"), SubResource("NativeEasingCurvePoint_lhxk8"), SubResource("NativeEasingCurvePoint_aht5i"), SubResource("NativeEasingCurvePoint_kk83s"), SubResource("NativeEasingCurvePoint_woqhe"), SubResource("NativeEasingCurvePoint_n8jg8"), SubResource("NativeEasingCurvePoint_4ml23"), SubResource("NativeEasingCurvePoint_44cwb"), SubResource("NativeEasingCurvePoint_6u13w"), SubResource("NativeEasingCurvePoint_brinb"), SubResource("NativeEasingCurvePoint_sj2i8"), SubResource("NativeEasingCurvePoint_0gbsr"), SubResource("NativeEasingCurvePoint_dj7oj"), SubResource("NativeEasingCurvePoint_r34sq"), SubResource("NativeEasingCurvePoint_fb0s2"), SubResource("NativeEasingCurvePoint_e1acr"), SubResource("NativeEasingCurvePoint_aeskk"), SubResource("NativeEasingCurvePoint_elr7a"), SubResource("NativeEasingCurvePoint_mhwq4"), SubResource("NativeEasingCurvePoint_256eu"), SubResource("NativeEasingCurvePoint_5vu4b"), SubResource("NativeEasingCurvePoint_wmvsv"), SubResource("NativeEasingCurvePoint_xybeo"), SubResource("NativeEasingCurvePoint_1ripn"), SubResource("NativeEasingCurvePoint_fo6mv"), SubResource("NativeEasingCurvePoint_y8ovl"), SubResource("NativeEasingCurvePoint_dg17v"), SubResource("NativeEasingCurvePoint_gdk5x"), SubResource("NativeEasingCurvePoint_n12nq"), SubResource("NativeEasingCurvePoint_lwsew"), SubResource("NativeEasingCurvePoint_qei2t"), SubResource("NativeEasingCurvePoint_c6cm0"), SubResource("NativeEasingCurvePoint_iwgbw"), SubResource("NativeEasingCurvePoint_pvdfh"), SubResource("NativeEasingCurvePoint_vce2n"), SubResource("NativeEasingCurvePoint_8k4la"), SubResource("NativeEasingCurvePoint_h48dc"), SubResource("NativeEasingCurvePoint_u86de"), SubResource("NativeEasingCurvePoint_bpn0x"), SubResource("NativeEasingCurvePoint_8e2c4"), SubResource("NativeEasingCurvePoint_58eor"), SubResource("NativeEasingCurvePoint_5hn7g"), SubResource("NativeEasingCurvePoint_djmjt"), SubResource("NativeEasingCurvePoint_uc60e"), SubResource("NativeEasingCurvePoint_dipwt"), SubResource("NativeEasingCurvePoint_o0dtm"), SubResource("NativeEasingCurvePoint_ln77v"), SubResource("NativeEasingCurvePoint_k64t6"), SubResource("NativeEasingCurvePoint_nf5tw"), SubResource("NativeEasingCurvePoint_cnt32"), SubResource("NativeEasingCurvePoint_onklr"), SubResource("NativeEasingCurvePoint_j1vrw"), SubResource("NativeEasingCurvePoint_d7hyh"), SubResource("NativeEasingCurvePoint_r1rsn"), SubResource("NativeEasingCurvePoint_7ki72"), SubResource("NativeEasingCurvePoint_dd7jh"), SubResource("NativeEasingCurvePoint_sfcob"), SubResource("NativeEasingCurvePoint_jd85s"), SubResource("NativeEasingCurvePoint_db3hj"), SubResource("NativeEasingCurvePoint_npvfu"), SubResource("NativeEasingCurvePoint_7nhf4"), SubResource("NativeEasingCurvePoint_u0cvf"), SubResource("NativeEasingCurvePoint_730hy"), SubResource("NativeEasingCurvePoint_fxl5p"), SubResource("NativeEasingCurvePoint_hf7of"), SubResource("NativeEasingCurvePoint_wpt0m"), SubResource("NativeEasingCurvePoint_1ole6"), SubResource("NativeEasingCurvePoint_egbfd"), SubResource("NativeEasingCurvePoint_04bhf"), SubResource("NativeEasingCurvePoint_ithao"), SubResource("NativeEasingCurvePoint_h2f1g"), SubResource("NativeEasingCurvePoint_bh20g"), SubResource("NativeEasingCurvePoint_8ufhy"), SubResource("NativeEasingCurvePoint_pr577"), SubResource("NativeEasingCurvePoint_rpngp"), SubResource("NativeEasingCurvePoint_h0sem"), SubResource("NativeEasingCurvePoint_scr2h"), SubResource("NativeEasingCurvePoint_16h81"), SubResource("NativeEasingCurvePoint_6spem"), SubResource("NativeEasingCurvePoint_l31c8"), SubResource("NativeEasingCurvePoint_4b83e"), SubResource("NativeEasingCurvePoint_whbq0"), SubResource("NativeEasingCurvePoint_85xjq"), SubResource("NativeEasingCurvePoint_bfeqc"), SubResource("NativeEasingCurvePoint_iy6p7"), SubResource("NativeEasingCurvePoint_ywhar"), SubResource("NativeEasingCurvePoint_urbyj"), SubResource("NativeEasingCurvePoint_qvgtf"), SubResource("NativeEasingCurvePoint_yqau3"), SubResource("NativeEasingCurvePoint_vi2hb"), SubResource("NativeEasingCurvePoint_rmhtw"), SubResource("NativeEasingCurvePoint_6bm0r"), SubResource("NativeEasingCurvePoint_c7j6u"), SubResource("NativeEasingCurvePoint_gcvof"), SubResource("NativeEasingCurvePoint_0764s"), SubResource("NativeEasingCurvePoint_p746r"), SubResource("NativeEasingCurvePoint_2nuoq"), SubResource("NativeEasingCurvePoint_2ohtj"), SubResource("NativeEasingCurvePoint_ryl0y"), SubResource("NativeEasingCurvePoint_b003l"), SubResource("NativeEasingCurvePoint_hfxdl"), SubResource("NativeEasingCurvePoint_khbqo"), SubResource("NativeEasingCurvePoint_weklk"), SubResource("NativeEasingCurvePoint_1w6yl"), SubResource("NativeEasingCurvePoint_8u5vq"), SubResource("NativeEasingCurvePoint_q4ecj"), SubResource("NativeEasingCurvePoint_5nnlt"), SubResource("NativeEasingCurvePoint_d3fxc"), SubResource("NativeEasingCurvePoint_yqk7t"), SubResource("NativeEasingCurvePoint_f8ume"), SubResource("NativeEasingCurvePoint_fdc0a"), SubResource("NativeEasingCurvePoint_b6ucn"), SubResource("NativeEasingCurvePoint_0juod"), SubResource("NativeEasingCurvePoint_6f5l8"), SubResource("NativeEasingCurvePoint_pnde2"), SubResource("NativeEasingCurvePoint_e4r3w"), SubResource("NativeEasingCurvePoint_titg6"), SubResource("NativeEasingCurvePoint_qakx8"), SubResource("NativeEasingCurvePoint_xelfh"), SubResource("NativeEasingCurvePoint_c83oe"), SubResource("NativeEasingCurvePoint_qveal")])

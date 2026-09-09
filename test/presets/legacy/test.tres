@@ -1,0 +1,1352 @@
+[gd_resource type="Resource" script_class="EasingCurve" format=3 uid="uid://b0wcb2xf71mjy"]
+
+[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/runtime/easing_curve.gd" id="1_0280p"]
+
+[resource]
+script = ExtResource("1_0280p")
+trans_type = 0
+_css_linear_points = PackedVector2Array(0, 0, 1, 1)
+_css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.25, 1)
+_point_count = 122
+_point_0/position = Vector2(0, 0)
+_point_0/left_control_point = Vector2(0, 0)
+_point_0/right_control_point = Vector2(0, 0)
+_point_0/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_0/handle_mode = 0
+_point_0/left_force_linear = false
+_point_0/right_force_linear = false
+_point_1/position = Vector2(0.012854934, 0.954689)
+_point_1/left_control_point = Vector2(0.012854934, 0.954689)
+_point_1/right_control_point = Vector2(0.012854934, 0.954689)
+_point_1/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_1/handle_mode = 1
+_point_1/left_force_linear = false
+_point_1/right_force_linear = false
+_point_2/position = Vector2(0.021351647, 0.8372277)
+_point_2/left_control_point = Vector2(0.021351647, 0.8372277)
+_point_2/right_control_point = Vector2(0.021351647, 0.8372277)
+_point_2/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_2/handle_mode = 1
+_point_2/left_force_linear = false
+_point_2/right_force_linear = false
+_point_3/position = Vector2(0.024183884, 0.29538977)
+_point_3/left_control_point = Vector2(0.024183884, 0.29538977)
+_point_3/right_control_point = Vector2(0.024183884, 0.29538977)
+_point_3/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_3/handle_mode = 1
+_point_3/left_force_linear = false
+_point_3/right_force_linear = false
+_point_4/position = Vector2(0.02984836, 0.7197664)
+_point_4/left_control_point = Vector2(0.02984836, 0.7197664)
+_point_4/right_control_point = Vector2(0.02984836, 0.7197664)
+_point_4/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_4/handle_mode = 1
+_point_4/left_force_linear = false
+_point_4/right_force_linear = false
+_point_5/position = Vector2(0.041177318, 0.5985159)
+_point_5/left_control_point = Vector2(0.041177318, 0.5985159)
+_point_5/right_control_point = Vector2(0.041177318, 0.5985159)
+_point_5/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_5/handle_mode = 1
+_point_5/left_force_linear = false
+_point_5/right_force_linear = false
+_point_6/position = Vector2(0.052506275, 0.47726548)
+_point_6/left_control_point = Vector2(0.052506275, 0.47726548)
+_point_6/right_control_point = Vector2(0.052506275, 0.47726548)
+_point_6/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_6/handle_mode = 1
+_point_6/left_force_linear = false
+_point_6/right_force_linear = false
+_point_7/position = Vector2(0.061002992, 0.25749904)
+_point_7/left_control_point = Vector2(0.061002992, 0.25749904)
+_point_7/right_control_point = Vector2(0.061002992, 0.25749904)
+_point_7/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_7/handle_mode = 1
+_point_7/left_force_linear = false
+_point_7/right_force_linear = false
+_point_8/position = Vector2(0.06949971, 0.0377326)
+_point_8/left_control_point = Vector2(0.06949971, 0.0377326)
+_point_8/right_control_point = Vector2(0.06949971, 0.0377326)
+_point_8/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_8/handle_mode = 1
+_point_8/left_force_linear = false
+_point_8/right_force_linear = false
+_point_9/position = Vector2(0.08082866, 0.84101677)
+_point_9/left_control_point = Vector2(0.08082866, 0.84101677)
+_point_9/right_control_point = Vector2(0.08082866, 0.84101677)
+_point_9/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_9/handle_mode = 1
+_point_9/left_force_linear = false
+_point_9/right_force_linear = false
+_point_10/position = Vector2(0.09215761, 0.5341016)
+_point_10/left_control_point = Vector2(0.09215761, 0.5341016)
+_point_10/right_control_point = Vector2(0.09215761, 0.5341016)
+_point_10/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_10/handle_mode = 1
+_point_10/left_force_linear = false
+_point_10/right_force_linear = false
+_point_11/position = Vector2(0.10348656, 0.22718644)
+_point_11/left_control_point = Vector2(0.10348656, 0.22718644)
+_point_11/right_control_point = Vector2(0.10348656, 0.22718644)
+_point_11/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_11/handle_mode = 1
+_point_11/left_force_linear = false
+_point_11/right_force_linear = false
+_point_12/position = Vector2(0.10915104, 0.4621092)
+_point_12/left_control_point = Vector2(0.10915104, 0.4621092)
+_point_12/right_control_point = Vector2(0.10915104, 0.4621092)
+_point_12/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_12/handle_mode = 1
+_point_12/left_force_linear = false
+_point_12/right_force_linear = false
+_point_13/position = Vector2(0.11835581, 0.3635933)
+_point_13/left_control_point = Vector2(0.11835581, 0.3635933)
+_point_13/right_control_point = Vector2(0.11835581, 0.3635933)
+_point_13/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_13/handle_mode = 1
+_point_13/left_force_linear = false
+_point_13/right_force_linear = false
+_point_14/position = Vector2(0.12756059, 0.2650773)
+_point_14/left_control_point = Vector2(0.12756059, 0.2650773)
+_point_14/right_control_point = Vector2(0.12756059, 0.2650773)
+_point_14/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_14/handle_mode = 1
+_point_14/left_force_linear = false
+_point_14/right_force_linear = false
+_point_15/position = Vector2(0.13676536, 0.16656128)
+_point_15/left_control_point = Vector2(0.13676536, 0.16656128)
+_point_15/right_control_point = Vector2(0.13676536, 0.16656128)
+_point_15/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_15/handle_mode = 1
+_point_15/left_force_linear = false
+_point_15/right_force_linear = false
+_point_16/position = Vector2(0.14597014, 0.06804526)
+_point_16/left_control_point = Vector2(0.14597014, 0.06804526)
+_point_16/right_control_point = Vector2(0.14597014, 0.06804526)
+_point_16/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_16/handle_mode = 1
+_point_16/left_force_linear = false
+_point_16/right_force_linear = false
+_point_17/position = Vector2(0.15163463, 0.8485949)
+_point_17/left_control_point = Vector2(0.15163463, 0.8485949)
+_point_17/right_control_point = Vector2(0.15163463, 0.8485949)
+_point_17/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_17/handle_mode = 1
+_point_17/left_force_linear = false
+_point_17/right_force_linear = false
+_point_18/position = Vector2(0.1643797, 0.52273434)
+_point_18/left_control_point = Vector2(0.1643797, 0.52273434)
+_point_18/right_control_point = Vector2(0.1643797, 0.52273434)
+_point_18/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_18/handle_mode = 1
+_point_18/left_force_linear = false
+_point_18/right_force_linear = false
+_point_19/position = Vector2(0.17712477, 0.19687378)
+_point_19/left_control_point = Vector2(0.17712477, 0.19687378)
+_point_19/right_control_point = Vector2(0.17712477, 0.19687378)
+_point_19/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_19/handle_mode = 1
+_point_19/left_force_linear = false
+_point_19/right_force_linear = false
+_point_20/position = Vector2(0.18562149, 0.27454984)
+_point_20/left_control_point = Vector2(0.18562149, 0.27454984)
+_point_20/right_control_point = Vector2(0.18562149, 0.27454984)
+_point_20/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_20/handle_mode = 1
+_point_20/left_force_linear = false
+_point_20/right_force_linear = false
+_point_21/position = Vector2(0.19128597, 0.82586044)
+_point_21/left_control_point = Vector2(0.19128597, 0.82586044)
+_point_21/right_control_point = Vector2(0.19128597, 0.82586044)
+_point_21/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_21/handle_mode = 1
+_point_21/left_force_linear = false
+_point_21/right_force_linear = false
+_point_22/position = Vector2(0.1941182, 0.3522259)
+_point_22/left_control_point = Vector2(0.1941182, 0.3522259)
+_point_22/right_control_point = Vector2(0.1941182, 0.3522259)
+_point_22/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_22/handle_mode = 1
+_point_22/left_force_linear = false
+_point_22/right_force_linear = false
+_point_23/position = Vector2(0.20261492, 0.42990196)
+_point_23/left_control_point = Vector2(0.20261492, 0.42990196)
+_point_23/right_control_point = Vector2(0.20261492, 0.42990196)
+_point_23/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_23/handle_mode = 1
+_point_23/left_force_linear = false
+_point_23/right_force_linear = false
+_point_24/position = Vector2(0.21111163, 0.507578)
+_point_24/left_control_point = Vector2(0.21111163, 0.507578)
+_point_24/right_control_point = Vector2(0.21111163, 0.507578)
+_point_24/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_24/handle_mode = 1
+_point_24/left_force_linear = false
+_point_24/right_force_linear = false
+_point_25/position = Vector2(0.21960834, 0.507578)
+_point_25/left_control_point = Vector2(0.21960834, 0.507578)
+_point_25/right_control_point = Vector2(0.21960834, 0.507578)
+_point_25/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_25/handle_mode = 1
+_point_25/left_force_linear = false
+_point_25/right_force_linear = false
+_point_26/position = Vector2(0.22668894, 0.60230494)
+_point_26/left_control_point = Vector2(0.22668894, 0.60230494)
+_point_26/right_control_point = Vector2(0.22668894, 0.60230494)
+_point_26/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_26/handle_mode = 1
+_point_26/left_force_linear = false
+_point_26/right_force_linear = false
+_point_27/position = Vector2(0.22810507, 0.14382672)
+_point_27/left_control_point = Vector2(0.22810507, 0.14382672)
+_point_27/right_control_point = Vector2(0.22810507, 0.14382672)
+_point_27/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_27/handle_mode = 1
+_point_27/left_force_linear = false
+_point_27/right_force_linear = false
+_point_28/position = Vector2(0.23376954, 0.69703186)
+_point_28/left_control_point = Vector2(0.23376954, 0.69703186)
+_point_28/right_control_point = Vector2(0.23376954, 0.69703186)
+_point_28/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_28/handle_mode = 1
+_point_28/left_force_linear = false
+_point_28/right_force_linear = false
+_point_29/position = Vector2(0.24085014, 0.7917588)
+_point_29/left_control_point = Vector2(0.24085014, 0.7917588)
+_point_29/right_control_point = Vector2(0.24085014, 0.7917588)
+_point_29/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_29/handle_mode = 1
+_point_29/left_force_linear = false
+_point_29/right_force_linear = false
+_point_30/position = Vector2(0.24793074, 0.8864857)
+_point_30/left_control_point = Vector2(0.24793074, 0.8864857)
+_point_30/right_control_point = Vector2(0.24793074, 0.8864857)
+_point_30/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_30/handle_mode = 1
+_point_30/left_force_linear = false
+_point_30/right_force_linear = false
+_point_31/position = Vector2(0.25784355, 0.5719931)
+_point_31/left_control_point = Vector2(0.25784355, 0.5719931)
+_point_31/right_control_point = Vector2(0.25784355, 0.5719931)
+_point_31/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_31/handle_mode = 1
+_point_31/left_force_linear = false
+_point_31/right_force_linear = false
+_point_32/position = Vector2(0.2677564, 0.2574991)
+_point_32/left_control_point = Vector2(0.2677564, 0.2574991)
+_point_32/right_control_point = Vector2(0.2677564, 0.2574991)
+_point_32/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_32/handle_mode = 1
+_point_32/left_force_linear = false
+_point_32/right_force_linear = false
+_point_33/position = Vector2(0.27766925, 0.17035012)
+_point_33/left_control_point = Vector2(0.27766925, 0.17035012)
+_point_33/right_control_point = Vector2(0.27766925, 0.17035012)
+_point_33/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_33/handle_mode = 1
+_point_33/left_force_linear = false
+_point_33/right_force_linear = false
+_point_34/position = Vector2(0.28758207, 0.08320153)
+_point_34/left_control_point = Vector2(0.28758207, 0.08320153)
+_point_34/right_control_point = Vector2(0.28758207, 0.08320153)
+_point_34/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_34/handle_mode = 1
+_point_34/left_force_linear = false
+_point_34/right_force_linear = false
+_point_35/position = Vector2(0.29324654, 0.10593605)
+_point_35/left_control_point = Vector2(0.29324654, 0.10593605)
+_point_35/right_control_point = Vector2(0.29324654, 0.10593605)
+_point_35/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_35/handle_mode = 1
+_point_35/left_force_linear = false
+_point_35/right_force_linear = false
+_point_36/position = Vector2(0.30740774, 0.59851587)
+_point_36/left_control_point = Vector2(0.30740774, 0.59851587)
+_point_36/right_control_point = Vector2(0.30740774, 0.59851587)
+_point_36/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_36/handle_mode = 1
+_point_36/left_force_linear = false
+_point_36/right_force_linear = false
+_point_37/position = Vector2(0.31023997, 0.90164196)
+_point_37/left_control_point = Vector2(0.31023997, 0.90164196)
+_point_37/right_control_point = Vector2(0.31023997, 0.90164196)
+_point_37/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_37/handle_mode = 1
+_point_37/left_force_linear = false
+_point_37/right_force_linear = false
+_point_38/position = Vector2(0.32015282, 0.6023043)
+_point_38/left_control_point = Vector2(0.32015282, 0.6023043)
+_point_38/right_control_point = Vector2(0.32015282, 0.6023043)
+_point_38/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_38/handle_mode = 1
+_point_38/left_force_linear = false
+_point_38/right_force_linear = false
+_point_39/position = Vector2(0.33006564, 0.3029679)
+_point_39/left_control_point = Vector2(0.33006564, 0.3029679)
+_point_39/right_control_point = Vector2(0.33006564, 0.3029679)
+_point_39/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_39/handle_mode = 1
+_point_39/left_force_linear = false
+_point_39/right_force_linear = false
+_point_40/position = Vector2(0.33006564, 0.20445204)
+_point_40/left_control_point = Vector2(0.33006564, 0.20445204)
+_point_40/right_control_point = Vector2(0.33006564, 0.20445204)
+_point_40/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_40/handle_mode = 1
+_point_40/left_force_linear = false
+_point_40/right_force_linear = false
+_point_41/position = Vector2(0.34422684, 0.5682033)
+_point_41/left_control_point = Vector2(0.34422684, 0.5682033)
+_point_41/right_control_point = Vector2(0.34422684, 0.5682033)
+_point_41/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_41/handle_mode = 1
+_point_41/left_force_linear = false
+_point_41/right_force_linear = false
+_point_42/position = Vector2(0.35838804, 0.83343863)
+_point_42/left_control_point = Vector2(0.35838804, 0.83343863)
+_point_42/right_control_point = Vector2(0.35838804, 0.83343863)
+_point_42/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_42/handle_mode = 1
+_point_42/left_force_linear = false
+_point_42/right_force_linear = false
+_point_43/position = Vector2(0.36688474, 0.23476458)
+_point_43/left_control_point = Vector2(0.36688474, 0.23476458)
+_point_43/right_control_point = Vector2(0.36688474, 0.23476458)
+_point_43/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_43/handle_mode = 1
+_point_43/left_force_linear = false
+_point_43/right_force_linear = false
+_point_44/position = Vector2(0.37254924, 0.4621092)
+_point_44/left_control_point = Vector2(0.37254924, 0.4621092)
+_point_44/right_control_point = Vector2(0.37254924, 0.4621092)
+_point_44/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_44/handle_mode = 1
+_point_44/left_force_linear = false
+_point_44/right_force_linear = false
+_point_45/position = Vector2(0.3803379, 0.55683625)
+_point_45/left_control_point = Vector2(0.3803379, 0.55683625)
+_point_45/right_control_point = Vector2(0.3803379, 0.55683625)
+_point_45/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_45/handle_mode = 1
+_point_45/left_force_linear = false
+_point_45/right_force_linear = false
+_point_46/position = Vector2(0.38812655, 0.6515633)
+_point_46/left_control_point = Vector2(0.38812655, 0.6515633)
+_point_46/right_control_point = Vector2(0.38812655, 0.6515633)
+_point_46/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_46/handle_mode = 1
+_point_46/left_force_linear = false
+_point_46/right_force_linear = false
+_point_47/position = Vector2(0.3959152, 0.7462903)
+_point_47/left_control_point = Vector2(0.3959152, 0.7462903)
+_point_47/right_control_point = Vector2(0.3959152, 0.7462903)
+_point_47/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_47/handle_mode = 1
+_point_47/left_force_linear = false
+_point_47/right_force_linear = false
+_point_48/position = Vector2(0.40370384, 0.84101677)
+_point_48/left_control_point = Vector2(0.40370384, 0.84101677)
+_point_48/right_control_point = Vector2(0.40370384, 0.84101677)
+_point_48/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_48/handle_mode = 1
+_point_48/left_force_linear = false
+_point_48/right_force_linear = false
+_point_49/position = Vector2(0.41220057, 0.29538977)
+_point_49/left_control_point = Vector2(0.41220057, 0.29538977)
+_point_49/right_control_point = Vector2(0.41220057, 0.29538977)
+_point_49/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_49/handle_mode = 1
+_point_49/left_force_linear = false
+_point_49/right_force_linear = false
+_point_50/position = Vector2(0.4150328, 0.08320153)
+_point_50/left_control_point = Vector2(0.4150328, 0.08320153)
+_point_50/right_control_point = Vector2(0.4150328, 0.08320153)
+_point_50/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_50/handle_mode = 1
+_point_50/left_force_linear = false
+_point_50/right_force_linear = false
+_point_51/position = Vector2(0.42423758, 0.23476475)
+_point_51/left_control_point = Vector2(0.42423758, 0.23476475)
+_point_51/right_control_point = Vector2(0.42423758, 0.23476475)
+_point_51/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_51/handle_mode = 1
+_point_51/left_force_linear = false
+_point_51/right_force_linear = false
+_point_52/position = Vector2(0.43344235, 0.38632798)
+_point_52/left_control_point = Vector2(0.43344235, 0.38632798)
+_point_52/right_control_point = Vector2(0.43344235, 0.38632798)
+_point_52/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_52/handle_mode = 1
+_point_52/left_force_linear = false
+_point_52/right_force_linear = false
+_point_53/position = Vector2(0.4426471, 0.5378905)
+_point_53/left_control_point = Vector2(0.4426471, 0.5378905)
+_point_53/right_control_point = Vector2(0.4426471, 0.5378905)
+_point_53/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_53/handle_mode = 1
+_point_53/left_force_linear = false
+_point_53/right_force_linear = false
+_point_54/position = Vector2(0.45185187, 0.12109232)
+_point_54/left_control_point = Vector2(0.45185187, 0.12109232)
+_point_54/right_control_point = Vector2(0.45185187, 0.12109232)
+_point_54/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_54/handle_mode = 1
+_point_54/left_force_linear = false
+_point_54/right_force_linear = false
+_point_55/position = Vector2(0.45185187, 0.6894537)
+_point_55/left_control_point = Vector2(0.45185187, 0.6894537)
+_point_55/right_control_point = Vector2(0.45185187, 0.6894537)
+_point_55/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_55/handle_mode = 1
+_point_55/left_force_linear = false
+_point_55/right_force_linear = false
+_point_56/position = Vector2(0.4575164, 0.86375123)
+_point_56/left_control_point = Vector2(0.4575164, 0.86375123)
+_point_56/right_control_point = Vector2(0.4575164, 0.86375123)
+_point_56/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_56/handle_mode = 1
+_point_56/left_force_linear = false
+_point_56/right_force_linear = false
+_point_57/position = Vector2(0.46530503, 0.79744273)
+_point_57/left_control_point = Vector2(0.46530503, 0.79744273)
+_point_57/right_control_point = Vector2(0.46530503, 0.79744273)
+_point_57/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_57/handle_mode = 1
+_point_57/left_force_linear = false
+_point_57/right_force_linear = false
+_point_58/position = Vector2(0.4730937, 0.7311339)
+_point_58/left_control_point = Vector2(0.4730937, 0.7311339)
+_point_58/right_control_point = Vector2(0.4730937, 0.7311339)
+_point_58/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_58/handle_mode = 1
+_point_58/left_force_linear = false
+_point_58/right_force_linear = false
+_point_59/position = Vector2(0.48088235, 0.66482496)
+_point_59/left_control_point = Vector2(0.48088235, 0.66482496)
+_point_59/right_control_point = Vector2(0.48088235, 0.66482496)
+_point_59/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_59/handle_mode = 1
+_point_59/left_force_linear = false
+_point_59/right_force_linear = false
+_point_60/position = Vector2(0.488671, 0.5985161)
+_point_60/left_control_point = Vector2(0.488671, 0.5985161)
+_point_60/right_control_point = Vector2(0.488671, 0.5985161)
+_point_60/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_60/handle_mode = 1
+_point_60/left_force_linear = false
+_point_60/right_force_linear = false
+_point_61/position = Vector2(0.4943355, 0.8182823)
+_point_61/left_control_point = Vector2(0.4943355, 0.8182823)
+_point_61/right_control_point = Vector2(0.4943355, 0.8182823)
+_point_61/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_61/handle_mode = 1
+_point_61/left_force_linear = false
+_point_61/right_force_linear = false
+_point_62/position = Vector2(0.49645966, 0.53220725)
+_point_62/left_control_point = Vector2(0.49645966, 0.53220725)
+_point_62/right_control_point = Vector2(0.49645966, 0.53220725)
+_point_62/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_62/handle_mode = 1
+_point_62/left_force_linear = false
+_point_62/right_force_linear = false
+_point_63/position = Vector2(0.49999997, 0.2196083)
+_point_63/left_control_point = Vector2(0.49999997, 0.2196083)
+_point_63/right_control_point = Vector2(0.49999997, 0.2196083)
+_point_63/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_63/handle_mode = 1
+_point_63/left_force_linear = false
+_point_63/right_force_linear = false
+_point_64/position = Vector2(0.5042483, 0.46589833)
+_point_64/left_control_point = Vector2(0.5042483, 0.46589833)
+_point_64/right_control_point = Vector2(0.5042483, 0.46589833)
+_point_64/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_64/handle_mode = 1
+_point_64/left_force_linear = false
+_point_64/right_force_linear = false
+_point_65/position = Vector2(0.512037, 0.39958945)
+_point_65/left_control_point = Vector2(0.512037, 0.39958945)
+_point_65/right_control_point = Vector2(0.512037, 0.39958945)
+_point_65/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_65/handle_mode = 1
+_point_65/left_force_linear = false
+_point_65/right_force_linear = false
+_point_66/position = Vector2(0.51982564, 0.33328056)
+_point_66/left_control_point = Vector2(0.51982564, 0.33328056)
+_point_66/right_control_point = Vector2(0.51982564, 0.33328056)
+_point_66/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_66/handle_mode = 1
+_point_66/left_force_linear = false
+_point_66/right_force_linear = false
+_point_67/position = Vector2(0.53115463, 0.84101677)
+_point_67/left_control_point = Vector2(0.53115463, 0.84101677)
+_point_67/right_control_point = Vector2(0.53115463, 0.84101677)
+_point_67/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_67/handle_mode = 1
+_point_67/left_force_linear = false
+_point_67/right_force_linear = false
+_point_68/position = Vector2(0.53965133, 0.46589822)
+_point_68/left_control_point = Vector2(0.53965133, 0.46589822)
+_point_68/right_control_point = Vector2(0.53965133, 0.46589822)
+_point_68/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_68/handle_mode = 1
+_point_68/left_force_linear = false
+_point_68/right_force_linear = false
+_point_69/position = Vector2(0.54814804, 0.09077966)
+_point_69/left_control_point = Vector2(0.54814804, 0.09077966)
+_point_69/right_control_point = Vector2(0.54814804, 0.09077966)
+_point_69/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_69/handle_mode = 1
+_point_69/left_force_linear = false
+_point_69/right_force_linear = false
+_point_70/position = Vector2(0.559477, 0.6818756)
+_point_70/left_control_point = Vector2(0.559477, 0.6818756)
+_point_70/right_control_point = Vector2(0.559477, 0.6818756)
+_point_70/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_70/handle_mode = 1
+_point_70/left_force_linear = false
+_point_70/right_force_linear = false
+_point_71/position = Vector2(0.5651415, 0.954689)
+_point_71/left_control_point = Vector2(0.5651415, 0.954689)
+_point_71/right_control_point = Vector2(0.5651415, 0.954689)
+_point_71/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_71/handle_mode = 1
+_point_71/left_force_linear = false
+_point_71/right_force_linear = false
+_point_72/position = Vector2(0.5736382, 0.6439848)
+_point_72/left_control_point = Vector2(0.5736382, 0.6439848)
+_point_72/right_control_point = Vector2(0.5736382, 0.6439848)
+_point_72/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_72/handle_mode = 1
+_point_72/left_force_linear = false
+_point_72/right_force_linear = false
+_point_73/position = Vector2(0.5821349, 0.33328056)
+_point_73/left_control_point = Vector2(0.5821349, 0.33328056)
+_point_73/right_control_point = Vector2(0.5821349, 0.33328056)
+_point_73/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_73/handle_mode = 1
+_point_73/left_force_linear = false
+_point_73/right_force_linear = false
+_point_74/position = Vector2(0.5906316, 0.7500789)
+_point_74/left_control_point = Vector2(0.5906316, 0.7500789)
+_point_74/right_control_point = Vector2(0.5906316, 0.7500789)
+_point_74/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_74/handle_mode = 1
+_point_74/left_force_linear = false
+_point_74/right_force_linear = false
+_point_75/position = Vector2(0.59983635, 0.58904374)
+_point_75/left_control_point = Vector2(0.59983635, 0.58904374)
+_point_75/right_control_point = Vector2(0.59983635, 0.58904374)
+_point_75/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_75/handle_mode = 1
+_point_75/left_force_linear = false
+_point_75/right_force_linear = false
+_point_76/position = Vector2(0.60904115, 0.42800748)
+_point_76/left_control_point = Vector2(0.60904115, 0.42800748)
+_point_76/right_control_point = Vector2(0.60904115, 0.42800748)
+_point_76/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_76/handle_mode = 1
+_point_76/left_force_linear = false
+_point_76/right_force_linear = false
+_point_77/position = Vector2(0.61824596, 0.26697126)
+_point_77/left_control_point = Vector2(0.61824596, 0.26697126)
+_point_77/right_control_point = Vector2(0.61824596, 0.26697126)
+_point_77/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_77/handle_mode = 1
+_point_77/left_force_linear = false
+_point_77/right_force_linear = false
+_point_78/position = Vector2(0.6274507, 0.10593605)
+_point_78/left_control_point = Vector2(0.6274507, 0.10593605)
+_point_78/right_control_point = Vector2(0.6274507, 0.10593605)
+_point_78/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_78/handle_mode = 1
+_point_78/left_force_linear = false
+_point_78/right_force_linear = false
+_point_79/position = Vector2(0.63028294, 0.10593605)
+_point_79/left_control_point = Vector2(0.63028294, 0.10593605)
+_point_79/right_control_point = Vector2(0.63028294, 0.10593605)
+_point_79/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_79/handle_mode = 1
+_point_79/left_force_linear = false
+_point_79/right_force_linear = false
+_point_80/position = Vector2(0.6331152, 0.6212504)
+_point_80/left_control_point = Vector2(0.6331152, 0.6212504)
+_point_80/right_control_point = Vector2(0.6331152, 0.6212504)
+_point_80/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_80/handle_mode = 1
+_point_80/left_force_linear = false
+_point_80/right_force_linear = false
+_point_81/position = Vector2(0.63594747, 0.9622672)
+_point_81/left_control_point = Vector2(0.63594747, 0.9622672)
+_point_81/right_control_point = Vector2(0.63594747, 0.9622672)
+_point_81/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_81/handle_mode = 1
+_point_81/left_force_linear = false
+_point_81/right_force_linear = false
+_point_82/position = Vector2(0.6458603, 0.954689)
+_point_82/left_control_point = Vector2(0.6458603, 0.954689)
+_point_82/right_control_point = Vector2(0.6458603, 0.954689)
+_point_82/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_82/handle_mode = 1
+_point_82/left_force_linear = false
+_point_82/right_force_linear = false
+_point_83/position = Vector2(0.65577316, 0.9471109)
+_point_83/left_control_point = Vector2(0.65577316, 0.9471109)
+_point_83/right_control_point = Vector2(0.65577316, 0.9471109)
+_point_83/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_83/handle_mode = 1
+_point_83/left_force_linear = false
+_point_83/right_force_linear = false
+_point_84/position = Vector2(0.65860534, 0.606094)
+_point_84/left_control_point = Vector2(0.65860534, 0.606094)
+_point_84/right_control_point = Vector2(0.65860534, 0.606094)
+_point_84/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_84/handle_mode = 1
+_point_84/left_force_linear = false
+_point_84/right_force_linear = false
+_point_85/position = Vector2(0.665686, 0.93953276)
+_point_85/left_control_point = Vector2(0.665686, 0.93953276)
+_point_85/right_control_point = Vector2(0.665686, 0.93953276)
+_point_85/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_85/handle_mode = 1
+_point_85/left_force_linear = false
+_point_85/right_force_linear = false
+_point_86/position = Vector2(0.6755988, 0.9319546)
+_point_86/left_control_point = Vector2(0.6755988, 0.9319546)
+_point_86/right_control_point = Vector2(0.6755988, 0.9319546)
+_point_86/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_86/handle_mode = 1
+_point_86/left_force_linear = false
+_point_86/right_force_linear = false
+_point_87/position = Vector2(0.68126327, 0.09077966)
+_point_87/left_control_point = Vector2(0.68126327, 0.09077966)
+_point_87/right_control_point = Vector2(0.68126327, 0.09077966)
+_point_87/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_87/handle_mode = 1
+_point_87/left_force_linear = false
+_point_87/right_force_linear = false
+_point_88/position = Vector2(0.6840955, 0.4393747)
+_point_88/left_control_point = Vector2(0.6840955, 0.4393747)
+_point_88/right_control_point = Vector2(0.6840955, 0.4393747)
+_point_88/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_88/handle_mode = 1
+_point_88/left_force_linear = false
+_point_88/right_force_linear = false
+_point_89/position = Vector2(0.69330025, 0.39580047)
+_point_89/left_control_point = Vector2(0.69330025, 0.39580047)
+_point_89/right_control_point = Vector2(0.69330025, 0.39580047)
+_point_89/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_89/handle_mode = 1
+_point_89/left_force_linear = false
+_point_89/right_force_linear = false
+_point_90/position = Vector2(0.70250505, 0.35222596)
+_point_90/left_control_point = Vector2(0.70250505, 0.35222596)
+_point_90/right_control_point = Vector2(0.70250505, 0.35222596)
+_point_90/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_90/handle_mode = 1
+_point_90/left_force_linear = false
+_point_90/right_force_linear = false
+_point_91/position = Vector2(0.71170986, 0.30865145)
+_point_91/left_control_point = Vector2(0.71170986, 0.30865145)
+_point_91/right_control_point = Vector2(0.71170986, 0.30865145)
+_point_91/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_91/handle_mode = 1
+_point_91/left_force_linear = false
+_point_91/right_force_linear = false
+_point_92/position = Vector2(0.7209146, 0.26507723)
+_point_92/left_control_point = Vector2(0.7209146, 0.26507723)
+_point_92/right_control_point = Vector2(0.7209146, 0.26507723)
+_point_92/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_92/handle_mode = 1
+_point_92/left_force_linear = false
+_point_92/right_force_linear = false
+_point_93/position = Vector2(0.7350758, 0.90922016)
+_point_93/left_control_point = Vector2(0.7350758, 0.90922016)
+_point_93/right_control_point = Vector2(0.7350758, 0.90922016)
+_point_93/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_93/handle_mode = 1
+_point_93/left_force_linear = false
+_point_93/right_force_linear = false
+_point_94/position = Vector2(0.7435725, 0.5075795)
+_point_94/left_control_point = Vector2(0.7435725, 0.5075795)
+_point_94/right_control_point = Vector2(0.7435725, 0.5075795)
+_point_94/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_94/handle_mode = 1
+_point_94/left_force_linear = false
+_point_94/right_force_linear = false
+_point_95/position = Vector2(0.75206923, 0.10593605)
+_point_95/left_control_point = Vector2(0.75206923, 0.10593605)
+_point_95/right_control_point = Vector2(0.75206923, 0.10593605)
+_point_95/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_95/handle_mode = 1
+_point_95/left_force_linear = false
+_point_95/right_force_linear = false
+_point_96/position = Vector2(0.7633982, 0.4734764)
+_point_96/left_control_point = Vector2(0.7633982, 0.4734764)
+_point_96/right_control_point = Vector2(0.7633982, 0.4734764)
+_point_96/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_96/handle_mode = 1
+_point_96/left_force_linear = false
+_point_96/right_force_linear = false
+_point_97/position = Vector2(0.7747271, 0.84101677)
+_point_97/left_control_point = Vector2(0.7747271, 0.84101677)
+_point_97/right_control_point = Vector2(0.7747271, 0.84101677)
+_point_97/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_97/handle_mode = 1
+_point_97/left_force_linear = false
+_point_97/right_force_linear = false
+_point_98/position = Vector2(0.78605604, 0.49242267)
+_point_98/left_control_point = Vector2(0.78605604, 0.49242267)
+_point_98/right_control_point = Vector2(0.78605604, 0.49242267)
+_point_98/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_98/handle_mode = 1
+_point_98/left_force_linear = false
+_point_98/right_force_linear = false
+_point_99/position = Vector2(0.79738504, 0.14382672)
+_point_99/left_control_point = Vector2(0.79738504, 0.14382672)
+_point_99/right_control_point = Vector2(0.79738504, 0.14382672)
+_point_99/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_99/handle_mode = 1
+_point_99/left_force_linear = false
+_point_99/right_force_linear = false
+_point_100/position = Vector2(0.8101301, 0.5113671)
+_point_100/left_control_point = Vector2(0.8101301, 0.5113671)
+_point_100/right_control_point = Vector2(0.8101301, 0.5113671)
+_point_100/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_100/handle_mode = 1
+_point_100/left_force_linear = false
+_point_100/right_force_linear = false
+_point_101/position = Vector2(0.8228752, 0.8789075)
+_point_101/left_control_point = Vector2(0.8228752, 0.8789075)
+_point_101/right_control_point = Vector2(0.8228752, 0.8789075)
+_point_101/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_101/handle_mode = 1
+_point_101/left_force_linear = false
+_point_101/right_force_linear = false
+_point_102/position = Vector2(0.8313719, 0.5341016)
+_point_102/left_control_point = Vector2(0.8313719, 0.5341016)
+_point_102/right_control_point = Vector2(0.8313719, 0.5341016)
+_point_102/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_102/handle_mode = 1
+_point_102/left_force_linear = false
+_point_102/right_force_linear = false
+_point_103/position = Vector2(0.8398686, 0.18929565)
+_point_103/left_control_point = Vector2(0.8398686, 0.18929565)
+_point_103/right_control_point = Vector2(0.8398686, 0.18929565)
+_point_103/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_103/handle_mode = 1
+_point_103/left_force_linear = false
+_point_103/right_force_linear = false
+_point_104/position = Vector2(0.8483653, 0.4014839)
+_point_104/left_control_point = Vector2(0.8483653, 0.4014839)
+_point_104/right_control_point = Vector2(0.8483653, 0.4014839)
+_point_104/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_104/handle_mode = 1
+_point_104/left_force_linear = false
+_point_104/right_force_linear = false
+_point_105/position = Vector2(0.85827816, 0.5947268)
+_point_105/left_control_point = Vector2(0.85827816, 0.5947268)
+_point_105/right_control_point = Vector2(0.85827816, 0.5947268)
+_point_105/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_105/handle_mode = 1
+_point_105/left_force_linear = false
+_point_105/right_force_linear = false
+_point_106/position = Vector2(0.868191, 0.7879697)
+_point_106/left_control_point = Vector2(0.868191, 0.7879697)
+_point_106/right_control_point = Vector2(0.868191, 0.7879697)
+_point_106/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_106/handle_mode = 1
+_point_106/left_force_linear = false
+_point_106/right_force_linear = false
+_point_107/position = Vector2(0.87102324, 0.41664028)
+_point_107/left_control_point = Vector2(0.87102324, 0.41664028)
+_point_107/right_control_point = Vector2(0.87102324, 0.41664028)
+_point_107/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_107/handle_mode = 1
+_point_107/left_force_linear = false
+_point_107/right_force_linear = false
+_point_108/position = Vector2(0.87951994, 0.35033154)
+_point_108/left_control_point = Vector2(0.87951994, 0.35033154)
+_point_108/right_control_point = Vector2(0.87951994, 0.35033154)
+_point_108/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_108/handle_mode = 1
+_point_108/left_force_linear = false
+_point_108/right_force_linear = false
+_point_109/position = Vector2(0.8880167, 0.28402233)
+_point_109/left_control_point = Vector2(0.8880167, 0.28402233)
+_point_109/right_control_point = Vector2(0.8880167, 0.28402233)
+_point_109/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_109/handle_mode = 1
+_point_109/left_force_linear = false
+_point_109/right_force_linear = false
+_point_110/position = Vector2(0.8965134, 0.2177136)
+_point_110/left_control_point = Vector2(0.8965134, 0.2177136)
+_point_110/right_control_point = Vector2(0.8965134, 0.2177136)
+_point_110/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_110/handle_mode = 1
+_point_110/left_force_linear = false
+_point_110/right_force_linear = false
+_point_111/position = Vector2(0.9050101, 0.15140486)
+_point_111/left_control_point = Vector2(0.9050101, 0.15140486)
+_point_111/right_control_point = Vector2(0.9050101, 0.15140486)
+_point_111/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_111/handle_mode = 1
+_point_111/left_force_linear = false
+_point_111/right_force_linear = false
+_point_112/position = Vector2(0.9191713, 0.87132937)
+_point_112/left_control_point = Vector2(0.9191713, 0.87132937)
+_point_112/right_control_point = Vector2(0.9191713, 0.87132937)
+_point_112/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_112/handle_mode = 1
+_point_112/left_force_linear = false
+_point_112/right_force_linear = false
+_point_113/position = Vector2(0.9283761, 0.6970316)
+_point_113/left_control_point = Vector2(0.9283761, 0.6970316)
+_point_113/right_control_point = Vector2(0.9283761, 0.6970316)
+_point_113/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_113/handle_mode = 1
+_point_113/left_force_linear = false
+_point_113/right_force_linear = false
+_point_114/position = Vector2(0.9375808, 0.52273494)
+_point_114/left_control_point = Vector2(0.9375808, 0.52273494)
+_point_114/right_control_point = Vector2(0.9375808, 0.52273494)
+_point_114/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_114/handle_mode = 1
+_point_114/left_force_linear = false
+_point_114/right_force_linear = false
+_point_115/position = Vector2(0.9467856, 0.34843716)
+_point_115/left_control_point = Vector2(0.9467856, 0.34843716)
+_point_115/right_control_point = Vector2(0.9467856, 0.34843716)
+_point_115/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_115/handle_mode = 1
+_point_115/left_force_linear = false
+_point_115/right_force_linear = false
+_point_116/position = Vector2(0.95599043, 0.17413938)
+_point_116/left_control_point = Vector2(0.95599043, 0.17413938)
+_point_116/right_control_point = Vector2(0.95599043, 0.17413938)
+_point_116/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_116/handle_mode = 1
+_point_116/left_force_linear = false
+_point_116/right_force_linear = false
+_point_117/position = Vector2(0.9588226, 0.4621092)
+_point_117/left_control_point = Vector2(0.9588226, 0.4621092)
+_point_117/right_control_point = Vector2(0.9588226, 0.4621092)
+_point_117/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_117/handle_mode = 1
+_point_117/left_force_linear = false
+_point_117/right_force_linear = false
+_point_118/position = Vector2(0.9691169, 0.5965815)
+_point_118/left_control_point = Vector2(0.9691169, 0.5965815)
+_point_118/right_control_point = Vector2(0.9691169, 0.5965815)
+_point_118/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_118/handle_mode = 1
+_point_118/left_force_linear = false
+_point_118/right_force_linear = false
+_point_119/position = Vector2(0.9794113, 0.7310546)
+_point_119/left_control_point = Vector2(0.9794113, 0.7310546)
+_point_119/right_control_point = Vector2(0.9794113, 0.7310546)
+_point_119/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_119/handle_mode = 1
+_point_119/left_force_linear = false
+_point_119/right_force_linear = false
+_point_120/position = Vector2(0.9897057, 0.8655277)
+_point_120/left_control_point = Vector2(0.9897057, 0.8655277)
+_point_120/right_control_point = Vector2(0.9897057, 0.8655277)
+_point_120/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_120/handle_mode = 1
+_point_120/left_force_linear = false
+_point_120/right_force_linear = false
+_point_121/position = Vector2(1, 1)
+_point_121/left_control_point = Vector2(1, 1)
+_point_121/right_control_point = Vector2(1, 1)
+_point_121/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_121/handle_mode = 0
+_point_121/left_force_linear = false
+_point_121/right_force_linear = false
