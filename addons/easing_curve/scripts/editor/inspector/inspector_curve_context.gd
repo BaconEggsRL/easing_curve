@@ -328,8 +328,8 @@ const NATIVE_TRANSITION_PRESENTATION := [
 	{
 		"name": "CSS",
 		"items": [
-			{"transition": 108, "label": "CSS Cubic Bézier"},
-			{"transition": 107, "label": "CSS Linear"},
+			{"transition": 108, "label": "cubic-bezier()"},
+			{"transition": 107, "label": "linear()"},
 		],
 	},
 	{
@@ -3764,12 +3764,7 @@ static func _set_transition_display(
 			continue
 
 		var transition := popup.get_item_id(i)
-		var display := (
-			String(EasingCurve.TRANS.keys()[transition])
-			.to_lower()
-			.capitalize()
-			.replace("_", " ")
-		)
+		var display := _enum_display_name(EasingCurve.TRANS.keys()[transition])
 
 		if (
 			SHOW_MODIFIED_ASTERISK
@@ -3830,12 +3825,7 @@ static func _create_transition_option(
 
 		for item: Dictionary in group["items"]:
 			var transition: EasingCurve.TRANS = item["transition"]
-			var display := (
-				String(EasingCurve.TRANS.keys()[transition])
-				.to_lower()
-				.capitalize()
-				.replace("_", " ")
-			)
+			var display := _enum_display_name(EasingCurve.TRANS.keys()[transition])
 
 			option.add_icon_item(MODE_ICONS.get_transition_icon(EasingCurve.TRANS.keys()[transition], EDITOR_THEME_CACHE.get_theme()), display, transition)
 			if transition == EasingCurve.TRANS.SMOOTHSTEP:
@@ -3868,6 +3858,15 @@ static func _create_native_transition_option(
 	return option
 
 
+static func _enum_display_name(key: String) -> String:
+	match key:
+		"CSS_CUBIC_BEZIER":
+			return "cubic-bezier()"
+		"CSS_LINEAR":
+			return "linear()"
+	return key.to_lower().capitalize().replace("_", " ")
+
+
 static func _create_option(enum_dict: Dictionary, selected_value: int) -> OptionButton:
 	var option := OptionButton.new()
 	_configure_compact_option(option)
@@ -3876,7 +3875,7 @@ static func _create_option(enum_dict: Dictionary, selected_value: int) -> Option
 		keys.erase("CSS_CUBIC_BEZIER")
 		keys.insert(keys.find("CSS_LINEAR") + 1, "CSS_CUBIC_BEZIER")
 	for key in keys:
-		var display = key.to_lower().capitalize().replace("_", " ")
+		var display := _enum_display_name(key)
 		if enum_dict == EasingCurve.EASE:
 			option.add_icon_item(MODE_ICONS.get_ease_icon(key, EDITOR_THEME_CACHE.get_theme()), display, enum_dict[key])
 		else:

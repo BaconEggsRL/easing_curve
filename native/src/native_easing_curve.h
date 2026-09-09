@@ -108,6 +108,7 @@ private:
 	TypedArray<NativeEasingCurvePoint> points;
 	std::vector<Ref<NativeEasingCurvePoint>> connected_points;
 	std::vector<Segment> segments;
+	bool segments_binary_search_safe = false;
 	int64_t last_segment_index = -1;
 	bool applying_point_states = false;
 	bool point_state_changed_while_applying = false;

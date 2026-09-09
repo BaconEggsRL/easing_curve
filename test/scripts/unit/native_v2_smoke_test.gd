@@ -483,15 +483,20 @@ func _test_point_ordering_contract() -> void:
 	var start := _new_native_point(Vector2(0.0, 0.0))
 	var middle := _new_native_point(Vector2(0.5, 0.8))
 	var end := _new_native_point(Vector2(1.0, 1.0))
-	var sorted := _new_native_curve(TRANS_CUSTOM, Tween.EASE_OUT)
 	var unsorted := _new_native_curve(TRANS_CUSTOM, Tween.EASE_OUT)
-	sorted.set(&"points", [start, middle, end])
 	unsorted.set(&"points", [end, start, middle])
+	var legacy := LEGACY_CURVE_SCRIPT.new()
+	legacy.set_trans(EasingCurve.TRANS.CUSTOM)
+	legacy.points = [
+		LEGACY_POINT_SCRIPT.new(Vector2.ONE),
+		LEGACY_POINT_SCRIPT.new(Vector2.ZERO),
+		LEGACY_POINT_SCRIPT.new(Vector2(0.5, 0.8)),
+	]
 	for index in range(SAMPLE_COUNT + 1):
 		var offset := float(index) / SAMPLE_COUNT
 		_expect(
-			is_equal_approx(sorted.call(&"sample", offset), unsorted.call(&"sample", offset)),
-			"point order changed sampling at %.6f" % offset,
+			absf(legacy.sample(offset) - unsorted.call(&"sample", offset)) <= 0.000002,
+			"Native did not preserve authored segment order at %.6f" % offset,
 		)
 
 	var duplicate_low := _new_native_point(Vector2(0.5, 0.2))
@@ -499,8 +504,8 @@ func _test_point_ordering_contract() -> void:
 	var duplicate_curve := _new_native_curve(TRANS_CUSTOM, Tween.EASE_OUT)
 	duplicate_curve.set(&"points", [start, duplicate_low, duplicate_high, end])
 	_expect(
-		is_equal_approx(duplicate_curve.call(&"sample", 0.5), 0.8),
-		"the last point at a duplicate x coordinate did not win",
+		is_equal_approx(duplicate_curve.call(&"sample", 0.5), 0.2),
+		"the incoming segment must own the exact duplicate-X boundary, as in Legacy",
 	)
 
 

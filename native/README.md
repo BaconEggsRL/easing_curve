@@ -107,6 +107,15 @@ shared for authored editing, and nested changes invalidate compiled segments.
 Native points persist handle mode, control locks, and force-linear state, and
 `apply_state()` restores a point snapshot atomically for future Undo/Redo use.
 
+Custom and modified-preset sampling preserves adjacent points in authored order,
+including duplicate X coordinates and reversed intervals, just like the graph
+and Legacy sampler. The first matching segment owns a shared boundary; an
+incoming segment therefore wins over a following vertical segment at the exact
+boundary. A vertical segment that is reached returns its ending Y within
+Legacy's `0.000001` X tolerance. Strictly increasing curves retain cached binary
+lookup; other topologies scan precompiled segments without sample-time allocation.
+See [sampling parity investigation](../test/docs/native_sampling_parity.md).
+
 ## Validation and benchmarks
 
 Run the Native correctness suite and the expanded runtime benchmark:

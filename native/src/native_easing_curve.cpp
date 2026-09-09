@@ -120,7 +120,7 @@ void NativeEasingCurve::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("sample", "offset"), &NativeEasingCurve::sample);
 
 	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "_editor_state_snapshot", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_editor_state_snapshot", "get_editor_state_snapshot");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100,Constant:101,Jitter:102,Irregular:103,Step:104,Power:105,Physics Spring:106,CSS Linear:107,CSS Cubic Bezier:108,Smoothstep:109"), "set_transition", "get_transition");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition", PROPERTY_HINT_ENUM, "Linear:0,Sine:1,Quint:2,Quart:3,Quad:4,Expo:5,Elastic:6,Cubic:7,Circ:8,Bounce:9,Back:10,Spring:11,Custom:100,Constant:101,Jitter:102,Irregular:103,Step:104,Power:105,Physics Spring:106,linear():107,cubic-bezier():108,Smoothstep:109"), "set_transition", "get_transition");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "ease_type", PROPERTY_HINT_ENUM, "In,Out,In Out,Out In"), "set_ease_type", "get_ease_type");
 	ADD_GROUP("Transition Parameters", "");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "amplitude", PROPERTY_HINT_RANGE, "1.0,10.0,0.001,or_greater"), "set_amplitude", "get_amplitude");
@@ -1431,34 +1431,27 @@ void NativeEasingCurve::compile_segments() {
 		}
 	}
 
-	std::stable_sort(ordered_points.begin(), ordered_points.end(), [](const Ref<NativeEasingCurvePoint> &p_left, const Ref<NativeEasingCurvePoint> &p_right) {
-		return p_left->get_position().x < p_right->get_position().x;
-	});
-	std::vector<Ref<NativeEasingCurvePoint>> unique_points;
-	unique_points.reserve(ordered_points.size());
-	for (const Ref<NativeEasingCurvePoint> &point : ordered_points) {
-		if (!unique_points.empty() && std::abs(point->get_position().x - unique_points.back()->get_position().x) <= SEGMENT_X_EPSILON) {
-			unique_points.back() = point;
-		} else {
-			unique_points.push_back(point);
-		}
-	}
-
+	// The graph and Legacy evaluate adjacent points in authored order, including
+	// duplicate X and reversed intervals. Never sort or merge their topology here.
 	segments.clear();
-	segments.reserve(unique_points.size() > 1 ? unique_points.size() - 1 : 0);
-	for (size_t index = 0; index + 1 < unique_points.size(); ++index) {
-		const Ref<NativeEasingCurvePoint> &start = unique_points[index];
-		const Ref<NativeEasingCurvePoint> &end = unique_points[index + 1];
+	segments_binary_search_safe = ordered_points.size() >= 2;
+	segments.reserve(ordered_points.size() > 1 ? ordered_points.size() - 1 : 0);
+	for (size_t index = 0; index + 1 < ordered_points.size(); ++index) {
+		const Ref<NativeEasingCurvePoint> &start = ordered_points[index];
+		const Ref<NativeEasingCurvePoint> &end = ordered_points[index + 1];
 		const Vector2 start_position = start->get_position();
 		const Vector2 end_position = end->get_position();
 		if (end_position.x - start_position.x <= SEGMENT_X_EPSILON) {
-			continue;
+			segments_binary_search_safe = false;
 		}
 
-		double out_x = std::clamp(static_cast<double>(start->get_right_control_point().x), static_cast<double>(start_position.x), static_cast<double>(end_position.x));
-		double in_x = std::clamp(static_cast<double>(end->get_left_control_point().x), static_cast<double>(start_position.x), static_cast<double>(end_position.x));
-		if (out_x > in_x) {
-			const double shared_x = (out_x + in_x) * 0.5;
+		const double min_x = std::min(start_position.x, end_position.x);
+		const double max_x = std::max(start_position.x, end_position.x);
+		double out_x = std::clamp(static_cast<double>(start->get_right_control_point().x), min_x, max_x);
+		double in_x = std::clamp(static_cast<double>(end->get_left_control_point().x), min_x, max_x);
+		const bool increasing = end_position.x >= start_position.x;
+		if ((increasing && out_x > in_x) || (!increasing && out_x < in_x)) {
+			const real_t shared_x = (out_x + in_x) * 0.5;
 			out_x = shared_x;
 			in_x = shared_x;
 		}
@@ -1967,9 +1960,28 @@ double NativeEasingCurve::sample_custom(double p_offset) {
 		return 0.0;
 	}
 
+	if (!segments_binary_search_safe) {
+		// Match Legacy's first matching segment, including its vertical tolerance.
+		// A locality cache cannot skip earlier overlapping or zero-width segments.
+		for (const Segment &segment : segments) {
+			if (std::abs(segment.x3 - segment.x0) <= SEGMENT_X_EPSILON) {
+				if (std::abs(p_offset - segment.x0) <= SEGMENT_X_EPSILON) {
+					return segment.y3;
+				}
+				continue;
+			}
+			if (p_offset < std::min(segment.x0, segment.x3) || p_offset > std::max(segment.x0, segment.x3)) {
+				continue;
+			}
+			const double t = solve_monotonic_t(p_offset, segment);
+			return bezier(segment.y0, segment.y1, segment.y2, segment.y3, t);
+		}
+		return 0.0;
+	}
+
 	if (last_segment_index >= 0 && last_segment_index < static_cast<int64_t>(segments.size())) {
 		const Segment &last = segments[last_segment_index];
-		if (p_offset >= last.x0 && p_offset <= last.x3) {
+		if (p_offset >= last.x0 && p_offset <= last.x3 && (last_segment_index == 0 || p_offset > last.x0)) {
 			const double t = solve_monotonic_t(p_offset, last);
 			return bezier(last.y0, last.y1, last.y2, last.y3, t);
 		}
@@ -2005,16 +2017,21 @@ double NativeEasingCurve::solve_monotonic_t(double p_x, const Segment &p_segment
 		return 1.0;
 	}
 
+	const double segment_width = p_segment.x3 - p_segment.x0;
+	if (std::abs(segment_width) < CMP_EPSILON) {
+		return 0.5;
+	}
+	const bool increasing = segment_width > 0.0;
 	double low = 0.0;
 	double high = 1.0;
-	double t = std::clamp((p_x - p_segment.x0) / (p_segment.x3 - p_segment.x0), 0.0, 1.0);
+	double t = std::clamp((p_x - p_segment.x0) / segment_width, 0.0, 1.0);
 	for (int iteration = 0; iteration < NEWTON_ITERATIONS; ++iteration) {
 		const double estimate = bezier(p_segment.x0, p_segment.x1, p_segment.x2, p_segment.x3, t);
 		const double error = estimate - p_x;
 		if (std::abs(error) <= SOLVE_EPSILON) {
 			return t;
 		}
-		if (estimate < p_x) {
+		if ((estimate < p_x) == increasing) {
 			low = t;
 		} else {
 			high = t;
@@ -2036,7 +2053,7 @@ double NativeEasingCurve::solve_monotonic_t(double p_x, const Segment &p_segment
 		if (std::abs(estimate - p_x) <= SOLVE_EPSILON) {
 			break;
 		}
-		if (estimate < p_x) {
+		if ((estimate < p_x) == increasing) {
 			low = t;
 		} else {
 			high = t;
