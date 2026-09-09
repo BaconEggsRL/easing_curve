@@ -18,6 +18,8 @@ $candidateRecord = Get-Content "$CandidateDirectory/provenance.json" -Raw | Conv
 $qualificationRoot = Join-Path $root 'test/_temp/editor-qualification'
 if (Test-Path $qualificationRoot) { throw 'Use a fresh qualification workspace; no retry into success.' }
 New-Item -ItemType Directory $qualificationRoot | Out-Null
+$nativeBefore = @(Get-ChildItem "$root/addons/easing_curve/bin" -File | Where-Object Extension -in @('.dll', '.wasm') | Get-FileHash | Select-Object Path,Hash)
+$nativeBefore | ConvertTo-Json | Set-Content "$qualificationRoot/native-input-hashes.json"
 Assert-GodotExecutableHash $candidate $pin.editor_sha256 | Out-Null
 Assert-GodotExecutableHash $control $controlRecord.executable_sha256 | Out-Null
 if ($candidateRecord.executable_sha256 -ine $pin.editor_sha256 -or $candidateRecord.source_commit -ne $pin.source_commit -or $controlRecord.source_commit -ne $pin.source_commit) { throw 'Candidate provenance does not match the pin.' }
@@ -80,6 +82,10 @@ if ($FullSuite) {
 	Invoke-Validation 'current-archive' "$root/test/runners/run_release_archive_test.ps1" @('-GodotPath', $OfficialGodotPath, '-KeepArtifacts')
 	Invoke-Validation 'windows-export' "$root/test/runners/run_native_release_export_test.ps1" @('-GodotPath', $OfficialGodotPath, '-SkipBuild', '-ExportTemplateVersion', $pin.export_template_version)
 	Invoke-Validation 'web-export-runtime' "$root/test/runners/run_native_web_export_test.ps1" @('-GodotPath', $OfficialGodotPath, '-SkipBuild', '-ExportTemplateVersion', $pin.export_template_version)
+}
+[void](Assert-GodotExecutableHash $candidate $pin.editor_sha256)
+foreach ($inputHash in $nativeBefore) {
+	if ((Get-FileHash -LiteralPath $inputHash.Path).Hash -ne $inputHash.Hash) { throw "Native validation input changed: $($inputHash.Path)" }
 }
 [ordered]@{ candidate_sha256=$pin.editor_sha256; source_commit=$pin.source_commit; patch_sha256=$pin.patch_sha256; repetitions=$Repetitions; full_suite=[bool]$FullSuite; image=$env:ImageOS; image_version=$env:ImageVersion; run=$env:GITHUB_RUN_ID; commit=$env:GITHUB_SHA; passed=$true } |
 	ConvertTo-Json | Set-Content "$qualificationRoot/qualification.json"

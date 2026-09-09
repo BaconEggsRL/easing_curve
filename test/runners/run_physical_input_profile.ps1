@@ -652,6 +652,9 @@ if ($Mode -eq "Both") {
             -Started (Get-Date) `
             -Ended (Get-Date) `
             -TracePath ""
+        $editorLog = Join-Path $projects[$entry.Key] 'test/_temp/editor.log'
+        $entry.Value.ExitCode | Set-Content -LiteralPath "$editorLog.exitcode.txt"
+        Assert-GodotProcessExit $entry.Value.ExitCode "Physical-input side-by-side capture '$($entry.Key)'" $editorLog
     }
 } else {
     foreach ($entry in $projects.GetEnumerator()) {

@@ -38,5 +38,21 @@ foreach ($file in @('run_native_editor_script_validation.ps1', 'run_native_inspe
 		if ($continued -ne $case[2]) { throw 'Archive lifecycle requires BOTH zero exit and semantic success.' }
 	}
 }
-Write-Host "PASS: runner wrappers retain raw status; archive lifecycle rejects crashes with clean caches and errors with zero exit. Evidence: $temp"
+& {
+	. (Get-RunnerFunction 'run_physical_input_profile.ps1' 'Invoke-ProfileHostSmokeTest')
+	function Start-Process { param($FilePath,$ArgumentList,[switch]$PassThru) return $script:fakeProcess }
+	function Test-LogHasScriptFailure { return $false }
+	function Get-PluginVersion { return 'fixture' }
+	$godot=@{Gui='unused'}
+	New-Item -ItemType Directory "$temp/test/_temp" -Force | Out-Null
+	'PHYSICAL_INPUT_PROBE_START' | Set-Content "$temp/test/_temp/smoke_editor.log"
+	foreach ($code in @(0, -1073741819)) {
+		$script:fakeProcess=[pscustomobject]@{ExitCode=$code}
+		$script:fakeProcess | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($Milliseconds) return $true }
+		$passed=$false
+		try { Invoke-ProfileHostSmokeTest -Label 'synthetic' -ProjectPath $temp; $passed=$true } catch { if ($code -eq 0) { throw } }
+		if ($passed -ne ($code -eq 0)) { throw 'Physical-input smoke check accepted a crash with clean output.' }
+	}
+}
+Write-Host "PASS: runner wrappers retain raw status; archive and profiling checks reject crashes despite clean semantic output. Evidence: $temp"
 exit 0
