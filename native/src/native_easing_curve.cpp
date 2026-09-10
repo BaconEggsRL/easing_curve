@@ -322,7 +322,8 @@ void NativeEasingCurve::set_constant_value(double p_value) {
 		return;
 	}
 	constant_value = value;
-	if (transition == TRANS_CONSTANT && !preset_override_active) {
+	if (transition == TRANS_CONSTANT) {
+		preset_override_active = false;
 		replace_points(build_selected_preset_points(), false);
 		publish_parameter_change(true);
 	} else {
@@ -341,7 +342,8 @@ void NativeEasingCurve::set_overshoot(double p_overshoot) {
 		return;
 	}
 	overshoot = value;
-	if (transition == TRANS_BACK && !preset_override_active) {
+	if (transition == TRANS_BACK) {
+		preset_override_active = false;
 		replace_points(build_selected_preset_points(), false);
 		publish_parameter_change(true);
 	} else {
@@ -1202,6 +1204,7 @@ void NativeEasingCurve::publish_parameter_change(bool p_points_changed) {
 
 Dictionary NativeEasingCurve::capture_parameter_state() const {
 	Dictionary state;
+	state[StringName("preset_override_active")] = preset_override_active;
 	state[StringName("constant_value")] = constant_value;
 	state[StringName("overshoot")] = overshoot;
 	state[StringName("amplitude")] = amplitude;

@@ -76,6 +76,8 @@ func _on_grabbed() -> void:
 	input.set_meta(DRAGGING_META, true)
 	if _is_native_curve(object):
 		drag_original_value = object.get(property_name)
+		if _is_native_bezier_parameter():
+			drag_original_snapshot = object.call(&"get_editor_state_snapshot")
 		object.call(&"begin_parameter_edit")
 	else:
 		drag_original_snapshot = EASING_CURVE_EDITOR_UNDO.capture_state(object as EasingCurve)
@@ -100,7 +102,14 @@ func _on_value_changed(value: float) -> void:
 	if input.has_meta(DRAGGING_META):
 		object.set(property_name, property_value)
 	elif _is_native_curve(object):
-		emit_changed(property_name, property_value)
+		if _is_native_bezier_parameter():
+			drag_original_value = object.get(property_name)
+			drag_original_snapshot = object.call(&"get_editor_state_snapshot")
+			object.call(&"begin_parameter_edit")
+			object.set(property_name, property_value)
+			_commit_native_bezier_edit(object)
+		else:
+			emit_changed(property_name, property_value)
 	else:
 		_commit_value(object as EasingCurve, property_value)
 	_queue_curve_redraw()
@@ -142,6 +151,9 @@ func _commit_drag() -> void:
 
 
 func _commit_native_drag(object: Resource) -> void:
+	if _is_native_bezier_parameter():
+		_commit_native_bezier_edit(object)
+		return
 	var final_value := object.get(property_name)
 	# Restore before emitting the final EditorProperty change so Godot captures
 	# the actual pre-drag value for Undo and live-debug publication.
@@ -149,6 +161,38 @@ func _commit_native_drag(object: Resource) -> void:
 	object.call(&"cancel_parameter_edit")
 	if final_value != drag_original_value:
 		emit_changed(property_name, final_value)
+
+
+func _is_native_bezier_parameter() -> bool:
+	return property_name in [&"constant_value", &"overshoot"]
+
+
+func _commit_native_bezier_edit(object: Resource) -> void:
+	var final_value := object.get(property_name)
+	var after: Dictionary = object.call(&"get_editor_state_snapshot")
+	if final_value == drag_original_value and after == drag_original_snapshot:
+		object.call(&"cancel_parameter_edit")
+		return
+	if undo_redo != null:
+		var action_name := "Change Easing Curve %s" % String(property_name).capitalize()
+		if undo_redo is EditorUndoRedoManager:
+			undo_redo.create_action(action_name, UndoRedo.MERGE_DISABLE, object)
+		else:
+			undo_redo.create_action(action_name)
+		# Restore the scalar before the snapshot: its setter regenerates geometry.
+		undo_redo.add_do_property(object, property_name, final_value)
+		undo_redo.add_do_property(object, &"_editor_state_snapshot", after)
+		undo_redo.add_undo_property(object, property_name, drag_original_value)
+		undo_redo.add_undo_property(object, &"_editor_state_snapshot", drag_original_snapshot)
+		if undo_redo is EditorUndoRedoManager:
+			undo_redo.add_do_method(object, &"_apply_live_editor_snapshot", after)
+			undo_redo.add_undo_method(object, &"_apply_live_editor_snapshot", drag_original_snapshot)
+		undo_redo.commit_action(undo_redo is EditorUndoRedoManager)
+	object.call(&"finish_parameter_edit")
+	if undo_redo == null:
+		emit_changed(property_name, final_value)
+	elif not undo_redo is EditorUndoRedoManager and is_instance_valid(curve_editor) and curve_editor.committed_change_publisher.is_valid():
+		curve_editor.committed_change_publisher.call()
 
 
 func _commit_value(object: EasingCurve, value: Variant, action_name := "") -> void:

@@ -52,6 +52,7 @@ func _run() -> void:
 	_test_native_point_list_swap_parity()
 	await _test_native_inspector_path()
 	await _test_native_deferred_parameter_editor()
+	await _test_native_bezier_parameter_history()
 	await _test_native_property_clipboard_and_lifecycle()
 	_test_clipboard_text_parsing()
 	_finish("shared curve editor vertical slice")
@@ -1326,6 +1327,59 @@ func _test_native_deferred_parameter_case(
 	)
 	_expect(is_equal_approx(curve.get(property_name), typed_value), "Native typed parameter value was not applied")
 	property_editor.free()
+
+
+func _test_native_bezier_parameter_history() -> void:
+	var host := EditorPlugin.new()
+	var manager := host.get_undo_redo()
+	for entry in [
+		[NativeEasingCurve.TRANS_CONSTANT, &"constant_value", 0.25],
+		[NativeEasingCurve.TRANS_BACK, &"overshoot", 2.8],
+	]:
+		for gesture in [&"typed", &"drag", &"return_to_original"]:
+			var curve := ClassDB.instantiate(&"NativeEasingCurve") as Resource
+			curve.set(&"transition", entry[0])
+			var point := curve.call(&"get_point", 0) as Resource
+			point.set(&"right_control_point", Vector2(0.1, 0.9))
+			var before: Dictionary = curve.call(&"get_editor_state_snapshot")
+			var property_name := StringName(entry[1])
+			var original_value: float = curve.get(property_name)
+			var native_editor := EditorProperty.new()
+			var input := EditorSpinSlider.new()
+			input.max_value = 5.0
+			input.step = 0.001
+			native_editor.add_child(input)
+			var property_editor := DEFERRED_PARAMETER_EDITOR_PROPERTY.new() as EditorProperty
+			property_editor.call(&"setup", native_editor, property_name, null, manager)
+			property_editor.set_object_and_property(curve, property_name)
+			root.add_child(property_editor)
+			var history := manager.get_history_undo_redo(manager.get_object_history_id(curve))
+			history.clear_history()
+			var publications := [0]
+			curve.changed.connect(func() -> void: publications[0] += 1)
+			if gesture != &"typed":
+				input.grabbed.emit()
+			input.value = entry[2]
+			if gesture == &"return_to_original":
+				input.value = original_value
+			if gesture != &"typed":
+				_expect(publications[0] == 0, "Modified Native %s published during drag" % property_name)
+				input.ungrabbed.emit()
+				await process_frame
+			var after: Dictionary = curve.call(&"get_editor_state_snapshot")
+			var final_value: float = curve.get(property_name)
+			_expect(not curve.call(&"is_selected_preset_modified"), "Native %s/%s kept modified geometry" % [property_name, gesture])
+			_expect(publications[0] == 1, "Native %s/%s did not publish once" % [property_name, gesture])
+			_expect(history.get_history_count() == 1, "Native %s/%s did not record one action" % [property_name, gesture])
+			property_editor.free()
+			history.undo()
+			_expect(is_equal_approx(curve.get(property_name), original_value), "Native %s Undo lost its original value" % property_name)
+			_expect(curve.call(&"get_editor_state_snapshot") == before, "Native %s Undo lost modified geometry" % property_name)
+			history.redo()
+			_expect(is_equal_approx(curve.get(property_name), final_value), "Native %s Redo lost its final value" % property_name)
+			_expect(curve.call(&"get_editor_state_snapshot") == after, "Native %s Redo lost canonical geometry" % property_name)
+			history.clear_history()
+	host.free()
 
 
 func _test_native_property_clipboard_and_lifecycle() -> void:

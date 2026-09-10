@@ -50,6 +50,7 @@ func _run() -> void:
 	_test_point_editor_state_contract()
 	_test_deferred_point_edit_transaction()
 	_test_deferred_parameter_edit_transaction()
+	_test_modified_bezier_parameter_parity()
 	_test_resource_free_editor_snapshot()
 	_test_transition_parameter_visibility()
 	_test_editable_preset_geometry()
@@ -707,6 +708,55 @@ func _test_deferred_parameter_edit_transaction() -> void:
 		preset.call(&"finish_parameter_edit")
 		_expect(preset_changes[0] == 1, "Native Bézier parameter drag did not publish one curve change on release")
 		_expect(point_changes[0] == 1, "Native Bézier parameter drag did not publish one point change on release")
+
+
+func _test_modified_bezier_parameter_parity() -> void:
+	var cases := [
+		[NativeEasingCurve.TRANS_CONSTANT, EasingCurve.TRANS.CONSTANT, &"constant_value", 0.25],
+		[NativeEasingCurve.TRANS_BACK, EasingCurve.TRANS.BACK, &"overshoot", 2.8],
+	]
+	for entry in cases:
+		for ease in range(NativeEasingCurve.EASE_OUT_IN + 1):
+			for deferred in [false, true]:
+				var curve := _new_native_curve(entry[0], ease)
+				var legacy := EasingCurve.new()
+				legacy.trans_type = entry[1]
+				legacy.ease_type = ease
+				var property_name := StringName(entry[2])
+				var point := curve.call(&"get_point", 0) as Resource
+				point.set(&"right_control_point", Vector2(0.1, 0.9))
+				curve.call(&"insert_point", 1, _new_native_point(Vector2(0.4, 0.8)))
+				legacy.points[0].right_control_point = Vector2(0.1, 0.9)
+				var extra := EasingCurvePoint.new()
+				extra.position = Vector2(0.4, 0.8)
+				legacy.add_point(extra)
+				var modified: Dictionary = curve.call(&"get_editor_state_snapshot")
+				var changes := [0, 0]
+				curve.changed.connect(func() -> void: changes[0] += 1)
+				curve.connect(&"points_changed", func(_points: Array) -> void: changes[1] += 1)
+				curve.set(property_name, curve.get(property_name))
+				_expect(curve.call(&"get_editor_state_snapshot") == modified, "Same-value %s discarded modified geometry" % property_name)
+				var inactive := &"overshoot" if property_name == &"constant_value" else &"constant_value"
+				curve.set(inactive, 0.7)
+				_expect(curve.call(&"get_editor_state_snapshot") == modified, "Inactive %s discarded modified geometry" % inactive)
+				changes[0] = 0
+				if deferred:
+					curve.call(&"begin_parameter_edit")
+				curve.set(property_name, entry[3])
+				legacy.set(property_name, entry[3])
+				_expect(not curve.call(&"is_selected_preset_modified"), "%s left Native preset modified" % property_name)
+				var canonical := _new_native_curve(entry[0], ease)
+				canonical.set(property_name, entry[3])
+				_expect(curve.call(&"capture_point_states") == canonical.call(&"capture_point_states"), "%s retained edited Native geometry" % property_name)
+				var max_error := 0.0
+				for index in range(SAMPLE_COUNT + 1):
+					var offset := float(index) / SAMPLE_COUNT
+					max_error = maxf(max_error, absf(curve.call(&"sample", offset) - legacy.sample(offset)))
+				_expect(max_error <= 0.00001, "%s/%d regenerated sampling differs from Legacy: %.9f" % [property_name, ease, max_error])
+				if deferred:
+					_expect(changes == [0, 0], "%s preview published before release" % property_name)
+					curve.call(&"finish_parameter_edit")
+				_expect(changes == [1, 1], "%s did not publish one curve/point change" % property_name)
 
 
 func _test_resource_free_editor_snapshot() -> void:

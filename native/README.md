@@ -27,6 +27,10 @@ root:
 ./native/build_native.ps1 -Platform web -Target all
 ```
 
+After changing Native C++, rebuild all three libraries before packaging and
+restart the Editor to load the new DLL. Updating GDScript alone does not update
+Native setter behavior in an already running Editor.
+
 Web builds require Emscripten 3.1.62. The build script resolves an activated
 `EMSDK` toolchain when `emcc` is not already on `PATH`. The Web artifacts are
 explicitly non-threaded, and the export preset must have Extension Support
@@ -59,6 +63,14 @@ with no GDExtension manifest or binary:
 ```
 
 ## Resource contract
+
+Changing Back's `overshoot` or Constant's `constant_value` regenerates the active
+preset, replacing manual point edits and clearing its modified marker, just as
+in Legacy. Setting the same value or changing an inactive preset's parameter
+preserves point edits. Inspector Undo restores both the previous parameter and
+the edited geometry; Redo restores the regenerated preset. Keep the modified
+preset cases in `native_v2_smoke_test.gd` and the Inspector parameter-history
+cases in `curve_editor_vertical_slice_test.gd` in future build validation.
 
 Native production resources use `format_version = 3`. Godot omits stored
 properties equal to their class defaults, so an absent marker means the current
