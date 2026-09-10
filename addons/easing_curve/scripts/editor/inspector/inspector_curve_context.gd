@@ -1771,7 +1771,8 @@ func _create_transition_generate_action(object: Resource) -> EditorProperty:
 	var generate_editor := GenerateFunctionEditorProperty.new()
 	generate_editor.name = &"GenerateControls"
 	generate_editor.setup(easing_curve_editor, editor_undo_redo)
-	generate_editor.set_object_and_property(object, &"randomness")
+	# Generate is an action, not a second editable Randomness property.
+	generate_editor.set_object_and_property(object, &"")
 	return generate_editor
 
 
@@ -2316,7 +2317,7 @@ func _parse_property(object, type, name, hint_type, hint_string, usage_flags, wi
 				object as Resource,
 			)
 			if generate_editor != null:
-				add_property_editor(name, generate_editor, true, "")
+				add_custom_control(generate_editor)
 		return true
 	return false
 

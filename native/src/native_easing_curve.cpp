@@ -139,7 +139,7 @@ void NativeEasingCurve::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "decay", PROPERTY_HINT_RANGE, "0.1,10.0,0.001"), "set_decay", "get_decay");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "stiffness", PROPERTY_HINT_RANGE, "0.000001,1000.0,0.1"), "set_stiffness", "get_stiffness");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "damping", PROPERTY_HINT_RANGE, "0.0,100.0,0.1"), "set_damping", "get_damping");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mass", PROPERTY_HINT_RANGE, "0.000001,10.0,0.1"), "set_mass", "get_mass");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mass", PROPERTY_HINT_RANGE, "0.000001,10.0,0.01"), "set_mass", "get_mass");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "velocity", PROPERTY_HINT_RANGE, "-30.0,30.0,0.1,or_less,or_greater"), "set_velocity", "get_velocity");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "css_linear"), "set_css_linear", "get_css_linear");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "css_cubic_bezier"), "set_css_cubic_bezier", "get_css_cubic_bezier");

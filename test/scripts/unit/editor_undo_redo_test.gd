@@ -949,11 +949,13 @@ func _test_generate_action() -> void:
 	curve.trans_type = EasingCurve.TRANS.IRREGULAR
 	var history := UndoRedo.new()
 	var before := EDITOR_UNDO.capture_state(curve)
-	curve._begin_editor_parameter_edit()
-	curve.generate_irregular()
+	var generate_editor := GENERATE_FUNCTION_EDITOR_PROPERTY.new() as EditorProperty
+	generate_editor.call(&"setup", null, history)
+	generate_editor.set_object_and_property(curve, &"")
+	(generate_editor.get("button") as Button).pressed.emit()
 	var after := EDITOR_UNDO.capture_state(curve)
-	curve._finish_editor_parameter_edit()
-	_expect(EDITOR_UNDO.commit_applied_action(history, curve, "Generate Easing Curve", EasingCurveEditorUndo.ActionContext.new(before, after)), "Generate action was not committed")
+	generate_editor.free()
+	_expect(history.has_undo(), "Generate action was not committed")
 	_verify_single_action(history, curve, before, after, "Generate", 3)
 	_dispose_history(history)
 
@@ -970,7 +972,7 @@ func _test_native_generate_action() -> void:
 	editor.set_curve(curve)
 	var generate_editor := GENERATE_FUNCTION_EDITOR_PROPERTY.new() as EditorProperty
 	generate_editor.call(&"setup", editor, history)
-	generate_editor.set_object_and_property(curve, &"randomness")
+	generate_editor.set_object_and_property(curve, &"")
 	var before := (curve.call(&"get_editor_state_snapshot") as Dictionary).duplicate(true)
 	var generate_button := generate_editor.get("button") as Button
 	generate_button.pressed.emit()

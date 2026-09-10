@@ -51,6 +51,7 @@ func _run() -> void:
 	_test_native_crossing_and_toolbar_reorder()
 	_test_native_point_list_swap_parity()
 	await _test_native_inspector_path()
+	_test_generate_action_binding()
 	await _test_native_deferred_parameter_editor()
 	await _test_native_bezier_parameter_history()
 	await _test_native_property_clipboard_and_lifecycle()
@@ -1219,25 +1220,30 @@ func _test_native_inspector_path() -> void:
 	) as EditorProperty
 	_expect(
 		generate_controls != null
-			and generate_controls.get_edited_property() == &"randomness"
+			and generate_controls.get_edited_property().is_empty()
 			and _find_button(generate_controls, "Generate") != null,
 		"Native generated transition omitted its Transition Parameters action",
 	)
-	var generate_revert_update := {&"received": false, &"can_revert": true}
-	generate_controls.property_can_revert_changed.connect(
-		func(property_name: StringName, can_revert: bool) -> void:
-			if property_name == &"randomness":
-				generate_revert_update[&"received"] = true
-				generate_revert_update[&"can_revert"] = can_revert
-	)
-	generate_controls.call(&"_hide_property_chrome")
-	_expect(
-		generate_revert_update[&"received"]
-			and not generate_revert_update[&"can_revert"],
-		"Native Generate control did not suppress its floating revert arrow",
-	)
 	generate_controls.free()
 	generated_content.free()
+
+
+func _test_generate_action_binding() -> void:
+	for native: bool in [false, true]:
+		for irregular: bool in [false, true]:
+			var curve: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+			var transition := 103 if irregular else 102
+			if not native:
+				transition = EasingCurve.TRANS.IRREGULAR if irregular else EasingCurve.TRANS.JITTER
+			curve.set(&"transition" if native else &"trans_type", transition)
+			var inspector := INSPECTOR_PLUGIN.new()
+			var action := inspector._create_transition_generate_action(curve)
+			for randomness: float in [1.0, 4.0, 2.0]:
+				curve.set(&"randomness", randomness)
+				action.update_property()
+				_expect(action.get_edited_object() == curve, "Generate lost its target resource")
+				_expect(action.get_edited_property().is_empty(), "Generate acquired Randomness revert chrome")
+			action.free()
 
 
 func _test_native_deferred_parameter_editor() -> void:

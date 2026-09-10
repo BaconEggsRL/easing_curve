@@ -1,0 +1,63 @@
+[gd_resource type="NativeEasingCurve" format=3 uid="uid://cfe1janlsopbn"]
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_hmtgg"]
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_dpv1i"]
+position = Vector2(0.2350145, 0)
+left_control_point = Vector2(0.11176542, 0.7118515)
+right_control_point = Vector2(0.11176542, 0.7118515)
+handle_mode = 4
+locked = {
+&"left_control_point": true,
+&"position": false,
+&"right_control_point": true
+}
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_i6rtu"]
+position = Vector2(0.29663903, 0.65577316)
+left_control_point = Vector2(0.29663903, 0.65577316)
+right_control_point = Vector2(0.29663903, 0.65577316)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_mg3kh"]
+position = Vector2(0.46097115, 0.38784337)
+left_control_point = Vector2(0.37292397, 0.4597486)
+right_control_point = Vector2(0.6211949, 0.2569939)
+handle_mode = 2
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_eut0n"]
+position = Vector2(0.6417364, 0.6931587)
+left_control_point = Vector2(0.6417364, 0.6931587)
+right_control_point = Vector2(0.7417364, 0.6931587)
+left_force_linear = true
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_7o4us"]
+position = Vector2(0.7033609, 0)
+left_control_point = Vector2(0.7033609, 0)
+right_control_point = Vector2(0.7033609, 0)
+handle_mode = 1
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_ykff2"]
+position = Vector2(0.8964511, 0.30684137)
+left_control_point = Vector2(0.87590957, 0.58723307)
+right_control_point = Vector2(0.91699266, 0.02644968)
+handle_mode = 3
+
+[sub_resource type="NativeEasingCurvePoint" id="NativeEasingCurvePoint_5p28q"]
+position = Vector2(1, 1)
+left_control_point = Vector2(1, 1)
+right_control_point = Vector2(1, 1)
+
+[resource]
+transition = 100
+num_points = 23
+randomness = 3.59
+steps = 13
+from_start = true
+y_offset = 0.14
+css_linear = "linear(0, .75, 1)"
+css_cubic_bezier = "cubic-bezier(0.25, 0.1, 0.5, 1)"
+points = Array[NativeEasingCurvePoint]([SubResource("NativeEasingCurvePoint_hmtgg"), SubResource("NativeEasingCurvePoint_dpv1i"), SubResource("NativeEasingCurvePoint_i6rtu"), SubResource("NativeEasingCurvePoint_mg3kh"), SubResource("NativeEasingCurvePoint_eut0n"), SubResource("NativeEasingCurvePoint_7o4us"), SubResource("NativeEasingCurvePoint_ykff2"), SubResource("NativeEasingCurvePoint_5p28q")])
+_generated_points = PackedVector2Array(0, 0, 0.04347826, 0.08074807, 0.08695652, 0.15358858, 0.13043478, 0.06156416, 0.17391305, 0.10318737, 0.2173913, 0.21963854, 0.26086956, 0.27852103, 0.3043478, 0.2924609, 0.3478261, 0.40413105, 0.39130434, 0.43021423, 0.4347826, 0.39698395, 0.47826087, 0.5182918, 0.5217391, 0.44860297, 0.5652174, 0.49647242, 0.6086956, 0.6515309, 0.65217394, 0.70273924, 0.6956522, 0.62514967, 0.73913044, 0.7877428, 0.7826087, 0.7724407, 0.82608694, 0.8500409, 0.8695652, 0.79387975, 0.9130435, 0.95990133, 0.95652175, 1, 1, 1)
+_css_linear_points = PackedVector2Array(0, 0, 0.5, 0.75, 1, 1)
+_css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.5, 1)

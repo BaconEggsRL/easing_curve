@@ -788,7 +788,7 @@ var _irregular_points_y: Array[float] = []:
 			damping = value
 			_notify_parameter_changed()
 ## The mass of the object attached to the spring.
-@export_range(1.0, 10.0, 0.1) var mass: float = 1.0:
+@export_range(1.0, 10.0, 0.01) var mass: float = 1.00:
 	set(value):
 		if mass != value:
 			mass = value
