@@ -670,6 +670,10 @@ func _test_layout_variants() -> void:
 								_expect(navigation_controls[index].get_global_rect() == navigation_rects[index], "Selection shifted the point label or arrows")
 						_expect(editor._graph_canvas.size.x == editor.size.x, "Variant widened graph beyond Inspector")
 						_expect(editor.get_combined_minimum_size().x == 64.0 * scale_value, "Variant propagated control minimum width")
+						var preset_toolbar := presentation.get_child(0) as GridContainer
+						for option_index: int in [1, 4]:
+							var option := preset_toolbar.get_child(option_index) as OptionButton
+							_expect(is_equal_approx(option.global_position.x, editor._point_handle_mode.global_position.x), "Ease/Trans dropdown does not align with point properties")
 						if single_row:
 							_expect(editor._point_mode_row.get_parent().clip_contents, "Single row lost right-edge clipping")
 							_expect(editor._point_left_group.get_parent() == editor._point_mode_row and editor._point_right_group.get_parent() == editor._point_mode_row, "Single-row controls wrapped")

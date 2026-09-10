@@ -1272,6 +1272,7 @@ func handle_easing_curve_editor(object: Resource, layout_override: int = -1) -> 
 		########################################
 		# Add curve editor
 		easing_curve_editor = EasingCurveEditor.new(layout_override)
+		easing_curve_editor.ready.connect(_align_preset_label_column.bind(_toolbar, easing_curve_editor))
 		easing_curve_editor.presentation_owned = true
 		easing_curve_editor.editor_undo_redo = editor_undo_redo
 		easing_curve_editor.set_curve(object)
@@ -1427,6 +1428,7 @@ func _handle_native_curve_editor(
 		if is_instance_valid(editor_override)
 		else EasingCurveEditor.new()
 	)
+	easing_curve_editor.ready.connect(_align_preset_label_column.bind(toolbar, easing_curve_editor))
 	easing_curve_editor.presentation_owned = true
 	easing_curve_editor.editor_undo_redo = editor_undo_redo
 	easing_curve_editor.set_curve(object)
@@ -3858,6 +3860,18 @@ static func _create_option(enum_dict: Dictionary, selected_value: int) -> Option
 			option.add_item(display, enum_dict[key]) # store enum value as ID
 	option.select(option.get_item_index(selected_value))
 	return option
+
+
+static func _align_preset_label_column(toolbar: GridContainer, editor: EasingCurveEditor) -> void:
+	var navigation := editor._point_reorder_buttons
+	var update_width := func() -> void:
+		var column_width := navigation.get_combined_minimum_size().x
+		column_width += editor._point_mode_row.get_theme_constant(&"separation") - toolbar.get_theme_constant(&"h_separation")
+		for index: int in [0, 3]:
+			var label := toolbar.get_child(index) as Label
+			label.custom_minimum_size.x = column_width
+	navigation.minimum_size_changed.connect(update_width)
+	update_width.call()
 
 
 static func _create_option_label(label_text: String) -> Label:
