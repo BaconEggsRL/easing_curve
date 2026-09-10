@@ -3596,13 +3596,14 @@ func _cancel_autofit(request_id: int = -1) -> void:
 		var exit_callback := _on_autofit_editor_exiting.bind(request_id)
 		if editor.tree_exiting.is_connected(exit_callback):
 			editor.tree_exiting.disconnect(exit_callback)
+		editor.set_graph_render_suppressed(false)
 
 
 func _complete_autofit(request_id: int) -> void:
 	if not _is_current_autofit_request(request_id):
 		return
 	var editor := _autofit_requests[request_id].editor.get_ref() as EasingCurveEditor
-	if is_instance_valid(editor) and editor.is_autofit_ready():
+	if is_instance_valid(editor) and editor.is_autofit_ready() and editor.is_autofit_needed():
 		editor.autofit()
 	_cancel_autofit(request_id)
 
@@ -3639,10 +3640,14 @@ func _defer_autofit_frames(request_id: int, frames_remaining: int) -> void:
 		_cancel_autofit(request_id)
 		return
 
+	var editor := _autofit_requests[request_id].editor.get_ref() as EasingCurveEditor
+	# Evaluate after the preset mutation, and again as layout settles. A request
+	# alone must not hide a curve whose zoom and pan already match the fitted view.
+	editor.set_graph_render_suppressed(editor.is_autofit_ready() and editor.is_autofit_needed())
+
 	# Preset/resource changes may rebuild the Inspector and hide/show the
 	# point toolbar. Let those minimum-size/layout changes settle before
-	# measuring the graph rect used by Autofit. Keep drawing the updated curve
-	# while its framing settles instead of blanking the graph between presets.
+	# fitting; only curves needing a different view wait to draw until then.
 	if frames_remaining > 0:
 		tree.process_frame.connect(
 			func() -> void: _defer_autofit_frames(request_id, frames_remaining - 1),
@@ -3655,7 +3660,6 @@ func _defer_autofit_frames(request_id: int, frames_remaining: int) -> void:
 	if is_instance_valid(section) and section.folded:
 		return
 	var request := _autofit_requests[request_id]
-	var editor := request.editor.get_ref() as EasingCurveEditor
 	var graph_rect := editor._get_graph_view_rect()
 	if request.last_graph_rect != graph_rect:
 		request.last_graph_rect = graph_rect

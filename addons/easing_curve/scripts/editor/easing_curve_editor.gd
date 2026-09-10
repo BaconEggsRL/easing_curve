@@ -2077,21 +2077,40 @@ func autofit() -> void:
 		return
 
 	var bounds := _get_autofit_world_bounds()
-	var padded_size := bounds.size * (1.0 + AUTOFIT_PADDING_RATIO)
-	padded_size.x = maxf(padded_size.x, 0.001)
-	padded_size.y = maxf(padded_size.y, 0.001)
-
-	var target_zoom := minf(1.0 / padded_size.x, 1.0 / padded_size.y)
-	_zoom_step = 0
-	for step in range(ZOOM_STEPS + 1):
-		if step_to_zoom(step) > target_zoom + 0.000001:
-			break
-		_zoom_step = step
+	_zoom_step = _get_autofit_zoom_step(bounds)
 	_apply_zoom_from_step()
 	update_view_transform()
 	pan_offset = _world_to_view.basis_xform(Vector2(0.5, 0.5) - bounds.get_center())
 	pan_changed.emit(pan_offset)
 	queue_redraw()
+
+
+func is_autofit_needed() -> bool:
+	if _backend == null:
+		return false
+	var bounds := _get_autofit_world_bounds()
+	var target_zoom := step_to_zoom(_get_autofit_zoom_step(bounds))
+	if not is_equal_approx(_zoom_x, target_zoom) or not is_equal_approx(_zoom_y, target_zoom):
+		return true
+	update_view_transform()
+	var target_pan := _world_to_view.basis_xform(Vector2(0.5, 0.5) - bounds.get_center())
+	# Preset control-point approximations can shift the center by a fraction of
+	# a pixel. Do not hide an otherwise fitted graph for an invisible correction.
+	return pan_offset.distance_squared_to(target_pan) > 0.25
+
+
+func _get_autofit_zoom_step(bounds: Rect2) -> int:
+	var padded_size := bounds.size * (1.0 + AUTOFIT_PADDING_RATIO)
+	padded_size.x = maxf(padded_size.x, 0.001)
+	padded_size.y = maxf(padded_size.y, 0.001)
+
+	var target_zoom := minf(1.0 / padded_size.x, 1.0 / padded_size.y)
+	var target_step := 0
+	for step in range(ZOOM_STEPS + 1):
+		if step_to_zoom(step) > target_zoom + 0.000001:
+			break
+		target_step = step
+	return target_step
 
 
 func _get_autofit_view_rect() -> Rect2:

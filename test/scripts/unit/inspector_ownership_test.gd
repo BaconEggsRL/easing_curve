@@ -732,12 +732,13 @@ func _observe_preset_frames(inspector: EditorInspector, target: Resource, label:
 		if context == null:
 			return
 		var graph := context.easing_curve_editor
-		_expect(not graph.is_graph_render_suppressed(), "Preset update blanked graph on frame %d" % frame)
+		var needs_fit := context._is_autofit_pending() and graph.is_autofit_needed()
+		_expect(graph.is_graph_render_suppressed() == needs_fit, "Graph visibility did not match required Autofit: %s frame %d" % [label, frame])
 		RenderingServer.force_draw()
 		var screenshot := _test_window.get_texture().get_image()
 		var graph_rect := Rect2i(Rect2(graph.global_position + graph._get_graph_view_rect().position, graph._get_graph_view_rect().size))
 		var graph_image := screenshot.get_region(graph_rect)
-		_expect(_has_curve_ink(graph_image), "Rendered curve disappeared: %s frame %d" % [label, frame])
+		_expect(_has_curve_ink(graph_image) != needs_fit, "Rendered curve did not wait only for required Autofit: %s frame %d" % [label, frame])
 		frames.blit_rect(graph_image, Rect2i(Vector2i.ZERO, graph_image.get_size()), Vector2i(0, frame * 360))
 	var backend := "legacy" if target is EasingCurve else "native"
 	_expect(frames.save_png("res://test/_temp/autofit-%s-%s.png" % [backend, label]) == OK, "Could not save Autofit frame capture")
@@ -750,7 +751,7 @@ func _observe_preset_frames(inspector: EditorInspector, target: Resource, label:
 	var zoom := graph._zoom_step
 	var pan := graph.pan_offset
 	graph.autofit()
-	_expect(graph._zoom_step == zoom and graph.pan_offset.is_equal_approx(pan), "Rendered Autofit did not match manual fit: %s/%s" % [backend, label])
+	_expect(graph._zoom_step == zoom and graph.pan_offset.distance_to(pan) <= 0.5, "Rendered Autofit did not match manual fit within half a pixel: %s/%s" % [backend, label])
 
 
 func _has_curve_ink(image: Image) -> bool:

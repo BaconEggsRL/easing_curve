@@ -26,7 +26,8 @@ func _run() -> void:
 	await _test_autofit_request_lifecycle()
 	await _test_autofit_waits_for_function_toolbar_layout()
 	await _test_ease_change_autofit()
-	await _test_automatic_autofit_keeps_graph_visible()
+	await _test_autofit_only_hides_when_view_changes()
+	await _test_automatic_autofit_defers_required_reframing()
 	await _test_folded_curve_editor_defers_autofit_until_expand()
 	_test_zoom_behavioral_invariants()
 	await _test_zoom_slider_wheel_scope()
@@ -326,6 +327,7 @@ func _test_autofit_graph_bounds() -> void:
 				_expect(editor.get_view_pos(bounds.get_center()).is_equal_approx(fit.get_center()), "Autofit did not center in the clear area")
 				var pan := editor.pan_offset
 				var step := editor._zoom_step
+				_expect(not editor.is_autofit_needed(), "Fitted graph incorrectly requests another Autofit")
 				editor.autofit()
 				_expect(editor.pan_offset.is_equal_approx(pan) and editor._zoom_step == step, "Repeated Autofit drifted")
 				editor.pan_offset += Vector2(0, -fit.position.y)
@@ -737,9 +739,6 @@ func _test_view_state_restore_and_rebuild_order() -> void:
 
 func _wait_for_autofit(inspector: Object) -> void:
 	for frame in range(12):
-		var editor: EasingCurveEditor = inspector.easing_curve_editor
-		if is_instance_valid(editor):
-			_expect(not editor.is_graph_render_suppressed(), "Pending Autofit blanked the graph")
 		await process_frame
 		if not bool(inspector.call("_is_autofit_pending")):
 			return
@@ -772,6 +771,45 @@ func _test_ease_change_autofit() -> void:
 				editor.autofit()
 				_expect(fitted_pan.is_equal_approx(editor.pan_offset) and fitted_zoom.is_equal_approx(Vector2(editor._zoom_x, editor._zoom_y)), "Ease change did not match settled auto-fit")
 			content.free()
+
+
+func _test_autofit_only_hides_when_view_changes() -> void:
+	for native: bool in [false, true]:
+		var curve: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+		curve.set(&"transition" if native else &"trans_type", 1 if native else EasingCurve.TRANS.SINE)
+		var context := EDITOR_HOST.INSPECTOR_PLUGIN.new()
+		var content := context.handle_easing_curve_editor(curve)
+		root.add_child(content)
+		await _wait_for_autofit(context)
+		var editor: EasingCurveEditor = context.easing_curve_editor
+		var ease := (content.get_child(0) as GridContainer).get_child(1) as OptionButton
+		var pan_events := [0]
+		editor.pan_changed.connect(func(_pan): pan_events[0] += 1)
+		# These ease variants share the same bounds and already-fitted view.
+		ease.item_selected.emit(ease.get_item_index(EasingCurve.EASE.OUT))
+		for frame in range(6):
+			await process_frame
+			_expect(not editor.is_graph_render_suppressed(), "Same-framing Ease change flashed")
+		_expect(pan_events[0] == 0, "Already-fitted Ease change reapplied Autofit")
+		# Pan alone requires a fit even when the zoom step has not changed.
+		editor.pan_offset += Vector2(30, 20)
+		var before_pan := editor.pan_offset
+		_expect(editor.is_autofit_needed(), "Pan-only change did not require Autofit")
+		_expect(editor.pan_offset == before_pan and pan_events[0] == 0, "Autofit query mutated the view")
+		ease.item_selected.emit(ease.get_item_index(EasingCurve.EASE.IN_OUT))
+		await process_frame
+		_expect(editor.is_graph_render_suppressed(), "Pan-only fit drew the unfitted curve")
+		await _wait_for_autofit(context)
+		_expect(not editor.is_graph_render_suppressed() and not editor.is_autofit_needed(), "Pan-only fit did not reveal its final view")
+		# A zoom-only change must be detected independently of pan.
+		editor.set_slider_value(editor._zoom_step - 1)
+		_expect(editor.is_autofit_needed(), "Zoom-only change did not require Autofit")
+		context._queue_autofit_curve_editor()
+		await process_frame
+		_expect(editor.is_graph_render_suppressed(), "Zoom-only fit drew the unfitted curve")
+		context._cancel_autofit()
+		_expect(not editor.is_graph_render_suppressed(), "Cancelled Autofit left the graph hidden")
+		content.free()
 
 
 func _test_autofit_waits_for_function_toolbar_layout() -> void:
@@ -866,7 +904,7 @@ func _test_autofit_request_lifecycle() -> void:
 	)
 
 
-func _test_automatic_autofit_keeps_graph_visible() -> void:
+func _test_automatic_autofit_defers_required_reframing() -> void:
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.LINEAR
 	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
@@ -899,8 +937,8 @@ func _test_automatic_autofit_keeps_graph_visible() -> void:
 
 	await process_frame
 	_expect(
-		not replacement_editor.is_graph_render_suppressed(),
-		"Automatic Autofit blanked the graph during the layout-settle window",
+		replacement_editor.is_graph_render_suppressed(),
+		"Elastic graph drew before its required Autofit settled",
 	)
 	await _wait_for_autofit(inspector)
 	_expect(
@@ -969,8 +1007,8 @@ func _test_folded_curve_editor_defers_autofit_until_expand() -> void:
 		"Automatic Autofit completed while the Curve Editor was folded",
 	)
 	_expect(
-		not replacement_editor.is_graph_render_suppressed(),
-		"Folding must defer Autofit without disabling graph drawing",
+		replacement_editor.is_graph_render_suppressed(),
+		"Folded Elastic graph did not defer its required Autofit drawing",
 	)
 
 	replacement_section.call("expand")
