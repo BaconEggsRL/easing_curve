@@ -20,10 +20,37 @@ func _init() -> void:
 
 
 func _run() -> void:
+	_test_free_mode_preserves_overrides()
 	await _test_grouped_toolbar()
 	await _test_sibling_capture()
 	await _test_graph_dimensions()
 	_finish("curve layout contract")
+
+
+func _test_free_mode_preserves_overrides() -> void:
+	for native: bool in [false, true]:
+		for mode: int in EasingCurvePoint.HandleMode.values():
+			for flags in range(16):
+				var curve: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+				if native:
+					curve.set(&"transition", 100)
+				else:
+					curve.set(&"trans_type", EasingCurve.TRANS.CUSTOM)
+				var backend = EasingCurveEditor.BackendFactory.create(curve)
+				var point: Resource = backend.get_point(0)
+				point.set(&"left_force_linear", bool(flags & 1))
+				point.set(&"right_force_linear", bool(flags & 2))
+				point.call(&"set_locked", &"left_control_point", bool(flags & 4))
+				point.call(&"set_locked", &"right_control_point", bool(flags & 8))
+				point.set(&"handle_mode", mode)
+				var before := _stored_overrides(point)
+				_expect(backend.apply_point_property(0, &"handle_mode", EasingCurvePoint.HandleMode.FREE, false), "Free mode edit was rejected")
+				_expect(_stored_overrides(backend.get_point(0)) == before, "Free mode changed stored flags: native=%s mode=%s flags=%s" % [native, mode, flags])
+		print("FREE_MODE_GATE backend=%s preserved overrides for all modes and flag combinations" % ["native" if native else "legacy"])
+
+
+func _stored_overrides(point: Resource) -> Array:
+	return [point.get(&"left_force_linear"), point.get(&"right_force_linear"), point.get(&"locked").duplicate(true)]
 
 
 func _settle() -> void:
