@@ -99,5 +99,27 @@ foreach ($file in @('run_native_editor_script_validation.ps1', 'run_native_inspe
 		if (-not [IO.File]::Exists($bootstrapLog) -or -not [IO.File]::Exists("$temp/test/_temp/smoke_editor.log")) { throw 'Failed profiler fixture was removed.' }
 	}
 }
-Write-Host "PASS: runner wrappers retain raw status; all profiler branches and archive checks reject crashes despite clean output. Evidence: $temp"
+# Exercise the layout runner's actual final decision: semantic failures retain
+# the host even when the process exits zero; only a complete PASS permits cleanup.
+$layoutSource = Get-Content "$PSScriptRoot/run_curve_editor_layout_validation.ps1" -Raw
+$layoutFinish = [scriptblock]::Create($layoutSource.Substring($layoutSource.IndexOf('if ($suiteExitCode -ne 0')))
+foreach ($case in @(@{Exit=0;Text='PASS: layout';Pass=$true}, @{Exit=1;Text='PASS: layout';Pass=$false}, @{Exit=0;Text='no pass';Pass=$false}, @{Exit=0;Text="PASS: layout`nSCRIPT ERROR: synthetic";Pass=$false})) {
+	& {
+		$tempRoot = $temp
+		$hostRoot = Join-Path $temp ('layout-' + [guid]::NewGuid().ToString('N'))
+		New-Item -ItemType Directory -Force "$hostRoot/test/_temp" | Out-Null
+		Set-Content "$hostRoot/test/_temp/validation.log" 'fixture evidence'
+		$suiteExitCode = $case.Exit
+		$outputText = $case.Text
+		$EvidenceDirectory = ''
+		$accepted = $false
+		try { & $layoutFinish | Out-Null; $accepted = $true } catch { if ($case.Pass) { throw } }
+		if ($accepted -ne $case.Pass -or (Test-Path $hostRoot) -eq $case.Pass) { throw 'Layout success cleanup/failure retention changed.' }
+	}
+}
+Write-Host "PASS: runner wrappers retain raw status; all profiler branches and archive checks reject crashes despite clean output."
+$resolvedTemp = [IO.Path]::GetFullPath($temp)
+$expectedPrefix = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../test/_temp')) + [IO.Path]::DirectorySeparatorChar
+if (-not $resolvedTemp.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe cleanup path: $resolvedTemp" }
+Remove-Item -LiteralPath $resolvedTemp -Recurse -Force
 exit 0

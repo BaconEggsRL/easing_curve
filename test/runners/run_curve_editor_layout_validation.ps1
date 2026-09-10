@@ -2,11 +2,19 @@
 param(
 	[ValidateSet('easing_curve_layout_contract_test', 'easing_curve_editor_gesture_characterization_test', 'easing_curve_editor_drag_coordinates_test')]
 	[string]$Suite = 'easing_curve_layout_contract_test',
-	[string]$GodotPath = ''
+	[string]$GodotPath = '',
+	[string]$EvidenceDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$tempRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'test/_temp'))
+if ($EvidenceDirectory) {
+	$EvidenceDirectory = [IO.Path]::GetFullPath($EvidenceDirectory)
+	if ($EvidenceDirectory -eq $tempRoot -or $EvidenceDirectory.StartsWith($tempRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+		throw 'Durable evidence must be outside test/_temp.'
+	}
+}
 $hostRoot = Join-Path $projectRoot ('test/_temp/layout-editor-' + [guid]::NewGuid().ToString('N'))
 $launcher = Join-Path $PSScriptRoot 'run_godot.ps1'
 New-Item -ItemType Directory -Force -Path "$hostRoot/addons", "$hostRoot/test/_temp" | Out-Null
@@ -85,7 +93,15 @@ Write-Output "Full editor validation host: $hostRoot"
 $suiteExitCode = $LASTEXITCODE
 $outputText = Get-Content -LiteralPath "$hostRoot/test/_temp/validation-console.txt" -Raw
 $outputText -split '\r?\n' | Where-Object { $_ -match '^(PASS:|WRAP_GATE|FREE_MODE_GATE|TOOLBAR_METRICS|RESET_GATE|SCRIPT ERROR:|ERROR: FAIL:)' } | Write-Output
-Write-Output "Preserved logs and captures: $hostRoot/test/_temp"
 if ($suiteExitCode -ne 0 -or $outputText -match 'SCRIPT ERROR:' -or $outputText -notmatch '(?m)^PASS:') {
 	throw "Layout validation failed (exit $suiteExitCode): $hostRoot/test/_temp/validation-console.txt"
 }
+if ($EvidenceDirectory) {
+	New-Item -ItemType Directory -Force -Path $EvidenceDirectory | Out-Null
+	Get-ChildItem -LiteralPath "$hostRoot/test/_temp" -Force | Copy-Item -Destination $EvidenceDirectory -Recurse
+	Write-Output "Saved requested evidence: $EvidenceDirectory"
+}
+$resolvedHost = [IO.Path]::GetFullPath($hostRoot)
+if (-not $resolvedHost.StartsWith($tempRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe cleanup path: $resolvedHost" }
+Remove-Item -LiteralPath $resolvedHost -Recurse -Force
+Write-Output 'Removed successful layout validation host.'

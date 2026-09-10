@@ -15,7 +15,7 @@ the checksum-pinned editor described in [tooling](../../tooling/godot/README.md)
 ```powershell
 ./tooling/godot/install_editor.ps1
 $pin = Get-Content ./tooling/godot/editor-pin.json -Raw | ConvertFrom-Json
-$env:EASING_CURVE_EDITOR_GODOT_PATH = (Resolve-Path ./test/_temp/pinned-editor/godot-editor.exe).Path
+$env:EASING_CURVE_EDITOR_GODOT_PATH = (Resolve-Path ./.cache/godot/pinned-editor/godot-editor.exe).Path
 $env:EASING_CURVE_EDITOR_GODOT_SHA256 = $pin.editor_sha256
 ```
 
@@ -61,7 +61,7 @@ The release contract script mocks Git/GitHub mutations and does not publish.
 ./test/runners/run_native_release_export_test.ps1 -SkipBuild
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ./build_asset_store.ps1
-./test/runners/run_release_archive_test.ps1 -KeepArtifacts
+./test/runners/run_release_archive_test.ps1
 ```
 
 The ABI runner defaults to locally installed 4.4.1/4.5.1/4.6.1/4.7.1 executables;
@@ -85,8 +85,9 @@ the packaged ZIP is the complete dual-API download.
 ./test/runners/run_curve_editor_layout_validation.ps1 -Suite easing_curve_editor_drag_coordinates_test
 ```
 
-These reuse existing suites in isolated full-editor hosts and preserve captures.
-Inspect the output images. They exercise rendered controls and synthetic viewport
+These reuse existing suites in isolated full-editor hosts and remove passing
+hosts. To inspect captures, pass `-EvidenceDirectory _exports/_validation/layout`
+to save only the requested logs/captures outside temp before host cleanup. They exercise rendered controls and synthetic viewport
 input, not physical mouse/keyboard routing, monitor DPI changes, global theme
 switches, or an editor-to-running-game session. Finish the paired checklist for
 those cases, conversion dialogs, clipboard, and restart persistence. Record any
@@ -101,10 +102,11 @@ Publish/Republish mutate remote releases and require separate authorization.
 
 Save command output and summaries under `_exports/_validation/v1.2.1/` before
 cleanup. Record source commit/dirty state, executable identities, build commands,
-binary/archive SHA-256, exits, diagnostics, and skips in the tracker. Tests that
-pass remove some temporary logs; redirect their console output for durable evidence.
-Do not run `--cleanup` while any gate is active or failed evidence is needed;
-it also removes the downloaded pinned editor. Never equate working-tree results
+binary/archive SHA-256, exits, diagnostics, and skips in the tracker. Passing tests remove their temporary data; redirect console output or explicitly
+export needed evidence outside temp. Preserve failed runs only while they need
+investigation, then remove them after resolution. `test/_temp` is not a tool cache
+or an evidence archive. The pinned editor lives in `.cache/godot/pinned-editor`.
+Do not run `--cleanup` while any gate is active or failed evidence is needed. Never equate working-tree results
 with committed-source, exact-archive, or hosted CI certification.
 
 ## Test assets and supporting documentation

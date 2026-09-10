@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$ManifestPath = "$PSScriptRoot/editor-pin.json", [string]$Destination = "$PSScriptRoot/../../test/_temp/pinned-editor")
+param([string]$ManifestPath = "$PSScriptRoot/editor-pin.json", [string]$Destination = "$PSScriptRoot/../../.cache/godot/pinned-editor")
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/../../test/runners/godot_process_contract.ps1"
 $pin = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
@@ -7,6 +7,7 @@ if ($pin.editor_url -notmatch '^https://github.com/BaconEggsRL/easing_curve/rele
 	throw 'A qualified release URL and SHA256 are required. No fallback editor is allowed.'
 }
 New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $Destination '.gdignore') -Value '' -NoNewline
 $path = Join-Path (Resolve-Path $Destination).Path 'godot-editor.exe'
 Invoke-WebRequest -Uri $pin.editor_url -OutFile "$path.download"
 Assert-GodotExecutableHash "$path.download" $pin.editor_sha256 | Out-Null

@@ -99,7 +99,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-editor-provenance
-          path: test/_temp/pinned-editor/*.json
+          include-hidden-files: true
+          path: .cache/godot/pinned-editor/*.json
       - name: Preserve Windows test failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
@@ -158,7 +159,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: web-editor-provenance
-          path: test/_temp/pinned-editor/*.json
+          include-hidden-files: true
+          path: .cache/godot/pinned-editor/*.json
 
   package:
     needs: [windows-tests, web-runtime]
@@ -205,7 +207,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: package-editor-provenance
-          path: test/_temp/pinned-editor/*.json
+          include-hidden-files: true
+          path: .cache/godot/pinned-editor/*.json
       - name: Record package Windows crash events
         if: failure()
         shell: pwsh

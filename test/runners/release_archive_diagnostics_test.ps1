@@ -71,14 +71,17 @@ exit -1073741819
 	Assert-Diagnostic ($failure.Contains('initial import') -and $failure.Contains('-1073741819') -and $failure.Contains($logPath)) "Failure omitted phase, status, or retained log path."
 	Write-Host "PASS: archive diagnostics retain crash status, process output, errors, and missing import evidence."
 }
-finally {
-	$resolvedRoot = [IO.Path]::GetFullPath($validationRoot)
-	$expectedPrefix = [IO.Path]::GetFullPath((Join-Path $projectRoot "test/_temp")) + [IO.Path]::DirectorySeparatorChar
-	if (-not $resolvedRoot.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-		throw "Refusing cleanup outside test/_temp: $resolvedRoot"
-	}
-	Remove-Item -LiteralPath $resolvedRoot -Recurse -Force
+catch {
+	Write-Host "Preserved failed diagnostic contract: $validationRoot"
+	throw
 }
+
+$resolvedRoot = [IO.Path]::GetFullPath($validationRoot)
+$expectedPrefix = [IO.Path]::GetFullPath((Join-Path $projectRoot "test/_temp")) + [IO.Path]::DirectorySeparatorChar
+if (-not $resolvedRoot.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+	throw "Refusing cleanup outside test/_temp: $resolvedRoot"
+}
+Remove-Item -LiteralPath $resolvedRoot -Recurse -Force
 # The synthetic crash is expected and asserted above; report the regression
 # test's own success instead of leaking its child process's native exit code.
 exit 0

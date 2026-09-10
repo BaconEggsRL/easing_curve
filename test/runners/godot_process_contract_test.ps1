@@ -83,10 +83,14 @@ try {
 	$env:EASING_CURVE_EDITOR_GODOT_SHA256 = '0' * 64
 	& $pwsh -NoProfile -File "$PSScriptRoot/run_godot.ps1" -GodotPath "$temp/runtime.exe" --editor --headless --log-file "$temp/test.log" *> "$temp/checksum-rejection.txt"
 	Assert-Test ($LASTEXITCODE -ne 0 -and -not (Test-Path $env:FAKE_GODOT_TRACE)) 'Unverified executable ran or silently fell back.'
-	Write-Host "PASS: executable roles, checksum rejection, signed crashes, malformed status and timeouts. Evidence: $temp"
+	Write-Host "PASS: executable roles, checksum rejection, signed crashes, malformed status and timeouts."
 } finally {
 	$env:EASING_CURVE_EDITOR_GODOT_PATH = $oldPath
 	$env:EASING_CURVE_EDITOR_GODOT_SHA256 = $oldHash
 	Remove-Item Env:FAKE_GODOT_EXIT,Env:FAKE_GODOT_DELAY,Env:FAKE_GODOT_TRACE,Env:FAKE_GODOT_VERSION_EXIT -ErrorAction SilentlyContinue
 }
+$resolvedTemp = [IO.Path]::GetFullPath($temp)
+$expectedPrefix = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../test/_temp')) + [IO.Path]::DirectorySeparatorChar
+if (-not $resolvedTemp.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe cleanup path: $resolvedTemp" }
+Remove-Item -LiteralPath $resolvedTemp -Recurse -Force
 exit 0

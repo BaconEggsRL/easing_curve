@@ -14,6 +14,10 @@ Workflows read setup versions through `read_manifest.ps1`. The candidate has a c
 4.7.1 build label, never an `official` label. A missing/incorrect hash is fatal
 before any execution. There is no pinned-editor fallback or companion substitution.
 
+`install_editor.ps1` installs the editor and its checksum/provenance record in
+`.cache/godot/pinned-editor`, an ignored tool cache independent of test output.
+Clearing `test/_temp` does not remove the editor.
+
 The common launcher selects the pinned editor for `--editor`/`-e`, `--import` and
 editor-driven exports. True runtime invocations keep the official executable.
 Set `EASING_CURVE_EDITOR_GODOT_PATH` and `EASING_CURVE_EDITOR_GODOT_SHA256`, or pass

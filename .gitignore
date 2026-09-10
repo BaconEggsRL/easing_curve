@@ -2,6 +2,7 @@
 .godot/
 /android/
 /_exports/
+/.cache/
 _media/
 test/_temp/*
 !test/_temp/.gdignore

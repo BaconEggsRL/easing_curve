@@ -69,5 +69,9 @@ foreach ($file in @('run_native_release_export_test.ps1', 'run_native_web_export
 	$text = Get-Content "$root/test/runners/$file" -Raw
 	if ($text -notmatch 'editor-pin.json.*export_template_version' -or $text -match 'templateVersion\s*=.*godotVersion') { throw "Export templates were inferred from editor identity: $file" }
 }
-Write-Host "PASS: historical checksum enforcement, resolved toolchain drift rejection, and centralized workflow/template pins. Evidence: $temp"
+Write-Host "PASS: historical checksum enforcement, resolved toolchain drift rejection, and centralized workflow/template pins."
+$resolvedTemp = [IO.Path]::GetFullPath($temp)
+$expectedPrefix = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../test/_temp')) + [IO.Path]::DirectorySeparatorChar
+if (-not $resolvedTemp.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe cleanup path: $resolvedTemp" }
+Remove-Item -LiteralPath $resolvedTemp -Recurse -Force
 exit 0
