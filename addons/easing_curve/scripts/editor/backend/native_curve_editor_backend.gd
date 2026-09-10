@@ -250,7 +250,7 @@ func apply_point_property(
 			)
 			if not _apply_control_state(point, side, int(value)):
 				return false
-		&"left_control_state_reset", &"right_control_state_reset", &"control_states_reset":
+		&"left_control_state_reset", &"right_control_state_reset":
 			# Clearing hidden overrides must not change the mode or handle geometry.
 			var state: Dictionary = point.call(&"capture_state")
 			if property_name != &"right_control_state_reset":

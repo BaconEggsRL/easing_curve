@@ -59,13 +59,6 @@ static func apply(
 			state.right_force_linear = false
 			state.locks["right_control_point"] = false
 
-		&"control_states_reset":
-			# Clear stored overrides even when the current mode masks them.
-			state.left_force_linear = false
-			state.right_force_linear = false
-			state.locks["left_control_point"] = false
-			state.locks["right_control_point"] = false
-
 		&"toolbar_options_reset":
 			state = POINT_STATE_TRANSITION.set_handle_mode(
 				state,

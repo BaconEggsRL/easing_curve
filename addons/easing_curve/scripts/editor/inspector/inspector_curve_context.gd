@@ -1218,14 +1218,13 @@ func _create_normal_point_property_rows(
 	)
 
 
-# Optional construction override for layout comparisons; -1 uses the editor default.
-func handle_easing_curve_editor(object: Resource, layout_override: int = -1) -> Control:
+func handle_easing_curve_editor(object: Resource) -> Control:
 	if object == null:
 		return null
 	resource = object
 	var backend := BackendFactory.create(object)
 	if backend != null and backend.get_backend_id() == &"native":
-		return _handle_native_curve_editor(object, EasingCurveEditor.new(layout_override))
+		return _handle_native_curve_editor(object)
 	if object is EasingCurve:
 		var curve_section := VBoxContainer.new()
 		curve_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1271,7 +1270,7 @@ func handle_easing_curve_editor(object: Resource, layout_override: int = -1) -> 
 		)
 		########################################
 		# Add curve editor
-		easing_curve_editor = EasingCurveEditor.new(layout_override)
+		easing_curve_editor = EasingCurveEditor.new()
 		easing_curve_editor.ready.connect(_align_preset_label_column.bind(_toolbar, easing_curve_editor))
 		easing_curve_editor.presentation_owned = true
 		easing_curve_editor.editor_undo_redo = editor_undo_redo

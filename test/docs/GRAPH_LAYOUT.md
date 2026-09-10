@@ -27,42 +27,26 @@ dimensions at a fixed width and scale. The preferred graph height does not
 publish a horizontal minimum. The existing graph minimum and Inspector
 property-wrapper compensation are preserved.
 
-## Fixed point-toolbar rows and input
+## Single-row point toolbar and input
 
-The selected-point toolbar always has two non-wrapping rows:
+The point toolbar uses one non-wrapping row: navigation/index, Handle Mode,
+applicable L/R state dropdowns, and one reserved combined reset. The row clips
+at the Inspector's right edge when controls cannot shrink further; its preferred
+width never becomes a graph minimum. Dropdowns retain their current tooltips.
+Ease and Trans reserve the navigation-column width to align their dropdowns.
 
-- Navigation/index, Handle Mode, reserved mode-reset slot.
-- L and R dropdowns on one shared row, followed by one reserved shared reset.
+Unavailable L/R groups are hidden. Linked mode retains both applicable dropdowns,
+with either editing the shared state. With no selection, the disabled arrows and
+"0" stay visible, and the row reserves its full height to prevent vertical shifts.
+Function mode keeps point controls and snapping hidden. Grid Snap and zoom remain
+separate from the graph.
 
-Linked mode keeps the separate L and R dropdowns on the same row. Both display
-the backend's shared Linked state; editing either available side updates both.
-At endpoints, the missing side remains visible but disabled.
-
-Shrinkable slots report height independently of preferred text width. Dropdowns
-clip/ellipsize text and retain tooltips. L/R share the available row width equally
-in every mode. Labels reserve matching widths. The trailing reset slot stays aligned with
-Handle Mode and Ease/Trans. Inactive resets remain allocated, transparent,
-disabled and non-focusable. Unavailable side fields remain visible but disabled
-in every mode. No selection hides the state row; Function-mode visibility
-is unchanged.
-
-Switching between Linked and other Handle Modes preserves the two-row height
-and graph dimensions at a fixed width. Resizing, mode switching and long labels
-settle without recurring minimum-size changes. Grid Snap and zoom stay separate.
-
-### Independent edits and resets
-
-Handle Mode reset remains `handle_mode = Free` and preserves stored Force Linear
-and Lock flags. The shared state-row reset always submits `control_states_reset`:
-it clears both sides' Force Linear and handle-lock flags, preserving Handle Mode,
-position locks and handle coordinates. This also applies in Linked mode.
-Each dropdown edit or reset remains one Undo/Redo action.
-
-The earlier side-specific reset intents remain available to existing internal
-callers, but the toolbar no longer exposes individual side reset buttons. The
-old `toolbar_options_reset` intent/callback also remains compatible and is not
-used by either toolbar reset. Backend/resource signatures, serialization and
-curve mathematics are unchanged.
+The reset submits `toolbar_options_reset`, restoring Free Handle Mode and clearing
+both sides' Force Linear and handle-lock flags while preserving the position lock.
+Its slot stays allocated, transparent and non-interactive when inactive. Each
+edit or reset remains one Undo/Redo action. Side-specific reset intents remain
+available for existing internal callers; the removed second-row reset intent is
+no longer supported.
 
 Graph drawing and transient coordinate feedback are children of the clipped
 canvas. Drawing and input convert at the canvas boundary while public view/world
@@ -89,9 +73,9 @@ ordinary resizing retains the user's zoom and pan.
 
 Run `test/runners/run_all_tests.ps1 --run` for all isolated correctness suites.
 The layout contract suite covers both backends, narrow/wide allocations, aspect
-breakpoints, scale/font changes, minimum widths, separate L/R fields in every mode,
-long-label clipping, reset-column alignment, independent reset transactions,
-transient label bounds and repeatable fitting.
+breakpoints, scale/font changes, minimum widths, applicable L/R fields,
+long-label clipping, Ease/Trans alignment, combined reset transactions,
+no-selection spacing and graph dimensions.
 
 Use `test/runners/run_curve_editor_layout_validation.ps1` for the same layout
 suite inside a full, rendered Godot editor with real editor icons and fonts.
@@ -118,55 +102,7 @@ The two existing `editor_undo_redo_test.gd` CSS dropdown-label assertions were
 reproduced against starting commit `23760bcbf7bfdfe43b7cca3c7177d956bb645663`;
 they are unrelated to this layout change.
 
-## Shared and Linked row measurements
-
-Both backends produced identical measurements in the full-editor fixture.
-Scale coverage combines the editor scale used by the graph/compact controls
-with 16 / 24 / 32 pixel fonts; icons and styling come from the real host editor.
-This is automated scale/font coverage, not three separate OS-DPI sessions.
-
-| Scale | Editor width | Mode field | Left / right fields | Reset left edge (all rows) | Usable graph | Presentation minimum width |
-| --- | ---: | ---: | ---: | ---: | --- | ---: |
-| 100% | 150 | 50 | 44 / 44 | 118 | 142 x 142 | 147 |
-| 150% | 225 | 92 | 75 / 76 | 193 | 213 x 213 | 168 |
-| 200% | 300 | 134 | 105 / 105 | 268 | 284 x 284 | 189 |
-
-All widths are measured pixels. Linked mode uses the same field allocations.
-All reset columns match Ease/Trans left and right edges
-exactly; no row wraps. Presentation minimum widths match
-the pre-refinement measurements. The existing property-wrapper compensation
-is unchanged. `point-toolbar-{native|legacy}-{separate|linked}-{150|220|600}.png` captures include
-active reset buttons; the gesture and readout captures cover graph boundaries,
-fold/reopen, scrolling, dragging and feedback.
-
-Final validation on Godot 4.7.1 passed 33 of 34 isolated suites. The only failures
-were the same two baseline CSS-label assertions noted above. Both headless and
-full-editor layout runs passed 22,895 checks. Full-editor gesture validation
-passed 831 checks, and coordinate-readout validation passed 1,035 checks. Narrow,
-medium and wide selected-point captures were visually inspected, including
-visible navigation arrows, active reset buttons and strict graph boundaries.
-Mode and shared state resets passed viewport-dispatched single-action Undo/Redo
-tests for Legacy and Native. Dropdown signal-path tests also verify one-action
-Undo/Redo, shared Linked state, opposite-side preservation and reversed mapping.
-
-Preserved evidence under `test/_temp/`:
-
-- Full suite: `split-linked-full-console.txt`.
-- Layout and reset checks: `split-linked-layout-console.txt`.
-- Active-reset captures: `layout-editor-be6b9c3806c54df9acf2dc9cee997dab/test/_temp/`.
-- Rendered gestures: `split-linked-gesture-console.txt`.
-- Rendered readouts: `split-linked-readout-console.txt`.
-
-This refinement began on clean `feature/curve-editor-max-graph-area` at `fda3850`.
-The earlier no-selection indicator change to `0` is
-preserved. No test-scene edits were made. `dev` remains
-`23760bcbf7bfdfe43b7cca3c7177d956bb645663`.
-
-### Files changed by the refinement
-
-- `addons/easing_curve/scripts/editor/easing_curve_editor.gd`
-- `test/scripts/unit/easing_curve_layout_contract_test.gd`
-- `test/docs/GRAPH_LAYOUT.md`
+## Linked-state regressions
 
 ### Native Linked lock correction
 
@@ -174,7 +110,7 @@ Native point setters write individual sides. The backend now expands a Linked
 control-state edit to both sides before committing the existing transaction.
 Locked sets both handle locks; Free and Linear clear both locks and update both
 Force Linear flags. This prevents a shared Locked label from masking a movable
-handle. Legacy behavior, resource APIs and the two-row toolbar are unchanged.
+handle. The single-row toolbar continues to use this backend behavior.
 
 The existing dropdown regression now covers Free, Linear and Locked through
 both endpoint dropdowns, with normal/reversed mapping on both backends. It checks
@@ -218,7 +154,7 @@ The Native smoke suite compares repeated mode changes and control edits against
 Legacy with either side forced linear and the opposite side locked. It checks
 that stored flags survive each edit. The layout suite exercises both interior
 handles through viewport input, normal/reversed transforms and Undo/Redo, and
-checks disabled dropdown values. The pre-fix Native smoke run failed 68 checks;
+checks stored control-state values. The pre-fix Native smoke run failed 68 checks;
 the rebuilt Windows release DLL passes all 2,053 smoke checks. Build and test logs
 are under `test/_temp/inactive-overrides-*`. Full-editor layout/input validation
 passes 24,693 checks. Reopen an existing Godot session before retesting to ensure

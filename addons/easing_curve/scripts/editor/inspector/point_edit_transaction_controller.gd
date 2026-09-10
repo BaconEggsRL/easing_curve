@@ -257,8 +257,6 @@ static func point_action_name(property_name: StringName) -> String:
 			return "Reset Easing Curve Left Handle State"
 		&"right_control_state_reset":
 			return "Reset Easing Curve Right Handle State"
-		&"control_states_reset":
-			return "Reset Easing Curve Handle States"
 		&"toolbar_options_reset":
 			return "Reset Easing Curve Point Options"
 		&"handle_mode":
