@@ -342,12 +342,16 @@ func _apply_control_state(point: Resource, side: int, control_state: int) -> boo
 		return false
 	if int(point.get(&"handle_mode")) not in [0, 4]:
 		return false
-	var lock_property := _control_property(side)
-	var force_property := _force_linear_property(side)
-	point.call(&"set_locked", lock_property, false)
-	point.set(force_property, control_state == CONTROL_STATE_LINEAR)
-	if control_state == CONTROL_STATE_LOCKED:
-		point.call(&"set_locked", lock_property, true)
+	var sides: Array[int] = [side]
+	if int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.LINKED:
+		# Native setters affect one side; a Linked editing intent affects both.
+		sides = [CONTROL_SIDE_LEFT, CONTROL_SIDE_RIGHT]
+	for control_side in sides:
+		var lock_property := _control_property(control_side)
+		point.call(&"set_locked", lock_property, false)
+		point.set(_force_linear_property(control_side), control_state == CONTROL_STATE_LINEAR)
+		if control_state == CONTROL_STATE_LOCKED:
+			point.call(&"set_locked", lock_property, true)
 	return true
 
 

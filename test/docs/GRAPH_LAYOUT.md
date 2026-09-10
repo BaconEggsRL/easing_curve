@@ -167,3 +167,22 @@ preserved. No test-scene edits were made. `dev` remains
 - `addons/easing_curve/scripts/editor/easing_curve_editor.gd`
 - `test/scripts/unit/easing_curve_layout_contract_test.gd`
 - `test/docs/GRAPH_LAYOUT.md`
+
+### Native Linked lock correction
+
+Native point setters write individual sides. The backend now expands a Linked
+control-state edit to both sides before committing the existing transaction.
+Locked sets both handle locks; Free and Linear clear both locks and update both
+Force Linear flags. This prevents a shared Locked label from masking a movable
+handle. Legacy behavior, resource APIs and the two-row toolbar are unchanged.
+
+The existing dropdown regression now covers Free, Linear and Locked through
+both endpoint dropdowns, with normal/reversed mapping on both backends. It checks
+stored flags against drag availability, complete single-action Undo/Redo, and
+viewport-dispatched attempts to drag locked Linked handles. The expanded flag
+checks reproduced 36 failures before the fix; the full-editor run after the fix
+passed 23,399 checks. Logs are `native-linked-lock-before-console.txt`,
+`native-linked-lock-after-console.txt` and `native-linked-lock-full-console.txt`
+under `test/_temp/`. Full validation passed 33 of 34 suites; only the two known
+CSS-label assertions failed. The correction changes `native_curve_editor_backend.gd`,
+the existing layout contract suite and this document.

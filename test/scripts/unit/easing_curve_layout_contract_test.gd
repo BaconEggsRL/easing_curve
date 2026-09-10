@@ -294,33 +294,78 @@ func _test_independent_resets() -> void:
 					_expect(history.redo(), "Reset Redo failed")
 					_expect(editor._backend.capture_snapshot() == after, "Reset Redo did not restore complete snapshot")
 			for shared: bool in [false, true]:
-				await _test_state_dropdown_edit(editor, manager, history, shared)
+				for point_index: int in [0, 1]:
+					for control_state: int in EasingCurvePoint.ControlState.values():
+						await _test_state_dropdown_edit(editor, manager, history, shared, point_index, control_state)
 			print("RESET_GATE backend=%s reverse=%s mode/shared resets and Linked side edits preserve state and Undo/Redo" % ["native" if native else "legacy", reverse_sides])
 			manager.clear_history()
 			viewport.free()
 	plugin.free()
 
 
-func _test_state_dropdown_edit(editor: EasingCurveEditor, manager: EditorUndoRedoManager, history: UndoRedo, shared: bool) -> void:
-	editor._backend.apply_point_property(0, &"toolbar_options_reset", true, false)
-	editor._backend.apply_point_property(0, &"handle_mode", 4 if shared else 0, false)
+func _test_state_dropdown_edit(editor: EasingCurveEditor, manager: EditorUndoRedoManager, history: UndoRedo, shared: bool, point_index: int, control_state: int) -> void:
+	editor.selected_index = point_index
+	editor._backend.apply_point_property(point_index, &"toolbar_options_reset", true, false)
+	editor._backend.apply_point_property(point_index, &"handle_mode", 4 if shared else 0, false)
+	var side := EasingCurvePoint.ControlSide.RIGHT if point_index == 0 else EasingCurvePoint.ControlSide.LEFT
+	var curve_side: int = editor._backend.display_control_side_to_curve(side)
+	var point := editor._point(point_index)
+	for stored_side: int in [EasingCurvePoint.ControlSide.LEFT, EasingCurvePoint.ControlSide.RIGHT] if shared else [curve_side]:
+		if control_state == EasingCurvePoint.ControlState.LOCKED:
+			point.set(&"left_force_linear" if stored_side == EasingCurvePoint.ControlSide.LEFT else &"right_force_linear", true)
+		else:
+			point.call(&"set_locked", &"left_control_point" if stored_side == EasingCurvePoint.ControlSide.LEFT else &"right_control_point", true)
 	editor._update_point_toolbar()
 	await _settle()
 	manager.clear_history()
-	var option := editor._point_right_state
+	var option := editor._point_right_state if point_index == 0 else editor._point_left_state
 	_expect(not option.disabled and option.is_visible_in_tree(), "State-edit fixture selected an unavailable dropdown")
 	var before: Variant = editor._backend.capture_snapshot()
-	var item := option.get_item_index(EasingCurvePoint.ControlState.LINEAR)
+	var item := option.get_item_index(control_state)
 	option.select(item)
 	option.item_selected.emit(item)
 	await _settle()
 	_expect(history.get_history_count() == 1, "Dropdown edit did not create one Undo action")
-	_expect(editor._get_point_toolbar_control_state(0, EasingCurvePoint.ControlSide.RIGHT) == EasingCurvePoint.ControlState.LINEAR, "Dropdown edit missed the displayed side")
-	_expect(editor._get_point_toolbar_control_state(0, EasingCurvePoint.ControlSide.LEFT) == (EasingCurvePoint.ControlState.LINEAR if shared else EasingCurvePoint.ControlState.FREE), "Dropdown edit changed the wrong set of sides")
+	for display_side: int in [EasingCurvePoint.ControlSide.LEFT, EasingCurvePoint.ControlSide.RIGHT]:
+		var expected_state := control_state if shared or display_side == side else EasingCurvePoint.ControlState.FREE
+		_expect(editor._get_point_toolbar_control_state(point_index, display_side) == expected_state, "Dropdown edit changed the wrong set of sides")
+		var stored_side: int = editor._backend.display_control_side_to_curve(display_side)
+		var lock_property := &"left_control_point" if stored_side == EasingCurvePoint.ControlSide.LEFT else &"right_control_point"
+		var force_property := &"left_force_linear" if stored_side == EasingCurvePoint.ControlSide.LEFT else &"right_force_linear"
+		_expect(editor._backend.is_point_property_locked(point_index, lock_property) == (expected_state == EasingCurvePoint.ControlState.LOCKED), "Displayed lock state differs from actual handle drag lock")
+		_expect(bool(point.get(force_property)) == (expected_state == EasingCurvePoint.ControlState.LINEAR), "Dropdown edit left a stale stored Force Linear flag")
 	var after: Variant = editor._backend.capture_snapshot()
+	if shared and control_state == EasingCurvePoint.ControlState.LOCKED:
+		await _assert_linked_handle_cannot_drag(editor, point_index)
+		_expect(editor._backend.capture_snapshot() == after, "Viewport drag moved a locked Linked handle")
 	_expect(history.undo() and editor._backend.capture_snapshot() == before, "Dropdown Undo did not restore complete snapshot")
 	_expect(not history.has_undo(), "Dropdown edit created multiple actions")
 	_expect(history.redo() and editor._backend.capture_snapshot() == after, "Dropdown Redo did not restore complete snapshot")
+
+
+func _assert_linked_handle_cannot_drag(editor: EasingCurveEditor, point_index: int) -> void:
+	editor.autofit()
+	await _settle()
+	var point := editor._point(point_index)
+	var display_side := EasingCurvePoint.ControlSide.RIGHT if editor._get_display_points().find(point) == 0 else EasingCurvePoint.ControlSide.LEFT
+	var local_position := editor.get_view_pos(editor._backend.get_display_control_point(point, display_side))
+	_expect(editor.get_control_at(local_position)[0] == point_index, "Locked drag fixture missed the visible handle")
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = editor.global_position + local_position
+	editor.get_viewport().push_input(press, true)
+	_expect(editor.dragging_point == -1, "Locked Linked handle started a viewport drag")
+	var motion := InputEventMouseMotion.new()
+	motion.position = press.position + Vector2(20.0, -15.0)
+	motion.relative = Vector2(20.0, -15.0)
+	motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+	editor.get_viewport().push_input(motion, true)
+	var release := press.duplicate() as InputEventMouseButton
+	release.pressed = false
+	release.position = motion.position
+	editor.get_viewport().push_input(release, true)
+	_expect(editor.dragging_point == -1, "Locked Linked handle retained a gesture")
 
 
 func _click(viewport: SubViewport, position: Vector2) -> void:
