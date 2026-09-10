@@ -26,7 +26,7 @@ func _run() -> void:
 	await _test_autofit_request_lifecycle()
 	await _test_autofit_waits_for_function_toolbar_layout()
 	await _test_ease_change_autofit()
-	await _test_automatic_autofit_suppresses_intermediate_render()
+	await _test_automatic_autofit_keeps_graph_visible()
 	await _test_folded_curve_editor_defers_autofit_until_expand()
 	_test_zoom_behavioral_invariants()
 	await _test_zoom_slider_wheel_scope()
@@ -737,6 +737,9 @@ func _test_view_state_restore_and_rebuild_order() -> void:
 
 func _wait_for_autofit(inspector: Object) -> void:
 	for frame in range(12):
+		var editor: EasingCurveEditor = inspector.easing_curve_editor
+		if is_instance_valid(editor):
+			_expect(not editor.is_graph_render_suppressed(), "Pending Autofit blanked the graph")
 		await process_frame
 		if not bool(inspector.call("_is_autofit_pending")):
 			return
@@ -819,14 +822,14 @@ func _test_autofit_request_lifecycle() -> void:
 	missing_slider_inspector.call("_queue_autofit_curve_editor")
 	_expect(
 		bool(missing_slider_inspector.call("_is_autofit_pending"))
-		and missing_slider_editor.is_graph_render_suppressed(),
-		"Autofit request did not acquire pending render suppression",
+		and not missing_slider_editor.is_graph_render_suppressed(),
+		"Autofit request must remain pending without blanking the graph",
 	)
 	await _wait_for_autofit(missing_slider_inspector)
 	_expect(
 		not bool(missing_slider_inspector.call("_is_autofit_pending"))
 		and not missing_slider_editor.is_graph_render_suppressed(),
-		"Missing-slider Autofit did not cancel and release render suppression",
+		"Missing-slider Autofit did not cancel with drawing enabled",
 	)
 	missing_slider_editor.free()
 
@@ -838,14 +841,14 @@ func _test_autofit_request_lifecycle() -> void:
 	stale_inspector.call("_cancel_autofit", stale_request_id)
 	_expect(
 		bool(stale_inspector.call("_is_autofit_pending"))
-		and stale_editor.is_graph_render_suppressed(),
-		"Stale Autofit cancellation released the current request's suppression",
+		and not stale_editor.is_graph_render_suppressed(),
+		"Stale cancellation must preserve the current request and graph drawing",
 	)
 	stale_inspector.call("_cancel_autofit", current_request_id)
 	_expect(
 		not bool(stale_inspector.call("_is_autofit_pending"))
 		and not stale_editor.is_graph_render_suppressed(),
-		"Current Autofit cancellation did not release render suppression",
+		"Current Autofit cancellation did not clear the request with drawing enabled",
 	)
 	stale_editor.free()
 
@@ -863,7 +866,7 @@ func _test_autofit_request_lifecycle() -> void:
 	)
 
 
-func _test_automatic_autofit_suppresses_intermediate_render() -> void:
+func _test_automatic_autofit_keeps_graph_visible() -> void:
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.LINEAR
 	var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
@@ -873,8 +876,8 @@ func _test_automatic_autofit_suppresses_intermediate_render() -> void:
 
 	inspector.call("_queue_autofit_curve_editor")
 	_expect(
-		initial_editor.is_graph_render_suppressed(),
-		"Automatic Autofit did not suppress graph rendering immediately",
+		not initial_editor.is_graph_render_suppressed(),
+		"Automatic Autofit blanked the initial graph",
 	)
 
 	# Simulate the Inspector rebuild caused by switching to a Function preset.
@@ -885,8 +888,8 @@ func _test_automatic_autofit_suppresses_intermediate_render() -> void:
 	get_root().add_child(replacement_content)
 	var replacement_editor := EDITOR_DRIVER.curve_editor(inspector)
 	_expect(
-		replacement_editor.is_graph_render_suppressed(),
-		"Inspector rebuild did not inherit pending Autofit render suppression",
+		inspector._is_autofit_pending() and not replacement_editor.is_graph_render_suppressed(),
+		"Inspector rebuild must inherit pending Autofit without blanking the graph",
 	)
 	var replacement_toolbar_panel: VBoxContainer = replacement_editor.get("_point_toolbar_panel")
 	_expect(
@@ -896,13 +899,13 @@ func _test_automatic_autofit_suppresses_intermediate_render() -> void:
 
 	await process_frame
 	_expect(
-		replacement_editor.is_graph_render_suppressed(),
-		"Automatic Autofit revealed the graph before the layout-settle window completed",
+		not replacement_editor.is_graph_render_suppressed(),
+		"Automatic Autofit blanked the graph during the layout-settle window",
 	)
 	await _wait_for_autofit(inspector)
 	_expect(
 		not replacement_editor.is_graph_render_suppressed(),
-		"Automatic Autofit did not reveal the graph after fitting completed",
+		"Automatic Autofit left graph drawing disabled after fitting completed",
 	)
 	_expect(
 		not bool(inspector.call("_is_autofit_pending")),
@@ -966,8 +969,8 @@ func _test_folded_curve_editor_defers_autofit_until_expand() -> void:
 		"Automatic Autofit completed while the Curve Editor was folded",
 	)
 	_expect(
-		replacement_editor.is_graph_render_suppressed(),
-		"Folded Curve Editor revealed the graph before pending Autofit could use expanded layout",
+		not replacement_editor.is_graph_render_suppressed(),
+		"Folding must defer Autofit without disabling graph drawing",
 	)
 
 	replacement_section.call("expand")

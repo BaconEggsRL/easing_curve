@@ -140,12 +140,14 @@ func _test_mixed_resource_autofit_isolation() -> void:
 		var contents: Array[Control] = []
 		var editors: Array[EasingCurveEditor] = []
 		var sections: Array[Control] = []
+		var contexts: Array[InspectorCurveContext] = []
 		for resource: Resource in curves:
 			inspector = INSPECTOR_PLUGIN.new()
 			inspector._parse_begin(resource)
 			var content := inspector.handle_easing_curve_editor(resource)
 			root.add_child(content)
 			contents.append(content)
+			contexts.append(inspector)
 			editors.append(inspector.easing_curve_editor)
 			sections.append(inspector._curve_editor_section)
 			inspector.call(&"_queue_autofit_curve_editor")
@@ -154,13 +156,16 @@ func _test_mixed_resource_autofit_isolation() -> void:
 		for frame in range(5):
 			await process_frame
 		_expect(not editors[1].is_graph_render_suppressed(), "Second graph stayed suppressed")
-		_expect(editors[0].is_graph_render_suppressed(), "Folded graph lost pending Autofit")
+		_expect(not editors[0].is_graph_render_suppressed(), "Folded graph disabled drawing")
+		_expect(contexts[0]._is_autofit_pending(), "Folded graph lost pending Autofit")
+		_expect(not contexts[1]._is_autofit_pending(), "Sibling graph did not finish Autofit")
 		sections[0].call(&"expand")
 		for frame in range(5):
 			await process_frame
 		for editor: EasingCurveEditor in editors:
 			_expect(not editor.is_graph_render_suppressed(), "Mixed resource graph stayed blank after rebuild")
-		_expect(not inspector.call(&"_is_autofit_pending"), "Mixed resource Autofit did not finish")
+		for context: InspectorCurveContext in contexts:
+			_expect(not context._is_autofit_pending(), "Mixed resource Autofit did not finish")
 		for content: Control in contents:
 			content.free()
 

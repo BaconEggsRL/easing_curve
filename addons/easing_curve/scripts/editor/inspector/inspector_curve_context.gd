@@ -3556,7 +3556,6 @@ func _request_autofit() -> int:
 	if is_instance_valid(_curve_editor_section):
 		request.section = weakref(_curve_editor_section)
 	_autofit_requests[_autofit_request_id] = request
-	easing_curve_editor.set_graph_render_suppressed(true)
 	easing_curve_editor.tree_exiting.connect(
 		_on_autofit_editor_exiting.bind(_autofit_request_id), CONNECT_ONE_SHOT,
 	)
@@ -3597,7 +3596,6 @@ func _cancel_autofit(request_id: int = -1) -> void:
 		var exit_callback := _on_autofit_editor_exiting.bind(request_id)
 		if editor.tree_exiting.is_connected(exit_callback):
 			editor.tree_exiting.disconnect(exit_callback)
-		editor.set_graph_render_suppressed(false)
 
 
 func _complete_autofit(request_id: int) -> void:
@@ -3643,9 +3641,8 @@ func _defer_autofit_frames(request_id: int, frames_remaining: int) -> void:
 
 	# Preset/resource changes may rebuild the Inspector and hide/show the
 	# point toolbar. Let those minimum-size/layout changes settle before
-	# measuring the graph rect used by Autofit. The graph stays suppressed
-	# until the fitted view is ready, so no intermediate default-view frame
-	# is presented.
+	# measuring the graph rect used by Autofit. Keep drawing the updated curve
+	# while its framing settles instead of blanking the graph between presets.
 	if frames_remaining > 0:
 		tree.process_frame.connect(
 			func() -> void: _defer_autofit_frames(request_id, frames_remaining - 1),

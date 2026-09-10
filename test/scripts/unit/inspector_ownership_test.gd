@@ -606,7 +606,15 @@ func _find_context(node: Node, target: Resource) -> Context:
 func _test_rendered_inspectors() -> void:
 	var plugin := Plugin.new()
 	plugin.editor_undo_redo = _undo
-	_undo_plugin.add_inspector_plugin(plugin)
+	# Reuse the loaded addon when present: two plugins recursively wrap the
+	# same parameter slider while instantiate_property_editor() is running.
+	var existing_plugin: EditorInspectorPlugin
+	for node in root.find_children("*", "EditorPlugin", true, false):
+		if node.get_script() == load("res://addons/easing_curve/plugin.gd"):
+			existing_plugin = node.easing_curve_editor_inspector_plugin
+			break
+	if existing_plugin == null:
+		_undo_plugin.add_inspector_plugin(plugin)
 	for kinds in [[false, false, false], [true, true, false], [false, true, false], [true, false, false], [false, false, true], [true, true, true]]:
 		var target_a := _curve(kinds[0])
 		var target_b := target_a if kinds[2] else _curve(kinds[1])
@@ -659,7 +667,102 @@ func _test_rendered_inspectors() -> void:
 		inspector_a.free()
 		inspector_b.free()
 		await process_frame
-	_undo_plugin.remove_inspector_plugin(plugin)
+	await _test_rendered_preset_visibility()
+	if existing_plugin == null:
+		_undo_plugin.remove_inspector_plugin(plugin)
+
+
+func _test_rendered_preset_visibility() -> void:
+	for native: bool in [false, true]:
+		var target: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+		var trans_property := &"transition" if native else &"trans_type"
+		target.set(trans_property, 1 if native else EasingCurve.TRANS.SINE)
+		var inspector := EditorInspector.new()
+		inspector.custom_minimum_size = Vector2(620, 850)
+		_host.add_child(inspector)
+		inspector.edit(target)
+		await _observe_preset_frames(inspector, target, "initial")
+		var history := _history(target)
+		history.clear_history()
+		# Same-mode and cross-mode transitions must exercise real Inspector reparses.
+		var transitions := [4, 6, 7] if native else [EasingCurve.TRANS.QUAD, EasingCurve.TRANS.ELASTIC, EasingCurve.TRANS.CUBIC]
+		for trans: int in transitions:
+			var context := _find_context(inspector, target)
+			var content: Control = context.graph_root_ref.get_ref()
+			var toolbar := content.get_child(0) as GridContainer
+			var option := toolbar.get_child(4) as OptionButton
+			var previous: int = target.get(trans_property)
+			option.item_selected.emit(option.get_item_index(trans))
+			_expect(not context.easing_curve_editor.is_graph_render_suppressed(), "Transition immediately blanked graph")
+			_expect(int(target.get(trans_property)) == trans, "Rendered transition selection did not apply")
+			await _observe_preset_frames(inspector, target, "trans_%d" % trans)
+			history.undo()
+			_expect(int(target.get(trans_property)) == previous, "Transition Undo did not restore preset")
+			await _observe_preset_frames(inspector, target, "undo_%d" % trans, false)
+			history.redo()
+			_expect(int(target.get(trans_property)) == trans, "Transition Redo did not restore preset")
+			await _observe_preset_frames(inspector, target, "redo_%d" % trans, false)
+			context = _find_context(inspector, target)
+			content = context.graph_root_ref.get_ref()
+			toolbar = content.get_child(0) as GridContainer
+			var ease := toolbar.get_child(1) as OptionButton
+			# Repeated selections before layout settles must leave only the latest fit.
+			for ease_id: int in [EasingCurve.EASE.OUT, EasingCurve.EASE.IN_OUT, EasingCurve.EASE.OUT_IN]:
+				ease.item_selected.emit(ease.get_item_index(ease_id))
+				_expect(not context.easing_curve_editor.is_graph_render_suppressed(), "Rapid Ease selection blanked graph")
+			await _observe_preset_frames(inspector, target, "ease_%d" % trans)
+			context = _find_context(inspector, target)
+			content = context.graph_root_ref.get_ref()
+			toolbar = content.get_child(0) as GridContainer
+			(toolbar.get_child(2) as Button).pressed.emit()
+			_expect(int(target.get(&"ease_type")) == EasingCurve.EASE.IN, "Rendered Ease reset did not apply")
+			await _observe_preset_frames(inspector, target, "reset_%d" % trans)
+		inspector.edit(null)
+		inspector.free()
+		history.clear_history()
+		await process_frame
+
+
+func _observe_preset_frames(inspector: EditorInspector, target: Resource, label: String, check_fit := true) -> void:
+	var frames := Image.create(620, 360 * 6, false, Image.FORMAT_RGBA8)
+	for frame in range(6):
+		await process_frame
+		var context := _find_context(inspector, target)
+		_expect(context != null, "Preset update lost the rendered Inspector context")
+		if context == null:
+			return
+		var graph := context.easing_curve_editor
+		_expect(not graph.is_graph_render_suppressed(), "Preset update blanked graph on frame %d" % frame)
+		RenderingServer.force_draw()
+		var screenshot := _test_window.get_texture().get_image()
+		var graph_rect := Rect2i(Rect2(graph.global_position + graph._get_graph_view_rect().position, graph._get_graph_view_rect().size))
+		var graph_image := screenshot.get_region(graph_rect)
+		_expect(_has_curve_ink(graph_image), "Rendered curve disappeared: %s frame %d" % [label, frame])
+		frames.blit_rect(graph_image, Rect2i(Vector2i.ZERO, graph_image.get_size()), Vector2i(0, frame * 360))
+	var backend := "legacy" if target is EasingCurve else "native"
+	_expect(frames.save_png("res://test/_temp/autofit-%s-%s.png" % [backend, label]) == OK, "Could not save Autofit frame capture")
+	var settled := _find_context(inspector, target)
+	_expect(not settled._is_autofit_pending(), "Rendered Autofit did not settle")
+	# Undo/Redo restores saved view state rather than requesting a new fit.
+	if not check_fit:
+		return
+	var graph := settled.easing_curve_editor
+	var zoom := graph._zoom_step
+	var pan := graph.pan_offset
+	graph.autofit()
+	_expect(graph._zoom_step == zoom and graph.pan_offset.is_equal_approx(pan), "Rendered Autofit did not match manual fit: %s/%s" % [backend, label])
+
+
+func _has_curve_ink(image: Image) -> bool:
+	var white_pixels := 0
+	for y in range(2, image.get_height() - 2, 2):
+		for x in range(2, image.get_width() - 2, 2):
+			var pixel := image.get_pixel(x, y)
+			if pixel.r > 0.9 and pixel.g > 0.9 and pixel.b > 0.9:
+				white_pixels += 1
+				if white_pixels >= 8:
+					return true
+	return false
 
 
 func _type_field(field: EditorSpinSlider, value: String) -> void:
