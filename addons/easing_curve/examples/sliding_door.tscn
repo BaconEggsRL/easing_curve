@@ -1,8 +1,8 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://we3t80pv7vix"]
 
-[ext_resource type="Theme" path="res://addons/easing_curve/examples/example_theme.tres" id="1_ec5rf"]
-[ext_resource type="Script" path="res://addons/easing_curve/examples/sliding_door.gd" id="2_oysyj"]
-[ext_resource type="Resource" path="res://addons/easing_curve/examples/sliding_door_curve.tres" id="3_cduni"]
+[ext_resource type="Theme" uid="uid://cl6r4pc1kex55" path="res://addons/easing_curve/examples/example_theme.tres" id="1_ec5rf"]
+[ext_resource type="Script" uid="uid://3ghfipkqfcfb" path="res://addons/easing_curve/examples/sliding_door.gd" id="2_oysyj"]
+[ext_resource type="Resource" uid="uid://c1ugcf8bglesy" path="res://addons/easing_curve/examples/sliding_door_curve.tres" id="3_cduni"]
 
 [sub_resource type="Animation" id="Animation_28fn6"]
 tracks/0/type = "value"
@@ -25,7 +25,7 @@ _data = {
 
 [node name="SlidingDoor" type="Control" unique_id=409256648]
 layout_mode = 3
-anchors_preset = 0
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 theme = ExtResource("1_ec5rf")

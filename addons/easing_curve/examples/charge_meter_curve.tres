@@ -1,12 +1,14 @@
-[gd_resource type="Resource" script_class="EasingCurve" format=3]
+[gd_resource type="Resource" script_class="EasingCurve" format=3 uid="uid://v5vhqjcix5co"]
 
-[ext_resource type="Script" path="res://addons/easing_curve/scripts/runtime/easing_curve.gd" id="1_mwnh0"]
+[ext_resource type="Script" uid="uid://c10cjby72qngf" path="res://addons/easing_curve/scripts/runtime/easing_curve.gd" id="1_mwnh0"]
 
 [resource]
 script = ExtResource("1_mwnh0")
-trans_type = 6
+trans_type = 20
 curve_mode = 1
 function_callable = Callable()
+_irregular_points_x = Array[float]([0.0, 0.3333333333333333, 0.6666666666666666, 1.0])
+_irregular_points_y = Array[float]([0.0, 0.6120633582274119, 0.6081227560838063, 1.0])
 _css_linear_points = PackedVector2Array(0, 0, 1, 1)
 _css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.25, 1)
 _point_count = 0

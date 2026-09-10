@@ -1,17 +1,18 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://cl00vjl7baoli"]
 
-[ext_resource type="Theme" path="res://addons/easing_curve/examples/example_theme.tres" id="1_rjc2e"]
-[ext_resource type="Script" path="res://addons/easing_curve/examples/charge_meter.gd" id="2_7tqa8"]
-[ext_resource type="Resource" path="res://addons/easing_curve/examples/charge_meter_curve.tres" id="3_628dt"]
+[ext_resource type="Theme" uid="uid://cl6r4pc1kex55" path="res://addons/easing_curve/examples/example_theme.tres" id="1_rjc2e"]
+[ext_resource type="Script" uid="uid://ccck5k7biavcr" path="res://addons/easing_curve/examples/charge_meter.gd" id="2_7tqa8"]
+[ext_resource type="Resource" uid="uid://v5vhqjcix5co" path="res://addons/easing_curve/examples/charge_meter_curve.tres" id="3_628dt"]
 
 [node name="ChargeMeter" type="Control" unique_id=1945538668]
 layout_mode = 3
-anchors_preset = 0
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 theme = ExtResource("1_rjc2e")
 script = ExtResource("2_7tqa8")
 curve = ExtResource("3_628dt")
+duration = 1.5
 
 [node name="ColorRect" type="ColorRect" parent="." unique_id=809435395]
 layout_mode = 0
