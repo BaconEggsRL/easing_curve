@@ -1,5 +1,32 @@
 # Development testing
 
+## Legacy right-drag deletion regression (2026-09-10)
+
+Deleting a Legacy point publishes a property-list refresh and rebuilds its
+Inspector graph. Presentation-owned graphs previously skipped delete-gesture
+storage/restoration, so the replacement graph lost the held RMB gesture after
+one deletion. Native does not take this rebuild path and was already working.
+
+Legacy contexts now share the existing delete-gesture state through their
+Inspector plugin, scoped by resource. Replacement graphs restore it only while
+RMB is held. Native's presentation-local behavior and standalone graph fallback
+are unchanged. No state is serialized into curve resources.
+
+The gesture-characterization suite now deletes three points through actual
+Inspector callbacks, rebuilding the Legacy context between deletions. It also
+checks Native deletion, release/hover behavior, isolation across Inspectors and
+resources, and one Undo/Redo action per deletion. Before the fix the new case
+caused nine failures, all in the Legacy path; its Native case passed. The final
+gesture suite passed 963 checks, and all 34 correctness suites passed on Godot
+4.7.1 with the pinned editor. Exact-archive install, dual-API behavior and plugin
+lifecycle checks also passed. Logs are retained under
+`_exports/_validation/legacy-rmb-20260910/`. Input is synthetic with actual
+held-button state and Inspector callbacks; physical mouse interaction was not
+verified. The standalone RMB test alone cannot catch this regression because it
+keeps the same graph instance for the whole gesture.
+The concurrent demo-scene edit was preserved; it appeared after the test/ZIP
+snapshots and is not covered by these results.
+
 ## Inspector minimum width
 
 See [Inspector minimum-width validation](INSPECTOR_MINIMUM_WIDTH.md) for the

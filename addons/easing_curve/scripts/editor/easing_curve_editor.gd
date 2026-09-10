@@ -106,6 +106,7 @@ const FUNCTION_DRAW_STEPS := 120
 const GRAPH_GRID_DIVISIONS := Vector2i(4, 2)
 
 var presentation_owned := false
+var right_delete_drag_states: Dictionary[int, Dictionary] = _right_delete_drag_state_by_curve
 var editor_undo_redo: Object
 var committed_change_publisher: Callable
 var pan_offset := Vector2.ZERO
@@ -1374,26 +1375,26 @@ func _set_right_delete_dragging(enabled: bool) -> void:
 		_right_delete_requires_exit = false
 		_right_delete_blocked_position = Vector2.ZERO
 		var resource := get_curve()
-		if resource != null and not presentation_owned:
-			_right_delete_drag_state_by_curve.erase(resource.get_instance_id())
+		if resource != null and (not presentation_owned or _curve != null):
+			right_delete_drag_states.erase(resource.get_instance_id())
 		return
 	_store_right_delete_drag_state()
 
 
 func _store_right_delete_drag_state() -> void:
-	if presentation_owned:
+	if presentation_owned and _curve == null:
 		return
 	var resource := get_curve()
 	if resource == null or not is_right_delete_dragging:
 		return
-	_right_delete_drag_state_by_curve[resource.get_instance_id()] = {
+	right_delete_drag_states[resource.get_instance_id()] = {
 		"requires_exit": _right_delete_requires_exit,
 		"blocked_position": _right_delete_blocked_position,
 	}
 
 
 func _restore_right_delete_drag_state() -> void:
-	if presentation_owned:
+	if presentation_owned and _curve == null:
 		return
 	var resource := get_curve()
 	if resource == null:
@@ -1401,10 +1402,10 @@ func _restore_right_delete_drag_state() -> void:
 
 	var curve_id := resource.get_instance_id()
 	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-		_right_delete_drag_state_by_curve.erase(curve_id)
+		right_delete_drag_states.erase(curve_id)
 		return
 
-	var state: Dictionary = _right_delete_drag_state_by_curve.get(curve_id, {})
+	var state: Dictionary = right_delete_drag_states.get(curve_id, {})
 	if state.is_empty():
 		return
 

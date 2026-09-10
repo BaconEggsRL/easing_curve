@@ -43,9 +43,109 @@ func _run() -> void:
 	_test_axis_constraint_view_and_order_geometry()
 	_test_axis_constraint_request_and_input_boundaries()
 	await _test_inspector_input_transaction_finish_boundaries()
+	await _test_right_delete_drag_inspector_rebuild()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
 	_finish("graph gesture characterization")
+
+
+func _test_right_delete_drag_inspector_rebuild() -> void:
+	const InspectorPlugin = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
+	var undo_host := EditorPlugin.new()
+	var manager := undo_host.get_undo_redo()
+	for native: bool in [false, true]:
+		var resource: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+		resource.set(&"transition" if native else &"trans_type", 100 if native else EasingCurve.TRANS.CUSTOM)
+		var backend := EasingCurveEditor.BackendFactory.create(resource)
+		for index in range(backend.get_point_count() - 1, -1, -1):
+			backend.remove_point(index)
+		for x: float in [0.1, 0.35, 0.6, 0.85]:
+			backend.add_point(backend.create_point(Vector2(x, 0.5)))
+		var before: Dictionary = resource.call(&"get_editor_state_snapshot")
+		var plugin := InspectorPlugin.new()
+		plugin.editor_undo_redo = manager
+		plugin._parse_begin(resource)
+		var context: InspectorCurveContext = plugin._construction_context
+		var graph := context.handle_easing_curve_editor(resource)
+		root.add_child(graph)
+		await process_frame
+		manager.clear_history()
+		# Set real held-button state without targeting any fixture; graph events below
+		# exercise the Inspector callbacks and its replacement contexts deterministically.
+		var button := InputEventMouseButton.new()
+		button.button_index = MOUSE_BUTTON_RIGHT
+		button.pressed = true
+		button.position = Vector2(-100, -100)
+		Input.parse_input_event(button)
+		Input.flush_buffered_events()
+		for deleted in range(3):
+			var editor := context.easing_curve_editor
+			editor.size = Vector2(600, 350)
+			editor.update_view_transform()
+			var position := editor.get_view_pos(Vector2(0.1 + 0.25 * deleted, 0.5))
+			if deleted == 0:
+				var press := button.duplicate() as InputEventMouseButton
+				press.position = position
+				editor._gui_input(press)
+			else:
+				var motion := InputEventMouseMotion.new()
+				motion.button_mask = MOUSE_BUTTON_MASK_RIGHT
+				motion.position = position
+				editor._gui_input(motion)
+			_expect(backend.get_point_count() == 3 - deleted, "%s RMB drag stopped after deletion %d" % ["Native" if native else "Legacy", deleted + 1])
+			if not native:
+				# Legacy topology publication rebuilds the entire Inspector presentation.
+				graph.free()
+				await process_frame
+				plugin._parse_begin(resource)
+				context = plugin._construction_context
+				graph = context.handle_easing_curve_editor(resource)
+				root.add_child(graph)
+				_expect(context.easing_curve_editor.is_right_delete_dragging, "Legacy rebuild lost held RMB delete gesture")
+				# Another Inspector displaying the same curve must not inherit the gesture.
+				var other := InspectorPlugin.new()
+				other._parse_begin(resource)
+				var other_graph := other._construction_context.handle_easing_curve_editor(resource)
+				_expect(not other._construction_context.easing_curve_editor.is_right_delete_dragging, "Delete gesture leaked into another Inspector")
+				other_graph.free()
+				var other_curve := EasingCurve.new()
+				plugin._parse_begin(other_curve)
+				var other_curve_graph := plugin._construction_context.handle_easing_curve_editor(other_curve)
+				_expect(not plugin._construction_context.easing_curve_editor.is_right_delete_dragging, "Delete gesture leaked into another curve")
+				other_curve_graph.free()
+			await process_frame
+		button.pressed = false
+		Input.parse_input_event(button)
+		Input.flush_buffered_events()
+		context.easing_curve_editor._gui_input(button)
+		_expect(not context.easing_curve_editor.is_right_delete_dragging, "RMB release retained delete gesture")
+		if not native:
+			graph.free()
+			await process_frame
+			plugin._parse_begin(resource)
+			context = plugin._construction_context
+			graph = context.handle_easing_curve_editor(resource)
+			root.add_child(graph)
+			_expect(not context.easing_curve_editor.is_right_delete_dragging, "Legacy rebuild revived released RMB gesture")
+		context.easing_curve_editor.size = Vector2(600, 350)
+		context.easing_curve_editor.update_view_transform()
+		var hover := InputEventMouseMotion.new()
+		hover.position = context.easing_curve_editor.get_view_pos(Vector2(0.85, 0.5))
+		context.easing_curve_editor._gui_input(hover)
+		_expect(backend.get_point_count() == 1, "Hover after RMB release deleted the last point")
+		var after: Dictionary = resource.call(&"get_editor_state_snapshot")
+		var history := manager.get_history_undo_redo(manager.get_object_history_id(resource))
+		for index in range(3):
+			_expect(history.undo(), "RMB deletion missing Undo")
+		_expect(not history.has_undo(), "RMB deletion created extra Undo actions")
+		_expect(resource.call(&"get_editor_state_snapshot") == before, "RMB Undo did not restore original points")
+		for index in range(3):
+			_expect(history.redo(), "RMB deletion missing Redo")
+		_expect(resource.call(&"get_editor_state_snapshot") == after, "RMB Redo did not restore deleted state")
+		graph.free()
+		manager.clear_history()
+		await process_frame
+	undo_host.free()
 
 
 func _test_section_geometry() -> void:

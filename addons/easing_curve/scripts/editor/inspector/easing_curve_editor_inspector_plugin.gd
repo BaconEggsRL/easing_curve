@@ -13,6 +13,7 @@ var _autofit_rebuild_resources: Dictionary[int, WeakRef] = {}
 # Selection must outlive one Inspector parse/context because point edits can rebuild
 # the Legacy Inspector. Context-local selection alone is lost during that rebuild.
 var _legacy_selection_by_resource: Dictionary[int, Dictionary] = {}
+var _legacy_delete_drag_by_resource: Dictionary[int, Dictionary] = {}
 
 
 func _can_handle(object: Object) -> bool:
@@ -25,6 +26,7 @@ func _parse_begin(object: Object) -> void:
 	_construction_context._initial_autofit_resource_ids = _initial_autofit_resource_ids
 	_construction_context._autofit_rebuild_resources = _autofit_rebuild_resources
 	_construction_context._legacy_selection_by_resource = _legacy_selection_by_resource
+	_construction_context._legacy_delete_drag_by_resource = _legacy_delete_drag_by_resource
 	_construction_context._parse_begin(object)
 
 

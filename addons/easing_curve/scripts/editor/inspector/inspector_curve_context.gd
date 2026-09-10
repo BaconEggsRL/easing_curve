@@ -914,6 +914,7 @@ var _initial_autofit_resource_ids: Dictionary[int, bool] = {}
 # Shared by Inspector parse contexts through the plugin. Legacy graph selection
 # must survive property-list rebuilds caused by add/drag topology publication.
 var _legacy_selection_by_resource: Dictionary[int, Dictionary] = {}
+var _legacy_delete_drag_by_resource: Dictionary[int, Dictionary] = {}
 
 
 class AutofitRequest:
@@ -1273,6 +1274,8 @@ func handle_easing_curve_editor(object: Resource) -> Control:
 		easing_curve_editor = EasingCurveEditor.new()
 		easing_curve_editor.ready.connect(_align_preset_label_column.bind(_toolbar, easing_curve_editor))
 		easing_curve_editor.presentation_owned = true
+		# A Legacy deletion rebuilds this context while RMB is still held.
+		easing_curve_editor.right_delete_drag_states = _legacy_delete_drag_by_resource
 		easing_curve_editor.editor_undo_redo = editor_undo_redo
 		easing_curve_editor.set_curve(object)
 		_connect_graph_swap_request()
