@@ -3,6 +3,12 @@
 > Candidate sign-off is recorded in [the release tracker](v1.2.1_CODE_TRACKER.md).
 > Historical results do not check off this candidate.
 
+## Manual result — 2026-09-10
+
+**PASS — user-reported:** "completed manual smoke test for 1.2.1, all checks passed".
+The checklist below remains the reusable procedure. The report did not specify
+an archive hash, source commit, or environment details.
+
 ## DRAG-COORDS-01 — drag-coordinate readout
 
 For both Native and Legacy Custom graphs:
@@ -801,7 +807,7 @@ If any supported version fails this subset, do not publish the compatibility cla
 
 ## Manual visible-editor result
 
-- [ ] PASS
+- [x] PASS — user-reported, 2026-09-10
 - [ ] PASS WITH KNOWN NON-BLOCKING ISSUES
 - [ ] FAIL
 
