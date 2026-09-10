@@ -45,12 +45,10 @@ class PointToolbarOptionSlot:
 			fit_child_in_rect(get_child(0), Rect2(Vector2.ZERO, size))
 
 
-enum ControlsLayout { CURRENT_TWO_ROW, COMPACT_TWO_ROW, DEV_SINGLE_ROW }
+enum ControlsLayout { CURRENT_TWO_ROW, DEV_SINGLE_ROW }
 
 # Reopen the curve Inspector after changing the layout.
 var controls_layout: ControlsLayout = ControlsLayout.DEV_SINGLE_ROW
-# COMPACT_TWO_ROW only. Reset buttons retain their reserved space in visible rows.
-var hide_unused_controls := true
 
 var use_pending_add := true
 # True: hide point controls and snapping in Function mode.
@@ -2658,8 +2656,6 @@ func _create_point_toolbar() -> void:
 	_point_states_row = HBoxContainer.new()
 	_point_states_row.name = &"PointStatesRow"
 	_point_states_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if controls_layout == ControlsLayout.COMPACT_TWO_ROW:
-		_point_states_row.alignment = BoxContainer.ALIGNMENT_END
 	_point_toolbar.add_child(_point_states_row)
 
 
@@ -2833,12 +2829,6 @@ func _update_point_toolbar_spacing() -> void:
 	var separation := EDITOR_THEME_CACHE.compact_separation(_editor_scale)
 	# Reserve the dropdown height even when it is hidden with no selection.
 	_point_mode_row.custom_minimum_size.y = _point_handle_mode.get_combined_minimum_size().y
-	if controls_layout == ControlsLayout.COMPACT_TWO_ROW:
-		# A reset-only row retains its usual vertical alignment until it collapses.
-		_point_states_row.custom_minimum_size.y = maxf(
-			_point_left_state.get_combined_minimum_size().y,
-			_point_right_state.get_combined_minimum_size().y,
-		)
 	for button: Button in [_point_move_left_button, _point_move_right_button]:
 		var icon_width := roundi(16.0 * _editor_scale)
 		button.custom_minimum_size = Vector2.ONE * icon_width
@@ -2947,8 +2937,6 @@ func _update_point_toolbar() -> void:
 			EasingCurvePoint.ControlSide.RIGHT,
 			false,
 		)
-		if controls_layout == ControlsLayout.COMPACT_TWO_ROW:
-			_set_reset_button_available(_point_states_reset_button, false)
 		return
 
 	var point := _point(selected_index)
@@ -2992,12 +2980,6 @@ func _update_point_toolbar() -> void:
 		else int(point.get(&"handle_mode")) != EasingCurvePoint.HandleMode.FREE
 	)
 	_set_reset_button_available(_point_states_reset_button, not _point_control_states_are_default(point))
-	if controls_layout == ControlsLayout.COMPACT_TWO_ROW:
-		_point_states_row.visible = (
-			not _point_left_state.disabled
-			or not _point_right_state.disabled
-			or not _point_states_reset_button.disabled
-		)
 	_updating_point_toolbar = false
 
 
@@ -3031,7 +3013,7 @@ func _set_point_toolbar_reorder_available(
 			continue
 		button.visible = (
 			(available or keep_visible_when_disabled) and visible
-			if controls_layout == ControlsLayout.DEV_SINGLE_ROW or (controls_layout == ControlsLayout.COMPACT_TWO_ROW and hide_unused_controls)
+			if controls_layout == ControlsLayout.DEV_SINGLE_ROW
 			else true
 		)
 		button.self_modulate.a = 1.0 if visible else 0.0
@@ -3074,10 +3056,7 @@ func _update_point_toolbar_control_state(
 	available: bool,
 	side_name: String,
 ) -> void:
-	var hide_unavailable := (
-		controls_layout == ControlsLayout.DEV_SINGLE_ROW
-		or (controls_layout == ControlsLayout.COMPACT_TWO_ROW and hide_unused_controls)
-	)
+	var hide_unavailable := controls_layout == ControlsLayout.DEV_SINGLE_ROW
 	_set_point_toolbar_control_state_visible(side, available or not hide_unavailable)
 
 	var option := (
