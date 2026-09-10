@@ -26,6 +26,9 @@ current top entry.
 
 ### Fixed
 
+* Set Spring Mass controls to 0.01 increments in both Legacy and Native Inspectors.
+* Removed duplicate reset chrome beside Jitter/Irregular Generate actions when
+  Randomness changes, while preserving parameter resets and Undo/Redo.
 * Fixed Inspector rebuilds and teardown interrupting shared graph/Points edits,
   stale callbacks affecting another presentation, and Legacy right-drag deletion
   stopping after the first removed point.
