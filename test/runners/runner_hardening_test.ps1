@@ -24,6 +24,7 @@ foreach ($file in @('run_native_editor_script_validation.ps1', 'run_native_inspe
 	if ($code -is [array] -or $code -ne -1073741819) { throw "$file mixed stdout with its native exit status." }
 }
 & {
+	. (Get-RunnerFunction 'run_release_archive_test.ps1' 'Test-ArchiveEditorResult')
 	. (Get-RunnerFunction 'run_release_archive_test.ps1' 'Invoke-EditorLifecycle')
 	function Write-EditorImportDiagnostics { param($Phase,$LogPath,$ExitCode) }
 	function Stop-ArchivePhase { param($Phase,$LogPath,$ExitCode) throw "Semantic failure: $Phase" }
