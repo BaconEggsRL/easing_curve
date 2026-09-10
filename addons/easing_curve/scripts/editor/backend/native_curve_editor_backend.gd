@@ -177,7 +177,11 @@ func get_point_control_state(index: int, side: int) -> int:
 		return CONTROL_STATE_LOCKED
 	if locks.get(lock_property, false):
 		return CONTROL_STATE_LOCKED
-	if is_point_control_force_linear(index, side):
+	# Display stored overrides even while the current mode makes them inactive.
+	var force_linear := bool(point.get(_force_linear_property(side)))
+	if int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.LINKED:
+		force_linear = bool(point.get(&"left_force_linear")) or bool(point.get(&"right_force_linear"))
+	if force_linear:
 		return CONTROL_STATE_LINEAR
 	return CONTROL_STATE_FREE
 

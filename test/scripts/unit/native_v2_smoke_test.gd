@@ -55,6 +55,7 @@ func _run() -> void:
 	_test_editable_preset_geometry()
 	_test_modified_preset_round_trip()
 	_test_point_mode_differential()
+	_test_inactive_point_overrides()
 	_test_deep_runtime_copy()
 	_test_resource_round_trip()
 	_finish("native v2 smoke")
@@ -909,6 +910,29 @@ func _test_point_mode_differential() -> void:
 		candidate.call(&"set_locked", "left_control_point", true)
 		candidate.set(&"position", Vector2(0.6, 0.7))
 	_expect_native_point_matches_legacy(native_locked, legacy_locked, "locked position move")
+
+
+func _test_inactive_point_overrides() -> void:
+	for force_property: StringName in [&"left_force_linear", &"right_force_linear"]:
+		var native := _new_native_point(Vector2(0.5, 0.5))
+		var legacy := LEGACY_POINT_SCRIPT.new(Vector2(0.5, 0.5)) as EasingCurvePoint
+		var lock_property := &"right_control_point" if force_property == &"left_force_linear" else &"left_control_point"
+		for point: Resource in [native, legacy]:
+			point.set(force_property, true)
+			point.call(&"set_locked", lock_property, true)
+		var stored := [native.get(&"left_force_linear"), native.get(&"right_force_linear"), native.get(&"locked")]
+		for mode: int in [3, 2, 1, 3, 2, 0, 3]:
+			for point: Resource in [native, legacy]:
+				point.set(&"handle_mode", mode)
+			for property_name: StringName in [&"left_control_point", &"right_control_point"]:
+				for offset: Vector2 in [Vector2(-0.2, 0.15), Vector2(0.25, -0.1)]:
+					var target := Vector2(0.5, 0.5) + offset
+					for point: Resource in [native, legacy]:
+						point.set(property_name, target)
+						_expect([point.get(&"left_force_linear"), point.get(&"right_force_linear"), point.get(&"locked")] == stored, "Mode change or drag rewrote inactive overrides")
+					_expect_native_point_matches_legacy(native, legacy, "inactive %s in mode %s dragging %s" % [force_property, mode, property_name])
+					if mode in [EasingCurvePoint.HandleMode.BALANCED, EasingCurvePoint.HandleMode.MIRRORED]:
+						_expect((native.get(property_name) as Vector2).is_equal_approx(target), "Inactive Force Linear collapsed a Native handle drag")
 
 
 func _expect_native_point_matches_legacy(

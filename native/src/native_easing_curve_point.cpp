@@ -270,6 +270,9 @@ bool NativeEasingCurvePoint::is_lockable_property(const StringName &p_property_n
 }
 
 bool NativeEasingCurvePoint::is_control_force_linear(bool p_left) const {
+	if (handle_mode != HANDLE_FREE && handle_mode != HANDLE_LINKED) {
+		return false;
+	}
 	if (handle_mode == HANDLE_LINKED) {
 		return left_force_linear || right_force_linear;
 	}

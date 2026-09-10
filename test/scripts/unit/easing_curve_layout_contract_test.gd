@@ -146,6 +146,9 @@ func _test_grouped_toolbar() -> void:
 					_expect(editor._get_graph_view_rect().size == dimensions, "Point state changed graph dimensions")
 					_expect(editor._point_left_state.disabled == (mode not in [0, 4]), "Left state availability does not match mode")
 					_expect(editor._point_right_state.disabled == (mode not in [0, 4]), "Right state availability does not match mode")
+					if native and mode not in [0, 4]:
+						_expect(editor._point_left_state.get_selected_id() == EasingCurvePoint.ControlState.LINEAR, "Disabled Left field hid its stored Linear state")
+						_expect(editor._point_right_state.get_selected_id() == EasingCurvePoint.ControlState.LOCKED, "Disabled Right field hid its stored Lock state")
 					_expect(presentation.get_combined_minimum_size().x == baseline_width, "Long mode text increased Inspector minimum width")
 					if scale_value == 1.0 and width in [150.0, 220.0, 600.0] and mode in [0, 4] and DisplayServer.get_name() != "headless":
 						await RenderingServer.frame_post_draw
@@ -309,9 +312,58 @@ func _test_independent_resets() -> void:
 				for locked_side: StringName in [&"left_control_point", &"right_control_point"]:
 					await _test_enter_linked_with_one_lock(editor, manager, history, point_index, locked_side)
 			print("RESET_GATE backend=%s reverse=%s mode/shared resets and Linked side edits preserve state and Undo/Redo" % ["native" if native else "legacy", reverse_sides])
+			await _test_inactive_override_drags(editor, manager, history)
 			manager.clear_history()
 			viewport.free()
 	plugin.free()
+
+
+func _test_inactive_override_drags(editor: EasingCurveEditor, manager: EditorUndoRedoManager, history: UndoRedo) -> void:
+	var point: Resource = editor._backend.create_point(Vector2(0.5, 0.5))
+	var point_index: int = editor._backend.add_point(point)
+	editor.selected_index = point_index
+	point.set(&"left_force_linear", true)
+	point.call(&"set_locked", &"right_control_point", true)
+	var stored := _stored_overrides(point)
+	for mode: int in [3, 2, 1, 3, 0, 3]:
+		editor._backend.apply_point_property(point_index, &"handle_mode", mode, false)
+		editor._update_point_toolbar()
+		await _settle()
+		_expect(_stored_overrides(editor._point(point_index)) == stored, "Mode transition changed inactive L/R overrides")
+		if mode not in [EasingCurvePoint.HandleMode.MIRRORED, EasingCurvePoint.HandleMode.BALANCED]:
+			continue
+		for display_side: int in [EasingCurvePoint.ControlSide.LEFT, EasingCurvePoint.ControlSide.RIGHT]:
+			editor.autofit()
+			await _settle()
+			manager.clear_history()
+			point = editor._point(point_index)
+			var before: Variant = editor._backend.capture_snapshot()
+			var start := editor.get_view_pos(editor._backend.get_display_control_point(point, display_side))
+			_expect(editor.get_control_at(start)[0] == point_index, "Inactive override drag missed its interior handle")
+			var press := InputEventMouseButton.new()
+			press.button_index = MOUSE_BUTTON_LEFT
+			press.pressed = true
+			press.position = editor.global_position + start
+			editor.get_viewport().push_input(press, true)
+			_expect(editor.dragging_point == point_index, "Inactive Lock blocked a handle drag")
+			var motion := InputEventMouseMotion.new()
+			motion.relative = Vector2(12.0, -18.0)
+			motion.position = press.position + motion.relative
+			motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+			editor.get_viewport().push_input(motion, true)
+			var release := press.duplicate() as InputEventMouseButton
+			release.pressed = false
+			release.position = motion.position
+			editor.get_viewport().push_input(release, true)
+			await _settle()
+			point = editor._point(point_index)
+			_expect(_stored_overrides(point) == stored, "Viewport drag rewrote inactive overrides")
+			for property_name: StringName in [&"left_control_point", &"right_control_point"]:
+				_expect(not (point.get(property_name) as Vector2).is_equal_approx(point.get(&"position")), "Inactive Force Linear collapsed a handle during viewport drag")
+			var after: Variant = editor._backend.capture_snapshot()
+			_expect(after != before and history.get_history_count() == 1, "Handle drag did not commit one geometry edit")
+			_expect(history.undo() and editor._backend.capture_snapshot() == before, "Handle drag Undo lost geometry or inactive overrides")
+			_expect(history.redo() and editor._backend.capture_snapshot() == after, "Handle drag Redo lost geometry or inactive overrides")
 
 
 func _test_enter_linked_with_one_lock(editor: EasingCurveEditor, manager: EditorUndoRedoManager, history: UndoRedo, point_index: int, locked_side: StringName) -> void:

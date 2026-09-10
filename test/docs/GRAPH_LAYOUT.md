@@ -199,3 +199,23 @@ Free state. The expanded suite reproduced 108 failures before this correction
 and passed all 24,215 checks afterward. Full validation again passed 33 of 34
 suites, with only the two known CSS-label failures. Evidence is under
 `test/_temp/native-enter-linked-*-console.txt`.
+
+### Inactive Native overrides
+
+Native's disabled L/R fields display stored Linear/Locked values in Linear,
+Balanced and Mirrored modes. Those values remain serialized but have no effect
+on handle dragging until Free or Linked makes them applicable again. The Native
+point setter now gates Force Linear by the active Handle Mode, matching Legacy's
+existing drag behavior. It no longer collapses Mirrored/Balanced handles when a
+stored Linear flag is inactive. Legacy production code is unchanged.
+
+The Native smoke suite compares repeated mode changes and control edits against
+Legacy with either side forced linear and the opposite side locked. It checks
+that stored flags survive each edit. The layout suite exercises both interior
+handles through viewport input, normal/reversed transforms and Undo/Redo, and
+checks disabled dropdown values. The pre-fix Native smoke run failed 68 checks;
+the rebuilt Windows release DLL passes all 2,053 smoke checks. Build and test logs
+are under `test/_temp/inactive-overrides-*`. Full-editor layout/input validation
+passes 24,693 checks. Reopen an existing Godot session before retesting to ensure
+it loads the rebuilt Native library; only the Windows release binary was rebuilt.
+Full validation passed 33 of 34 suites, with only the two known CSS-label failures.
