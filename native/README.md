@@ -128,7 +128,7 @@ incoming segment therefore wins over a following vertical segment at the exact
 boundary. A vertical segment that is reached returns its ending Y within
 Legacy's `0.000001` X tolerance. Strictly increasing curves retain cached binary
 lookup; other topologies scan precompiled segments without sample-time allocation.
-See [sampling parity investigation](../test/docs/native_sampling_parity.md).
+See [sampling parity investigation](../test/docs/_archive/v1.2.1/native_sampling_parity.md).
 
 ## Validation and benchmarks
 

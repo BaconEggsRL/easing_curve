@@ -120,13 +120,13 @@ with committed-source, exact-archive, or hosted CI certification.
   `test/user/` contains exploratory scenes/scripts, not correctness gates;
   preserve them unless a concrete consumer defect warrants a change.
 - Performance runners and their Python/web adapters are optional diagnostics;
-  see [benchmark instructions](GODOT_TWEEN_BENCHMARK.md). Retained numbers are
+  see [benchmark instructions](_archive/v1.2.1/GODOT_TWEEN_BENCHMARK.md). Retained numbers are
   historical observations, not candidate guarantees. Do not promote baselines
   during release documentation cleanup.
-- [Graph layout](GRAPH_LAYOUT.md), [grid](FIXED_GRAPH_GRID.md),
-  [minimum width](INSPECTOR_MINIMUM_WIDTH.md), [ownership](INSPECTOR_OWNERSHIP.md),
-  [sampling parity](native_sampling_parity.md), and
-  [topology performance](inspector_topology_performance.md) describe behavior and
+- [Graph layout](_archive/v1.2.1/GRAPH_LAYOUT.md), [grid](_archive/v1.2.1/FIXED_GRAPH_GRID.md),
+  [minimum width](_archive/v1.2.1/INSPECTOR_MINIMUM_WIDTH.md), [ownership](_archive/v1.2.1/INSPECTOR_OWNERSHIP.md),
+  [sampling parity](_archive/v1.2.1/native_sampling_parity.md), and
+  [topology performance](_archive/v1.2.1/inspector_topology_performance.md) describe behavior and
   historical investigations. The tracker supersedes their dated results.
 - [Historical development records](_archive/v1.2.1/development_history.md)
   preserve the previous testing guide. Older release archives remain historical.

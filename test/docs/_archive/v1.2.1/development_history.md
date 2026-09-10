@@ -67,19 +67,19 @@ snapshots and is not covered by these results.
 
 ## Inspector minimum width
 
-See [Inspector minimum-width validation](../../INSPECTOR_MINIMUM_WIDTH.md) for the
+See [Inspector minimum-width validation](INSPECTOR_MINIMUM_WIDTH.md) for the
 measured hidden EditorProperty chrome allowance, horizontal-only compensation,
 native height parity, and creation/rebuild checks at actual Editor scales.
 
 ## Responsive graph layout
 
-See [graph layout validation](../../GRAPH_LAYOUT.md) for canonical sizing, grouped
+See [graph layout validation](GRAPH_LAYOUT.md) for canonical sizing, grouped
 control rows, gesture ownership tests, full-editor captures and the
 pre-existing CSS-label failures in the full correctness gate.
 
 ## Fixed graph grid and reference box
 
-See [the grid validation report](../../FIXED_GRAPH_GRID.md) for the shared rendering
+See [the grid validation report](FIXED_GRAPH_GRID.md) for the shared rendering
 behavior, 1,016 focused checks, 32-suite correctness results, visual comparison,
 and remaining differences from the supplied references.
 
@@ -209,7 +209,7 @@ of the final release package.
 
 ## Performance comparisons
 
-The [Godot Tween comparison](../../GODOT_TWEEN_BENCHMARK.md) runs the upstream
+The [Godot Tween comparison](GODOT_TWEEN_BENCHMARK.md) runs the upstream
 100-property and 1000-method workloads with Tween, Native and Legacy curves.
 Run `./test/runners/run_godot_tween_comparison.ps1` for three rendered trials per
 case, or add `-ValidateOnly` for deterministic workload checks. JSON, CSV and
@@ -219,11 +219,11 @@ These six performance cases are separate from the correctness manifest.
 Run `./test/runners/run_godot_benchmark_web.ps1 -Serve` to view saved results in
 Godot's existing Hugo/Plotly benchmark interface, with Native, Legacy, Tween and
 combined graphs. Python 3 and Hugo are required; see the
-[web interface instructions](../../GODOT_TWEEN_BENCHMARK.md#view-results-with-godots-existing-web-interface).
+[web interface instructions](GODOT_TWEEN_BENCHMARK.md#view-results-with-godots-existing-web-interface).
 
 ## Inspector ownership
 
-The [ownership follow-up](../../INSPECTOR_OWNERSHIP.md) records the graph/Points lifetime
+The [ownership follow-up](INSPECTOR_OWNERSHIP.md) records the graph/Points lifetime
 fixes, the indexed regression suite, rendered input coverage and baseline
 diagnostic comparison. Run `./test/runners/run_all_tests.ps1 --run` for all registered
 correctness suites.

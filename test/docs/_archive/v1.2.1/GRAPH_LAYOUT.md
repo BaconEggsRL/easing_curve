@@ -1,7 +1,7 @@
 # Curve editor graph layout
 
 > The behavior descriptions reflect the current single-row toolbar. Dated
-> validation below is historical; [v1.2.1 certification](v1.2.1_CODE_TRACKER.md)
+> validation below is historical; [v1.2.1 certification](../../v1.2.1_CODE_TRACKER.md)
 > supersedes its old counts and CSS-label failures.
 
 The native and legacy Inspector presentations share `EasingCurveEditor`.

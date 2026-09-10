@@ -1,6 +1,6 @@
 extends "res://tween.gd"
 ## Same sprite, counts, target, duration and Tween scheduling as pinned upstream.
-## Only the easing callback differs. See test/docs/GODOT_TWEEN_BENCHMARK.md.
+## Only the easing callback differs. See test/docs/_archive/v1.2.1/GODOT_TWEEN_BENCHMARK.md.
 
 
 func benchmark_native_100_properties() -> Node:

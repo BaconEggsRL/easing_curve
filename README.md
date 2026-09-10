@@ -195,13 +195,13 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 		* **Linked** -- Keeps both controls at a shared position.
 	* Note that control Locked and Forced Linear states apply in Free and Linked modes, and are preserved when switching modes.
   * The selected-point toolbar keeps navigation, Handle Mode, L/R state, and
-    a combined reset in one row. The reset restores Free mode and clears both
-    control overrides while preserving the position lock. Linked shares state
-    between the two handles. When entering Linked, Locked wins over Linear,
-    which wins over Free. A single locked handle supplies the shared position.
+	a combined reset in one row. The reset restores Free mode and clears both
+	control overrides while preserving the position lock. Linked shares state
+	between the two handles. When entering Linked, Locked wins over Linear,
+	which wins over Free. A single locked handle supplies the shared position.
   * Stored control overrides remain visible but inactive in Linear, Balanced,
-    and Mirrored modes. Switching modes preserves these flags until they are
-    explicitly changed or reset.
+	and Mirrored modes. Switching modes preserves these flags until they are
+	explicitly changed or reset.
 
 * **Zoom and Pan**
   * Zoom and pan can be used to see points outside the grid box. The grid box represents an x_range and y_range of 0 to 1.
@@ -210,13 +210,13 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 
 * **Snapping and drag feedback**
   * Enable Grid Snap and choose 2–100 subdivisions, or hold Ctrl/Cmd while dragging
-    to snap temporarily. Points and new additions snap; handles stay free.
+	to snap temporarily. Points and new additions snap; handles stay free.
   * Hold Shift to constrain a drag to an axis. Releasing and pressing Shift again
-    establishes a fresh constraint from the current position.
+	establishes a fresh constraint from the current position.
   * Coordinate readouts follow graph and Points-list drags. Editor Settings under
-    Easing Curve / Curve Editor can hide the position tooltip or snapping row.
+	Easing Curve / Curve Editor can hide the position tooltip or snapping row.
   * Graph size follows Inspector width and editor scale. Border tick positions
-    stay fixed during pan/zoom; their labels show the current coordinates.
+	stay fixed during pan/zoom; their labels show the current coordinates.
 
 * **Reordering the Points List**
   * Click the up or down arrows or drag a point in the points list to swap it with another point.

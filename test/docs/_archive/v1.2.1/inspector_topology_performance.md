@@ -1,7 +1,7 @@
 # Inspector topology performance — PERF-POINTS-01 through 05
 
 > Implementation/investigation record. Dated counts and failures below are
-> historical; [v1.2.1 certification](v1.2.1_CODE_TRACKER.md) records current results.
+> historical; [v1.2.1 certification](../../v1.2.1_CODE_TRACKER.md) records current results.
 
 ## Decision and measured cause
 
@@ -263,8 +263,8 @@ below performed one actual Inspector reparse and retained zero row instances.
 
 - [Raw topology samples](inspector_topology_samples.jsonl)
 - [Environment, source hashes and median/p95 summaries](inspector_topology_summary.json)
-- [Focused reconciliation regression](../scripts/unit/native_point_reconciliation_test.gd)
-- [Benchmark harness](../scripts/performance/easing_curve_topology_benchmark.gd)
+- [Focused reconciliation regression](../../../scripts/unit/native_point_reconciliation_test.gd)
+- [Benchmark harness](../../../scripts/performance/easing_curve_topology_benchmark.gd)
 
 Baseline addon source is revision `adb3188`; the worktree moved to `c7fa408` during
 validation due to an independent preset/scene change. That commit does not change

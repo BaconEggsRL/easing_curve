@@ -170,7 +170,7 @@ measures drawing work, so nearly identical render timings do not establish
 equal easing performance. Use multiple runs and inspect variation before
 interpreting small differences. Method results include GDScript adapter and
 Callable dispatch overhead. The existing
-[`native_v2_vs_tween_benchmark.gd`](../scripts/performance/native_v2_vs_tween_benchmark.gd)
+[`native_v2_vs_tween_benchmark.gd`](../../../scripts/performance/native_v2_vs_tween_benchmark.gd)
 separately measures direct sampling across transitions, custom curves and
 mutations; its units/workload should not be compared to the Tween dashboard.
 
@@ -201,7 +201,7 @@ checks are automated; visual smoothness and representative application behavior
 remain separate observations.
 
 Pinned source paths, hashes and MIT attribution are in
-[`PROVENANCE.md`](../scripts/performance/godot_tween_upstream/PROVENANCE.md).
+[`PROVENANCE.md`](../../../scripts/performance/godot_tween_upstream/PROVENANCE.md).
 
 ## Development verification — 2026-09-06
 
