@@ -4,19 +4,20 @@
 resources. They coexist with the GDScript `EasingCurve` and
 `EasingCurvePoint` APIs; neither runtime solver delegates to the other.
 
-Both API families are supported in v1.2.0. The GDScript API remains the
+Both API families are supported in v1.2.1. The GDScript API remains the
 compatibility and fallback implementation and is not deprecated. Any future
 deprecation proposal remains conditional on broader Native platform coverage,
 a stable release cycle, proven migration and rollback, and explicit approval.
 
-See [PLAN.md](PLAN.md) for milestone status, the manual smoke-test checklist,
-and the prioritized next implementation tranche.
+See the [release tracker](../test/docs/v1.2.1_CODE_TRACKER.md) for current
+certification and the [paired checklist](../test/docs/SMOKE_TEST.md) for manual
+checks. [PLAN.md](PLAN.md) preserves the historical Native development plan.
 
 ## Build contract
 
-The `godot-cpp` submodule is pinned to `godot-4.4.1-stable`. The v1.2.0 minimum
+The `godot-cpp` submodule is pinned to `godot-4.4.1-stable`. The v1.2.1 minimum
 is **Godot 4.4.1** for both API families. The extension manifest declares `4.4.1`,
-matching godot-cpp's runtime version check. Godot 4.4.0 is outside the v1.2.0
+matching godot-cpp's runtime version check. Godot 4.4.0 is outside the v1.2.1
 support contract; the current Native DLL cannot load on it.
 Build the supported
 Windows release library and both non-threaded Web variants from the repository
@@ -104,6 +105,7 @@ IDs are frozen independently:
 | 106 | Physics Spring |
 | 107 | CSS Linear |
 | 108 | CSS Cubic Bézier |
+| 109 | Smoothstep |
 
 All transition IDs above are implemented. Jitter and Irregular persist their
 generated point arrays, so sampling is deterministic until **Generate** is used
@@ -144,7 +146,9 @@ Run the Native correctness suite and the expanded runtime benchmark:
 ./test/runners/run_native_web_export_test.ps1 -SkipBuild
 ```
 
-The Native smoke suite currently contains 1,789 checks. The runtime benchmark runs
+The authoritative suite inventory comes from `run_all_tests.ps1 --list`;
+assertion counts are recorded per run in the release tracker. Benchmarks below
+are optional characterization and do not gate v1.2.1. The runtime benchmark runs
 in an isolated project containing only this addon and
 the benchmark script. It reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
@@ -160,7 +164,7 @@ points and is intentionally outside the retained historical baseline.
 Tween is used only as a benchmark and numerical oracle. No Native sampling path
 calls Tween, GDScript, or a Callable.
 
-### Runtime performance evidence
+### Historical runtime performance evidence (pre-v1.2.1)
 
 The historical absolute baseline remains deliberately unpromoted. The retained
 release-library results below are supplemented by the current three-run extended-
@@ -176,11 +180,11 @@ Bounce comparison; the current run did not evaluate or replace the absolute file
 | 65-point mutation and sampling | 4,000 | 30.032 ms | Legacy: 325.832 ms | 10.8× |
 | 65-point deep copies | 500 | 113.880 ms | Legacy: 11,345.662 ms | 99.6× |
 
-All 64 current relative comparisons pass. Eight of the 27 retained Native-only
+All 64 relative comparisons passed in that historical run. Eight of the 27 retained Native-only
 absolute cases exceed their old timing plus the noise allowance, so the
 historical file remains unchanged pending a quiet reference-host run.
 
-### Large-curve characterization
+### Historical large-curve characterization (pre-v1.2.1)
 
 The generalized shared-editor benchmark measures one-event point crossings;
 times below are update-to-draw p99 in milliseconds. Four-event bursts remain in
@@ -213,7 +217,7 @@ thresholds.
 ## Shared editor status
 
 The production Inspector and Curve Editor choose either the legacy or Native
-backend through the shared adapter boundary. Native custom curves and the ten
+backend through the shared adapter boundary. Native custom curves and the eleven
 Bézier-backed presets support graph and point-list creation, deletion, crossing,
 reordering, point/handle dragging, handle modes, force-linear state, locks, and
 preset reset. Graph and list drags compile local previews but defer public and
@@ -229,11 +233,10 @@ clipboard, and cross-copy behavior as Legacy. Deferred value-edit completion is
 resolved by curve and point identity rather than retaining row controls, so an
 Inspector rebuild, topology action, or resource switch cannot replay a stale UI
 callback or merge unrelated Undo transactions.
-Ease and Trans remain ungrouped above the custom **Curve Editor** foldout.
+Ease and Trans remain ungrouped in the shared **Curve Editor** presentation.
 The structural Native property-list groups are **Transition Parameters** and
 **Global Transform**, with the conditional **Points** section inserted between
-them at the serialized `points` field only for point-graph transitions. The
-Jitter and Irregular keep **Generate** at the bottom of **Curve Editor**. Point
+them at the serialized `points` field only for point-graph transitions. Jitter and Irregular keep **Generate** at the bottom of **Curve Editor**. Point
 graphs show **New point handles** and **Add Point** as the first row inside the
 **Points** section, immediately above the editable point array. Both controls
 shrink together in narrow Inspectors and stop expanding at their text-fitting
@@ -271,20 +274,12 @@ The original Web failure was caused by the absent wasm32 library. The validated
 manifest now loads the matching non-threaded extension; no legacy substitution
 is used for serialized Native resources.
 
-## Remaining release certification
+## Current release certification
 
-- Run the corrected Windows behavioral and Web browser-runtime jobs in GitHub
-  Actions and retain the exact artifacts.
-- Retain the passing automated exact-ZIP Windows dual-API and plugin-lifecycle
-  evidence; test both Web export variants and the real-manifest legacy fallback.
-- Manually verify visible Inspector ordering, conversion confirmation,
-  saved/reloaded converted resources, lifecycle behavior, and the new-point
-  preference across an editor restart.
-- Record a quiet-host performance baseline. The current relative performance
-  gates pass, but the historical absolute baseline is intentionally unpromoted.
-- Add remaining Native platforms and complete at least one stable release cycle
-  before considering any legacy deprecation proposal.
-
+The [v1.2.1 tracker](../test/docs/v1.2.1_CODE_TRACKER.md) supersedes the dated
+manual results above. Require exact-source CI artifacts, the packaged ZIP, and
+paired visible-editor sign-off. Performance baselines and additional Native
+platforms are follow-ups, not v1.2.1 acceptance gates. Legacy is not deprecated.
 
 ## SMOOTHSTEP-01
 

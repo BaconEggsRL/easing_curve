@@ -3,7 +3,7 @@ Dual GDScript and Native curve editor for easing functions.
 
 Designed for parity with Godot's Tween system and easing equations.
 
-Version 1.2.0 includes two independent, supported API families:
+Version 1.2.1 includes two independent, supported API families:
 `EasingCurve` / `EasingCurvePoint` in GDScript and `NativeEasingCurve` /
 `NativeEasingCurvePoint` in GDExtension. Both can coexist in one project and use
 the same Inspector workflow. The legacy API is **not deprecated** and remains
@@ -25,13 +25,14 @@ the portable fallback.
 
 ### Compatibility:
 
-* Godot **4.4.1 or newer** is required for v1.2.0, including both Legacy and Native workflows.
-* The full workflow has been verified on Godot 4.7.1.
+* Godot **4.4.1 or newer** is required for v1.2.1, including both Legacy and Native workflows.
+* Godot 4.7.1 is the primary validation version. The release tracker records
+  exact candidate checks and remaining manual/CI certification.
 * Native resources are supported on Windows x86_64 and non-threaded Web builds.
 * Legacy resources remain supported on all plugin platforms and do not require
   a Native binary.
 * Windows editor sessions currently use the release Native DLL. Native debug
-  builds and hot reload are not part of the v1.2.0 support contract.
+  builds and hot reload are not part of the v1.2.1 support contract.
 
 ### Choose an API:
 
@@ -59,6 +60,10 @@ func eased_value(t: float) -> float:
 
 #### Godot Asset Library / Asset Store
 
+Choose the published v1.2.1 package. A listing backed by a Git source archive
+does not include the Native libraries; use the packaged GitHub ZIP for Native.
+Confirm the installed package contains the libraries for your target platform.
+
 **Godot 4.7 and newer:**
 * Install **Easing Curve** normally through the Asset Store.
 * The plugin should be installed to `res://addons/easing_curve/`.
@@ -72,7 +77,12 @@ func eased_value(t: float) -> float:
 
 #### Manual Installation
 
-* Copy `addons/easing_curve/` into your project's `addons/` folder.
+* Download the packaged `easing_curve_v1.2.1.zip` from the
+  [GitHub release](https://github.com/BaconEggsRL/easing_curve/releases/tag/v1.2.1).
+* Extract it and copy `addons/easing_curve/` into your project's `addons/` folder.
+* Use the packaged ZIP for Native support. GitHub **Source code** archives and
+  source checkouts omit Native binaries; developers must build those separately.
+  A project containing Native resources requires matching binaries to load them.
 * The resulting path should be:
   `res://addons/easing_curve/`
 
@@ -81,10 +91,11 @@ func eased_value(t: float) -> float:
 * Open **Project > Project Settings > Plugins**.
 * Enable **Easing Curve**.
 
-### Create a new EasingCurve:
+### Create a new curve:
 
- * Export a variable of type EasingCurve, and create a new EasingCurve resource.
-  * The resource will pre-populate with a linear cubic_bezier curve.
+* Export `EasingCurve` or `NativeEasingCurve`, then create the matching resource.
+* A new resource starts with a Linear preset. Native requires the matching library.
+* Open `res://addons/easing_curve/_test_scene/test.tscn` for the bundled demo.
 
 **&nbsp;**
 
@@ -132,12 +143,21 @@ Modifying a preset creates a customized version while retaining the original tra
 
 Easing Curve also includes transitions beyond Godot's built-in Tween system:
 
+* **Smoothstep** -- Exact editable Bézier preset in all four ease modes; In Out
+  uses `3t² - 2t³`. It is distinct from Sine and has no Tween counterpart.
 * **Constant** -- Returns a configurable **Constant Value**, [Bézier]
 * **Physics Spring** -- Spring easing using physics (**Stiffness**, **Damping**, **Mass**, and **Velocity**), [Function]
 * **Jitter** -- Stronger persistent-amplitude random variation; more points primarily increase jitter frequency (**Num Points**, **Randomness**) and **Generate Tool Button**, [Function]
 * **Irregular** -- Noisy linear interpolation whose deviations shrink with more points / lower randomness (**Num Points**, **Randomness**) and **Generate Tool Button**, [Function]
 * **Step** -- Staircase easing (**Steps**, **From Start**, and **Y Offset**), [Function]
 * **Power** -- Fractional power easing (**Power**), [Function]
+
+Smoothstep uses new transition IDs (Legacy 21, Native 109). Existing IDs and
+Native format 3 are unchanged. Saved Smoothstep resources need v1.2.1 scripts
+and matching Native binaries; older plugin versions do not recognize this mode.
+
+Transition and ease menus include fixed mini-curve icons. Their shapes identify
+the mode and do not change with parameter edits.
 
 CSS easing functions can also be used directly:
 
@@ -169,17 +189,34 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 * **Handle Modes**
   * Each point can use a handle mode to control how its left and right control handles behave:
 		* **Free** -- Each handle moves independently without affecting the other handle.
-		* **Linear** -- Keeps the handles aligned with the neighboring points, creating straight-line segments through the point.
+		* **Linear** -- Collapses both handles to the point, producing straight segments between points.
 		* **Balanced** -- Keeps both handles aligned in opposite directions while allowing each handle to have a different length.
 		* **Mirrored** -- Keeps both handles aligned in opposite directions and at the same length. Moving one handle mirrors the other across the point.
 		* **Linked** -- Keeps both controls at a shared position.
 	* Note that control Locked and Forced Linear states apply in Free and Linked modes, and are preserved when switching modes.
-  * The selected-point toolbar shows the point number, Handle Mode, L/R control state, and Reset controls.
+  * The selected-point toolbar keeps navigation, Handle Mode, L/R state, and
+    a combined reset in one row. The reset restores Free mode and clears both
+    control overrides while preserving the position lock. Linked shares state
+    between the two handles. When entering Linked, Locked wins over Linear,
+    which wins over Free. A single locked handle supplies the shared position.
+  * Stored control overrides remain visible but inactive in Linear, Balanced,
+    and Mirrored modes. Switching modes preserves these flags until they are
+    explicitly changed or reset.
 
 * **Zoom and Pan**
   * Zoom and pan can be used to see points outside the grid box. The grid box represents an x_range and y_range of 0 to 1.
   * Use the zoom slider (drag it or scroll over its track), or hold Ctrl/Cmd while scrolling over the graph, to adjust the zoom level. Plain scrolling over the graph scrolls the Inspector. The arrow box to the right of the zoom slider will reset the zoom.
   * Click and drag with the middle mouse button to pan the curve editor. The arrow box to the right of the zoom slider will reset the pan.
+
+* **Snapping and drag feedback**
+  * Enable Grid Snap and choose 2–100 subdivisions, or hold Ctrl/Cmd while dragging
+    to snap temporarily. Points and new additions snap; handles stay free.
+  * Hold Shift to constrain a drag to an axis. Releasing and pressing Shift again
+    establishes a fresh constraint from the current position.
+  * Coordinate readouts follow graph and Points-list drags. Editor Settings under
+    Easing Curve / Curve Editor can hide the position tooltip or snapping row.
+  * Graph size follows Inspector width and editor scale. Border tick positions
+    stay fixed during pan/zoom; their labels show the current coordinates.
 
 * **Reordering the Points List**
   * Click the up or down arrows or drag a point in the points list to swap it with another point.
@@ -194,7 +231,12 @@ Bézier-backed presets, including multi-segment presets, expose all points and h
 * The curve editor allows you to start from a basic preset and modify to suit your needs.
 * When you're happy with your custom curve, you can save the resource to use wherever you want.
 * Use the "Make Unique" option on saved resources to avoid modifying the original resource.
-* Refer to the presets folder for some examples and try them out in the provided test scene.
+* Try the bundled comparison scene at
+  `res://addons/easing_curve/_test_scene/test.tscn`; development test fixtures
+  are not included in the installed addon.
+* Changing Back Overshoot or Constant Value regenerates that active preset,
+  replacing manual point edits. Undo restores the previous parameter and geometry.
+  Setting an unchanged value or an inactive preset parameter preserves edits.
 
 ### Resource Autosaving
 
@@ -234,6 +276,11 @@ You can find all my addons on my [GitHub profile page](https://github.com/BaconE
 
 <a href='https://ko-fi.com/baconeggsrl' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://cdn.ko-fi.com/cdn/kofi1.png?v=3' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
+
+### Release validation:
+
+The [release tracker](https://github.com/BaconEggsRL/easing_curve/blob/dev/test/docs/v1.2.1_CODE_TRACKER.md)
+records candidate validation, compatibility evidence, and unverified checks.
 
 ### AI Usage Disclaimer:
 AI-assisted coding was used during development for implementation, debugging, refactoring, and release-readiness review. Generated suggestions and changes were reviewed, modified where needed, and tested in Godot before release.

@@ -1,5 +1,8 @@
 # Inspector ownership follow-up
 
+> Implementation/investigation record. Dated counts and failures below are
+> historical; [v1.2.1 certification](v1.2.1_CODE_TRACKER.md) records current results.
+
 Reviewed and implemented on 2026-09-08 against `b7c4899`.
 
 ## Review and changes

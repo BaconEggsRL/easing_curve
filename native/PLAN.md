@@ -1,6 +1,10 @@
 # Native Easing Curve Migration and Conditional Legacy Deprecation Plan
 
-> Living plan and progress tracker. Last updated: 2026-09-04.
+> Historical Native development plan, last maintained during v1.2.0 preparation.
+> Current release status: [v1.2.1 tracker](../test/docs/v1.2.1_CODE_TRACKER.md).
+> Milestone counts, pending tasks, and certification claims below describe that
+> earlier baseline; they are not current release gates. No Legacy deprecation
+> or additional platform work is authorized by the v1.2.1 readiness review.
 >
 > Status values: **Verified**, **In progress**, **Blocked**, and **Not started**.
 > A milestone is **Verified** only when every acceptance condition has evidence.

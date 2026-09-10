@@ -10,3 +10,7 @@
 # Easing Curve distribution.
 /addons/godot_ai export-ignore
 /addons/godot_ai/** export-ignore
+/addons/godot_ai_tunnel export-ignore
+/addons/godot_ai_tunnel/** export-ignore
+/addons/editor_settings_cleanup export-ignore
+/addons/editor_settings_cleanup/** export-ignore

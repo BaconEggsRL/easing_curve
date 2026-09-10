@@ -9,7 +9,7 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile(
 	(Join-Path $PSScriptRoot "run_release_archive_test.ps1"), [ref]$tokens, [ref]$parseErrors
 )
 if ($parseErrors.Count) { throw "Archive runner parse errors: $parseErrors" }
-foreach ($name in @("Invoke-Runner", "Write-EditorImportDiagnostics", "Stop-ArchivePhase")) {
+foreach ($name in @("Invoke-Runner", "Write-EditorImportDiagnostics", "Stop-ArchivePhase", "Test-ArchiveRuntimeResult")) {
 	$definition = $ast.Find({
 		param($node)
 		$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
@@ -21,6 +21,19 @@ function Assert-Diagnostic {
 	if (-not $Condition) { throw $Message }
 }
 try {
+	$passText = 'PASS: exact archive loaded, sampled, saved, and reloaded both APIs'
+	foreach ($case in @(
+		@(0, $passText, $true),
+		@(0, "$passText`nERROR: Failed to read the root certificate store.", $true),
+		@(1, $passText, $false),
+		@(-1073741819, $passText, $false),
+		@(0, '', $false),
+		@(0, "$passText`nSCRIPT ERROR: fixture failure", $false),
+		@(0, "$passText`nERROR: missing demo texture", $false),
+		@(0, "$passText`nWARNING: invalid UID fallback", $false)
+	)) {
+		Assert-Diagnostic ((Test-ArchiveRuntimeResult -ExitCode $case[0] -LogText $case[1]) -eq $case[2]) "Archive accepted missing success, a crash, or unexpected runtime diagnostics."
+	}
 	New-Item -ItemType Directory -Path $validationRoot | Out-Null
 	$runner = Join-Path $validationRoot "fake_runner.ps1"
 	@'

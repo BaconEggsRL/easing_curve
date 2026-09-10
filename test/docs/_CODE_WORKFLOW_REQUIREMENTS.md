@@ -58,7 +58,7 @@ in one file.
 
 Authoritative workflow file:
 
-`test/docs/_test_plans/_CODE_WORKFLOW_REQUIREMENTS.md`
+`test/docs/_CODE_WORKFLOW_REQUIREMENTS.md`
 
 Generated trackers should reference this document rather than repeat generic
 workflow boilerplate.
@@ -67,7 +67,7 @@ workflow boilerplate.
 
 Each active release should normally have exactly one tracker:
 
-`test/docs/_test_plans/vX.Y.Z_CODE_TRACKER.md`
+`test/docs/vX.Y.Z_CODE_TRACKER.md`
 
 The tracker is both:
 
@@ -154,7 +154,7 @@ document: vX.Y.Z_CODE_TRACKER.md
 project: <project name>
 release: X.Y.Z-dev
 document_type: release-code-tracker
-requirements: test/docs/_test_plans/_CODE_WORKFLOW_REQUIREMENTS.md
+requirements: test/docs/_CODE_WORKFLOW_REQUIREMENTS.md
 plan_status: draft | frozen | amended
 execution_status: not_started | in_progress | blocked | complete
 baseline_commit: <commit hash or pending>

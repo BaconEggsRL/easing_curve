@@ -1,5 +1,8 @@
 # Native runtime sampling parity
 
+> Implementation/investigation record. Dated counts and failures below are
+> historical; [v1.2.1 certification](v1.2.1_CODE_TRACKER.md) records current results.
+
 ## Root cause and sampling paths
 
 Native is a GDExtension `Resource` with a `TypedArray<NativeEasingCurvePoint>`

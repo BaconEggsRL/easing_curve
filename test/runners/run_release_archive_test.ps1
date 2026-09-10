@@ -102,6 +102,14 @@ function Stop-ArchivePhase {
 	throw "Exact-archive $Phase failed (runner exit $ExitCode). Godot exit: $LogPath.exitcode.txt. Log: $LogPath. Artifacts retained at $validationRoot"
 }
 
+function Test-ArchiveRuntimeResult {
+	param([int]$ExitCode, [string]$LogText)
+	$diagnostics = @($LogText -split '\r?\n' | Where-Object {
+		$_ -match '^(?:SCRIPT ERROR:|ERROR:|WARNING:)' -and $_ -ne 'ERROR: Failed to read the root certificate store.'
+	})
+	return $ExitCode -eq 0 -and $diagnostics.Count -eq 0 -and $LogText -match '(?m)^PASS: exact archive loaded, sampled, saved, and reloaded both APIs$'
+}
+
 function Invoke-EditorLifecycle {
 	param(
 		[string]$Phase,
@@ -168,6 +176,9 @@ renderer/rendering_method.mobile="gl_compatibility"
 extends SceneTree
 
 func _init() -> void:
+	_run.call_deferred()
+
+func _run() -> void:
 	var legacy_script := load("res://addons/easing_curve/scripts/runtime/easing_curve.gd")
 	if legacy_script == null or not ClassDB.class_exists(&"NativeEasingCurve"):
 		push_error("The exact archive did not load both curve APIs.")
@@ -195,8 +206,8 @@ func _init() -> void:
 		push_error("Could not save the extracted Native resource.")
 		quit(1)
 		return
-	var loaded_legacy := load("res://legacy_curve.tres") as EasingCurve
-	var loaded_native := load("res://native_curve.tres") as Resource
+	var loaded_legacy := ResourceLoader.load("res://legacy_curve.tres", "", ResourceLoader.CACHE_MODE_IGNORE) as EasingCurve
+	var loaded_native := ResourceLoader.load("res://native_curve.tres", "", ResourceLoader.CACHE_MODE_IGNORE) as Resource
 	if loaded_legacy == null or loaded_native == null:
 		push_error("Could not reload both extracted archive resources.")
 		quit(1)
@@ -205,6 +216,31 @@ func _init() -> void:
 		push_error("A reloaded archive resource returned a non-finite sample.")
 		quit(1)
 		return
+	legacy.trans_type = EasingCurve.TRANS.SMOOTHSTEP
+	native.set(&"transition", 109)
+	if absf(legacy.sample(0.25) - 0.15625) > 0.000002 or absf(float(native.call(&"sample", 0.25)) - 0.15625) > 0.000002:
+		push_error("The packaged scripts/binary do not implement Smoothstep.")
+		quit(1)
+		return
+	var demo_scene := load("res://addons/easing_curve/_test_scene/test.tscn") as PackedScene
+	if demo_scene == null:
+		push_error("The packaged demo scene could not load.")
+		quit(1)
+		return
+	var demo := demo_scene.instantiate()
+	root.add_child(demo)
+	for use_native: bool in [true, false]:
+		demo.set(&"use_native_curve", use_native)
+		demo.call(&"restart_runtime")
+		await process_frame
+		var runtime_property := &"_runtime_native_curve" if use_native else &"_runtime_easing_curve"
+		if demo.get(runtime_property) == null:
+			push_error("The packaged demo did not start the requested curve backend.")
+			quit(1)
+			return
+	demo.queue_free()
+	await process_frame
+	print("PASS: exact archive Smoothstep and demo playback for both APIs")
 	print("PASS: exact archive loaded, sampled, saved, and reloaded both APIs")
 	quit(0)
 '@
@@ -234,7 +270,7 @@ func _init() -> void:
 		"--log-file", $runtimeLog
 	)
 	$runtimeText = if (Test-Path -LiteralPath $runtimeLog) { Get-Content -Raw -LiteralPath $runtimeLog } else { "" }
-	if ($runtimeExit -ne 0 -or $runtimeText -notmatch '(?m)^PASS: exact archive loaded, sampled, saved, and reloaded both APIs$') {
+	if (-not (Test-ArchiveRuntimeResult -ExitCode $runtimeExit -LogText $runtimeText)) {
 		Stop-ArchivePhase -Phase "runtime validation" -LogPath $runtimeLog -ExitCode $runtimeExit
 	}
 

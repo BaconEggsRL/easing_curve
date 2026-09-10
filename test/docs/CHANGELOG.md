@@ -3,6 +3,75 @@
 Release entries are ordered newest to oldest. Add future releases above the
 current top entry.
 
+## v1.2.1
+
+### Added
+
+* Added exact, editable Smoothstep presets in both APIs and the demo, including
+  all four ease modes, conversion, reset, and save/reload support.
+* Added fixed mini-curve icons to transition and ease dropdowns in both
+  Inspectors and the demo, with bundled SVG fallbacks.
+* Added graph snapping with 2–100 subdivisions and temporary Ctrl/Cmd snapping,
+  plus coordinate readouts during graph and Points-list drags. Editor settings
+  can hide the readout or snapping row.
+
+### Improved
+
+* Made graph sizing responsive to Inspector width and editor scale. Point
+  controls share one compact row with a combined reset; snapping,
+  plotting, and zoom occupy distinct areas. The graph displays fixed border
+  ticks, coordinate labels, and a clipped 0–1 reference box.
+* Kept pointer gestures attached to their starting graph across toolbar crossings,
+  and refreshed Shift axis constraints when Shift is released and pressed again.
+
+### Fixed
+
+* Fixed Inspector rebuilds and teardown interrupting shared graph/Points edits,
+  stale callbacks affecting another presentation, and Legacy right-drag deletion
+  stopping after the first removed point.
+* Clear point/control selection before changing transitions, including through
+  Undo/Redo, so controls from the previous preset do not flash over the new curve.
+* Matched Native Linear control-field edits, position bounds, and
+  Balanced/Mirrored handle dragging to Legacy behavior.
+* Matched Linked control-state editing across both APIs. Locked state takes
+  precedence when linking asymmetric controls; inactive stored overrides no
+  longer constrain Native Balanced/Mirrored dragging.
+* Fixed Native sampling of duplicate-X, vertical, and reversed segments to follow
+  authored order and Legacy boundary rules while retaining fast lookup for
+  strictly increasing curves.
+* Fixed changing Native Back Overshoot or Constant Value after manual preset
+  edits: changing the active parameter regenerates the preset and clears its
+  modified marker. Undo restores the parameter and edited geometry. Unchanged
+  or inactive parameters preserve manual edits.
+* Updated release documentation, manual checks, and source-archive exclusions
+  for development addons. The packaged release ZIP remains the complete Native
+  distribution; Git source archives do not contain Native binaries.
+* Keep release smoke projects and Godot logs under repository-local `test/_temp`
+  and preserve failed smoke evidence. Exact-archive validation now starts the
+  bundled demo with both backends, checks Smoothstep, reloads resources from disk,
+  and rejects unexpected runtime diagnostics even after a PASS marker.
+
+### Compatibility
+
+* The minimum remains **Godot 4.4.1**. Native targets remain Windows x86_64 and
+  non-threaded Web; Legacy remains supported independently. Windows Native
+  debug builds and hot reload are outside the support contract.
+* Smoothstep appends Legacy transition **21** and Native transition **109**.
+  Existing IDs and Native resource format **3** are unchanged. Resources using
+  Smoothstep require v1.2.1 scripts and matching Native binaries; older versions
+  do not recognize the new transition.
+
+### Validation
+
+* Added regression coverage for Inspector ownership, selection/deletion gestures,
+  coordinate readouts, snapping, layout, Linked controls, Native sampling parity,
+  Smoothstep, and icons. Hardened runner crash/timeout handling and pinned-editor
+  verification without relaxing correctness gates.
+* Candidate results, headless skips, exact archive identity, and outstanding
+  manual/CI certification are recorded in
+  [the v1.2.1 release tracker](v1.2.1_CODE_TRACKER.md). Historical benchmark results
+  are not v1.2.1 performance guarantees or release gates.
+
 ## v1.2.0
 
 ### Added

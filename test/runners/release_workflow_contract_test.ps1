@@ -88,6 +88,7 @@ $RequiredHelpers = @(
     "Get-NextDevelopmentVersion"
     "Assert-PublishPreflight"
     "Assert-PrepareChanges"
+    "Invoke-CleanInstallSmokeTest"
 )
 foreach ($HelperName in $RequiredHelpers) {
     Import-ReleaseFunctionDefinition -Name $HelperName
@@ -131,6 +132,55 @@ Assert-Contract (
     $RepublishText.IndexOf("Assert-ReleaseTagTarget") -lt
         $RepublishText.IndexOf("Update-GitHubRelease")
 ) "Republish must verify updated Git refs before mutating the GitHub release."
+
+# Exercise smoke-path ownership and success/failure retention without Godot.
+& {
+    $FixtureRoot = Join-Path $ProjectRoot ("test/_temp/release-smoke-contract-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $FixtureRoot | Out-Null
+    $ProjectRoot = $FixtureRoot
+    $Version = "1.2.1"
+    $ZipPath = Join-Path $FixtureRoot "fixture.zip"
+    Set-Content -LiteralPath $ZipPath -Value "fixture"
+    function Write-Step { param($Message) }
+    function Expand-Archive {
+        param($LiteralPath, $DestinationPath, [switch]$Force)
+        $PluginDirectory = Join-Path $DestinationPath "addons/easing_curve"
+        New-Item -ItemType Directory -Path $PluginDirectory -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $PluginDirectory "plugin.cfg") -Value 'version="1.2.1"'
+    }
+    function Invoke-Godot {
+        param([string[]]$Arguments, [string]$Description)
+        $PathIndex = [Array]::IndexOf($Arguments, "--path")
+        $LogIndex = [Array]::IndexOf($Arguments, "--log-file")
+        Assert-Contract ($PathIndex -ge 0 -and $LogIndex -ge 0) "Smoke invocation must pass project and log paths."
+        $InvocationRoot = $Arguments[$PathIndex + 1]
+        $LogPath = $Arguments[$LogIndex + 1]
+        $Prefix = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "test/_temp")) + [IO.Path]::DirectorySeparatorChar
+        Assert-Contract ([IO.Path]::GetFullPath($LogPath).StartsWith($Prefix, [StringComparison]::OrdinalIgnoreCase)) "Smoke log escaped repository test/_temp."
+        Assert-Contract (Test-Path (Join-Path $InvocationRoot "test/_temp/.gdignore")) "Smoke logs are not excluded from imports."
+        $Config = Get-Content -Raw -LiteralPath (Join-Path $InvocationRoot "project.godot")
+        if ($State.Calls -eq 0) {
+            Assert-Contract ($Arguments -contains '--import' -and $Config.Contains('enabled=PackedStringArray()')) "Fresh smoke import enabled the plugin before assets were imported."
+        } else {
+            Assert-Contract ($Config.Contains('enabled=PackedStringArray("res://addons/easing_curve/plugin.cfg")')) "Smoke did not enable the plugin after importing assets."
+        }
+        Set-Content -LiteralPath $LogPath -Value $Description
+        $State.Root = $InvocationRoot
+        $State.Calls += 1
+        if ($State.Fail) { throw "Synthetic smoke failure" }
+    }
+    foreach ($Case in @(@($false, $false), @($true, $false), @($false, $true))) {
+        $State = @{ Fail = $Case[0]; Root = ""; Calls = 0 }
+        $KeepSmokeProject = $Case[1]
+        if ($State.Fail) {
+            Assert-Throws { Invoke-CleanInstallSmokeTest } "Smoke swallowed the process failure."
+        } else {
+            Invoke-CleanInstallSmokeTest
+        }
+        Assert-Contract ($State.Calls -eq $(if ($State.Fail) { 1 } else { 3 })) "Smoke skipped a required invocation."
+        Assert-Contract ((Test-Path $State.Root) -eq ($State.Fail -or $KeepSmokeProject)) "Smoke failed retention/cleanup contract."
+    }
+}
 
 $script:MockRemoteOnlyCount = "0"
 $script:MockTagType = "tag"

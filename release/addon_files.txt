@@ -3,6 +3,9 @@ LICENSE.md
 plugin.cfg
 plugin.gd
 plugin.gd.uid
+_test_scene/test.gd
+_test_scene/test.gd.uid
+_test_scene/test.tscn
 assets/BezierHandlesLinked.svg
 assets/Curve.svg
 assets/transitions/back.svg

@@ -1,5 +1,8 @@
 # Inspector topology performance — PERF-POINTS-01 through 05
 
+> Implementation/investigation record. Dated counts and failures below are
+> historical; [v1.2.1 certification](v1.2.1_CODE_TRACKER.md) records current results.
+
 ## Decision and measured cause
 
 Native topology now reconciles existing point panels by resource identity. Middle
@@ -377,4 +380,3 @@ Re-run the registered full correctness suite with:
 | PERF-POINTS-03 | Exactly 1 / 0 / 0 new panels for middle Add / Remove / interior reorder at 9/65/129/257; ordinary Undo identity and exact replacement behavior verified; timing improvement reproduced |
 | PERF-POINTS-04 | No Legacy topology/publication refactor: one observed reparse per operation, no proven redundant request or surviving incremental caller |
 | PERF-POINTS-05 | Full correctness and rendered checks pass; before/after construction, timing and ordinary-edit evidence retained; remaining latency and measurement limits stated above |
-

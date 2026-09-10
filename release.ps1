@@ -339,8 +339,12 @@ function Invoke-CleanInstallSmokeTest {
         throw "Release ZIP does not exist: $ZipPath"
     }
 
-    $SmokeRoot = Join-Path ([IO.Path]::GetTempPath()) ("easing-curve-v{0}-smoke-{1}" -f $Version, [guid]::NewGuid())
-    New-Item -ItemType Directory -Path $SmokeRoot -Force | Out-Null
+    $SmokeBase = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "test/_temp"))
+    $SmokeRoot = Join-Path $SmokeBase ("easing-curve-v{0}-smoke-{1}" -f $Version, [guid]::NewGuid())
+    $SmokeLogDirectory = Join-Path $SmokeRoot "test/_temp"
+    New-Item -ItemType Directory -Path $SmokeLogDirectory -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $SmokeLogDirectory ".gdignore") -Value "" -NoNewline
+    $SmokeSucceeded = $false
 
     try {
         Write-Host "Extracting exact release ZIP to:"
@@ -369,7 +373,7 @@ config/name="Easing Curve Release Smoke"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/easing_curve/plugin.cfg")
+enabled=PackedStringArray()
 
 [rendering]
 
@@ -377,12 +381,27 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 "@ | Set-Content -LiteralPath (Join-Path $SmokeRoot "project.godot") -Encoding UTF8
 
+        # Complete fresh asset imports before the plugin preloads its SVG icons.
+        Invoke-Godot `
+            -Description "Clean-project initial import" `
+            -Arguments @(
+                "--editor", "--headless", "--path", $SmokeRoot, "--import",
+                "--log-file", (Join-Path $SmokeLogDirectory "initial-import.log")
+            )
+        $SmokeConfigPath = Join-Path $SmokeRoot "project.godot"
+        $SmokeConfig = (Get-Content -Raw -LiteralPath $SmokeConfigPath).Replace(
+            'enabled=PackedStringArray()',
+            'enabled=PackedStringArray("res://addons/easing_curve/plugin.cfg")'
+        )
+        Set-Content -LiteralPath $SmokeConfigPath -Value $SmokeConfig -Encoding UTF8
+
         Invoke-Godot `
             -Description "Clean-project Editor smoke test" `
             -Arguments @(
                 "--editor",
                 "--headless",
                 "--path", $SmokeRoot,
+                "--log-file", (Join-Path $SmokeLogDirectory "editor.log"),
                 "--quit-after", "2"
             )
 
@@ -422,18 +441,24 @@ func _init() -> void:
             -Arguments @(
                 "--headless",
                 "--path", $SmokeRoot,
+                "--log-file", (Join-Path $SmokeLogDirectory "runtime.log"),
                 "--script", "res://release_smoke.gd"
             )
 
         Write-Host ""
         Write-Host "Clean-project smoke test passed." -ForegroundColor Green
+        $SmokeSucceeded = $true
     }
     finally {
-        if ($KeepSmokeProject) {
+        if ($KeepSmokeProject -or -not $SmokeSucceeded) {
             Write-Host "Smoke project retained at:"
             Write-Host "  $SmokeRoot"
         }
         else {
+            $ExpectedPrefix = $SmokeBase + [IO.Path]::DirectorySeparatorChar
+            if (-not [IO.Path]::GetFullPath($SmokeRoot).StartsWith($ExpectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Refusing to remove smoke project outside repository test/_temp: $SmokeRoot"
+            }
             Remove-Item -LiteralPath $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
     }

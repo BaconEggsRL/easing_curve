@@ -1,4 +1,7 @@
-# v1.2.0 — Legacy / Native parity smoke test
+# v1.2.1 — Legacy / Native parity smoke test
+
+> Candidate sign-off is recorded in [the release tracker](v1.2.1_CODE_TRACKER.md).
+> Historical results do not check off this candidate.
 
 ## DRAG-COORDS-01 — drag-coordinate readout
 
@@ -49,7 +52,8 @@ For both Native and Legacy Custom graphs:
 outside-graph release checks. Captures at 1.0/1.5 scale with light/dark theme
 fixtures were generated; normal dark and enlarged light captures were inspected.
 Physical mouse/Alt-Tab, monitor DPI and global Editor theme switching remain
-manual checks. See the DRAG-COORDS-01 coverage record in `README.md`.
+manual checks. See the historical DRAG-COORDS-01 coverage record in
+`_archive/v1.2.1/development_history.md`.
 
 Run this paired checklist after the gates in [Development testing](README.md).
 The detailed interaction checks below remain applicable to **both** APIs; they
@@ -232,7 +236,7 @@ and 4.4.1 for the minimum-version subset. ABI loading alone does not prove full
 UI compatibility. Unsupported
 environments are N/A with a reason, never PASS. No unexplained plugin errors.
 
-## v1.2.0 sign-off
+## v1.2.1 sign-off
 
 - [ ] Automated results/skips recorded in [Development testing](README.md).
 - [ ] P01–P09 completed for both resource forms; failures linked in the table.
@@ -491,24 +495,22 @@ Pass criteria:
 
 ## 10. Force Linear and locks
 
-For left and right controls individually:
+For both APIs, check the single-row selected-point toolbar and combined reset:
 
-- [ ] Enable Force Linear.
-- [ ] Confirm the handle collapses to the point.
-- [ ] Disable Force Linear.
-- [ ] Confirm the handle restores to the intended default offset.
-- [ ] Lock a handle.
-- [ ] Confirm an active Force Linear state is cleared/restored according to current Inspector semantics.
-- [ ] Enable Force Linear while a handle is locked.
-- [ ] Confirm the last-action-wins behavior is correct.
-- [ ] Repeat in Linked mode.
-- [ ] Use the selected-point reset action.
-- [ ] Confirm Handle Mode returns to Free and control locks/Force Linear reset as intended.
-- [ ] Undo/redo these changes.
+- [ ] In Free mode, change L and R states independently between Free, Linear,
+  and Locked. Linear collapses its handle; Locked prevents its movement.
+- [ ] In Linked mode, a state selection applies to both controls. Entering
+  Linked resolves Locked before Linear before Free; one locked side supplies
+  the shared coordinate. Undo restores the original asymmetric state.
+- [ ] In Linear, Balanced, and Mirrored, stored overrides remain visible but
+  inactive. Handle dragging follows the mode, not those inactive flags.
+- [ ] Use the combined toolbar reset: Handle Mode becomes Free, both control
+  locks/Force Linear flags clear, and the position lock is preserved. Verify
+  complete geometry/state restoration through one Undo/Redo action.
+- [ ] Repeat at both endpoints and with Reverse/Invert. Hidden endpoint handles
+  must not make visible state controls or resets edit the wrong side.
 
-Pass criteria:
-
-- No contradictory visual state exists between lock, Force Linear, and handle mode controls.
+Pass criteria: displayed states, actual locks, geometry, and Undo/Redo agree.
 
 ---
 
@@ -555,8 +557,10 @@ Pass criteria:
 - [ ] Middle-mouse drag the graph.
 - [ ] Confirm panning is smooth.
 - [ ] Release middle mouse and confirm panning stops.
-- [ ] Scroll wheel up and down over the graph.
-- [ ] Confirm zoom occurs around the pointer as intended.
+- [ ] Scroll normally over the graph and confirm the Inspector scrolls.
+- [ ] Hold Ctrl/Cmd while scrolling over the graph and confirm zoom changes.
+- [ ] Scroll or drag the zoom slider and confirm zoom changes.
+- [ ] Check Auto Fit and Reset Pan/Zoom independently.
 - [ ] Confirm hover/selection behavior still updates after pan/zoom.
 - [ ] Test zoom while using a FUNCTION transition.
 - [ ] Confirm wheel zoom remains available even though point editing is disabled in FUNCTION mode.
@@ -579,7 +583,8 @@ For each:
 - [ ] Confirm the preset name gains `*`.
 - [ ] Confirm the Reset button appears.
 - [ ] Change Ease on the modified preset.
-- [ ] Confirm the modified geometry is not unexpectedly replaced unless current behavior explicitly requires it.
+- [ ] Confirm the selected ease is applied consistently on both backends, and
+  Undo restores the previous ease and complete edited geometry.
 - [ ] Press Reset.
 - [ ] Confirm canonical preset geometry is restored.
 - [ ] Confirm `*` disappears.
@@ -591,6 +596,10 @@ Back:
 - [ ] Confirm the Back curve rebuilds immediately.
 - [ ] Confirm changing only Overshoot does not incorrectly mark the canonical Back preset modified.
 - [ ] Test IN, OUT, IN_OUT, and OUT_IN.
+- [ ] Modify Back geometry, then change Overshoot: canonical geometry replaces
+  edits and clears the modified marker. Undo restores both values and geometry.
+- [ ] Repeat with Constant Value. Setting the same value, or editing an inactive
+  preset parameter, must preserve manual geometry.
 
 Pass criteria:
 
@@ -658,7 +667,8 @@ Then:
 - [ ] Undo each step one at a time.
 - [ ] Confirm curve state returns correctly.
 - [ ] Confirm logical point identity/order is restored.
-- [ ] Confirm selection is restored correctly.
+- [ ] Confirm point-edit selection follows the intended point; transition
+  changes and their Undo/Redo leave point/control selection cleared.
 - [ ] Confirm Inspector controls refresh correctly.
 - [ ] Redo all steps.
 - [ ] Confirm the same states return.
@@ -759,7 +769,7 @@ Pass criteria:
 
 # Compatibility subset
 
-Run this shorter subset on every Godot version explicitly claimed as supported, especially Godot 4.4 and 4.6 if the README continues to claim Godot 4.4–4.7 support.
+Run this shorter subset on every Godot version explicitly claimed as supported, especially the supported minimum 4.4.1. Record exact versions; 4.4.0 is not supported.
 
 - [ ] Plugin enables without parse/load errors.
 - [ ] Custom EasingCurve Inspector appears.
@@ -783,7 +793,7 @@ If any supported version fails this subset, do not publish the compatibility cla
 
 ## Required automated baseline
 
-- [ ] All 17 registered automated test suites pass on the release candidate.
+- [ ] All suites listed by `run_all_tests.ps1 --list` pass on the release candidate.
 - [ ] No suite timeout.
 - [ ] `git diff --check` passes.
 - [ ] Release validation passes.

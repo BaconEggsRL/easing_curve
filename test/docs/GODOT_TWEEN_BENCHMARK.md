@@ -28,8 +28,8 @@ root:
 ./test/runners/run_godot_tween_comparison.ps1 -Headless -RunCount 3
 ```
 
-The engine defaults to `EASING_CURVE_GODOT_PATH`, then the existing launcher's
-local fallback. Renderer defaults to `forward_plus`; `mobile` and
+The engine defaults to `EASING_CURVE_GODOT_PATH`, then `godot` on PATH through
+the existing launcher. Renderer defaults to `forward_plus`; `mobile` and
 `gl_compatibility` are also accepted. Run counts must be odd. The timeout is per
 process (90 seconds by default), configurable with `-TimeoutSeconds`.
 

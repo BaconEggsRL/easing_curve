@@ -1,5 +1,8 @@
 # Fixed graph grid and reference box
 
+> Implementation/investigation record. Dated counts and failures below are
+> historical; [v1.2.1 certification](v1.2.1_CODE_TRACKER.md) records current results.
+
 Implemented in the shared `EasingCurveEditor` for Legacy and Native Inspectors.
 The supplied `ticks1.png` and `box2.png` are the visual references.
 

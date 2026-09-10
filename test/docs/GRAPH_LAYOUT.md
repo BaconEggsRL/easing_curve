@@ -1,5 +1,9 @@
 # Curve editor graph layout
 
+> The behavior descriptions reflect the current single-row toolbar. Dated
+> validation below is historical; [v1.2.1 certification](v1.2.1_CODE_TRACKER.md)
+> supersedes its old counts and CSS-label failures.
+
 The native and legacy Inspector presentations share `EasingCurveEditor`.
 Its root remains a `Control`; an internal vertical container places the point
 toolbar, Grid Snap row, clipped graph canvas and zoom row in separate regions.
@@ -106,7 +110,8 @@ All Godot logs stay under repository-local `test/_temp/`. The main runner alread
 recognizes the Godot 4.7.1 certificate-store and editor shutdown leak diagnostics.
 The two existing `editor_undo_redo_test.gd` CSS dropdown-label assertions were
 reproduced against starting commit `23760bcbf7bfdfe43b7cca3c7177d956bb645663`;
-they are unrelated to this layout change.
+they were unrelated to that layout change and were subsequently corrected.
+The current tracker records the fresh full-suite result.
 
 ## Linked-state regressions
 
