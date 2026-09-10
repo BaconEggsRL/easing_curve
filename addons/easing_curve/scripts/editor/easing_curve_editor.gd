@@ -2831,6 +2831,8 @@ func _add_point_toolbar_option(row: Container, option: OptionButton) -> void:
 
 func _update_point_toolbar_spacing() -> void:
 	var separation := EDITOR_THEME_CACHE.compact_separation(_editor_scale)
+	# Reserve the dropdown height even when it is hidden with no selection.
+	_point_mode_row.custom_minimum_size.y = _point_handle_mode.get_combined_minimum_size().y
 	if controls_layout == ControlsLayout.COMPACT_TWO_ROW:
 		# A reset-only row retains its usual vertical alignment until it collapses.
 		_point_states_row.custom_minimum_size.y = maxf(
@@ -2930,6 +2932,7 @@ func _update_point_toolbar() -> void:
 		_set_point_toolbar_reorder_available(
 			false,
 			_backend == null or _is_point_graph(),
+			true,
 		)
 		_point_handle_mode.visible = controls_layout != ControlsLayout.DEV_SINGLE_ROW
 		_point_handle_mode.self_modulate.a = 0.0
@@ -2946,7 +2949,6 @@ func _update_point_toolbar() -> void:
 		)
 		if controls_layout == ControlsLayout.COMPACT_TWO_ROW:
 			_set_reset_button_available(_point_states_reset_button, false)
-			_point_toolbar_panel.hide()
 		return
 
 	var point := _point(selected_index)
@@ -3022,12 +3024,13 @@ func _set_point_toolbar_control_state_visible(
 func _set_point_toolbar_reorder_available(
 	available: bool,
 	visible: bool = true,
+	keep_visible_when_disabled: bool = false,
 ) -> void:
 	for button in [_point_move_left_button, _point_move_right_button]:
 		if button == null:
 			continue
 		button.visible = (
-			available and visible
+			(available or keep_visible_when_disabled) and visible
 			if controls_layout == ControlsLayout.DEV_SINGLE_ROW or (controls_layout == ControlsLayout.COMPACT_TWO_ROW and hide_unused_controls)
 			else true
 		)

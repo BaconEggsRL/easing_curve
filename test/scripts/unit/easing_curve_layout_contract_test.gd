@@ -635,7 +635,12 @@ func _test_layout_variants() -> void:
 					editor._update_point_toolbar()
 					editor.selected_index = -1
 					await _settle()
-					_expect(editor._point_toolbar_panel.visible == not compact, "No-selection empty panel did not follow layout policy")
+					_expect(editor._point_toolbar_panel.visible, "No selection hid the navigation row")
+					_expect(editor._point_label.is_visible_in_tree() and editor._point_label.text == "0", "No selection hid the zero label")
+					for button: Button in [editor._point_move_left_button, editor._point_move_right_button]:
+						_expect(button.is_visible_in_tree() and button.self_modulate.a == 1.0, "No selection hid a navigation arrow")
+						_expect(button.disabled and button.mouse_filter == Control.MOUSE_FILTER_IGNORE and button.focus_mode == Control.FOCUS_NONE, "No-selection navigation arrow accepts input")
+					_expect(not editor._point_states_row.is_visible_in_tree(), "No selection retained an unused state row")
 					editor.selected_index = 1
 					await _settle()
 					_expect(editor._point_toolbar_panel.visible, "Selection failed to restore toolbar")
@@ -652,6 +657,17 @@ func _test_layout_variants() -> void:
 						var graph_size := editor._get_graph_view_rect().size
 						var expanded_height := editor.get_combined_minimum_size().y
 						var reset_rect := editor._point_states_reset_button.get_global_rect()
+						var navigation_controls: Array[Control] = [editor._point_move_left_button, editor._point_label, editor._point_move_right_button]
+						var navigation_rects: Array[Rect2] = []
+						for control: Control in navigation_controls:
+							navigation_rects.append(control.get_global_rect())
+						var navigation_row_height := editor._point_mode_row.size.y
+						for selection: int in [-1, 1]:
+							editor.selected_index = selection
+							await _settle()
+							_expect(editor._point_mode_row.size.y == navigation_row_height, "Selection changed the reserved navigation row height")
+							for index in navigation_controls.size():
+								_expect(navigation_controls[index].get_global_rect() == navigation_rects[index], "Selection shifted the point label or arrows")
 						_expect(editor._graph_canvas.size.x == editor.size.x, "Variant widened graph beyond Inspector")
 						_expect(editor.get_combined_minimum_size().x == 64.0 * scale_value, "Variant propagated control minimum width")
 						if single_row:
