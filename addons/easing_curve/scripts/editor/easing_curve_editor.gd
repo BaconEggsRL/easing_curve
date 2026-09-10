@@ -2847,7 +2847,7 @@ func _update_point_toolbar() -> void:
 		_point_label.text = (
 			""
 			if _backend != null and not _is_point_graph()
-			else "No Selection"
+			else "0"
 		)
 		_point_label.modulate.a = 0.6
 		_set_point_toolbar_reorder_available(
