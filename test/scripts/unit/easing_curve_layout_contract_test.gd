@@ -24,6 +24,8 @@ func _run() -> void:
 	_test_locked_handle_precedence()
 	await _test_grouped_toolbar()
 	await _test_independent_resets()
+	await _test_layout_variants()
+	await _test_variant_resets()
 	await _test_sibling_capture()
 	await _test_graph_dimensions()
 	_finish("curve layout contract")
@@ -111,7 +113,7 @@ func _test_grouped_toolbar() -> void:
 			legacy.points = [EasingCurvePoint.new(Vector2.ZERO), EasingCurvePoint.new(Vector2(0.5, 0.5)), EasingCurvePoint.new(Vector2.ONE)]
 			curve = legacy
 		var context := HOST.INSPECTOR_PLUGIN.new()
-		var presentation: Control = context.handle_easing_curve_editor(curve)
+		var presentation: Control = context.handle_easing_curve_editor(curve, EasingCurveEditor.ControlsLayout.CURRENT_TWO_ROW)
 		# Keep full-editor captures free of the host's scene-tree/start-page text.
 		var backdrop := ColorRect.new()
 		backdrop.color = Color(0.16, 0.16, 0.16)
@@ -283,7 +285,7 @@ func _test_independent_resets() -> void:
 			curve.set(&"reverse", reverse_sides)
 			curve.set(&"ease_type", 1 if reverse_sides else 0)
 			context.editor_undo_redo = manager
-			var presentation: Control = context.handle_easing_curve_editor(curve)
+			var presentation: Control = context.handle_easing_curve_editor(curve, EasingCurveEditor.ControlsLayout.CURRENT_TWO_ROW)
 			viewport.add_child(presentation)
 			presentation.size.x = 220.0
 			var editor: EasingCurveEditor = context.easing_curve_editor
@@ -571,6 +573,188 @@ func _test_sibling_capture() -> void:
 		viewport.push_input(release, true)
 		_expect(graph.events.is_empty() and clicks[0] == 1, "Sibling button did not own its own interaction")
 		viewport.free()
+
+
+func _comparison_curve(native: bool) -> Resource:
+	var curve: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+	curve.set(&"transition" if native else &"trans_type", 100 if native else EasingCurve.TRANS.CUSTOM)
+	if native:
+		var point: Resource = ClassDB.instantiate(&"NativeEasingCurvePoint")
+		point.set(&"position", Vector2(0.5, 0.5))
+		curve.call(&"insert_point", 1, point)
+	else:
+		curve.set(&"points", [EasingCurvePoint.new(Vector2.ZERO), EasingCurvePoint.new(Vector2(0.5, 0.5)), EasingCurvePoint.new(Vector2.ONE)] as Array[EasingCurvePoint])
+	return curve
+
+
+func _test_layout_variants() -> void:
+	for native: bool in [false, true]:
+		var baseline_width := -1.0
+		for layout: int in EasingCurveEditor.ControlsLayout.values():
+			var compact := layout == EasingCurveEditor.ControlsLayout.COMPACT_TWO_ROW
+			var single_row := layout == EasingCurveEditor.ControlsLayout.DEV_SINGLE_ROW
+			var curve := _comparison_curve(native)
+			var context := HOST.INSPECTOR_PLUGIN.new()
+			var presentation := context.handle_easing_curve_editor(curve, layout)
+			var editor: EasingCurveEditor = context.easing_curve_editor
+			_expect(editor.controls_layout == layout, "Construction override did not select layout")
+			var backdrop := ColorRect.new()
+			backdrop.color = Color(0.16, 0.16, 0.16)
+			backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			backdrop.size = Vector2(root.size)
+			root.add_child(backdrop)
+			root.add_child(presentation)
+			await _settle()
+			if baseline_width < 0:
+				baseline_width = presentation.get_combined_minimum_size().x
+			_expect(presentation.get_combined_minimum_size().x == baseline_width, "Layout variant changed Inspector minimum width")
+			for hide_unused: bool in [true, false]:
+				editor.hide_unused_controls = hide_unused
+				var hide_groups := single_row or (compact and hide_unused)
+				for point_index: int in [0, 1, 2]:
+					editor.selected_index = point_index
+					for mode: int in EasingCurvePoint.HandleMode.values():
+						editor._backend.apply_point_property(point_index, &"toolbar_options_reset", true, false)
+						editor._backend.apply_point_property(point_index, &"handle_mode", mode, false)
+						editor._update_point_toolbar()
+						var supports := mode in [EasingCurvePoint.HandleMode.FREE, EasingCurvePoint.HandleMode.LINKED]
+						var left_available := supports and point_index > 0
+						var right_available := supports and point_index < 2
+						_expect(editor._point_left_state.disabled == not left_available, "Left availability changed across layouts")
+						_expect(editor._point_right_state.disabled == not right_available, "Right availability changed across layouts")
+						_expect(editor._point_left_group.visible == (left_available or not hide_groups), "Left group visibility ignored layout policy")
+						_expect(editor._point_right_group.visible == (right_available or not hide_groups), "Right group visibility ignored layout policy")
+						for group: HBoxContainer in [editor._point_left_group, editor._point_right_group]:
+							_expect(group.get_child(0).visible == group.visible, "Side label did not hide atomically")
+						_expect(editor._point_states_row.visible == (not single_row and (not compact or supports)), "Empty state row retained space or applicable row disappeared")
+						_expect(editor._point_reset_button.visible and editor._point_states_reset_button.visible, "Reset slot visibility changed")
+					editor._backend.apply_point_property(point_index, &"toolbar_options_reset", true, false)
+					editor._update_point_toolbar()
+					editor._set_point_toolbar_reorder_available(false)
+					_expect(editor._point_move_left_button.visible == not hide_groups, "Unavailable navigation ignored layout policy")
+					editor._update_point_toolbar()
+					editor.selected_index = -1
+					await _settle()
+					_expect(editor._point_toolbar_panel.visible == not compact, "No-selection empty panel did not follow layout policy")
+					editor.selected_index = 1
+					await _settle()
+					_expect(editor._point_toolbar_panel.visible, "Selection failed to restore toolbar")
+				for scale_value: float in [1.0, 1.5, 2.0]:
+					var theme := Theme.new()
+					theme.default_font_size = roundi(16.0 * scale_value)
+					presentation.theme = theme
+					editor._editor_scale = scale_value
+					for width: float in [150.0, 220.0, 600.0]:
+						presentation.size.x = width * scale_value
+						editor._backend.apply_point_property(1, &"toolbar_options_reset", true, false)
+						editor._update_point_toolbar()
+						await _settle()
+						var graph_size := editor._get_graph_view_rect().size
+						var expanded_height := editor.get_combined_minimum_size().y
+						var reset_rect := editor._point_states_reset_button.get_global_rect()
+						_expect(editor._graph_canvas.size.x == editor.size.x, "Variant widened graph beyond Inspector")
+						_expect(editor.get_combined_minimum_size().x == 64.0 * scale_value, "Variant propagated control minimum width")
+						if single_row:
+							_expect(editor._point_mode_row.get_parent().clip_contents, "Single row lost right-edge clipping")
+							_expect(editor._point_left_group.get_parent() == editor._point_mode_row and editor._point_right_group.get_parent() == editor._point_mode_row, "Single-row controls wrapped")
+							_expect(not editor._point_states_reset_button.is_visible_in_tree(), "Single row shows a second reset")
+						else:
+							_assert_fixed_rows(editor, presentation.get_child(0).get_child(5) as Button)
+						if scale_value == 1.0 and DisplayServer.get_name() != "headless":
+							await _capture_layout(presentation, "layout-%s-%s-hide-%s-%s" % [native, layout, hide_unused, int(width)])
+							editor.selected_index = 0
+							await _capture_layout(presentation, "layout-endpoint-%s-%s-hide-%s-%s" % [native, layout, hide_unused, int(width)])
+							editor.selected_index = 1
+						editor._backend.apply_point_property(1, &"handle_mode", EasingCurvePoint.HandleMode.BALANCED, false)
+						editor._update_point_toolbar()
+						await _settle()
+						_expect(editor._get_graph_view_rect().size == graph_size, "Row collapse changed graph dimensions")
+						_expect((editor.get_combined_minimum_size().y < expanded_height) == compact, "Empty row did not collapse with its separation")
+						if scale_value == 1.0 and DisplayServer.get_name() != "headless":
+							await _capture_layout(presentation, "layout-balanced-%s-%s-hide-%s-%s" % [native, layout, hide_unused, int(width)])
+						editor._point(1).set(&"left_force_linear", true)
+						editor._update_point_toolbar()
+						await _settle()
+						if compact:
+							_expect(editor._point_states_row.visible, "Active reset became inaccessible with hidden overrides")
+							_expect(editor._point_states_reset_button.get_global_rect() == reset_rect, "Reset slot shifted when side groups hid")
+						editor._backend.apply_point_property(1, &"toolbar_options_reset", true, false)
+						editor._update_point_toolbar()
+						await _settle()
+						_expect(editor.get_combined_minimum_size().y == expanded_height, "Restored controls changed layout height")
+						var minimum_width := presentation.get_combined_minimum_size().x
+						var original_text := editor._point_handle_mode.get_item_text(editor._point_handle_mode.selected)
+						editor._point_handle_mode.set_item_text(editor._point_handle_mode.selected, "Long localized handle mode description")
+						await _settle()
+						_expect(presentation.get_combined_minimum_size().x == minimum_width and editor._get_graph_view_rect().size == graph_size, "Preferred text width escaped variant clipping")
+						editor._point_handle_mode.set_item_text(editor._point_handle_mode.selected, original_text)
+				editor.selected_index = 1
+				presentation.theme = null
+				editor._editor_scale = 1.0
+				await _settle()
+			curve.set(&"transition" if native else &"trans_type", 6 if native else EasingCurve.TRANS.ELASTIC)
+			editor._update_point_toolbar()
+			_expect(not editor._point_toolbar_panel.visible and not editor._snap_toolbar_margin.visible, "Function mode exposed point controls")
+			print("WRAP_GATE layout=%s native=%s comparison policies and widths verified" % [layout, native])
+			presentation.free()
+			backdrop.free()
+
+
+func _capture_layout(presentation: Control, capture_name: String) -> void:
+	await _settle()
+	presentation.size.y = presentation.get_combined_minimum_size().y
+	await _settle()
+	await RenderingServer.frame_post_draw
+	var capture := root.get_texture().get_image().get_region(Rect2i(presentation.get_global_rect()))
+	capture.save_png("res://test/_temp/%s.png" % capture_name)
+
+
+func _test_variant_resets() -> void:
+	var plugin := EditorPlugin.new()
+	var manager := plugin.get_undo_redo()
+	for native: bool in [false, true]:
+		for layout: int in [EasingCurveEditor.ControlsLayout.COMPACT_TWO_ROW, EasingCurveEditor.ControlsLayout.DEV_SINGLE_ROW]:
+			var curve := _comparison_curve(native)
+			var context := HOST.INSPECTOR_PLUGIN.new()
+			context.editor_undo_redo = manager
+			var presentation := context.handle_easing_curve_editor(curve, layout)
+			var viewport := SubViewport.new()
+			viewport.size = Vector2i(600, 900)
+			root.add_child(viewport)
+			viewport.add_child(presentation)
+			presentation.size.x = 600
+			var editor: EasingCurveEditor = context.easing_curve_editor
+			editor.selected_index = 1
+			await _settle()
+			var history := manager.get_history_undo_redo(manager.get_object_history_id(curve))
+			var single_row := layout == EasingCurveEditor.ControlsLayout.DEV_SINGLE_ROW
+			for reset_states: bool in [false, true]:
+				editor._backend.apply_point_property(1, &"toolbar_options_reset", true, false)
+				var point := editor._point(1)
+				point.set(&"left_force_linear", true)
+				point.call(&"set_locked", &"right_control_point", true)
+				point.call(&"set_locked", &"position", true)
+				point.set(&"handle_mode", EasingCurvePoint.HandleMode.BALANCED)
+				editor._update_point_toolbar()
+				await _settle()
+				manager.clear_history()
+				var before: Variant = editor._backend.capture_snapshot()
+				var button := editor._point_states_reset_button if reset_states and not single_row else editor._point_reset_button
+				_click(viewport, button.get_global_rect().get_center())
+				await _settle()
+				point = editor._point(1)
+				_expect(history.get_history_count() == 1, "Variant reset did not create one transaction")
+				_expect(int(point.get(&"handle_mode")) == (EasingCurvePoint.HandleMode.BALANCED if reset_states and not single_row else EasingCurvePoint.HandleMode.FREE), "Variant reset changed wrong mode")
+				_expect(editor._point_control_states_are_default(point) == (single_row or reset_states), "Variant reset changed wrong control states")
+				_expect(point.get(&"locked").get(&"position"), "Variant reset cleared position lock")
+				var after: Variant = editor._backend.capture_snapshot()
+				_expect(history.undo() and editor._backend.capture_snapshot() == before, "Variant reset Undo lost state")
+				await _settle()
+				_expect(not button.disabled and button.is_visible_in_tree(), "Undo did not restore reset control")
+				_expect(history.redo() and editor._backend.capture_snapshot() == after, "Variant reset Redo lost state")
+			manager.clear_history()
+			viewport.free()
+	plugin.free()
 
 
 func _test_graph_dimensions() -> void:

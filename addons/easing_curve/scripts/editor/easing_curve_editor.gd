@@ -45,6 +45,13 @@ class PointToolbarOptionSlot:
 			fit_child_in_rect(get_child(0), Rect2(Vector2.ZERO, size))
 
 
+enum ControlsLayout { CURRENT_TWO_ROW, COMPACT_TWO_ROW, DEV_SINGLE_ROW }
+
+# Reopen the curve Inspector after changing the layout.
+var controls_layout: ControlsLayout = ControlsLayout.DEV_SINGLE_ROW
+# COMPACT_TWO_ROW only. Reset buttons retain their reserved space in visible rows.
+var hide_unused_controls := true
+
 var use_pending_add := true
 # True: hide point controls and snapping in Function mode.
 # False: show those rows with point-only controls inactive.
@@ -210,6 +217,11 @@ var _backend_point_edit_point: Resource
 var _backend_point_edit_property := StringName()
 var _backend_point_edit_from_point_list := false
 var _default_new_point_handle_mode := EasingCurvePoint.HandleMode.FREE
+
+
+func _init(layout_override: int = -1) -> void:
+	if layout_override in ControlsLayout.values():
+		controls_layout = layout_override as ControlsLayout
 
 
 func _ready() -> void:
@@ -2637,10 +2649,17 @@ func _create_point_toolbar() -> void:
 	_point_mode_row = HBoxContainer.new()
 	_point_mode_row.name = &"PointModeRow"
 	_point_mode_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_toolbar.add_child(_point_mode_row)
+	if controls_layout == ControlsLayout.DEV_SINGLE_ROW:
+		var row_slot := PointToolbarOptionSlot.new()
+		row_slot.add_child(_point_mode_row)
+		_point_toolbar.add_child(row_slot)
+	else:
+		_point_toolbar.add_child(_point_mode_row)
 	_point_states_row = HBoxContainer.new()
 	_point_states_row.name = &"PointStatesRow"
 	_point_states_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if controls_layout == ControlsLayout.COMPACT_TWO_ROW:
+		_point_states_row.alignment = BoxContainer.ALIGNMENT_END
 	_point_toolbar.add_child(_point_states_row)
 
 
@@ -2742,7 +2761,8 @@ func _create_point_toolbar() -> void:
 	_point_left_state_label.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
 	_point_left_group = HBoxContainer.new()
 	_point_left_group.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_states_row.add_child(_point_left_group)
+	var states_parent := _point_mode_row if controls_layout == ControlsLayout.DEV_SINGLE_ROW else _point_states_row
+	states_parent.add_child(_point_left_group)
 	_point_left_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_point_left_group.add_child(_point_left_state_label)
 	_point_left_state = _create_point_toolbar_control_state_option(
@@ -2756,7 +2776,7 @@ func _create_point_toolbar() -> void:
 	_point_right_state_label.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
 	_point_right_group = HBoxContainer.new()
 	_point_right_group.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_states_row.add_child(_point_right_group)
+	states_parent.add_child(_point_right_group)
 	_point_right_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_point_right_group.add_child(_point_right_state_label)
 	_reserve_point_toolbar_control_side_label_width()
@@ -2766,7 +2786,11 @@ func _create_point_toolbar() -> void:
 	_add_point_toolbar_option(_point_right_group, _point_right_state)
 
 	_point_reset_button = EDITOR_THEME_CACHE.create_reserved_reset_button("Reset Handle Mode to Free")
-	_point_reset_button.pressed.connect(_on_point_handle_mode_reset_pressed)
+	if controls_layout == ControlsLayout.DEV_SINGLE_ROW:
+		_point_reset_button.tooltip_text = "Reset Handle Mode and Left/Right states"
+		_point_reset_button.pressed.connect(_on_point_toolbar_reset_pressed)
+	else:
+		_point_reset_button.pressed.connect(_on_point_handle_mode_reset_pressed)
 	_point_mode_row.add_child(_point_reset_button)
 	_point_states_reset_button = EDITOR_THEME_CACHE.create_reserved_reset_button("Reset Left and Right Force Linear and Lock states")
 	_point_states_reset_button.pressed.connect(_on_point_states_reset_pressed)
@@ -2797,6 +2821,9 @@ func _reserve_point_toolbar_label_column_width() -> void:
 
 
 func _add_point_toolbar_option(row: Container, option: OptionButton) -> void:
+	if controls_layout == ControlsLayout.DEV_SINGLE_ROW:
+		row.add_child(option)
+		return
 	var slot := PointToolbarOptionSlot.new()
 	slot.add_child(option)
 	row.add_child(slot)
@@ -2804,6 +2831,12 @@ func _add_point_toolbar_option(row: Container, option: OptionButton) -> void:
 
 func _update_point_toolbar_spacing() -> void:
 	var separation := EDITOR_THEME_CACHE.compact_separation(_editor_scale)
+	if controls_layout == ControlsLayout.COMPACT_TWO_ROW:
+		# A reset-only row retains its usual vertical alignment until it collapses.
+		_point_states_row.custom_minimum_size.y = maxf(
+			_point_left_state.get_combined_minimum_size().y,
+			_point_right_state.get_combined_minimum_size().y,
+		)
 	for button: Button in [_point_move_left_button, _point_move_right_button]:
 		var icon_width := roundi(16.0 * _editor_scale)
 		button.custom_minimum_size = Vector2.ONE * icon_width
@@ -2885,7 +2918,7 @@ func _update_point_toolbar() -> void:
 	)
 
 	_point_toolbar.visible = true
-	_point_states_row.visible = valid_selection
+	_point_states_row.visible = valid_selection and controls_layout != ControlsLayout.DEV_SINGLE_ROW
 
 	if not valid_selection:
 		_point_label.text = (
@@ -2898,7 +2931,7 @@ func _update_point_toolbar() -> void:
 			false,
 			_backend == null or _is_point_graph(),
 		)
-		_point_handle_mode.visible = true
+		_point_handle_mode.visible = controls_layout != ControlsLayout.DEV_SINGLE_ROW
 		_point_handle_mode.self_modulate.a = 0.0
 		_point_handle_mode.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_point_handle_mode.disabled = true
@@ -2911,6 +2944,9 @@ func _update_point_toolbar() -> void:
 			EasingCurvePoint.ControlSide.RIGHT,
 			false,
 		)
+		if controls_layout == ControlsLayout.COMPACT_TWO_ROW:
+			_set_reset_button_available(_point_states_reset_button, false)
+			_point_toolbar_panel.hide()
 		return
 
 	var point := _point(selected_index)
@@ -2949,9 +2985,17 @@ func _update_point_toolbar() -> void:
 		"Right",
 	)
 	_set_point_toolbar_reset_available(
-		int(point.get(&"handle_mode")) != EasingCurvePoint.HandleMode.FREE
+		not _point_toolbar_options_are_default(point)
+		if controls_layout == ControlsLayout.DEV_SINGLE_ROW
+		else int(point.get(&"handle_mode")) != EasingCurvePoint.HandleMode.FREE
 	)
 	_set_reset_button_available(_point_states_reset_button, not _point_control_states_are_default(point))
+	if controls_layout == ControlsLayout.COMPACT_TWO_ROW:
+		_point_states_row.visible = (
+			not _point_left_state.disabled
+			or not _point_right_state.disabled
+			or not _point_states_reset_button.disabled
+		)
 	_updating_point_toolbar = false
 
 
@@ -2982,6 +3026,11 @@ func _set_point_toolbar_reorder_available(
 	for button in [_point_move_left_button, _point_move_right_button]:
 		if button == null:
 			continue
+		button.visible = (
+			available and visible
+			if controls_layout == ControlsLayout.DEV_SINGLE_ROW or (controls_layout == ControlsLayout.COMPACT_TWO_ROW and hide_unused_controls)
+			else true
+		)
 		button.self_modulate.a = 1.0 if visible else 0.0
 		button.mouse_filter = (
 			Control.MOUSE_FILTER_STOP
@@ -3022,7 +3071,11 @@ func _update_point_toolbar_control_state(
 	available: bool,
 	side_name: String,
 ) -> void:
-	_set_point_toolbar_control_state_visible(side, true)
+	var hide_unavailable := (
+		controls_layout == ControlsLayout.DEV_SINGLE_ROW
+		or (controls_layout == ControlsLayout.COMPACT_TWO_ROW and hide_unused_controls)
+	)
+	_set_point_toolbar_control_state_visible(side, available or not hide_unavailable)
 
 	var option := (
 		_point_left_state
@@ -3112,7 +3165,7 @@ func _on_point_states_reset_pressed() -> void:
 	_request_point_property_change(selected_index, &"control_states_reset", true)
 
 
-# Retain the combined action for existing callers; no current toolbar button uses it.
+# Shared reset used by the single-row comparison layout and existing callers.
 func _on_point_toolbar_reset_pressed() -> void:
 	if _backend == null or selected_index < 0 or selected_index >= _point_count():
 		return

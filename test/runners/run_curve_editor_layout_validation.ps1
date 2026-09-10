@@ -81,7 +81,7 @@ enabled=PackedStringArray("res://addons/layout_test_host/plugin.cfg")
 '@ | Add-Content -LiteralPath "$hostRoot/project.godot"
 
 Write-Output "Full editor validation host: $hostRoot"
-& $launcher -GodotPath $GodotPath -TimeoutSeconds 60 --editor --path $hostRoot --log-file "$hostRoot/test/_temp/validation.log" *> "$hostRoot/test/_temp/validation-console.txt"
+& $launcher -GodotPath $GodotPath -TimeoutSeconds 180 --editor --path $hostRoot --log-file "$hostRoot/test/_temp/validation.log" *> "$hostRoot/test/_temp/validation-console.txt"
 $suiteExitCode = $LASTEXITCODE
 $outputText = Get-Content -LiteralPath "$hostRoot/test/_temp/validation-console.txt" -Raw
 $outputText -split '\r?\n' | Where-Object { $_ -match '^(PASS:|WRAP_GATE|FREE_MODE_GATE|TOOLBAR_METRICS|RESET_GATE|SCRIPT ERROR:|ERROR: FAIL:)' } | Write-Output
