@@ -19,6 +19,7 @@ func _run() -> void:
 	_manager = _host.get_undo_redo()
 	_shift(false)
 	for native: bool in [false, true]:
+		await _test_zero_label(native)
 		await _test_tooltip_lifecycle(native)
 		for count: int in [2, 4]:
 			for reverse: bool in [false, true]:
@@ -32,6 +33,58 @@ func _run() -> void:
 	_manager.clear_history()
 	_host.free()
 	_finish("navigation tooltips and Shift swap")
+
+
+func _test_zero_label(native: bool) -> void:
+	var fixture := _fixture(native, 2)
+	var editor: EasingCurveEditor = fixture.editor
+	var history := _manager.get_history_undo_redo(_manager.get_object_history_id(fixture.curve))
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	var first := editor._point(0)
+	first.set(&"position", Vector2(0.2, 0.3))
+	editor.selected_index = -1
+	_expect(editor._point_label.mouse_filter == Control.MOUSE_FILTER_STOP, "Zero label must receive mouse input")
+	editor._point_label.gui_input.emit(click)
+	_expect(editor.selected_index == 0 and editor.get_selected_point_resource() == first, "Zero label did not select existing point 0")
+	_expect(first.get(&"position") == Vector2(0.2, 0.3) and not history.has_undo(), "Selecting point 0 changed curve data")
+	editor.selected_index = 1
+	editor._point_label.gui_input.emit(click)
+	_expect(editor.selected_index == 1, "Nonzero label changed selection")
+	while editor._point_count() > 0:
+		editor.remove_point_from_list(editor._point(0))
+	_manager.clear_history()
+	editor.selected_index = -1
+	click.button_index = MOUSE_BUTTON_RIGHT
+	editor._point_label.gui_input.emit(click)
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = false
+	editor._point_label.gui_input.emit(click)
+	_expect(editor._point_count() == 0, "Right click or mouse release created a point")
+	click.pressed = true
+	editor._default_new_point_handle_mode = EasingCurvePoint.HandleMode.MIRRORED
+	editor._point_label.gui_input.emit(click)
+	_expect(editor._point_count() == 1 and editor.selected_index == 0, "Zero label did not create and select point 0")
+	var created := editor.get_selected_point_resource()
+	_expect(created != null, "Creation lost committed point selection")
+	if created != null:
+		_expect(created.get(&"position") == Vector2.ZERO, "Created point is not at the origin")
+		_expect(created.get(&"handle_mode") == EasingCurvePoint.HandleMode.MIRRORED, "Creation ignored default handle mode")
+	for button: Button in [editor._point_move_left_button, editor._point_move_right_button]:
+		_expect(button.visible and button.disabled, "Single-point arrows must remain visible and disabled")
+	editor._point_label.gui_input.emit(click)
+	_expect(editor._point_count() == 1, "Repeated zero click duplicated point")
+	_expect(history.undo(), "Zero creation has no Undo action")
+	_expect(editor._point_count() == 0 and not history.has_undo(), "Undo did not restore empty curve in one action")
+	_expect(history.redo(), "Zero creation has no Redo action")
+	_expect(editor._point_count() == 1 and editor.selected_index == 0, "Redo did not restore selected point 0")
+	editor._request_point_add(editor._create_point_with_default_handle_mode(Vector2.ONE))
+	editor.selected_index = 0
+	for button: Button in [editor._point_move_left_button, editor._point_move_right_button]:
+		_expect(button.visible and not button.disabled, "Two-point arrows must be enabled")
+	_free_fixture(fixture)
+	await process_frame
 
 
 func _shift(pressed: bool) -> void:

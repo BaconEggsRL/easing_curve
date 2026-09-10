@@ -2681,7 +2681,8 @@ func _create_point_toolbar() -> void:
 	_point_reorder_buttons.add_child(_point_move_left_button)
 
 	_point_label = Label.new()
-	_point_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_point_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	_point_label.gui_input.connect(_on_point_label_gui_input)
 	_point_label.clip_text = true
 	_point_label.text = "No Selection"
 	_point_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -2860,6 +2861,22 @@ func _update_point_navigation_tooltips(reset_modifier := false) -> void:
 		_point_move_right_button.tooltip_text = next
 
 
+func _on_point_label_gui_input(event: InputEvent) -> void:
+	if not event is InputEventMouseButton or event.button_index != MOUSE_BUTTON_LEFT or not event.pressed:
+		return
+	if not _is_point_graph() or _point_label.text != "0":
+		return
+	_point_label.accept_event()
+	finish_active_point_edit()
+	selected_control_index = ControlIndex.NONE
+	if _point_count() > 0:
+		selected_index = 0
+		return
+	var point := _create_point_with_default_handle_mode(Vector2.ZERO)
+	if point != null:
+		selected_index = _request_point_add(point)
+
+
 func _update_point_toolbar() -> void:
 	if _point_toolbar == null:
 		return
@@ -2921,6 +2938,7 @@ func _update_point_toolbar() -> void:
 	_set_point_toolbar_reorder_available(
 		_can_use_point_move_buttons(),
 		_is_point_graph(),
+		true,
 	)
 
 	_updating_point_toolbar = true
