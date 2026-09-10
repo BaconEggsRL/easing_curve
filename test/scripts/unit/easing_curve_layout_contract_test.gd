@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_locked_handle_precedence()
 	await _test_combined_reset_and_handle_edits()
 	await _test_single_row_toolbar()
+	await _test_function_preset_label_width()
 	await _test_sibling_capture()
 	await _test_graph_dimensions()
 	_finish("curve layout contract")
@@ -511,6 +512,37 @@ func _test_single_row_toolbar() -> void:
 		print("WRAP_GATE native=%s single-row controls and widths verified" % [native])
 		presentation.free()
 		backdrop.free()
+
+
+func _test_function_preset_label_width() -> void:
+	for native: bool in [false, true]:
+		var curve := _three_point_curve(native)
+		var property_name := &"transition" if native else &"trans_type"
+		var function_mode: int = 6 if native else EasingCurve.TRANS.ELASTIC
+		var bezier_mode: int = 100 if native else EasingCurve.TRANS.CUSTOM
+		curve.set(property_name, function_mode)
+		var context := HOST.INSPECTOR_PLUGIN.new()
+		var presentation := context.handle_easing_curve_editor(curve)
+		var editor: EasingCurveEditor = context.easing_curve_editor
+		root.add_child(presentation)
+		var toolbar := presentation.get_child(0) as GridContainer
+		for scale_value: float in [1.0, 1.5, 2.0]:
+			var theme := Theme.new()
+			theme.default_font_size = roundi(16.0 * scale_value)
+			presentation.theme = theme
+			editor._editor_scale = scale_value
+			editor._update_point_toolbar()
+			await _settle()
+			var function_width := (toolbar.get_child(0) as Label).size.x
+			var function_dropdown_x := (toolbar.get_child(1) as OptionButton).position.x
+			for mode: int in [bezier_mode, function_mode]:
+				curve.set(property_name, mode)
+				editor._update_point_toolbar()
+				await _settle()
+				for label_index: int in [0, 3]:
+					_expect(is_equal_approx((toolbar.get_child(label_index) as Label).size.x, function_width), "Function and Bezier label widths differ")
+					_expect(is_equal_approx((toolbar.get_child(label_index + 1) as OptionButton).position.x, function_dropdown_x), "Switching function/Bezier shifted preset dropdowns")
+		presentation.free()
 
 
 func _capture_layout(presentation: Control, capture_name: String) -> void:

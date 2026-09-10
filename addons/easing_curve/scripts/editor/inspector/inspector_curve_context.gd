@@ -1436,11 +1436,13 @@ func _handle_native_curve_editor(
 	easing_curve_editor.point_selection_changed.connect(_on_native_graph_selection_changed)
 	var resource_editor := easing_curve_editor
 	preset_reset.pressed.connect(easing_curve_editor.reset_native_preset)
+	ease_reset.pressed.connect(_queue_autofit_curve_editor)
 	ease_reset.pressed.connect(
 		easing_curve_editor.edit_curve_property.bind(&"ease_type", EasingCurve.EASE.IN)
 	)
 	native_ease_option.item_selected.connect(
 		func(index: int) -> void:
+			_queue_autofit_curve_editor()
 			resource_editor.edit_curve_property(
 				&"ease_type",
 				native_ease_option.get_item_id(index),
@@ -3864,12 +3866,16 @@ static func _create_option(enum_dict: Dictionary, selected_value: int) -> Option
 static func _align_preset_label_column(toolbar: GridContainer, editor: EasingCurveEditor) -> void:
 	var navigation := editor._point_reorder_buttons
 	var update_width := func() -> void:
-		var column_width := navigation.get_combined_minimum_size().x
+		var column_width := 2.0 * navigation.get_theme_constant(&"separation")
+		for control: Control in navigation.get_children():
+			column_width += control.get_combined_minimum_size().x
 		column_width += editor._point_mode_row.get_theme_constant(&"separation") - toolbar.get_theme_constant(&"h_separation")
 		for index: int in [0, 3]:
 			var label := toolbar.get_child(index) as Label
 			label.custom_minimum_size.x = column_width
-	navigation.minimum_size_changed.connect(update_width)
+	for control: Control in navigation.get_children():
+		control.minimum_size_changed.connect(update_width)
+	editor._layout.sort_children.connect(update_width)
 	update_width.call()
 
 

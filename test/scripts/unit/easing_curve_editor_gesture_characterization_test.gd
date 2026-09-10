@@ -25,6 +25,7 @@ func _run() -> void:
 	_test_view_state_restore_and_rebuild_order()
 	await _test_autofit_request_lifecycle()
 	await _test_autofit_waits_for_function_toolbar_layout()
+	await _test_ease_change_autofit()
 	await _test_automatic_autofit_suppresses_intermediate_render()
 	await _test_folded_curve_editor_defers_autofit_until_expand()
 	_test_zoom_behavioral_invariants()
@@ -740,6 +741,34 @@ func _wait_for_autofit(inspector: Object) -> void:
 		if not bool(inspector.call("_is_autofit_pending")):
 			return
 	_expect(false, "Auto Fit did not settle within twelve frames")
+
+
+func _test_ease_change_autofit() -> void:
+	for native: bool in [false, true]:
+		for function_mode: bool in [false, true]:
+			var curve: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+			curve.set(&"transition" if native else &"trans_type", (6 if function_mode else 1) if native else (EasingCurve.TRANS.ELASTIC if function_mode else EasingCurve.TRANS.SINE))
+			var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
+			var content := inspector.handle_easing_curve_editor(curve)
+			get_root().add_child(content)
+			var editor: EasingCurveEditor = inspector.easing_curve_editor
+			await _wait_for_autofit(inspector)
+			var toolbar := content.get_child(0) as GridContainer
+			var ease := toolbar.get_child(1) as OptionButton
+			for ease_id: int in [EasingCurve.EASE.OUT, EasingCurve.EASE.IN_OUT, EasingCurve.EASE.OUT_IN, EasingCurve.EASE.IN]:
+				editor.pan_offset = Vector2(2000.0, 2000.0)
+				if ease_id == EasingCurve.EASE.IN:
+					(toolbar.get_child(2) as Button).pressed.emit()
+				else:
+					ease.item_selected.emit(ease.get_item_index(ease_id))
+				_expect(int(curve.get(&"ease_type")) == ease_id, "Ease selection/reset did not apply")
+				_expect(inspector._is_autofit_pending(), "Ease change did not queue auto-fit")
+				await _wait_for_autofit(inspector)
+				var fitted_pan := editor.pan_offset
+				var fitted_zoom := Vector2(editor._zoom_x, editor._zoom_y)
+				editor.autofit()
+				_expect(fitted_pan.is_equal_approx(editor.pan_offset) and fitted_zoom.is_equal_approx(Vector2(editor._zoom_x, editor._zoom_y)), "Ease change did not match settled auto-fit")
+			content.free()
 
 
 func _test_autofit_waits_for_function_toolbar_layout() -> void:
