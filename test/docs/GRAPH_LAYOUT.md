@@ -29,43 +29,51 @@ property-wrapper compensation are preserved.
 
 ## Fixed point-toolbar rows and input
 
-A selected point has exactly two horizontal rows inside the shared vertical
-point toolbar. Neither row wraps:
+The selected-point toolbar has three non-wrapping rows outside Linked mode:
 
-- Row 1: previous / index / next, Handle Mode field, reserved mode-reset slot.
-- Row 2: L / left-state field, R / right-state field, reserved state-reset slot.
+- Navigation/index, Handle Mode, reserved mode-reset slot.
+- L label, full-width left-state dropdown, reserved left-reset slot.
+- R label, full-width right-state dropdown, reserved right-reset slot.
 
-Shrinkable option slots report height independently of their field's preferred
-text width. Dropdowns clip/ellipsize text, keep tooltips and share remaining
-Row 2 space equally (allowing one pixel of rounding). Compact navigation icons
-and unpadded L/R labels leave room for the native dropdown chrome even at the
-established narrow Inspector allocation. The shared reset-button factory and
-compact separation metric align both trailing slots with the Ease/Trans column.
-Inactive reset buttons stay allocated, transparent, disabled and non-focusable.
-Unavailable side fields remain visible but disabled, including missing endpoint
-handles and modes that mask side overrides. No selection hides the second row;
-Function-mode toolbar/snapping visibility retains the existing setting.
+Linked mode reuses the left-state row as one LR row and hides the right row,
+leaving exactly two visible rows. LR displays the backend's existing shared
+state and edits both sides through the existing Linked control-state operation.
+It remains editable at either endpoint whenever one handle is available.
 
-At a fixed width and scale, selection-state changes do not change graph size.
-The two selected rows keep a constant height across Handle Modes. Repeated
-resizing and long localized field labels settle without recurring minimum-size
-notifications. The zoom slider remains in its separate row and can shrink to
-32 logical pixels before its surrounding controls.
+Shrinkable slots report height independently of preferred field text width.
+Dropdowns clip/ellipsize text and keep tooltips. Both side labels reserve the
+width of "LR", aligning field starts across separate and Linked presentations.
+The shared reset-button factory and compact separation metric align all reset
+slots with Ease/Trans. Inactive resets remain allocated, transparent, disabled
+and non-focusable. Outside Linked mode, unavailable side fields remain visible
+but disabled, including missing endpoint handles and modes masking overrides.
+No selection hides both state rows; Function-mode toolbar/snapping visibility
+retains the existing setting.
 
-### Independent resets
+At a fixed width and scale, state changes do not change graph dimensions.
+Switching to Linked removes one row of toolbar height; switching back restores
+it. Repeated resizing, mode switching and long localized field labels settle
+without recurring minimum-size notifications. Grid Snap and zoom stay separate.
 
-Row 1 submits the existing `handle_mode = Free` edit. Characterization covers
-both backends, all five modes and 16 combinations of stored Force Linear / Lock
-flags: the existing path preserves those stored flags exactly.
+### Independent edits and resets
 
-Row 2 submits one `control_states_reset` intent through the existing transaction
-pipeline. Legacy snapshot mutation and the Native backend clear both Force
-Linear flags and both handle-lock flags, including masked overrides. Handle
-Mode, position locks and handle coordinates remain unchanged. Each reset has
-one Undo/Redo action; an unavailable reset creates no action. The old combined
-`toolbar_options_reset` intent and callback remain compatible for existing
-callers, and neither new button invokes them. Resource and backend method
-signatures, serialization and curve mathematics are unchanged.
+The Handle Mode reset remains `handle_mode = Free`. Characterization covers both
+backends, all five modes and 16 combinations of stored Force Linear / Lock flags:
+the existing path preserves those stored flags exactly.
+
+Outside Linked mode, the L/R buttons submit `left_control_state_reset` or
+`right_control_state_reset`, applying the backend's existing display-to-curve
+side mapping. Legacy snapshot mutation and the Native backend clear only the
+chosen side's Force Linear and handle-lock flags. The opposite side, Handle
+Mode, position locks and handle coordinates are preserved, including overrides
+masked by an unavailable mode.
+
+The LR reset reuses `control_states_reset`, clearing both sides without changing
+Linked mode or geometry. Each state dropdown edit and reset is one Undo/Redo
+action; unavailable resets create no action. The old `toolbar_options_reset`
+intent and callback remain compatible, and no current toolbar button invokes
+them. Resource/backend signatures, serialization and curve mathematics are
+unchanged.
 
 Graph drawing and transient coordinate feedback are children of the clipped
 canvas. Drawing and input convert at the canvas boundary while public view/world
@@ -92,7 +100,7 @@ ordinary resizing retains the user's zoom and pan.
 
 Run `test/runners/run_all_tests.ps1 --run` for all isolated correctness suites.
 The layout contract suite covers both backends, narrow/wide allocations, aspect
-breakpoints, scale/font changes, minimum widths, two fixed toolbar rows,
+breakpoints, scale/font changes, minimum widths, separate L/R rows and a combined Linked row,
 long-label clipping, reset-column alignment, independent reset transactions,
 transient label bounds and repeatable fitting.
 
@@ -121,7 +129,7 @@ The two existing `editor_undo_redo_test.gd` CSS dropdown-label assertions were
 reproduced against starting commit `23760bcbf7bfdfe43b7cca3c7177d956bb645663`;
 they are unrelated to this layout change.
 
-## Two-row refinement measurements
+## Separate and Linked row measurements
 
 Both backends produced identical measurements in the full-editor fixture.
 Scale coverage combines the editor scale used by the graph/compact controls
@@ -130,48 +138,46 @@ This is automated scale/font coverage, not three separate OS-DPI sessions.
 
 | Scale | Editor width | Mode field | Left / right fields | Reset left edge (all rows) | Usable graph | Presentation minimum width |
 | --- | ---: | ---: | ---: | ---: | --- | ---: |
-| 100% | 150 | 50 | 44 / 44 | 118 | 142 × 142 | 147 |
-| 150% | 225 | 92 | 75 / 76 | 193 | 213 × 213 | 168 |
-| 200% | 300 | 134 | 105 / 105 | 268 | 284 × 284 | 189 |
+| 100% | 150 | 50 | 94 / 94 | 118 | 142 × 142 | 147 |
+| 150% | 225 | 92 | 158 / 158 | 193 | 213 × 213 | 168 |
+| 200% | 300 | 134 | 221 / 221 | 268 | 284 × 284 | 189 |
 
-All widths are measured pixels. Both reset columns match the Ease/Trans left
-and right edges exactly; neither row wraps. Presentation minimum widths match
+All widths are measured pixels. The LR field uses the same allocation as either
+separate side field. All reset columns match Ease/Trans left and right edges
+exactly; no row wraps. Presentation minimum widths match
 the pre-refinement measurements. The existing property-wrapper compensation
-is unchanged. `point-toolbar-{native|legacy}-{150|220|600}.png` captures include
+is unchanged. `point-toolbar-{native|legacy}-{separate|linked}-{150|220|600}.png` captures include
 active reset buttons; the gesture and readout captures cover graph boundaries,
 fold/reopen, scrolling, dragging and feedback.
 
 Final validation on Godot 4.7.1 passed 33 of 34 isolated suites. The only failures
 were the same two baseline CSS-label assertions noted above. Both headless and
-full-editor layout runs passed 14,703 checks. Full-editor gesture validation
+full-editor layout runs passed 24,621 checks. Full-editor gesture validation
 passed 831 checks, and coordinate-readout validation passed 1,035 checks. Narrow,
 medium and wide selected-point captures were visually inspected, including
 visible navigation arrows, active reset buttons and strict graph boundaries.
-Both reset operations passed viewport-dispatched single-action Undo/Redo tests
-for Legacy and Native, including masks imposed by unavailable Handle Modes.
+Mode, L, R and LR resets passed viewport-dispatched single-action Undo/Redo
+tests for Legacy and Native. Dropdown signal-path tests also verify one-action
+Undo/Redo, shared Linked state, opposite-side preservation and reversed mapping.
 
 Preserved evidence under `test/_temp/`:
 
-- Full suite: `two-row-full-final-console.txt`.
-- Layout and reset checks: `two-row-clean-captures-console.txt`.
-- Clean active-reset captures: `layout-editor-fb4fbf38c11848dd8941c0ce92887f6a/test/_temp/`.
-- Rendered gestures: `two-row-gesture-final-console.txt`.
-- Rendered readouts: `two-row-readout-final-console.txt`.
+- Full suite: `side-rows-full-console.txt`.
+- Layout and reset checks: `side-rows-focused-final-console.txt`.
+- Clean active-reset captures: `layout-editor-bfaef48f53a44ecfb7a85ef49b852f77/test/_temp/`.
+- Rendered gestures: `side-rows-gesture-console.txt`.
+- Rendered readouts: `side-rows-readout-console.txt`.
 
-The refinement began at feature-branch commit `9126c45`, which already contained
-the user's no-selection indicator change to `0`; its working tree was clean.
-No test-scene edits were introduced or restored. `dev` was verified unchanged
-at `23760bcbf7bfdfe43b7cca3c7177d956bb645663` before and after implementation.
+This refinement began on `feature/curve-editor-max-graph-area` at `48de6ec` with
+a clean working tree. The earlier no-selection indicator change to `0` is
+preserved. No test-scene edits were made. `dev` remains
+`23760bcbf7bfdfe43b7cca3c7177d956bb645663`.
 
 ### Files changed by the refinement
 
 - `addons/easing_curve/scripts/editor/easing_curve_editor.gd`
 - `addons/easing_curve/scripts/editor/backend/native_curve_editor_backend.gd`
-- `addons/easing_curve/scripts/editor/inspector/editor_theme_cache.gd`
-- `addons/easing_curve/scripts/editor/inspector/inspector_curve_context.gd`
 - `addons/easing_curve/scripts/editor/inspector/point_edit_transaction_controller.gd`
 - `addons/easing_curve/scripts/runtime/easing_curve_point_snapshot_mutator.gd`
 - `test/scripts/unit/easing_curve_layout_contract_test.gd`
-- `test/scripts/unit/easing_curve_points_list_reorder_editor_test.gd`
-- `test/runners/run_curve_editor_layout_validation.ps1`
 - `test/docs/GRAPH_LAYOUT.md`
