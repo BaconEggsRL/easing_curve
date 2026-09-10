@@ -44,9 +44,163 @@ func _run() -> void:
 	_test_axis_constraint_request_and_input_boundaries()
 	await _test_inspector_input_transaction_finish_boundaries()
 	await _test_right_delete_drag_inspector_rebuild()
+	await _test_transition_clears_selection_before_change()
 	_test_point_and_control_drag_boundaries()
 	_test_zoom_and_pan_interactions()
 	_finish("graph gesture characterization")
+
+
+func _preset_option(graph: Control, label: String) -> OptionButton:
+	for option: OptionButton in graph.find_children("*", "OptionButton", true, false):
+		for index in option.item_count:
+			if option.get_item_text(index) == label:
+				return option
+	return null
+
+
+func _expect_transition_selection_cleared(context: InspectorCurveContext, phase: String) -> void:
+	var editor := context.easing_curve_editor
+	_expect(editor.selected_index == -1 and editor.selected_control_index == EasingCurveEditor.ControlIndex.NONE, phase + ": graph selection survived")
+	_expect(EDITOR_DRIVER.selected_point_index(context) == -1 and EDITOR_DRIVER.selected_point_resource_id(context) == 0, phase + ": list selection survived")
+	_expect(EDITOR_DRIVER.selected_point_property_name(context) == StringName() and EDITOR_DRIVER.selected_point_property_header(context) == null, phase + ": property highlight survived")
+	_expect(not editor._point_handle_mode.visible and not editor._point_left_group.visible and not editor._point_right_group.visible, phase + ": selected-point controls survived")
+
+
+func _capture_transition_graph(graph: Control, label: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var image := graph.get_viewport().get_texture().get_image()
+	var region := Rect2i(graph.get_global_rect()).intersection(Rect2i(Vector2i.ZERO, image.get_size()))
+	_expect(region.has_area(), "Rendered transition graph is outside the viewport")
+	if region.has_area():
+		image.get_region(region).save_png("res://test/_temp/transition-%s.png" % label)
+
+
+func _test_transition_clears_selection_before_change() -> void:
+	const InspectorPlugin = preload("res://addons/easing_curve/scripts/editor/inspector/easing_curve_editor_inspector_plugin.gd")
+	var undo_host := EditorPlugin.new()
+	var manager := undo_host.get_undo_redo()
+	for native: bool in [false, true]:
+		var surface: Window = root
+		if DisplayServer.get_name() != "headless":
+			surface = Window.new()
+			surface.title = "Transition selection: " + ("Native" if native else "Legacy")
+			surface.size = Vector2i(700, 700)
+			root.add_child(surface)
+		var resource: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+		var transition_property := &"transition" if native else &"trans_type"
+		resource.set(transition_property, 0 if native else EasingCurve.TRANS.LINEAR)
+		var plugin := InspectorPlugin.new()
+		plugin.editor_undo_redo = manager
+		plugin._parse_begin(resource)
+		var context: InspectorCurveContext = plugin._construction_context
+		var graph := context.handle_easing_curve_editor(resource)
+		surface.add_child(graph)
+		graph.custom_minimum_size.x = 640
+		await process_frame
+		var editor := context.easing_curve_editor
+		for position: Vector2 in [Vector2(0.3, 0.4), Vector2(0.7, 0.8)]:
+			editor._request_point_add(editor._backend.create_point(position))
+		await process_frame
+		_expect(editor._point_count() == 4, "Transition fixture did not add two Linear points")
+		var header := PanelContainer.new()
+		root.add_child(header)
+		var selected := editor._point(1)
+		if native:
+			context._select_native_point_property(header, selected, &"left_control_point")
+		else:
+			context._select_point_property(header, 1, &"left_control_point")
+		editor.select_point_resource(selected)
+		editor.selected_control_index = EasingCurveEditor.ControlIndex.LEFT
+		var transition := _preset_option(graph, "Cubic")
+		_expect(transition != null, "Transition dropdown missing")
+		if transition == null:
+			header.free()
+			graph.free()
+			continue
+		manager.clear_history()
+		var before: Dictionary = resource.call(&"get_editor_state_snapshot")
+		transition.item_selected.emit(transition.get_item_index(resource.get(transition_property)))
+		_expect(editor.get_selected_point_resource() == selected and EDITOR_DRIVER.selected_point_property_header(context) == header, "Same transition discarded selection")
+		var label := "native" if native else "legacy"
+		await process_frame
+		_capture_transition_graph(graph, label + "-before")
+		var first_change := [false]
+		var on_change := func() -> void:
+			if first_change[0]:
+				return
+			first_change[0] = true
+			_expect_transition_selection_cleared(context, "first resource change")
+		resource.changed.connect(on_change)
+		var cubic_index := -1
+		for index in transition.item_count:
+			if transition.get_item_text(index) == "Cubic":
+				cubic_index = index
+		transition.item_selected.emit(cubic_index)
+		resource.changed.disconnect(on_change)
+		_expect(first_change[0], "Transition did not publish a resource change")
+		_expect_transition_selection_cleared(context, "dropdown callback return")
+		var after: Dictionary = resource.call(&"get_editor_state_snapshot")
+		var first_toolbar_height := -1.0
+		for frame in range(3):
+			await process_frame
+			_expect_transition_selection_cleared(context, "following frame %d" % frame)
+			if frame == 0 or frame == 2:
+				_capture_transition_graph(graph, label + "-frame-%d" % frame)
+				if frame == 0:
+					first_toolbar_height = editor._point_toolbar_panel.size.y
+				else:
+					_expect(is_equal_approx(editor._point_toolbar_panel.size.y, first_toolbar_height), "Point toolbar changed height after the first updated frame")
+		var history := manager.get_history_undo_redo(manager.get_object_history_id(resource))
+		_expect(history.undo() and not history.has_undo(), "Transition did not create exactly one Undo action")
+		_expect(resource.call(&"get_editor_state_snapshot") == before, "Transition Undo lost curve state")
+		_expect_transition_selection_cleared(context, "Undo")
+		_expect(history.redo(), "Transition Redo missing")
+		_expect(resource.call(&"get_editor_state_snapshot") == after, "Transition Redo lost curve state")
+		_expect_transition_selection_cleared(context, "Redo")
+		if not native:
+			graph.free()
+			await process_frame
+			plugin._parse_begin(resource)
+			context = plugin._construction_context
+			graph = context.handle_easing_curve_editor(resource)
+			surface.add_child(graph)
+			graph.custom_minimum_size.x = 640
+			editor = context.easing_curve_editor
+			await process_frame
+			_expect_transition_selection_cleared(context, "Legacy rebuild")
+		editor.select_point_resource(editor._point(1))
+		_expect(editor.selected_index == 1, "Ease fixture has no selected point; count=%d" % editor._point_count())
+		var ease := _preset_option(graph, "Out")
+		_expect(ease != null, "Ease dropdown missing")
+		if ease != null:
+			ease.item_selected.emit(ease.get_item_index(EasingCurve.EASE.OUT))
+			# Existing Ease regeneration clears selection after replacing the points.
+			_expect(editor.selected_index == -1, "Ease regeneration selection behavior changed")
+		# A pending point edit must finish as its own action before the transition.
+		transition = _preset_option(graph, "Linear")
+		manager.clear_history()
+		var before_edit: Dictionary = resource.call(&"get_editor_state_snapshot")
+		editor._request_point_property_change(0, &"position", Vector2(0.05, 0.1), true)
+		var edited: Dictionary = resource.call(&"get_editor_state_snapshot")
+		_expect(edited != before_edit, "Pending point edit fixture did not change geometry")
+		_expect(editor._backend_point_edit_active if native else context._point_edit_transaction_controller.is_point_edit_active(), "Pending point edit fixture did not start a transaction")
+		transition.item_selected.emit(transition.get_item_index(0 if native else EasingCurve.TRANS.LINEAR))
+		_expect(not editor._backend_point_edit_active and not context._point_edit_transaction_controller.is_point_edit_active(), "Transition retained an active point edit")
+		_expect_transition_selection_cleared(context, "transition after pending edit")
+		history = manager.get_history_undo_redo(manager.get_object_history_id(resource))
+		_expect(history.undo(), "Transition after pending edit lost Undo")
+		_expect(resource.call(&"get_editor_state_snapshot") == edited, "Transition Undo did not preserve the completed point edit")
+		_expect_transition_selection_cleared(context, "pending edit transition Undo")
+		_expect(history.undo() and not history.has_undo(), "Pending edit and transition were not two separate actions")
+		_expect(resource.call(&"get_editor_state_snapshot") == before_edit, "Point edit Undo did not restore pre-edit geometry")
+		header.free()
+		graph.free()
+		if surface != root:
+			surface.queue_free()
+		manager.clear_history()
+		await process_frame
+	undo_host.free()
 
 
 func _test_right_delete_drag_inspector_rebuild() -> void:

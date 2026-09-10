@@ -1,5 +1,36 @@
 # Development testing
 
+## Clear selection before transition changes (2026-09-10)
+
+Both Inspector transition handlers now finish any pending point edit and clear
+graph/control selection, the Points property highlight and Legacy's persisted
+selection before changing the preset. This uses the existing selection/toolbar
+updates synchronously; no delay or forced redraw was added. Undo/Redo restores
+the curve while leaving selection cleared. Ease, reset and same-transition
+handling are unchanged.
+
+The gesture suite reproduces Linear plus two added points to Cubic through the
+actual dropdown callbacks. It checks selection and control visibility at the
+first resource-change notification, subsequent frames, Undo/Redo and Legacy
+rebuilds. A pending edit remains a separate Undo action. The initial regression
+produced 20 failures before the production fix; the expanded headless suite
+passes 1,077 checks. All 34 correctness suites and exact-archive lifecycle/API
+validation passed. After refining the capture fixture, the rendered suite passed
+1,083 checks and the final headless focused run passed 1,077 checks.
+
+Rendered Legacy/Native captures show selected-point controls absent in the first
+updated frame. First and third updated-frame PNGs are byte-identical. Input is
+synthetic through the real Inspector callbacks with actual Editor rendering.
+The first capture attempt waited indefinitely for an idle Editor to redraw;
+the fixture now reads completed frames in an isolated window. No production
+rendering workaround or diagnostic allowlist change was needed. Existing
+standalone rendered teardown diagnostics remain in the logs.
+
+Evidence: `_exports/_validation/transition-selection-20260910/`. Full-suite and
+archive checks used isolated working-tree snapshots; separate demo-scene edits
+were preserved. The final capture-only adjustments were checked in the focused
+headless and rendered runs; production code was unchanged after the full run.
+
 ## Legacy right-drag deletion regression (2026-09-10)
 
 Deleting a Legacy point publishes a property-list refresh and rebuilds its

@@ -1453,6 +1453,8 @@ func _handle_native_curve_editor(
 	)
 	native_trans_option.item_selected.connect(
 		func(index: int) -> void:
+			if object.get(&"transition") != native_trans_option.get_item_id(index):
+				_clear_transition_selection()
 			resource_editor.edit_curve_property(
 				&"transition",
 				native_trans_option.get_item_id(index),
@@ -3513,6 +3515,15 @@ func _remove_point(point: EasingCurvePoint) -> void:
 		),
 	)
 
+func _clear_transition_selection() -> void:
+	_finish_applied_point_edit()
+	_clear_point_property_selection()
+	if is_instance_valid(easing_curve_editor):
+		easing_curve_editor.selected_control_index = EasingCurveEditor.ControlIndex.NONE
+	_sync_graph_selected_point_index(-1)
+	_persist_legacy_selection()
+
+
 func _emit_curve_property(property_name: StringName, value: Variant, object: EasingCurve) -> void:
 	if object == null:
 		return
@@ -3522,6 +3533,8 @@ func _emit_curve_property(property_name: StringName, value: Variant, object: Eas
 		and object.is_selected_preset_modified()
 	):
 		return
+	if property_name == &"trans_type" and object.trans_type != value:
+		_clear_transition_selection()
 	if is_instance_valid(easing_curve_editor) and easing_curve_editor.get_curve() == object:
 		_queue_autofit_curve_editor()
 	var action_name := "Change Easing Curve Ease" if property_name == &"ease_type" else "Change Easing Curve Transition"
