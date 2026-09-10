@@ -110,6 +110,11 @@ function Test-ArchiveRuntimeResult {
 	return $ExitCode -eq 0 -and $diagnostics.Count -eq 0 -and $LogText -match '(?m)^PASS: exact archive loaded, sampled, saved, and reloaded both APIs$'
 }
 
+function Test-ArchiveEditorResult {
+	param([int]$ExitCode, [string]$LogText)
+	return $ExitCode -eq 0 -and $LogText -notmatch '(?m)^(?:SCRIPT ERROR:|.*Parse Error:|ERROR: Failed to load (?:extension|script))'
+}
+
 function Invoke-EditorLifecycle {
 	param(
 		[string]$Phase,
@@ -123,7 +128,7 @@ function Invoke-EditorLifecycle {
 	Assert-GodotProcessExit -ExitCode $exitCode -Phase $Phase -LogPath $LogPath
 	$logText = if (Test-Path -LiteralPath $LogPath) { Get-Content -Raw -LiteralPath $LogPath } else { "" }
 	$classCache = Join-Path $validationRoot ".godot\global_script_class_cache.cfg"
-	$failed = (-not (Test-Path -LiteralPath $classCache -PathType Leaf)) -or ($logText -match '(?m)^(?:SCRIPT ERROR:|.*Parse Error:|ERROR: Failed to load extension)')
+	$failed = (-not (Test-Path -LiteralPath $classCache -PathType Leaf)) -or -not (Test-ArchiveEditorResult -ExitCode $exitCode -LogText $logText)
 	if ($failed) {
 		Stop-ArchivePhase -Phase $Phase -LogPath $LogPath -ExitCode $exitCode
 	}
@@ -246,20 +251,21 @@ func _run() -> void:
 '@
 	[IO.File]::WriteAllText((Join-Path $validationRoot "main.gd"), $runtimeScript, [Text.UTF8Encoding]::new($false))
 
-	# A fresh install imports SVG textures before the user enables the plugin.
-	# Keep first-import diagnostics separate from the strict enabled-plugin check.
+	# Exercise first import with the plugin configured to load. A later successful
+	# restart must not hide parse errors caused by unavailable imported textures.
 	$disabledConfig = $projectConfig.Replace(
 		'enabled=PackedStringArray("res://addons/easing_curve/plugin.cfg")',
 		'enabled=PackedStringArray()'
 	)
-	[IO.File]::WriteAllText((Join-Path $validationRoot "project.godot"), $disabledConfig, [Text.UTF8Encoding]::new($false))
+	[IO.File]::WriteAllText((Join-Path $validationRoot "project.godot"), $projectConfig, [Text.UTF8Encoding]::new($false))
 	$importLog = Join-Path $logDirectory "initial-import.log"
 	$importExit = Invoke-Runner -LogPath $importLog -Arguments @(
 		"--editor", "--headless", "--path", $validationRoot, "--import",
 		"--log-file", $importLog
 	)
 	Write-EditorImportDiagnostics -Phase "initial import" -LogPath $importLog -ExitCode $importExit
-	if ($importExit -ne 0) {
+	$importText = if (Test-Path -LiteralPath $importLog) { Get-Content -Raw -LiteralPath $importLog } else { "" }
+	if (-not (Test-ArchiveEditorResult -ExitCode $importExit -LogText $importText)) {
 		Stop-ArchivePhase -Phase "initial import" -LogPath $importLog -ExitCode $importExit
 	}
 	[IO.File]::WriteAllText((Join-Path $validationRoot "project.godot"), $projectConfig, [Text.UTF8Encoding]::new($false))

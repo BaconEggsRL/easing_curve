@@ -3,7 +3,7 @@ Dual GDScript and Native curve editor for easing functions.
 
 Designed for parity with Godot's Tween system and easing equations.
 
-Version 1.2.1 includes two independent, supported API families:
+Version 1.2.2 includes two independent, supported API families:
 `EasingCurve` / `EasingCurvePoint` in GDScript and `NativeEasingCurve` /
 `NativeEasingCurvePoint` in GDExtension. Both can coexist in one project and use
 the same Inspector workflow. The legacy API is **not deprecated** and remains
@@ -25,14 +25,14 @@ the portable fallback.
 
 ### Compatibility:
 
-* Godot **4.4.1 or newer** is required for v1.2.1, including both Legacy and Native workflows.
+* Godot **4.4.1 or newer** is required for v1.2.2, including both Legacy and Native workflows.
 * Godot 4.7.1 is the primary validation version. The release tracker records
   exact candidate checks and remaining manual/CI certification.
 * Native resources are supported on Windows x86_64 and non-threaded Web builds.
 * Legacy resources remain supported on all plugin platforms and do not require
   a Native binary.
 * Windows editor sessions currently use the release Native DLL. Native debug
-  builds and hot reload are not part of the v1.2.1 support contract.
+  builds and hot reload are not part of the v1.2.2 support contract.
 
 ### Choose an API:
 
@@ -60,7 +60,7 @@ func eased_value(t: float) -> float:
 
 #### Godot Asset Library / Asset Store
 
-Choose the published v1.2.1 package. A listing backed by a Git source archive
+Choose the published v1.2.2 package. A listing backed by a Git source archive
 does not include the Native libraries; use the packaged GitHub ZIP for Native.
 Confirm the installed package contains the libraries for your target platform.
 
@@ -77,8 +77,8 @@ Confirm the installed package contains the libraries for your target platform.
 
 #### Manual Installation
 
-* Download the packaged `easing_curve_v1.2.1.zip` from the
-  [GitHub release](https://github.com/BaconEggsRL/easing_curve/releases/tag/v1.2.1).
+* Download the packaged `easing_curve_v1.2.2.zip` from the
+  [GitHub release](https://github.com/BaconEggsRL/easing_curve/releases/tag/v1.2.2).
 * Extract it and copy `addons/easing_curve/` into your project's `addons/` folder.
 * Use the packaged ZIP for Native support. GitHub **Source code** archives and
   source checkouts omit Native binaries; developers must build those separately.

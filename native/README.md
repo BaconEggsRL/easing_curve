@@ -4,7 +4,7 @@
 resources. They coexist with the GDScript `EasingCurve` and
 `EasingCurvePoint` APIs; neither runtime solver delegates to the other.
 
-Both API families are supported in v1.2.1. The GDScript API remains the
+Both API families are supported in v1.2.2. The GDScript API remains the
 compatibility and fallback implementation and is not deprecated. Any future
 deprecation proposal remains conditional on broader Native platform coverage,
 a stable release cycle, proven migration and rollback, and explicit approval.
@@ -15,9 +15,9 @@ checks. [PLAN.md](PLAN.md) preserves the historical Native development plan.
 
 ## Build contract
 
-The `godot-cpp` submodule is pinned to `godot-4.4.1-stable`. The v1.2.1 minimum
+The `godot-cpp` submodule is pinned to `godot-4.4.1-stable`. The v1.2.2 minimum
 is **Godot 4.4.1** for both API families. The extension manifest declares `4.4.1`,
-matching godot-cpp's runtime version check. Godot 4.4.0 is outside the v1.2.1
+matching godot-cpp's runtime version check. Godot 4.4.0 is outside the v1.2.2
 support contract; the current Native DLL cannot load on it.
 Build the supported
 Windows release library and both non-threaded Web variants from the repository
@@ -148,7 +148,7 @@ Run the Native correctness suite and the expanded runtime benchmark:
 
 The authoritative suite inventory comes from `run_all_tests.ps1 --list`;
 assertion counts are recorded per run in the release tracker. Benchmarks below
-are optional characterization and do not gate v1.2.1. The runtime benchmark runs
+are optional characterization and do not gate v1.2.2. The runtime benchmark runs
 in an isolated project containing only this addon and
 the benchmark script. It reports median, median absolute deviation, and raw values
 for all 12 standard transitions in all four ease modes; 2-, 9-, and 65-point
@@ -279,7 +279,7 @@ is used for serialized Native resources.
 The [v1.2.1 tracker](../test/docs/v1.2.1_CODE_TRACKER.md) supersedes the dated
 manual results above. Require exact-source CI artifacts, the packaged ZIP, and
 paired visible-editor sign-off. Performance baselines and additional Native
-platforms are follow-ups, not v1.2.1 acceptance gates. Legacy is not deprecated.
+platforms are follow-ups, not v1.2.2 acceptance gates. Legacy is not deprecated.
 
 ## SMOOTHSTEP-01
 

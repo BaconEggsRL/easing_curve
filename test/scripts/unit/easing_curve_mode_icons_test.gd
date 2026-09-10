@@ -9,6 +9,12 @@ func _init() -> void:
 
 func _run() -> void:
 	_expect(ICONS.TRANSITION_ICONS.size() == EasingCurve.TRANS.size(), "Transition icon catalog is incomplete")
+	for name: StringName in EasingCurve.TRANS:
+		_expect(ICONS.get_transition_icon(name) != null, "Lazy runtime transition icon missing: %s" % name)
+	for name: StringName in EasingCurve.EASE:
+		_expect(ICONS.get_ease_icon(name) != null, "Lazy runtime ease icon missing: %s" % name)
+	_expect(ICONS.get_transition_icon(&"UNKNOWN") == null, "Unknown transition should not load a texture")
+	_expect(ICONS.get_ease_icon(&"UNKNOWN") == null, "Unknown ease should not load a texture")
 	for scale: float in [1.0, 1.5, 2.0]:
 		for light: bool in [false, true]:
 			var theme := Theme.new()

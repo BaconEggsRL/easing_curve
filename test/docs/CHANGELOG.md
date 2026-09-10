@@ -3,6 +3,14 @@
 Release entries are ordered newest to oldest. Add future releases above the
 current top entry.
 
+## v1.2.2
+
+* Fixed first-install SVG preload errors that could prevent the plugin from
+  compiling until the project was reloaded. Linked, transition, and ease icons
+  now load when requested by the UI.
+* First-import certification now rejects script/parse errors even when Godot
+  exits successfully, and tests a cold project with the plugin enabled.
+
 ## v1.2.1
 
 ### Added

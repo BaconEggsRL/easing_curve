@@ -1,13 +1,26 @@
-# v1.2.1 — Legacy / Native parity smoke test
+# v1.2.2 — Legacy / Native parity smoke test
 
 > Candidate sign-off is recorded in [the release tracker](v1.2.1_CODE_TRACKER.md).
 > Historical results do not check off this candidate.
 
-## Manual result — 2026-09-10
+## Historical v1.2.1 manual result — 2026-09-10
 
 **PASS — user-reported:** "completed manual smoke test for 1.2.1, all checks passed".
 The checklist below remains the reusable procedure. The report did not specify
 an archive hash, source commit, or environment details.
+
+**Follow-up blocker:** the published v1.2.1 ZIP was subsequently reported and
+reproduced with first-import SVG preload errors. The earlier manual PASS does
+not cover this failure. A reload that clears the errors is not a passing install.
+
+## Fresh-install gate
+
+- Extract the exact candidate ZIP into a new project with no imported addon cache.
+- Inspect the initial Output/Debugger messages before clearing them or restarting.
+- Enable the plugin, create both curve types, and verify Linked, transition, and
+  ease icons. Reject script/parse/load errors even if Godot exits zero.
+- Also extract into an already-open empty project and let its file scan complete.
+  Enabling the plugin must work without closing/reopening the project.
 
 ## DRAG-COORDS-01 — drag-coordinate readout
 

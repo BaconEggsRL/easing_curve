@@ -9,7 +9,7 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile(
 	(Join-Path $PSScriptRoot "run_release_archive_test.ps1"), [ref]$tokens, [ref]$parseErrors
 )
 if ($parseErrors.Count) { throw "Archive runner parse errors: $parseErrors" }
-foreach ($name in @("Invoke-Runner", "Write-EditorImportDiagnostics", "Stop-ArchivePhase", "Test-ArchiveRuntimeResult")) {
+foreach ($name in @("Invoke-Runner", "Write-EditorImportDiagnostics", "Stop-ArchivePhase", "Test-ArchiveRuntimeResult", "Test-ArchiveEditorResult")) {
 	$definition = $ast.Find({
 		param($node)
 		$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
@@ -21,6 +21,17 @@ function Assert-Diagnostic {
 	if (-not $Condition) { throw $Message }
 }
 try {
+	foreach ($case in @(
+		@(0, 'Normal first import', $true),
+		@(0, 'ERROR: Failed to read the root certificate store.', $true),
+		@(1, '', $false),
+		@(-1073741819, '', $false),
+		@(0, 'SCRIPT ERROR: Parse Error: Preload file "res://icon.svg" has no resource loaders (unrecognized file extension).', $false),
+		@(0, 'SCRIPT ERROR: Compile Error: Failed to compile depended scripts.', $false),
+		@(0, 'ERROR: Failed to load script "res://addons/easing_curve/plugin.gd" with error "Compilation failed".', $false)
+	)) {
+		Assert-Diagnostic ((Test-ArchiveEditorResult -ExitCode $case[0] -LogText $case[1]) -eq $case[2]) "Editor import result accepted a crash or compile failure."
+	}
 	$passText = 'PASS: exact archive loaded, sampled, saved, and reloaded both APIs'
 	foreach ($case in @(
 		@(0, $passText, $true),

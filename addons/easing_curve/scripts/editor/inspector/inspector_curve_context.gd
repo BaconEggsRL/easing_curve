@@ -1116,7 +1116,7 @@ func _add_new_point_handle_mode_items(option: OptionButton) -> void:
 	option.add_icon_item(EDITOR_THEME_CACHE.get_icon(&"BezierHandlesLinear"), "Linear", EasingCurvePoint.HandleMode.LINEAR)
 	option.add_icon_item(EDITOR_THEME_CACHE.get_icon(&"BezierHandlesBalanced"), "Balanced", EasingCurvePoint.HandleMode.BALANCED)
 	option.add_icon_item(EDITOR_THEME_CACHE.get_icon(&"BezierHandlesMirror"), "Mirrored", EasingCurvePoint.HandleMode.MIRRORED)
-	option.add_icon_item(preload("res://addons/easing_curve/assets/BezierHandlesLinked.svg"), "Linked", EasingCurvePoint.HandleMode.LINKED)
+	option.add_icon_item(load("res://addons/easing_curve/assets/BezierHandlesLinked.svg"), "Linked", EasingCurvePoint.HandleMode.LINKED)
 
 
 func _measure_new_point_handle_mode_size() -> Vector2:

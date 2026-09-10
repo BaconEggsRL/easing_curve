@@ -1,6 +1,6 @@
 # Development testing
 
-Current release: **v1.2.1**. See the [release tracker](v1.2.1_CODE_TRACKER.md)
+Current release: **v1.2.2**. See the [release tracker](v1.2.1_CODE_TRACKER.md)
 for the tested source, binaries, exact archive, results, and outstanding gates.
 The [changelog](CHANGELOG.md) supplies release notes. The
 [paired smoke checklist](SMOKE_TEST.md) covers visible/manual behavior.
@@ -95,12 +95,12 @@ unavailable operation as unverified rather than checking its box.
 
 ## Release procedure and evidence
 
-`./release.ps1 --version 1.2.1 --mode Validate` changes the plugin version,
+`./release.ps1 --version 1.2.2 --mode Validate` changes the plugin version,
 builds the ZIP, and runs clean-install/archive tests. It is not a dry run.
 It does not commit, tag, push, or publish. Prepare commits the version change;
 Publish/Republish mutate remote releases and require separate authorization.
 
-Save command output and summaries under `_exports/_validation/v1.2.1/` before
+Save command output and summaries under `_exports/_validation/v1.2.2/` before
 cleanup. Record source commit/dirty state, executable identities, build commands,
 binary/archive SHA-256, exits, diagnostics, and skips in the tracker. Passing tests remove their temporary data; redirect console output or explicitly
 export needed evidence outside temp. Preserve failed runs only while they need
