@@ -234,6 +234,17 @@ func apply_point_property(
 			point.set(property_name, value)
 		&"handle_mode":
 			point.set(&"handle_mode", int(value))
+			if int(value) == EasingCurvePoint.HandleMode.LINKED:
+				# Match the Legacy Inspector transition without changing runtime setters.
+				var state: Dictionary = point.call(&"capture_state")
+				var locks: Dictionary = state[&"locked"]
+				var shared_locked := bool(locks[&"left_control_point"]) or bool(locks[&"right_control_point"])
+				var shared_linear := bool(state[&"left_force_linear"]) or bool(state[&"right_force_linear"])
+				locks[&"left_control_point"] = shared_locked
+				locks[&"right_control_point"] = shared_locked
+				state[&"left_force_linear"] = shared_linear
+				state[&"right_force_linear"] = shared_linear
+				point.call(&"apply_state", state)
 		&"left_control_state", &"right_control_state":
 			var side := (
 				CONTROL_SIDE_LEFT

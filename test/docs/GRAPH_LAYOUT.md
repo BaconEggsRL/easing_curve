@@ -186,3 +186,16 @@ passed 23,399 checks. Logs are `native-linked-lock-before-console.txt`,
 under `test/_temp/`. Full validation passed 33 of 34 suites; only the two known
 CSS-label assertions failed. The correction changes `native_curve_editor_backend.gd`,
 the existing layout contract suite and this document.
+
+The Native Inspector's Handle Mode transition also combines stored overrides
+when entering Linked: either handle lock locks both sides, and either Force
+Linear flag enables both sides. Locks and Force Linear are combined independently
+so masked flags are preserved. Position locks and runtime point setters are
+unchanged. This covers Free with L Locked / R Free (and the reverse), which is
+a different path from editing a dropdown after the point is already Linked.
+Regression coverage checks all 16 flag combinations, both endpoints and reversed
+mapping, blocked viewport dragging, and one Undo restoring the original asymmetric
+Free state. The expanded suite reproduced 108 failures before this correction
+and passed all 24,215 checks afterward. Full validation again passed 33 of 34
+suites, with only the two known CSS-label failures. Evidence is under
+`test/_temp/native-enter-linked-*-console.txt`.

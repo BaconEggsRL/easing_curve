@@ -20,7 +20,7 @@ func _init() -> void:
 
 
 func _run() -> void:
-	_test_free_mode_preserves_overrides()
+	_test_mode_override_transitions()
 	await _test_grouped_toolbar()
 	await _test_independent_resets()
 	await _test_sibling_capture()
@@ -28,7 +28,7 @@ func _run() -> void:
 	_finish("curve layout contract")
 
 
-func _test_free_mode_preserves_overrides() -> void:
+func _test_mode_override_transitions() -> void:
 	for native: bool in [false, true]:
 		for mode: int in EasingCurvePoint.HandleMode.values():
 			for flags in range(16):
@@ -47,6 +47,14 @@ func _test_free_mode_preserves_overrides() -> void:
 				var before := _stored_overrides(point)
 				_expect(backend.apply_point_property(0, &"handle_mode", EasingCurvePoint.HandleMode.FREE, false), "Free mode edit was rejected")
 				_expect(_stored_overrides(backend.get_point(0)) == before, "Free mode changed stored flags: native=%s mode=%s flags=%s" % [native, mode, flags])
+				_expect(backend.apply_point_property(0, &"handle_mode", EasingCurvePoint.HandleMode.LINKED, false), "Linked mode edit was rejected")
+				point = backend.get_point(0)
+				var locks: Dictionary = point.get(&"locked")
+				var shared_locked := bool(flags & 12)
+				var shared_linear := bool(flags & 3)
+				_expect(bool(locks[&"left_control_point"]) == shared_locked and bool(locks[&"right_control_point"]) == shared_locked, "Entering Linked did not combine stored locks: native=%s flags=%s" % [native, flags])
+				_expect(bool(point.get(&"left_force_linear")) == shared_linear and bool(point.get(&"right_force_linear")) == shared_linear, "Entering Linked did not combine stored Force Linear: native=%s flags=%s" % [native, flags])
+				_expect(locks[&"position"] == before[2][&"position"], "Entering Linked changed position lock")
 		print("FREE_MODE_GATE backend=%s preserved overrides for all modes and flag combinations" % ["native" if native else "legacy"])
 
 
@@ -297,10 +305,38 @@ func _test_independent_resets() -> void:
 				for point_index: int in [0, 1]:
 					for control_state: int in EasingCurvePoint.ControlState.values():
 						await _test_state_dropdown_edit(editor, manager, history, shared, point_index, control_state)
+			for point_index: int in [0, 1]:
+				for locked_side: StringName in [&"left_control_point", &"right_control_point"]:
+					await _test_enter_linked_with_one_lock(editor, manager, history, point_index, locked_side)
 			print("RESET_GATE backend=%s reverse=%s mode/shared resets and Linked side edits preserve state and Undo/Redo" % ["native" if native else "legacy", reverse_sides])
 			manager.clear_history()
 			viewport.free()
 	plugin.free()
+
+
+func _test_enter_linked_with_one_lock(editor: EasingCurveEditor, manager: EditorUndoRedoManager, history: UndoRedo, point_index: int, locked_side: StringName) -> void:
+	editor.selected_index = point_index
+	editor._backend.apply_point_property(point_index, &"toolbar_options_reset", true, false)
+	editor._point(point_index).call(&"set_locked", locked_side, true)
+	editor._update_point_toolbar()
+	await _settle()
+	manager.clear_history()
+	var before: Variant = editor._backend.capture_snapshot()
+	var option := editor._point_handle_mode
+	var item := option.get_item_index(EasingCurvePoint.HandleMode.LINKED)
+	option.select(item)
+	option.item_selected.emit(item)
+	await _settle()
+	_expect(history.get_history_count() == 1, "Entering Linked did not create one Undo action")
+	for property_name: StringName in [&"left_control_point", &"right_control_point"]:
+		_expect(editor._backend.is_point_property_locked(point_index, property_name), "Entering Linked displays Locked but leaves a movable handle")
+	_expect(editor._point_left_state.get_selected_id() == EasingCurvePoint.ControlState.LOCKED and editor._point_right_state.get_selected_id() == EasingCurvePoint.ControlState.LOCKED, "Entering Linked did not refresh both Locked dropdowns")
+	var after: Variant = editor._backend.capture_snapshot()
+	await _assert_linked_handle_cannot_drag(editor, point_index)
+	_expect(editor._backend.capture_snapshot() == after, "Viewport drag moved a handle after entering Linked with one lock")
+	_expect(history.undo() and editor._backend.capture_snapshot() == before, "Linked Undo did not restore the asymmetric Free state")
+	_expect(not history.has_undo(), "Entering Linked created multiple Undo actions")
+	_expect(history.redo() and editor._backend.capture_snapshot() == after, "Linked Redo did not restore shared locks")
 
 
 func _test_state_dropdown_edit(editor: EasingCurveEditor, manager: EditorUndoRedoManager, history: UndoRedo, shared: bool, point_index: int, control_state: int) -> void:
