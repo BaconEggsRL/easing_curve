@@ -213,15 +213,12 @@ func _test_format_and_placement() -> void:
 		var top_anchor := editor.get_view_pos(Vector2(0.5, 1.0))
 		var actual_text_size := Vector2(100, font.get_height(font_size))
 		var top_label := editor._get_drag_coordinate_label_position(top_anchor, actual_text_size)
-		var snap_to_overlay := editor._coordinate_overlay.get_global_transform().affine_inverse() * editor._snap_button.get_global_transform()
-		var top_controls_bottom := (snap_to_overlay * Vector2(0, editor._snap_button.size.y)).y
-		_expect(top_label.y >= top_controls_bottom + 8.0 * scale, "Top-edge label overlapped the visible overlay controls")
-		_expect(is_equal_approx(editor._get_graph_view_rect().position.y, 4.0 * scale), "Readout clamp reserved graph height")
-		var text_size := Vector2(100, 20) * scale
+		var graph := editor._get_graph_view_rect()
+		_expect(top_label.y >= graph.position.y, "Top-edge label escaped graph canvas")
 		for anchor: Vector2 in [Vector2.ZERO, Vector2(600, 0), Vector2(0, 300), Vector2(600, 300), Vector2(-300, 800)]:
-			var position := editor._get_drag_coordinate_label_position(anchor, text_size)
-			_expect(position.x >= 4 * scale and position.y >= 36 * scale, "Label escaped top/left bounds")
-			_expect(position.x + text_size.x <= editor.size.x - 4 * scale and position.y + text_size.y <= editor.size.y - 4 * scale, "Label escaped bottom/right bounds")
+			var position := editor._get_drag_coordinate_label_position(anchor, actual_text_size)
+			_expect(position.x >= graph.position.x and position.y >= graph.position.y, "Label escaped top/left bounds")
+			_expect(graph.encloses(Rect2(position, actual_text_size)), "Label escaped bottom/right bounds")
 	_expect(not editor._get_drag_coordinate_label_position(Vector2.ZERO, Vector2(900, 900)).is_finite(), "Oversized label was not omitted")
 	_dispose(editor)
 
@@ -237,19 +234,15 @@ func _label_bounds(editor: EasingCurveEditor) -> Rect2:
 
 func _expect_coordinate_placement(editor: EasingCurveEditor, expected_coordinate: Vector2, radius := -1.0) -> void:
 	var bounds := _label_bounds(editor)
-	var label_top := editor._coordinate_overlay.get_global_transform() * bounds.position
-	var button_bottom := editor._snap_button.get_global_transform() * Vector2(0, editor._snap_button.size.y)
-	var canvas_scale := editor._coordinate_overlay.get_global_transform().get_scale().y
-	var minimum_gap := EasingCurveEditor.GRID_SNAP_COORDINATE_LABEL_MIN_GAP * editor._editor_scale
-	_expect((label_top.y - button_bottom.y) / canvas_scale >= minimum_gap - 0.01, "Coordinate line crossed the Grid Snap minimum gap")
+	var graph := editor._get_graph_view_rect()
+	_expect(graph.encloses(bounds), "Coordinate readout escaped graph bounds")
 	_expect(editor._get_drag_coordinate_position().is_equal_approx(expected_coordinate), "Layout/navigation changed the coordinate value")
-	var margin := 4.0 * editor._editor_scale
-	var expected_x := clampf(editor.get_view_pos(expected_coordinate).x - bounds.size.x * 0.5, margin, editor.size.x - margin - bounds.size.x)
-	_expect(is_equal_approx(bounds.position.x, expected_x), "Y-only fix changed horizontal placement")
-	var minimum_y := (editor._coordinate_overlay.get_global_transform().affine_inverse() * button_bottom).y + minimum_gap
+	var expected_x := clampf(editor.get_view_pos(expected_coordinate).x - bounds.size.x * 0.5, graph.position.x, graph.end.x - bounds.size.x)
+	_expect(is_equal_approx(bounds.position.x, expected_x), "Horizontal readout tracking changed")
+	var minimum_y := graph.position.y
 	var item_radius := float(editor.point_radius) if radius < 0 else radius
 	var candidate_y := editor.get_view_pos(expected_coordinate).y - item_radius - 6.0 * editor._editor_scale - bounds.size.y
-	var expected_y := clampf(candidate_y, minimum_y, editor.size.y - margin - bounds.size.y)
+	var expected_y := clampf(candidate_y, minimum_y, graph.end.y - bounds.size.y)
 	_expect(is_equal_approx(bounds.position.y, expected_y), "Coordinate Y lost its original anchor/radius offset or edge clamp")
 
 
@@ -319,13 +312,13 @@ func _test_coordinate_tracking_and_minimum_gap(native: bool) -> void:
 	editor.pan_offset.y = -1000
 	editor.queue_redraw()
 	var draws := [0]
-	editor._coordinate_overlay.draw.connect(func(): draws[0] += 1)
+	editor._coordinate_readout.draw.connect(func(): draws[0] += 1)
 	await process_frame
 	await process_frame
 	var previous_draws: int = draws[0]
 	var previous_top := _label_bounds(editor).position.y
-	var separation := editor._point_toolbar_panel.get_theme_constant(&"separation")
-	editor._point_toolbar_panel.add_theme_constant_override(&"separation", separation - 2)
+	var separation := editor._layout.get_theme_constant(&"separation")
+	editor._layout.add_theme_constant_override(&"separation", separation - 1)
 	await process_frame
 	await process_frame
 	await process_frame
@@ -456,7 +449,7 @@ func _test_grid_snapping() -> void:
 		_expect(editor.snap_count == 2, "Snap count accepted less than 2")
 		editor.snap_count = 200
 		_expect(editor.snap_count == 100, "Snap count accepted more than 100")
-		_expect(editor._coordinate_overlay.z_index > 0 and editor._coordinate_overlay.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Readout is not a foreground input-transparent overlay")
+		_expect(editor._coordinate_readout.z_index > 0 and editor._coordinate_readout.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Readout is not a foreground input-transparent overlay")
 		_dispose(editor)
 
 
@@ -464,13 +457,17 @@ func _test_rendered() -> void:
 	if DisplayServer.get_name() == "headless":
 		print("SKIP: rendered drag-coordinate smoke requires display support")
 		return
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(1100, 1600)
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	root.add_child(viewport)
 	var canvas := Control.new()
 	canvas.z_index = 100
 	canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	canvas.size = root.size
-	root.add_child(canvas)
+	canvas.size = Vector2(viewport.size)
+	viewport.add_child(canvas)
 	var background := ColorRect.new()
-	background.size = root.size
+	background.size = Vector2(viewport.size)
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(background)
 	var editors: Array[EasingCurveEditor] = []
@@ -494,7 +491,7 @@ func _test_rendered() -> void:
 			editors[1].position.y = editors[0].position.y + editors[0].size.y + 30
 			await process_frame
 			await RenderingServer.frame_post_draw
-			root.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-%s-%s.png" % [scale, "light" if light else "dark"])
+			viewport.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-%s-%s.png" % [scale, "light" if light else "dark"])
 			for editor: EasingCurveEditor in editors:
 				_expect(editor._get_drag_coordinate_position().is_finite(), "Rendered overlay disappeared")
 	for editor: EasingCurveEditor in editors:
@@ -504,14 +501,14 @@ func _test_rendered() -> void:
 		editor.queue_redraw()
 	await process_frame
 	await RenderingServer.frame_post_draw
-	root.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-top-inset.png")
+	viewport.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-top-inset.png")
 	for editor: EasingCurveEditor in editors:
 		editor._snap_button.button_pressed = true
 		editor._snap_count_input.value = 100
 	await process_frame
 	await RenderingServer.frame_post_draw
-	root.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-snapping.png")
-	await _capture_coordinate_views(editors, canvas)
+	viewport.get_texture().get_image().save_png("res://test/_temp/drag-coordinates-snapping.png")
+	await _capture_coordinate_views(editors, canvas, viewport)
 	for editor: EasingCurveEditor in editors:
 		editor._handle_left_released()
 		# The top-edge fixture can now lie behind real toolbar controls. Start
@@ -523,19 +520,19 @@ func _test_rendered() -> void:
 		press.pressed = true
 		press.position = editor.position + editor.get_view_pos(_resolved(editor, &"position"))
 		press.global_position = press.position
-		root.push_input(press)
+		viewport.push_input(press, true)
 		_expect(editor._get_drag_coordinate_position().is_finite(), "Viewport press did not start overlay")
 		var release := InputEventMouseButton.new()
 		release.button_index = MOUSE_BUTTON_LEFT
 		release.position = Vector2(900, 900)
 		release.global_position = release.position
-		root.push_input(release)
+		viewport.push_input(release, true)
 		_expect(not editor._get_drag_coordinate_position().is_finite(), "Outside-graph viewport release retained overlay")
 		_dispose(editor)
-	canvas.free()
+	viewport.free()
 
 
-func _capture_coordinate_views(editors: Array[EasingCurveEditor], canvas: Control) -> void:
+func _capture_coordinate_views(editors: Array[EasingCurveEditor], canvas: Control, viewport: SubViewport) -> void:
 	var input := EditorSpinSlider.new()
 	canvas.add_child(input)
 	input.hide()
@@ -571,7 +568,7 @@ func _capture_coordinate_views(editors: Array[EasingCurveEditor], canvas: Contro
 		_expect_coordinate_placement(editors[1], Vector2(0, 1))
 		_expect(is_equal_approx(_label_bounds(editors[0]).position.y, _label_bounds(editors[1]).position.y), "Legacy/Native coordinate rows differ")
 		var capture_size := Vector2i(int(view.width) + 40, int(editors[1].position.y + editors[1].size.y + 45))
-		var capture := root.get_texture().get_image().get_region(Rect2i(Vector2i.ZERO, capture_size))
+		var capture := viewport.get_texture().get_image().get_region(Rect2i(Vector2i.ZERO, capture_size))
 		_expect(capture.save_png("res://test/_temp/coordinate-gap-%s.png" % view.name) == OK, "Coordinate layout capture failed")
 	for editor: EasingCurveEditor in editors:
 		editor.end_point_list_coordinate_drag()

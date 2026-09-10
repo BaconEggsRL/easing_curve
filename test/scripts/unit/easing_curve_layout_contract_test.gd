@@ -50,6 +50,8 @@ func _test_grouped_toolbar() -> void:
 		root.add_child(presentation)
 		var editor: EasingCurveEditor = context.easing_curve_editor
 		editor.selected_index = 1
+		editor._point(1).set(&"left_force_linear", true)
+		editor._point(1).call(&"set_locked", &"right_control_point", true)
 		await _settle()
 		var flow := editor._point_toolbar
 		_expect(flow is HFlowContainer, "Toolbar lost its characterized native wrapping container")
@@ -82,6 +84,10 @@ func _test_grouped_toolbar() -> void:
 				_expect(editor._snap_toolbar_margin.get_parent() == editor._graph_canvas.get_parent(), "Grid Snap is not a graph sibling")
 				_expect(editor._snap_toolbar_margin.get_rect().end.y <= editor._graph_canvas.position.y, "Grid Snap overlaps graph")
 				_expect(editor._slider.get_global_rect().end.x <= editor.get_global_rect().end.x + 0.01, "Zoom row overflowed Inspector width")
+				for option: OptionButton in [editor._point_handle_mode, editor._point_left_state, editor._point_right_state]:
+					var font := option.get_theme_font(&"font")
+					var extent := font.get_string_size(option.get_item_text(option.selected), HORIZONTAL_ALIGNMENT_LEFT, -1, option.get_theme_font_size(&"font_size"))
+					_expect(option.size.x >= extent.x + option.get_theme_icon(&"arrow").get_width(), "Flow collapsed a state field to its arrow")
 				editor.autofit()
 				var graph := editor._get_graph_view_rect()
 				_expect(editor._get_autofit_view_rect() == graph, "Auto Fit still subtracts control obstructions")

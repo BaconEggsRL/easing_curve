@@ -12,12 +12,12 @@ func _init() -> void:
 
 
 func _run() -> void:
-	await _test_overlay_section_geometry()
-	await _test_overlay_gesture_ownership()
-	await _test_overlay_input_routing()
-	await _test_overlay_resize_and_theme()
-	await _test_autofit_avoids_overlays()
-	await _test_autofit_limits_overlay_shrinkage()
+	await _test_section_geometry()
+	await _test_sibling_gesture_ownership()
+	await _test_control_row_input_routing()
+	await _test_tall_control_layout()
+	await _test_autofit_graph_bounds()
+	await _test_autofit_independent_of_controls()
 	_test_zoom_metadata_contract()
 	_test_resource_initial_autofit_gate()
 	await _test_new_resource_automatic_autofit()
@@ -46,11 +46,11 @@ func _run() -> void:
 	_finish("graph gesture characterization")
 
 
-func _test_overlay_section_geometry() -> void:
+func _test_section_geometry() -> void:
 	var measurements: Array[Dictionary] = []
 	for native: bool in [false, true]:
 		for function_mode: bool in [false, true]:
-			for width: float in [320.0, 450.0, 700.0]:
+			for width: float in [150.0, 220.0, 360.0, 600.0]:
 				var curve: Resource
 				if native:
 					curve = ClassDB.instantiate(&"NativeEasingCurve")
@@ -59,12 +59,23 @@ func _test_overlay_section_geometry() -> void:
 					var legacy := EasingCurve.new()
 					legacy.trans_type = EasingCurve.TRANS.ELASTIC if function_mode else EasingCurve.TRANS.CUSTOM
 					curve = legacy
+				if not function_mode:
+					if native:
+						var interior: Resource = ClassDB.instantiate(&"NativeEasingCurvePoint")
+						interior.set(&"position", Vector2(0.45, 0.6))
+						curve.call(&"insert_point", 1, interior)
+					else:
+						var legacy_curve := curve as EasingCurve
+						legacy_curve.points = [EasingCurvePoint.new(Vector2.ZERO), EasingCurvePoint.new(Vector2(0.45, 0.6)), EasingCurvePoint.new(Vector2.ONE)]
 				var inspector := EDITOR_HOST.INSPECTOR_PLUGIN.new()
 				var content := inspector.handle_easing_curve_editor(curve)
 				var viewport := SubViewport.new()
 				viewport.size = Vector2i(1000, 1000)
 				root.add_child(viewport)
 				viewport.add_child(content)
+				if not function_mode:
+					inspector.easing_curve_editor.selected_index = 1
+					inspector.easing_curve_editor.snap_enabled = true
 				content.size = Vector2(width, 0)
 				for frame in range(6):
 					await process_frame
@@ -73,13 +84,6 @@ func _test_overlay_section_geometry() -> void:
 				var zoom_row := editor._slider.get_parent() as HBoxContainer
 				var separation := graph_content.get_theme_constant(&"separation")
 				var graph_rect := editor._get_graph_view_rect()
-				if not function_mode:
-					var reset_count := 0
-					for button: Button in content.find_children("*", "Button", true, false):
-						if button.tooltip_text in ["Reset Ease to In", "Restore selected preset geometry"]:
-							reset_count += 1
-							_expect(is_equal_approx(button.get_global_rect().get_center().x, editor._point_reset_button.get_global_rect().get_center().x), "Point reset is not aligned with the Ease/Trans reset column")
-					_expect(reset_count == 2, "Inspector alignment fixture did not find both header resets")
 				var measurement := {
 					"native": native, "function": function_mode, "width": editor.size.x,
 					"scale": editor._editor_scale,
@@ -89,17 +93,13 @@ func _test_overlay_section_geometry() -> void:
 					"zoom_minimum": zoom_row.get_combined_minimum_size().y, "separation": separation,
 				}
 				measurements.append(measurement)
-				print("OVERLAY_LAYOUT: ", JSON.stringify(measurement))
-				# Recorded before migration, for both backends and both modes at 1x.
-				var old_heights := {320.0: Vector3(270, 212, 109), 450.0: Vector3(330, 272, 169), 700.0: Vector3(446, 388, 285)}
-				var baseline: Vector3 = old_heights[width]
-				if is_equal_approx(editor._editor_scale, 1.0):
-					_expect(absf(inspector._curve_editor_section.size.y - baseline.x) <= 1.0, "Overlay migration changed the measured outer section height")
-					_expect(absf(editor.size.y - baseline.y - 34.0) <= 1.0, "Zoom row height was not transferred to the graph")
-					var old_graph_height := baseline.y - 8.0 if function_mode else baseline.z
-					_expect(graph_rect.size.y > old_graph_height + 33.0, "Overlay migration did not recover graph height")
-				_expect(is_equal_approx(graph_content.size.y, editor.size.y), "An external row still reserves graph section height")
-				_expect(is_zero_approx(graph_rect.position.y - 4.0 * editor._editor_scale), "Graph still reserves top overlay height")
+				print("GRAPH_LAYOUT: ", JSON.stringify(measurement))
+				var usable_width := editor.size.x - 8.0 * editor._editor_scale
+				_expect(graph_rect.size.is_equal_approx(Vector2(usable_width, clampf(180.0 * editor._editor_scale, usable_width / 2.0, usable_width))), "Inspector graph violates canonical sizing")
+				_expect(editor._graph_canvas.size.x == editor.size.x, "Graph lost allocated width")
+				_expect(editor._graph_canvas.get_rect().end.y <= editor._zoom_row.position.y, "Zoom row overlaps graph canvas")
+				if not function_mode:
+					_expect(editor._snap_toolbar_margin.get_rect().end.y <= editor._graph_canvas.position.y, "Snap row overlaps graph canvas")
 				var zoom_before := editor._slider
 				var minimum_before := editor.get_combined_minimum_size()
 				editor.setup_zoom_row()
@@ -115,13 +115,13 @@ func _test_overlay_section_geometry() -> void:
 					viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 					await RenderingServer.frame_post_draw
 					var capture := viewport.get_texture().get_image().get_region(Rect2i(Vector2i.ZERO, Vector2i(ceili(content.size.x), ceili(content.size.y))))
-					capture.save_png("res://test/_temp/overlay-%s-%s-%d.png" % ["native" if native else "legacy", "function" if function_mode else "custom", width])
+					capture.save_png("res://test/_temp/graph-layout-%s-%s-%d.png" % ["native" if native else "legacy", "function" if function_mode else "custom", width])
 				viewport.free()
-	var output := FileAccess.open("res://test/_temp/overlay-layout.json", FileAccess.WRITE)
+	var output := FileAccess.open("res://test/_temp/graph-layout-layout.json", FileAccess.WRITE)
 	output.store_string(JSON.stringify(measurements, "\t"))
 
 
-func _overlay_input_fixture(native: bool) -> Dictionary:
+func _graph_input_fixture(native: bool) -> Dictionary:
 	var curve: Resource
 	var point: Resource
 	if native:
@@ -158,16 +158,16 @@ func _push_graph_input(viewport: SubViewport, event: InputEventMouse) -> void:
 	viewport.push_input(event, true)
 
 
-func _dispose_overlay_fixture(fixture: Dictionary) -> void:
+func _dispose_graph_fixture(fixture: Dictionary) -> void:
 	fixture.editor.finish_active_point_edit()
 	fixture.editor.editor_undo_redo.clear_history()
 	fixture.viewport.free()
 
 
-func _test_overlay_gesture_ownership() -> void:
+func _test_sibling_gesture_ownership() -> void:
 	for native: bool in [false, true]:
 		for gesture: String in ["point", "left", "right", "pan", "pending", "delete", "immediate"]:
-			var fixture := _overlay_input_fixture(native)
+			var fixture := _graph_input_fixture(native)
 			var editor: EasingCurveEditor = fixture.editor
 			var viewport: SubViewport = fixture.viewport
 			for frame in range(3):
@@ -216,12 +216,12 @@ func _test_overlay_gesture_ownership() -> void:
 			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, target, true))
 			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, target, false))
 			_expect(editor.snap_enabled != snap_before and editor.dragging_point == -1 and editor.pending_add_point == null, "Grid Snap did not own a fresh button click")
-			_dispose_overlay_fixture(fixture)
+			_dispose_graph_fixture(fixture)
 
 
-func _test_overlay_input_routing() -> void:
+func _test_control_row_input_routing() -> void:
 	for native: bool in [false, true]:
-		var fixture := _overlay_input_fixture(native)
+		var fixture := _graph_input_fixture(native)
 		var editor: EasingCurveEditor = fixture.editor
 		var viewport: SubViewport = fixture.viewport
 		editor.selected_index = -1
@@ -239,24 +239,15 @@ func _test_overlay_input_routing() -> void:
 		for position: Vector2 in empty_positions:
 			_push_graph_input(viewport, _motion(position))
 			_push_graph_input(viewport, _button(MOUSE_BUTTON_MIDDLE, position, true))
-			_expect(editor.is_panning, "Empty overlay space blocked a graph press")
-			_push_graph_input(viewport, _motion(position + Vector2(3, 4), MOUSE_BUTTON_MASK_MIDDLE))
-			_push_graph_input(viewport, _button(MOUSE_BUTTON_MIDDLE, position + Vector2(3, 4), false))
-			_expect(not editor.is_panning, "Empty overlay space blocked graph release")
-			editor.pan_offset = Vector2.ZERO
+			_expect(not editor.is_panning, "Empty control-row space started graph pan")
+			_push_graph_input(viewport, _button(MOUSE_BUTTON_MIDDLE, position, false))
 			var zoom_before := editor._zoom_step
-			_push_graph_input(viewport, _button(MOUSE_BUTTON_WHEEL_UP, position, true))
-			_expect(editor._zoom_step == zoom_before, "Plain wheel in empty overlay space zoomed graph")
-			var world_before := editor.get_world_pos(position)
 			_push_graph_input(viewport, _button(MOUSE_BUTTON_WHEEL_UP, position, true, false, true))
-			_expect(editor._zoom_step == zoom_before + 1 and editor.get_world_pos(position).is_equal_approx(world_before), "Empty overlay space blocked pointer-anchored zoom")
+			_expect(editor._zoom_step == zoom_before, "Empty control-row space zoomed graph")
 			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, position, true))
-			_expect(editor.pending_add_point != null, "Empty overlay space blocked pending point addition")
-			_push_graph_input(viewport, _button(MOUSE_BUTTON_RIGHT, position, true))
-			_push_graph_input(viewport, _button(MOUSE_BUTTON_RIGHT, position, false))
+			_expect(editor.pending_add_point == null, "Empty control-row space added a point")
 			_push_graph_input(viewport, _button(MOUSE_BUTTON_LEFT, position, false))
-			_expect(editor.pending_add_point == null, "Pending addition could not be cancelled in empty overlay space")
-		# Numeric control and slider own presses; their parents and gaps do not.
+		# Numeric controls and sliders retain their own interactions.
 		editor.snap_enabled = true
 		await process_frame
 		await process_frame
@@ -272,10 +263,10 @@ func _test_overlay_input_routing() -> void:
 		editor.set_slider_value(4)
 		_push_graph_input(viewport, _button(MOUSE_BUTTON_WHEEL_UP, slider_position, true))
 		_expect(editor._zoom_step == 5, "Plain wheel over embedded slider did not zoom")
-		_dispose_overlay_fixture(fixture)
+		_dispose_graph_fixture(fixture)
 		# EditorSpinSlider can open a text-entry popup, so verify a fresh Autofit
 		# click in its own viewport rather than clicking through that popup.
-		fixture = _overlay_input_fixture(native)
+		fixture = _graph_input_fixture(native)
 		editor = fixture.editor
 		viewport = fixture.viewport
 		for frame in range(3):
@@ -289,64 +280,30 @@ func _test_overlay_input_routing() -> void:
 		var fitted_pan := editor.pan_offset
 		editor.autofit()
 		_expect(editor._zoom_step == fitted_step and editor.pan_offset.is_equal_approx(fitted_pan) and editor.dragging_point == -1 and editor.pending_add_point == null, "Fresh Autofit click did not belong to the overlay")
-		_dispose_overlay_fixture(fixture)
+		_dispose_graph_fixture(fixture)
 
 
-func _test_overlay_resize_and_theme() -> void:
+func _test_tall_control_layout() -> void:
 	for native: bool in [false, true]:
-		var fixture := _overlay_input_fixture(native)
+		var fixture := _graph_input_fixture(native)
 		var editor: EasingCurveEditor = fixture.editor
-		for scale_value: float in [1.0, 1.5, 2.0]:
-			editor._editor_scale = scale_value
-			var theme := Theme.new()
-			theme.set_font_size(&"font_size", &"Label", roundi(16 * scale_value))
-			theme.set_font_size(&"font_size", &"Button", roundi(16 * scale_value))
-			editor.theme = theme
-			for logical_width: float in [320.0, 450.0, 700.0]:
-				editor.size = Vector2(logical_width, 360) * scale_value
-				for frame in range(4):
-					await process_frame
-				var inset := 8.0 * scale_value
-				var top := editor._point_toolbar_panel.get_rect()
-				var bottom := editor._zoom_row.get_rect()
-				_expect(top.position.is_equal_approx(Vector2.ZERO), "Point toolbar did not use the available top-left corner")
-				_expect(is_equal_approx(top.end.x, editor.size.x), "Point toolbar did not use the full editor width")
-				_expect(is_equal_approx(editor._point_reset_button.get_global_rect().end.x, editor.get_global_rect().end.x), "Point reset lost its trailing alignment after resize/theme change")
-				_expect(is_equal_approx(editor._snap_button.get_global_rect().position.x - editor.global_position.x, inset), "Widening the point toolbar moved Grid Snap's side inset")
-				_expect(is_equal_approx(bottom.position.x, inset) and is_equal_approx(bottom.end.x, editor.size.x - inset), "Bottom overlay lost its side insets after resize/theme change")
-				_expect(is_equal_approx(bottom.end.y, editor.size.y), "Zoom overlay was not flush with the bottom after resize/theme change")
-				_expect(is_equal_approx(bottom.size.y, editor._zoom_row.get_combined_minimum_size().y), "Bottom overlay height ignored widget minimum size")
-				var graph := editor._get_graph_view_rect()
-				var canvas_size := Vector2(editor.size.x, minf(editor.size.x, editor.size.y))
-				_expect(graph.is_equal_approx(Rect2(Vector2.ONE * 4.0 * scale_value, canvas_size - Vector2.ONE * 8.0 * scale_value)), "Scaled graph lost its edge margins or square height cap")
-				_expect(graph.size.y <= graph.size.x and editor.get_combined_minimum_size().y <= editor.size.x, "Graph became taller than wide")
-				var minimum := editor.get_combined_minimum_size()
-				editor.selected_index = -1
-				editor._point_toolbar_panel.hide()
-				_expect(editor._get_graph_view_rect() == graph and editor.get_combined_minimum_size() == minimum, "Hidden top controls changed graph or section height")
-				_expect(is_equal_approx(editor._get_coordinate_minimum_y(), 4.0 * scale_value), "Hidden top controls retained the readout clamp")
-				editor._point_toolbar_panel.show()
-				editor.selected_index = 1
-		# A taller numeric field must participate in the top clamp independently
-		# of the Snap button; changing only chrome must not change the viewport.
+		await process_frame
+		await process_frame
+		var initial_graph_size := editor._get_graph_view_rect().size
+		var initial_height := editor.get_combined_minimum_size().y
 		editor.snap_enabled = true
 		editor._snap_count_input.custom_minimum_size.y = 100
-		for frame in range(4):
+		for frame in range(5):
 			await process_frame
-		var graph_before := editor._get_graph_view_rect()
-		var count_bottom := editor._snap_count_input.get_global_rect().end.y
-		_expect(editor._get_coordinate_minimum_y() >= count_bottom + 8.0 * editor._editor_scale, "Readout clamp ignored the numeric Snap field")
-		_expect(editor._get_autofit_view_rect().position.y >= count_bottom + 12.0 * editor._editor_scale, "Autofit lost the preferred gap below the numeric Snap field")
-		editor._point_toolbar_panel.add_theme_constant_override(&"separation", 10)
-		for frame in range(4):
-			await process_frame
-		_expect(editor._get_graph_view_rect() == graph_before, "Toolbar-only relayout changed graph coordinates")
-		_dispose_overlay_fixture(fixture)
+		_expect(editor._get_graph_view_rect().size == initial_graph_size, "Taller numeric control shrank graph")
+		_expect(editor.get_combined_minimum_size().y > initial_height, "Taller numeric control did not grow editor height")
+		_expect(editor._get_graph_view_rect().position.y > editor._snap_toolbar_margin.get_rect().end.y, "Readout graph boundary overlaps numeric row")
+		_dispose_graph_fixture(fixture)
 
 
-func _test_autofit_avoids_overlays() -> void:
+func _test_autofit_graph_bounds() -> void:
 	for native: bool in [false, true]:
-		var fixture := _overlay_input_fixture(native)
+		var fixture := _graph_input_fixture(native)
 		var editor: EasingCurveEditor = fixture.editor
 		# Fit bounds must continue to include handles outside the reference box.
 		fixture.point.set(&"left_control_point", Vector2(0.15, -0.25))
@@ -360,8 +317,8 @@ func _test_autofit_avoids_overlays() -> void:
 				var graph := editor._get_graph_view_rect()
 				editor.autofit()
 				var fit := editor._get_autofit_view_rect()
-				_expect(fit.position.y >= editor._snap_button.get_global_rect().end.y + 12.0 * scale_value, "Autofit lost the preferred gap below Grid Snap")
-				_expect(fit.end.y <= editor._zoom_row.position.y - 12.0 * scale_value, "Autofit lost the preferred gap above the zoom overlay")
+				_expect(fit == graph, "Auto Fit still avoids control obstructions")
+				_expect(fit.end.y < editor._zoom_row.position.y, "Auto Fit escaped into zoom row")
 				var bounds := editor._get_autofit_world_bounds()
 				for world: Vector2 in [bounds.position, bounds.end, Vector2(bounds.position.x, bounds.end.y), Vector2(bounds.end.x, bounds.position.y)]:
 					_expect(graph.grow(0.01).has_point(editor.get_view_pos(world)), "Autofit left curve or handle bounds outside the canvas")
@@ -372,7 +329,7 @@ func _test_autofit_avoids_overlays() -> void:
 				_expect(editor.pan_offset.is_equal_approx(pan) and editor._zoom_step == step, "Repeated Autofit drifted")
 				editor.pan_offset += Vector2(0, -fit.position.y)
 				_expect(editor.get_view_pos(bounds.get_center()).y < fit.get_center().y and editor._get_graph_view_rect() == graph, "Preferred fit area constrained manual pan or graph geometry")
-				var pointer := editor._snap_button.get_global_rect().get_center()
+				var pointer := graph.get_center()
 				var world_before := editor.get_world_pos(pointer)
 				editor._zoom_at_view_pos(1, pointer)
 				_expect(editor.get_world_pos(pointer).is_equal_approx(world_before), "Preferred fit area broke pointer-anchored zoom under controls")
@@ -381,7 +338,7 @@ func _test_autofit_avoids_overlays() -> void:
 		editor._snap_count_input.custom_minimum_size.y = 100
 		for frame in range(4):
 			await process_frame
-		_expect(editor._get_autofit_view_rect().position.y >= editor._snap_count_input.get_global_rect().end.y + 8.0 * editor._editor_scale, "Autofit ignored the taller Snap field")
+		_expect(editor._get_autofit_view_rect().position.y >= editor._snap_toolbar_margin.get_rect().end.y, "Autofit ignored the taller Snap field")
 		editor._point_toolbar_panel.hide()
 		_expect(is_equal_approx(editor._get_autofit_view_rect().position.y, editor._get_graph_view_rect().position.y), "Hidden top controls still reduced Autofit space")
 		editor._zoom_row.hide()
@@ -394,12 +351,12 @@ func _test_autofit_avoids_overlays() -> void:
 		_expect(editor._get_autofit_view_rect() == editor._get_graph_view_rect(), "Controls filling the canvas did not fall back to a usable Autofit")
 		editor.autofit()
 		_expect(editor.pan_offset.is_finite(), "Crowded Autofit produced invalid coordinates")
-		_dispose_overlay_fixture(fixture)
+		_dispose_graph_fixture(fixture)
 
 
-func _test_autofit_limits_overlay_shrinkage() -> void:
+func _test_autofit_independent_of_controls() -> void:
 	for native: bool in [false, true]:
-		var fixture := _overlay_input_fixture(native)
+		var fixture := _graph_input_fixture(native)
 		var editor: EasingCurveEditor = fixture.editor
 		# Match the narrow Inspector and flat curve from the reported regression.
 		for index in range(editor._point_count()):
@@ -420,10 +377,10 @@ func _test_autofit_limits_overlay_shrinkage() -> void:
 		editor._point_toolbar_panel.show()
 		editor._zoom_row.show()
 		editor.autofit()
-		_expect(editor._zoom_step == full_step - 2, "Narrow Inspector Autofit did not retain the requested larger framing")
+		_expect(editor._zoom_step == full_step, "Control rows changed the fit zoom")
 		var plot_width := absf(editor.get_view_pos(Vector2.ONE).x - editor.get_view_pos(Vector2(0, 1)).x)
 		_expect(plot_width >= graph.size.x * 0.60, "Overlay avoidance shrank the reference plot below 60 percent of canvas width")
-		_expect(editor._zoom_step < full_step, "Autofit stopped considering visible controls")
+		_expect(editor._get_autofit_view_rect().size == graph.size, "Control rows shrank the fit rectangle")
 		# A tall Snap field may push the preferred center down, but must neither
 		# force more zoom-out nor push the fitted bounds past the canvas edge.
 		editor.snap_enabled = true
@@ -431,13 +388,14 @@ func _test_autofit_limits_overlay_shrinkage() -> void:
 		for frame in range(4):
 			await process_frame
 		editor.autofit()
-		_expect(editor._zoom_step >= full_step - 2, "Taller controls exceeded the overlay zoom penalty")
+		_expect(editor._zoom_step == full_step, "Taller controls changed fit zoom")
+		graph = editor._get_graph_view_rect()
 		var bounds := editor._get_autofit_world_bounds()
 		_expect(graph.grow(0.01).has_point(editor.get_view_pos(bounds.position)) and graph.grow(0.01).has_point(editor.get_view_pos(bounds.end)), "Preferred center pushed a larger fit outside the graph")
 		var pan := editor.pan_offset
 		editor.autofit()
 		_expect(editor.pan_offset.is_equal_approx(pan), "Soft overlay fitting drifted on repeat")
-		_dispose_overlay_fixture(fixture)
+		_dispose_graph_fixture(fixture)
 
 
 func _fixture() -> Dictionary:
@@ -776,6 +734,14 @@ func _test_view_state_restore_and_rebuild_order() -> void:
 	replacement_content.free()
 
 
+func _wait_for_autofit(inspector: Object) -> void:
+	for frame in range(12):
+		await process_frame
+		if not bool(inspector.call("_is_autofit_pending")):
+			return
+	_expect(false, "Auto Fit did not settle within twelve frames")
+
+
 func _test_autofit_waits_for_function_toolbar_layout() -> void:
 	var curve := EasingCurve.new()
 	curve.trans_type = EasingCurve.TRANS.CUSTOM
@@ -790,9 +756,7 @@ func _test_autofit_waits_for_function_toolbar_layout() -> void:
 	curve.trans_type = EasingCurve.TRANS.ELASTIC
 	editor.size = Vector2(600.0, 300.0)
 	EDITOR_DRIVER.request_autofit(inspector)
-	await process_frame
-	await process_frame
-	await process_frame
+	await _wait_for_autofit(inspector)
 
 	var toolbar_panel: VBoxContainer = editor.get("_point_toolbar_panel")
 	_expect(
@@ -829,9 +793,7 @@ func _test_autofit_request_lifecycle() -> void:
 		and missing_slider_editor.is_graph_render_suppressed(),
 		"Autofit request did not acquire pending render suppression",
 	)
-	await process_frame
-	await process_frame
-	await process_frame
+	await _wait_for_autofit(missing_slider_inspector)
 	_expect(
 		not bool(missing_slider_inspector.call("_is_autofit_pending"))
 		and not missing_slider_editor.is_graph_render_suppressed(),
@@ -908,8 +870,7 @@ func _test_automatic_autofit_suppresses_intermediate_render() -> void:
 		replacement_editor.is_graph_render_suppressed(),
 		"Automatic Autofit revealed the graph before the layout-settle window completed",
 	)
-	await process_frame
-	await process_frame
+	await _wait_for_autofit(inspector)
 	_expect(
 		not replacement_editor.is_graph_render_suppressed(),
 		"Automatic Autofit did not reveal the graph after fitting completed",

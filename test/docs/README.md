@@ -6,10 +6,10 @@ See [Inspector minimum-width validation](INSPECTOR_MINIMUM_WIDTH.md) for the
 measured hidden EditorProperty chrome allowance, horizontal-only compensation,
 native height parity, and creation/rebuild checks at actual Editor scales.
 
-## Full graph overlays
+## Responsive graph layout
 
-See [graph overlay validation](GRAPH_OVERLAYS.md) for the before/after section
-measurements, shared layout, gesture ownership tests, scale captures and the
+See [graph layout validation](GRAPH_LAYOUT.md) for canonical sizing, grouped
+control rows, gesture ownership tests, full-editor captures and the
 pre-existing CSS-label failures in the full correctness gate.
 
 ## Fixed graph grid and reference box

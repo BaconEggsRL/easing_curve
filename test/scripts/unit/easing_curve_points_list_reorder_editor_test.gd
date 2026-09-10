@@ -280,7 +280,7 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	var editor := EDITOR_DRIVER.curve_editor(inspector)
 	var move_left: Button = editor.get("_point_move_left_button")
 	var move_right: Button = editor.get("_point_move_right_button")
-	var toolbar: GridContainer = editor.get("_point_toolbar")
+	var toolbar: HFlowContainer = editor.get("_point_toolbar")
 	var toolbar_panel: VBoxContainer = editor.get("_point_toolbar_panel")
 	var toolbar_height := toolbar.custom_minimum_size.y
 	editor.size = Vector2(600.0, 300.0)
@@ -372,15 +372,15 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	var function_graph_rect: Rect2 = editor.call("_get_graph_view_rect")
 	_expect(move_left.disabled and move_right.disabled, "Graph reorder buttons remained active in Function mode")
 	_expect(
-		function_minimum_size.is_equal_approx(bezier_minimum_size),
-		"Switching between Bezier and Function mode changed the Easing Curve editor section size",
+		function_minimum_size.y < bezier_minimum_size.y if editor.hide_selection_toolbar_for_functions else function_minimum_size.is_equal_approx(bezier_minimum_size),
+		"Hidden Function controls did not release their layout height",
 	)
 	# Follow the production comparison switch without changing it in the test.
 	if editor.hide_selection_toolbar_for_functions:
 		_expect(not toolbar_panel.visible, "Point-selection toolbar panel remained visible in Function mode")
 		_expect(
-			function_graph_rect.is_equal_approx(bezier_graph_rect),
-			"Hiding the Function overlay changed the full graph rectangle",
+			function_graph_rect.size.is_equal_approx(bezier_graph_rect.size),
+			"Hiding Function controls changed graph dimensions",
 		)
 	else:
 		_expect(toolbar_panel.visible, "Point-selection toolbar panel was hidden with Function-mode hiding disabled")

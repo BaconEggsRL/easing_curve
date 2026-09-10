@@ -226,7 +226,7 @@ func _ready() -> void:
 		_layout.move_child(_zoom_row, -1)
 	_graph_canvas.gui_input.connect(_on_graph_gui_input)
 	_graph_canvas.resized.connect(queue_redraw)
-	_layout.sort_children.connect(queue_redraw)
+	_layout.sort_children.connect(_on_layout_sorted)
 	_graph_ink = Control.new()
 	_graph_ink.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_graph_canvas.add_child(_graph_ink)
@@ -257,6 +257,11 @@ func _ensure_layout() -> void:
 	_layout.minimum_size_changed.connect(update_minimum_size)
 
 
+func _on_layout_sorted() -> void:
+	update_view_transform()
+	queue_redraw()
+
+
 func _queue_layout() -> void:
 	if _layout_queued or not is_node_ready():
 		return
@@ -272,6 +277,7 @@ func _update_layout() -> void:
 		return
 	var inset := CONTROL_ROW_INSET * _editor_scale
 	_reserve_point_toolbar_label_column_width()
+	_measure_point_toolbar_options()
 	_layout.size.x = size.x
 	_graph_canvas.custom_minimum_size.y = _get_graph_size().y + 2.0 * GRAPH_EDGE_PADDING * _editor_scale
 	for side: StringName in [&"margin_left", &"margin_right"]:
@@ -2748,6 +2754,25 @@ func _reserve_point_toolbar_label_column_width() -> void:
 	_point_label.custom_minimum_size.x = ceilf(font.get_string_size("999", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
 
 
+func _measure_point_toolbar_options() -> void:
+	for option: OptionButton in [_point_handle_mode, _point_left_state, _point_right_state]:
+		if option == null or option.selected < 0:
+			continue
+		var font := option.get_theme_font(&"font")
+		var font_size := option.get_theme_font_size(&"font_size")
+		var text_width := font.get_string_size(option.get_item_text(option.selected), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var chrome_width := option.get_theme_stylebox(&"normal").get_minimum_size().x
+		var arrow := option.get_theme_icon(&"arrow")
+		if arrow != null:
+			chrome_width += arrow.get_width() + option.get_theme_constant(&"arrow_margin")
+		var available_width := size.x
+		if option != _point_handle_mode:
+			var group := option.get_parent() as HBoxContainer
+			var label := _point_left_state_label if option == _point_left_state else _point_right_state_label
+			available_width -= label.get_combined_minimum_size().x + group.get_theme_constant(&"separation")
+		option.custom_minimum_size.x = minf(ceilf(text_width + chrome_width), maxf(0.0, available_width))
+
+
 func _reserve_point_toolbar_control_side_label_width() -> void:
 	var label_width := maxf(
 		_point_left_state_label.get_combined_minimum_size().x,
@@ -2798,6 +2823,7 @@ func _update_point_navigation_tooltips(reset_modifier := false) -> void:
 func _update_point_toolbar() -> void:
 	if _point_toolbar == null:
 		return
+	_queue_layout()
 	_update_point_navigation_tooltips()
 
 	var hide_toolbar := _is_point_toolbar_hidden()
@@ -2922,6 +2948,7 @@ func _set_point_toolbar_reorder_available(
 
 
 func _set_point_toolbar_reset_available(available: bool) -> void:
+	_point_reset_button.visible = available
 	var tint := _point_reset_button.self_modulate
 	tint.a = 1.0 if available else 0.0
 	_point_reset_button.self_modulate = tint

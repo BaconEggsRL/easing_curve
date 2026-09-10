@@ -45,7 +45,7 @@ func _test_ticks(native: bool) -> void:
 	var editor := _fixture(native)
 	var rect := editor._get_graph_view_rect()
 	var margin := 4.0 * editor._editor_scale
-	_expect(rect.is_equal_approx(Rect2(Vector2.ONE * margin, editor.size - Vector2.ONE * margin * 2.0)), "Graph viewport does not fill the editor")
+	_expect(rect.size.is_equal_approx(Vector2(592, 296)), "Graph viewport violates width-driven sizing")
 	editor.selected_index = 0
 	editor._point_toolbar_panel.hide()
 	_expect(editor._get_graph_view_rect() == rect, "Toolbar visibility or selection changed graph dimensions")
@@ -86,7 +86,7 @@ func _test_ticks(native: bool) -> void:
 	editor.size = Vector2(320, 900)
 	editor.update_view_transform()
 	var square := editor._get_graph_view_rect()
-	_expect(square.size.is_equal_approx(Vector2.ONE * (320.0 - margin * 2.0)), "An externally tall editor escaped the square graph cap")
+	_expect(square.size.is_equal_approx(Vector2(312, 180)), "External editor height changed the width-driven graph size")
 	var square_tick := editor._get_grid_tick_position(1, 1, square)
 	_expect(is_equal_approx(square_tick.y, square.get_center().y), "Height cap moved proportional grid ticks")
 	_expect(editor.get_view_pos(editor.get_world_pos(square_tick)).distance_to(square_tick) < 0.01, "Height cap broke canonical transform round trip")
