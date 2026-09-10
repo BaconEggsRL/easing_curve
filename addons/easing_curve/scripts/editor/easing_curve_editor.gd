@@ -591,12 +591,6 @@ func _update_hover_from_mouse(position: Vector2) -> void:
 		hovered_control_index = ControlIndex.NONE
 		hovered_index = get_point_at(position)
 	queue_redraw()
-	if hovered_control_index != ControlIndex.NONE:
-		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	elif hovered_index != -1:
-		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	else:
-		mouse_default_cursor_shape = Control.CURSOR_ARROW
 
 
 func _handle_mouse_button(event: InputEventMouseButton) -> void:
