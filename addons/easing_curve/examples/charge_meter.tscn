@@ -9,10 +9,11 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 theme = ExtResource("1_rjc2e")
 script = ExtResource("2_7tqa8")
 curve = ExtResource("3_628dt")
-duration = 1.5
 
 [node name="ColorRect" type="ColorRect" parent="." unique_id=809435395]
 layout_mode = 0
@@ -40,7 +41,7 @@ text = "03 / Shape a charge-up"
 
 [node name="Label2" type="Label" parent="Margin/Layout" unique_id=286444935]
 layout_mode = 2
-text = "Power In / Direct sampling / Bounded percentage"
+text = "CSS cubic Bezier / Direct sampling / Bounded percentage"
 
 [node name="Stage" type="CenterContainer" parent="Margin/Layout" unique_id=1644540476]
 layout_mode = 2
@@ -90,7 +91,7 @@ text = "Reset"
 [node name="Label3" type="Label" parent="Margin/Layout" unique_id=256132524]
 layout_mode = 2
 text = "Select the scene root to edit Curve and Duration. Run with F6.
-While running, edit the local Curve with Live Scene Editing enabled; edits restart motion."
+After each edit, press Replay. If values are stale, save and rerun the scene."
 autowrap_mode = 3
 
 [connection signal="value_changed" from="Margin/Layout/Stage/VBoxContainer/Progress" to="." method="scrub"]

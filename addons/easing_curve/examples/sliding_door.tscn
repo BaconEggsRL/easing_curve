@@ -99,7 +99,7 @@ text = "Close"
 [node name="Label3" type="Label" parent="Margin/Layout" unique_id=1170302348]
 layout_mode = 2
 text = "Select the scene root to edit Curve and Duration. Run with F6.
-While running, edit the local Curve with Live Scene Editing enabled; edits restart motion."
+After each edit, press Replay. If values are stale, save and rerun the scene."
 autowrap_mode = 3
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=741904312]

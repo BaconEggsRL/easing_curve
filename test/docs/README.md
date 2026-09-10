@@ -96,14 +96,10 @@ to **GitHub Actions**; no custom domain is required.
 
 For visible verification, open each scene in `addons/easing_curve/examples/`
 and press F6. Check replay/reset, popup pivot and overshoot, door open/close,
-and the meter scrubber. With Live Scene Editing enabled, change the local
-Curve's parameters or handles and undo; motion should restart, while a parked
-meter should resample its current progress. The documentation's door example
-does not implement editor-only timeline preview.
-
-The initial 4.7.1 verification rendered all three examples and confirmed the
-meter's local Inspector Power edit and undo reached the running scene:
-at progress 0.5, Power 2 → 3 → undo produced charge 25% → 12.5% → 25%.
+and the meter scrubber. Change Curve or Duration and press Replay after each
+edit or undo. If the running scene still has old values, save and rerun it with
+F6, then press Replay. These runtime scripts do not preview animation in the
+editor viewport.
 
 ### Existing Inspector checks
 

@@ -10,7 +10,7 @@ extends Control
 			curve.changed.connect(replay)
 		if is_node_ready():
 			replay()
-@export_range(0.05, 10.0, 0.05) var duration := 0.6
+@export_range(0.05, 10.0, 0.05) var duration := 0.5
 
 var tween: Tween
 @onready var panel: PanelContainer = %Popup

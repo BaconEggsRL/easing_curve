@@ -19,7 +19,7 @@
     <a href="#popup">01 · Popup panel</a>
     <a href="#sliding-door">02 · AnimationPlayer door</a>
     <a href="#charge-meter">03 · Charge meter</a>
-    <a href="#live-preview">Edit while it runs</a>
+    <a href="#live-preview">Edit and replay</a>
     <a href="#reference">API &amp; common pitfalls</a>
   </nav>
   <a class="repo" href="https://github.com/BaconEggsRL/easing_curve">Source &amp; full editor guide ↗</a>
@@ -36,7 +36,7 @@
   <section id="first-tween">
     <h2>Your first Tween</h2>
     <ol>
-      <li>Install the <a href="https://github.com/BaconEggsRL/easing_curve/releases/tag/v1.2.2">packaged plugin</a> under <code>res://addons/easing_curve/</code>. Enable <strong>Easing Curve</strong> in Project Settings → Plugins.</li>
+      <li>Install the <a href="https://github.com/BaconEggsRL/easing_curve/releases/latest">packaged plugin</a> under <code>res://addons/easing_curve/</code>. Enable <strong>Easing Curve</strong> in Project Settings → Plugins.</li>
       <li>Attach the script below to a <code>Node2D</code> with something visible beneath it. Select the node, create a <strong>New EasingCurve</strong> in the exported Curve field, and choose a preset.</li>
       <li>Run the scene. Edit and save the resource to reuse the same motion elsewhere.</li>
     </ol>
@@ -56,12 +56,12 @@ func _ready() -> void:
     <p class="eyebrow">01 / PROPERTY TWEEN</p>
     <h2>A popup that settles into place</h2>
     <p>Start small, grow past the target, then settle. <strong>Back · Out</strong> gives a confirmation panel a little weight. This same connection works for position, rotation, color, and other Tween-compatible properties.</p>
-    <div class="demo" data-example="popup" data-duration="0.6">
+    <div class="demo" data-example="popup" data-duration="0.5">
       <div class="demo-top"><span>BACK / OUT</span><span>Scale · 0.2 → 1</span></div>
       <div class="stage popup-stage"><div class="popup-panel motion-target"><strong>Saved!</strong><span>Your progress is ready.</span></div></div>
       <div class="demo-controls" hidden>
         <button class="play" type="button">Play</button><button class="replay" type="button">Replay</button>
-        <label>Duration <input class="duration" type="number" min="0.05" max="10" step="0.05" value="0.6"> s</label>
+        <label>Duration <input class="duration" type="number" min="0.05" max="10" step="0.05" value="0.5"> s</label>
         <label class="scrub-label">Progress <input class="progress" type="range" min="0" max="1" step="0.001" value="0"></label>
         <output class="readout">t 0.00 · sample 0.000</output>
       </div>
@@ -109,20 +109,20 @@ func _ready() -> void:
 
   <section id="charge-meter">
     <p class="eyebrow">03 / SAMPLE A VALUE</p>
-    <h2>A charge that builds slowly, then quickly</h2>
-    <p>A curve does not need to animate a node. Here <strong>Power · In</strong> maps elapsed progress into charge. The default power of 2 gives 25% charge halfway through the duration.</p>
-    <div class="demo" data-example="charge_meter" data-duration="2">
-      <div class="demo-top"><span>POWER / IN</span><span>Value · 0 → 100%</span></div>
+    <h2>A charge shaped by your curve</h2>
+    <p>A curve does not need to animate a node. Here the saved <strong>CSS cubic Bézier</strong> curve maps elapsed progress into charge. Its controls are <code>cubic-bezier(0.25, 0.1, 0.25, 1)</code>; the preview below uses samples exported from that resource.</p>
+    <div class="demo" data-example="charge_meter" data-duration="1.5">
+      <div class="demo-top"><span>CSS CUBIC BÉZIER</span><span>Value · 0 → 100%</span></div>
       <div class="stage meter-stage"><div class="meter-wrap"><label for="browser-charge">CHARGE</label><progress id="browser-charge" class="motion-target" value="0" max="100">0%</progress><span class="charge-value">0%</span></div></div>
       <div class="demo-controls" hidden>
         <button class="play" type="button">Play</button><button class="replay" type="button">Replay</button>
-        <label>Duration <input class="duration" type="number" min="0.05" max="10" step="0.05" value="2"> s</label>
+        <label>Duration <input class="duration" type="number" min="0.05" max="10" step="0.05" value="1.5"> s</label>
         <label class="scrub-label">Progress <input class="progress" type="range" min="0" max="1" step="0.001" value="0"></label>
         <output class="readout">t 0.00 · sample 0.000</output>
       </div>
     </div>
     <h3>In Godot</h3>
-    <p>Open <a href="https://github.com/BaconEggsRL/easing_curve/blob/master/addons/easing_curve/examples/charge_meter.tscn">charge_meter.tscn</a>. Replay supplies linear progress through <code>tween_method()</code>. Drag the slider to stop playback and sample a particular moment. Try changing Power while parked at 0.5.</p>
+    <p>Open <a href="https://github.com/BaconEggsRL/easing_curve/blob/master/addons/easing_curve/examples/charge_meter.tscn">charge_meter.tscn</a>. Replay supplies linear progress through <code>tween_method()</code>. Drag the slider to stop playback and sample a particular moment. Change the curve's CSS cubic Bézier controls, press Replay, and compare the result.</p>
     <pre><code data-source="charge_meter.gd">func apply_charge(value: float) -> void:
 	progress = clampf(value, 0.0, 1.0)
 	var weight := curve.sample(progress) if curve != null else progress
@@ -134,16 +134,16 @@ func _ready() -> void:
 
   <section id="live-preview">
     <p class="eyebrow">ITERATE IN CONTEXT</p>
-    <h2>Edit while it runs</h2>
+    <h2>Edit a value, then press Replay</h2>
     <ol>
       <li>Open an example scene, select its root in the <strong>Local</strong> scene tree, and expand the exported Curve.</li>
-      <li>Enable <strong>Debug → Live Scene Editing</strong> and run the current scene with <kbd>F6</kbd>.</li>
-      <li>Press Replay in the running scene. In the local Inspector, change a curve parameter or drag a point/handle. Committed curve changes restart the motion. Undo should restore the previous shape and replay it.</li>
-      <li>For the charge meter, stop at a slider position first. Curve changes then resample that position instead of moving the slider.</li>
+      <li>Save the scene and resource, then run the current scene with <kbd>F6</kbd>.</li>
+      <li>After changing Curve or Duration, press <strong>Replay</strong> in the running scene to compare the effect from its starting position. Press Replay after undoing an edit, too.</li>
+      <li>If the running scene still has the old values, save your edits and run it again with <kbd>F6</kbd>, then press Replay. Use the charge meter's slider to inspect a particular progress value.</li>
     </ol>
-    <p>The plugin publishes Inspector edits through Godot’s live-debug bridge. These scripts listen to <code>Resource.changed</code>; they disconnect the old resource when you assign a replacement. Playback samples the current resource directly.</p>
-    <div class="note"><strong>Local and Remote are different.</strong> Local edits author the resource you will save. Remote edits affect the running instance and are not a way to save your design. This workflow depends on an editor debug session; changing an arbitrary file on disk does not automatically reload it in an exported game.</div>
-    <p>If changes do not arrive, check Live Scene Editing, select the example root rather than an unrelated saved resource, and restart the scene. Editing a resource shared by multiple nodes can affect all of them. Use <strong>Make Unique</strong> before giving one effect its own curve, then save the scene/resource intentionally.</p>
+    <p>These example scripts are runtime scripts, not <code>@tool</code> scripts. Editing a value in the editor does not run their animation there. Replay starts a new effect using the values available to the running instance; it does not reload arbitrary files from disk.</p>
+    <div class="note"><strong>Local and Remote are different.</strong> Local edits author the resource you will save. Remote edits affect the running instance and are not a way to save your design. Save and rerun when local edits have not reached the running instance.</div>
+    <p>The scripts also listen to <code>Resource.changed</code>, so a change that reaches the running resource may restart motion automatically or refresh a parked meter. Use Replay after each edit for a consistent comparison. Editing a shared resource can affect multiple nodes; use <strong>Make Unique</strong> before giving one effect its own curve.</p>
     <p>Want to compare easing against Godot’s built-in transitions? The existing comparison scene remains at <code>res://addons/easing_curve/_test_scene/test.tscn</code>.</p>
   </section>
 

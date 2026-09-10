@@ -5,7 +5,6 @@ $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $hostRoot = Join-Path $projectRoot ("test/_temp/documentation-" + [guid]::NewGuid().ToString("N"))
 $launcher = Join-Path $PSScriptRoot "run_godot.ps1"
-$shellPath = (Get-Process -Id $PID).Path
 $passed = $false
 
 try {
@@ -25,8 +24,6 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 [rendering]
 renderer/rendering_method="gl_compatibility"
 '@ | Set-Content -LiteralPath "$hostRoot/project.godot" -Encoding utf8
-	$arguments = @("-NoProfile", "-File", $launcher, "-TimeoutSeconds", "60")
-	if ($GodotPath) { $arguments += @("-GodotPath", $GodotPath) }
 	$runs = @(
 		@{ Name = "import"; Args = @("--editor", "--headless", "--import"); Pass = $false },
 		@{ Name = "examples"; Args = @("--headless", "--script", "res://test/scripts/unit/practical_examples_test.gd"); Pass = $true },
@@ -34,9 +31,9 @@ renderer/rendering_method="gl_compatibility"
 	)
 	foreach ($run in $runs) {
 		$log = "$hostRoot/test/_temp/$($run.Name).log"
-		$runArguments = $arguments + @("--path", $hostRoot, "--log-file", $log) + $run.Args
+		$runArguments = @("--path", $hostRoot, "--log-file", $log) + $run.Args
 		if ($run.Name -eq "samples" -and $UpdateSamples) { $runArguments += @("--", "--write") }
-		& $shellPath @runArguments
+		& $launcher -GodotPath $GodotPath -TimeoutSeconds 60 -GodotArgs $runArguments
 		if ($LASTEXITCODE -ne 0) { throw "$($run.Name) failed with exit code $LASTEXITCODE" }
 		$output = Get-Content -LiteralPath $log -Raw
 		$unexpectedErrors = $output -split "`n" | Where-Object { $_ -match '^(SCRIPT ERROR:|ERROR:)' -and $_ -notmatch '^ERROR: Failed to read the root certificate store\.' }

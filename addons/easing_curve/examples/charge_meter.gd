@@ -10,7 +10,7 @@ extends Control
 			curve.changed.connect(_on_curve_changed)
 		if is_node_ready():
 			_on_curve_changed()
-@export_range(0.05, 10.0, 0.05) var duration := 2.0
+@export_range(0.05, 10.0, 0.05) var duration := 1.5
 
 var tween: Tween
 var progress := 0.0

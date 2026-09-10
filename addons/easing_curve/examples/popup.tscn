@@ -9,10 +9,11 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 theme = ExtResource("1_8ip3j")
 script = ExtResource("2_nw7cc")
 curve = ExtResource("3_gck6s")
-duration = 0.5
 
 [node name="ColorRect" type="ColorRect" parent="." unique_id=629910874]
 layout_mode = 0
@@ -73,7 +74,7 @@ text = "Reset"
 [node name="Label3" type="Label" parent="Margin/Layout" unique_id=443828743]
 layout_mode = 2
 text = "Select the scene root to edit Curve and Duration. Run with F6.
-While running, edit the local Curve with Live Scene Editing enabled; edits restart motion."
+After each edit, press Replay. If values are stale, save and rerun the scene."
 autowrap_mode = 3
 
 [connection signal="pressed" from="Margin/Layout/Buttons/Replay" to="." method="replay"]

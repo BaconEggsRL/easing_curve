@@ -24,7 +24,7 @@ the portable fallback.
 ## Put a curve to work
 
 [Read the practical HTML guide](https://baconeggsrl.github.io/easing_curve/) for
-Tweens, AnimationPlayer, direct sampling, and editing curves while a scene runs.
+Tweens, AnimationPlayer, direct sampling, and replaying examples after edits.
 The site source is in `docs/index.html`; publishing is handled by the Documentation workflow.
 
 ```gdscript
@@ -46,12 +46,12 @@ in `res://addons/easing_curve/examples/` and the next packaged release (not the 
 
 * `popup.tscn`: a Back Out property Tween, with replay cancellation.
 * `sliding_door.tscn`: AnimationPlayer drives a linear progress property that samples Smoothstep.
-* `charge_meter.tscn`: sample a Power curve into a bounded percentage, with a scrubber.
+* `charge_meter.tscn`: sample a CSS cubic Bézier curve into a bounded percentage, with a scrubber.
 
 Open a scene and press F6. Select its root to edit Curve and Duration. The examples
 use portable EasingCurve resources and do not require Native libraries. Each
 script handles resource replacement and change signals; the HTML guide explains
-the live-debug workflow and its limits.
+how to replay after edits and when to save and rerun the scene.
 
 # User Guide
 
@@ -109,8 +109,8 @@ Confirm the installed package contains the libraries for your target platform.
 
 #### Manual Installation
 
-* Download the packaged `easing_curve_v1.2.2.zip` from the
-  [GitHub release](https://github.com/BaconEggsRL/easing_curve/releases/tag/v1.2.2).
+* Download the latest packaged ZIP from the
+  [GitHub release](https://github.com/BaconEggsRL/easing_curve/releases/latest).
 * Extract it and copy `addons/easing_curve/` into your project's `addons/` folder.
 * Use the packaged ZIP for Native support. GitHub **Source code** archives and
   source checkouts omit Native binaries; developers must build those separately.

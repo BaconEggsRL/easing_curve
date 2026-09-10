@@ -20,7 +20,6 @@ for (const values of Object.values(samples)) {
   }
 }
 assert.ok(Math.max(...samples.popup) > 1, "popup retains overshoot");
-assert.ok(Math.abs(sampleCurve(samples.charge_meter, 0.5) - 0.25) < 1e-6);
 assert.equal(validDuration("", 2), 2);
 assert.equal(validDuration("garbage", 2), 2);
 assert.equal(validDuration("Infinity", 2), 2);
@@ -29,6 +28,12 @@ assert.equal(validDuration("11", 2), 2);
 assert.equal(validDuration("0.6", 2), 0.6);
 
 const html = fs.readFileSync(path.join(docs, "index.html"), "utf8");
+for (const [slug, duration] of Object.entries({ popup: 0.5, sliding_door: 1.5, charge_meter: 1.5 })) {
+  const match = html.match(new RegExp(`<div class="demo" data-example="${slug}" data-duration="([^"]+)">([\\s\\S]*?)<output`));
+  assert.ok(match, `${slug} preview exists`);
+  assert.equal(Number(match[1]), duration, `${slug} playback default`);
+  assert.equal(Number(match[2].match(/class="duration"[^>]*value="([^"]+)"/)[1]), duration, `${slug} displayed duration`);
+}
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(ids).size, ids.length, "unique HTML anchors");
 for (const [, ref] of html.matchAll(/\b(?:href|src)="([^"]+)"/g)) {
