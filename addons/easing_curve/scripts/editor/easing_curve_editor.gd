@@ -2829,6 +2829,10 @@ func _update_point_toolbar_spacing() -> void:
 	var separation := EDITOR_THEME_CACHE.compact_separation(_editor_scale)
 	# Reserve the dropdown height even when it is hidden with no selection.
 	_point_mode_row.custom_minimum_size.y = _point_handle_mode.get_combined_minimum_size().y
+	_point_states_row.custom_minimum_size.y = maxf(
+		_point_left_state.get_combined_minimum_size().y,
+		_point_right_state.get_combined_minimum_size().y,
+	)
 	for button: Button in [_point_move_left_button, _point_move_right_button]:
 		var icon_width := roundi(16.0 * _editor_scale)
 		button.custom_minimum_size = Vector2.ONE * icon_width
@@ -2910,7 +2914,7 @@ func _update_point_toolbar() -> void:
 	)
 
 	_point_toolbar.visible = true
-	_point_states_row.visible = valid_selection and controls_layout != ControlsLayout.DEV_SINGLE_ROW
+	_point_states_row.visible = controls_layout == ControlsLayout.CURRENT_TWO_ROW
 
 	if not valid_selection:
 		_point_label.text = (
@@ -2929,6 +2933,7 @@ func _update_point_toolbar() -> void:
 		_point_handle_mode.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_point_handle_mode.disabled = true
 		_set_point_toolbar_reset_available(false)
+		_set_reset_button_available(_point_states_reset_button, false)
 		_set_point_toolbar_control_state_visible(
 			EasingCurvePoint.ControlSide.LEFT,
 			false,
