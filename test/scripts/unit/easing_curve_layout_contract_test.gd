@@ -89,7 +89,7 @@ func _test_grouped_toolbar() -> void:
 		await _settle()
 		var toolbar := editor._point_toolbar
 		var preset_reset := presentation.get_child(0).get_child(5) as Button
-		_expect(toolbar is VBoxContainer and toolbar.get_child_count() == 3, "Toolbar must contain mode, left/shared and right rows")
+		_expect(toolbar is VBoxContainer and toolbar.get_child_count() == 2, "Toolbar must contain mode and shared state rows")
 		_expect(editor._point_left_state.get_parent().get_parent() == editor._point_left_state_label.get_parent(), "Left label split from its field")
 		_expect(editor._point_right_state.get_parent().get_parent() == editor._point_right_state_label.get_parent(), "Right label split from its field")
 		for scale_value: float in [1.0, 1.5, 2.0]:
@@ -134,7 +134,7 @@ func _test_grouped_toolbar() -> void:
 					editor._update_point_toolbar()
 					await _settle()
 					_assert_fixed_rows(editor, preset_reset)
-					_expect(toolbar.size.y < row_height if mode == 4 else is_equal_approx(toolbar.size.y, row_height), "Linked must remove exactly the unused side row")
+					_expect(is_equal_approx(toolbar.size.y, row_height), "Linked must retain the shared toolbar row height")
 					_expect(editor._get_graph_view_rect().size == dimensions, "Point state changed graph dimensions")
 					_expect(editor._point_left_state.disabled == (mode not in [0, 4]), "Left state availability does not match mode")
 					_expect(editor._point_right_state.disabled == (mode != 0), "Right state availability does not match mode")
@@ -182,7 +182,7 @@ func _test_grouped_toolbar() -> void:
 		editor.selected_index = -1
 		editor._update_point_toolbar()
 		await _settle()
-		_expect(not editor._point_left_state_row.visible and not editor._point_right_state_row.visible, "No selection reserves state rows")
+		_expect(not editor._point_states_row.visible, "No selection reserves state rows")
 		presentation.free()
 		backdrop.free()
 		await _settle()
@@ -190,29 +190,29 @@ func _test_grouped_toolbar() -> void:
 
 func _assert_fixed_rows(editor: EasingCurveEditor, preset_reset: Button) -> void:
 	var first := editor._point_mode_row
-	var second := editor._point_left_state_row
-	var third := editor._point_right_state_row
+	var second := editor._point_states_row
 	var linked := int(editor._point(editor.selected_index).get(&"handle_mode")) == EasingCurvePoint.HandleMode.LINKED
-	_expect(first.visible and second.visible and third.visible == not linked, "Mode has the wrong visible row count")
+	_expect(first.visible and second.visible and editor._point_right_group.visible == not linked, "Mode has the wrong visible row count")
 	_expect(first.get_rect().end.y <= second.position.y, "Logical rows overlap")
 	_expect(editor._point_left_state_label.text == ("LR" if linked else "L"), "Shared state label does not match mode")
 	_expect(editor._point_handle_mode.get_parent().get_parent() == first, "Handle Mode left Row 1")
 	_expect(editor._point_reorder_buttons.get_parent().get_parent() == first, "Navigation left Row 1")
-	_expect(editor._point_left_group.get_parent() == second and editor._point_right_group.get_parent() == third, "Side controls must have their own rows")
+	_expect(editor._point_left_group.get_parent() == second and editor._point_right_group.get_parent() == second, "Side controls must share a row")
 	if linked:
 		_expect(editor._point_left_state.get_selected_id() == editor._get_point_toolbar_control_state(editor.selected_index, EasingCurvePoint.ControlSide.RIGHT), "LR does not show the shared backend state")
 	else:
-		_expect(second.get_rect().end.y <= third.position.y, "Side rows overlap")
-		_expect(editor._point_left_state.global_position.x == editor._point_right_state.global_position.x, "L/R fields do not align")
+		_expect(editor._point_left_state.global_position.y == editor._point_right_state.global_position.y, "L/R fields do not share a row")
 		_expect(absf(editor._point_left_state.size.x - editor._point_right_state.size.x) <= 1.0, "Side fields have different allocations")
-	for row: HBoxContainer in [first, second, third]:
+	for row: HBoxContainer in [first, second]:
 		if not row.visible:
 			continue
 		var previous_end := 0.0
 		for child: Control in row.get_children():
+			if not child.visible:
+				continue
 			_expect(child.position.x >= previous_end - 0.01 and child.get_rect().end.x <= row.size.x + 0.01, "Row contents overlap or overflow")
 			previous_end = child.get_rect().end.x
-	for button: Button in [editor._point_reset_button, editor._point_left_state_reset_button, editor._point_right_state_reset_button]:
+	for button: Button in [editor._point_reset_button, editor._point_states_reset_button]:
 		if not button.is_visible_in_tree():
 			continue
 		_expect(button.visible, "Inactive reset removed its slot")
@@ -250,9 +250,7 @@ func _test_independent_resets() -> void:
 			await _settle()
 			var history := manager.get_history_undo_redo(manager.get_object_history_id(curve))
 			for mode: int in EasingCurvePoint.HandleMode.values():
-				for reset_target: int in [0, 1, 2]:
-					if mode == 4 and reset_target == 2:
-						continue
+				for reset_target: int in [0, 1]:
 					var reset_states := reset_target != 0
 					var point := editor._point(0)
 					point.set(&"handle_mode", EasingCurvePoint.HandleMode.FREE)
@@ -267,7 +265,7 @@ func _test_independent_resets() -> void:
 					var overrides := _stored_overrides(editor._point(0))
 					var geometry := [point.get(&"position"), point.get(&"left_control_point"), point.get(&"right_control_point")]
 					var dimensions := editor._get_graph_view_rect().size
-					var buttons: Array[Button] = [editor._point_reset_button, editor._point_left_state_reset_button, editor._point_right_state_reset_button]
+					var buttons: Array[Button] = [editor._point_reset_button, editor._point_states_reset_button]
 					var button := buttons[reset_target]
 					var reset_rect := button.get_global_rect()
 					_click(viewport, reset_rect.get_center())
@@ -280,15 +278,7 @@ func _test_independent_resets() -> void:
 					point = editor._point(0)
 					if reset_states:
 						_expect(int(point.get(&"handle_mode")) == mode, "State reset changed Handle Mode")
-						if mode == 4:
-							_expect(editor._point_control_states_are_default(point), "LR reset left hidden overrides")
-						else:
-							var display_side: int = EasingCurvePoint.ControlSide.LEFT if reset_target == 1 else EasingCurvePoint.ControlSide.RIGHT
-							_expect(editor._point_control_side_is_default(point, display_side), "Side reset left hidden overrides")
-							var opposite_side: int = editor._backend.display_control_side_to_curve(1 - display_side)
-							var force_property := &"left_force_linear" if opposite_side == 0 else &"right_force_linear"
-							var lock_property := &"left_control_point" if opposite_side == 0 else &"right_control_point"
-							_expect(point.get(force_property) == overrides[opposite_side] and point.get(&"locked").get(lock_property) == overrides[2].get(lock_property), "Side reset changed the opposite side")
+						_expect(editor._point_control_states_are_default(point), "Shared reset left hidden overrides")
 						_expect(point.get(&"locked").get(&"position"), "State reset cleared position lock")
 						_expect([point.get(&"position"), point.get(&"left_control_point"), point.get(&"right_control_point")] == geometry, "State reset changed handle geometry")
 					else:
@@ -304,7 +294,7 @@ func _test_independent_resets() -> void:
 					_expect(editor._backend.capture_snapshot() == after, "Reset Redo did not restore complete snapshot")
 			for shared: bool in [false, true]:
 				await _test_state_dropdown_edit(editor, manager, history, shared)
-			print("RESET_GATE backend=%s reverse=%s mode, separate side and LR edits preserve independent state and Undo/Redo" % ["native" if native else "legacy", reverse_sides])
+			print("RESET_GATE backend=%s reverse=%s mode and shared L/R or LR edits preserve independent state and Undo/Redo" % ["native" if native else "legacy", reverse_sides])
 			manager.clear_history()
 			viewport.free()
 	plugin.free()

@@ -186,8 +186,7 @@ var _zoom_row_slider: EasingCurveZoomSliderContainer
 var _point_toolbar_panel: VBoxContainer
 var _point_toolbar: VBoxContainer
 var _point_mode_row: HBoxContainer
-var _point_left_state_row: HBoxContainer
-var _point_right_state_row: HBoxContainer
+var _point_states_row: HBoxContainer
 var _point_label: Label
 var _point_reorder_buttons: HBoxContainer
 var _point_move_left_button: Button
@@ -200,8 +199,7 @@ var _point_left_state: OptionButton
 var _point_right_state_label: Label
 var _point_right_state: OptionButton
 var _point_reset_button: Button
-var _point_left_state_reset_button: Button
-var _point_right_state_reset_button: Button
+var _point_states_reset_button: Button
 var _updating_point_toolbar := false
 var _graph_render_suppressed := false
 var _backend_point_edit_active := false
@@ -2640,14 +2638,11 @@ func _create_point_toolbar() -> void:
 	_point_mode_row.name = &"PointModeRow"
 	_point_mode_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_toolbar.add_child(_point_mode_row)
-	_point_left_state_row = HBoxContainer.new()
-	_point_left_state_row.name = &"PointLeftStateRow"
-	_point_left_state_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_toolbar.add_child(_point_left_state_row)
-	_point_right_state_row = HBoxContainer.new()
-	_point_right_state_row.name = &"PointRightStateRow"
-	_point_right_state_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_toolbar.add_child(_point_right_state_row)
+	_point_states_row = HBoxContainer.new()
+	_point_states_row.name = &"PointStatesRow"
+	_point_states_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_point_toolbar.add_child(_point_states_row)
+
 
 	var point_label_row := HBoxContainer.new()
 	point_label_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2747,7 +2742,7 @@ func _create_point_toolbar() -> void:
 	_point_left_state_label.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
 	_point_left_group = HBoxContainer.new()
 	_point_left_group.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_left_state_row.add_child(_point_left_group)
+	_point_states_row.add_child(_point_left_group)
 	_point_left_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_point_left_group.add_child(_point_left_state_label)
 	_point_left_state = _create_point_toolbar_control_state_option(
@@ -2761,7 +2756,7 @@ func _create_point_toolbar() -> void:
 	_point_right_state_label.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
 	_point_right_group = HBoxContainer.new()
 	_point_right_group.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_right_state_row.add_child(_point_right_group)
+	_point_states_row.add_child(_point_right_group)
 	_point_right_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_point_right_group.add_child(_point_right_state_label)
 	_reserve_point_toolbar_control_side_label_width()
@@ -2773,12 +2768,9 @@ func _create_point_toolbar() -> void:
 	_point_reset_button = EDITOR_THEME_CACHE.create_reserved_reset_button("Reset Handle Mode to Free")
 	_point_reset_button.pressed.connect(_on_point_handle_mode_reset_pressed)
 	_point_mode_row.add_child(_point_reset_button)
-	_point_left_state_reset_button = EDITOR_THEME_CACHE.create_reserved_reset_button("Reset Left and Right Force Linear and Lock states")
-	_point_left_state_reset_button.pressed.connect(_on_point_control_state_reset_pressed.bind(EasingCurvePoint.ControlSide.LEFT))
-	_point_left_state_row.add_child(_point_left_state_reset_button)
-	_point_right_state_reset_button = EDITOR_THEME_CACHE.create_reserved_reset_button("Reset Right Force Linear and Lock state")
-	_point_right_state_reset_button.pressed.connect(_on_point_control_state_reset_pressed.bind(EasingCurvePoint.ControlSide.RIGHT))
-	_point_right_state_row.add_child(_point_right_state_reset_button)
+	_point_states_reset_button = EDITOR_THEME_CACHE.create_reserved_reset_button("Reset Left and Right Force Linear and Lock states")
+	_point_states_reset_button.pressed.connect(_on_point_states_reset_pressed)
+	_point_states_row.add_child(_point_states_reset_button)
 	_update_point_toolbar_spacing()
 
 	var toolbar_row_height := SELECTION_TOOLBAR_HEIGHT * _editor_scale
@@ -2817,7 +2809,7 @@ func _update_point_toolbar_spacing() -> void:
 		button.custom_minimum_size = Vector2.ONE * icon_width
 		if button.get_theme_constant(&"icon_max_width") != icon_width:
 			button.add_theme_constant_override(&"icon_max_width", icon_width)
-	for row: BoxContainer in [_point_toolbar, _point_mode_row, _point_left_state_row, _point_right_state_row, _point_left_group, _point_right_group]:
+	for row: BoxContainer in [_point_toolbar, _point_mode_row, _point_states_row, _point_left_group, _point_right_group]:
 		if row.get_theme_constant(&"separation") != separation:
 			row.add_theme_constant_override("separation", separation)
 
@@ -2825,7 +2817,10 @@ func _update_point_toolbar_spacing() -> void:
 func _reserve_point_toolbar_control_side_label_width() -> void:
 	var font := _point_left_state_label.get_theme_font(&"font")
 	var font_size := _point_left_state_label.get_theme_font_size(&"font_size")
-	var label_width := ceilf(font.get_string_size("LR", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
+	var label_width := ceilf(maxf(
+		font.get_string_size(_point_left_state_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x,
+		font.get_string_size("R", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x,
+	))
 	_point_left_state_label.custom_minimum_size.x = label_width
 	_point_right_state_label.custom_minimum_size.x = label_width
 
@@ -2890,8 +2885,7 @@ func _update_point_toolbar() -> void:
 	)
 
 	_point_toolbar.visible = true
-	_point_left_state_row.visible = valid_selection
-	_point_right_state_row.visible = valid_selection
+	_point_states_row.visible = valid_selection
 
 	if not valid_selection:
 		_point_label.text = (
@@ -2945,7 +2939,6 @@ func _update_point_toolbar() -> void:
 
 	var linked := int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.LINKED
 	var supports_states: bool = _backend.point_supports_control_state(selected_index)
-	_point_right_state_row.visible = not linked
 	_point_left_state_label.text = "LR" if linked else "L"
 	_update_point_toolbar_control_state(
 		EasingCurvePoint.ControlSide.LEFT,
@@ -2960,19 +2953,8 @@ func _update_point_toolbar() -> void:
 	_set_point_toolbar_reset_available(
 		int(point.get(&"handle_mode")) != EasingCurvePoint.HandleMode.FREE
 	)
-	_point_left_state_reset_button.tooltip_text = (
-		"Reset Left and Right Force Linear and Lock states" if linked
-		else "Reset Left Force Linear and Lock state"
-	)
-	_set_reset_button_available(
-		_point_left_state_reset_button,
-		not _point_control_states_are_default(point) if linked
-		else not _point_control_side_is_default(point, EasingCurvePoint.ControlSide.LEFT),
-	)
-	_set_reset_button_available(
-		_point_right_state_reset_button,
-		not linked and not _point_control_side_is_default(point, EasingCurvePoint.ControlSide.RIGHT),
-	)
+	_point_right_group.visible = not linked
+	_set_reset_button_available(_point_states_reset_button, not _point_control_states_are_default(point))
 	_updating_point_toolbar = false
 
 
@@ -3036,13 +3018,6 @@ func _point_control_states_are_default(point: Resource) -> bool:
 		and not locks.get(&"left_control_point", false)
 		and not locks.get(&"right_control_point", false)
 	)
-
-
-func _point_control_side_is_default(point: Resource, display_side: EasingCurvePoint.ControlSide) -> bool:
-	var curve_side: int = _backend.display_control_side_to_curve(display_side)
-	var force_property := &"left_force_linear" if curve_side == EasingCurvePoint.ControlSide.LEFT else &"right_force_linear"
-	var lock_property := &"left_control_point" if curve_side == EasingCurvePoint.ControlSide.LEFT else &"right_control_point"
-	return not bool(point.get(force_property)) and not point.get(&"locked").get(lock_property, false)
 
 
 func _update_point_toolbar_control_state(
@@ -3134,18 +3109,10 @@ func _on_point_handle_mode_reset_pressed() -> void:
 	_request_point_property_change(selected_index, &"handle_mode", EasingCurvePoint.HandleMode.FREE)
 
 
-func _on_point_control_state_reset_pressed(side: EasingCurvePoint.ControlSide) -> void:
-	if _backend == null or selected_index < 0 or selected_index >= _point_count():
+func _on_point_states_reset_pressed() -> void:
+	if _backend == null or selected_index < 0 or selected_index >= _point_count() or _point_states_reset_button.disabled:
 		return
-	var button := _point_left_state_reset_button if side == EasingCurvePoint.ControlSide.LEFT else _point_right_state_reset_button
-	if button.disabled:
-		return
-	if int(_point(selected_index).get(&"handle_mode")) == EasingCurvePoint.HandleMode.LINKED:
-		_request_point_property_change(selected_index, &"control_states_reset", true)
-		return
-	var curve_side: int = _backend.display_control_side_to_curve(side)
-	var intent := &"left_control_state_reset" if curve_side == EasingCurvePoint.ControlSide.LEFT else &"right_control_state_reset"
-	_request_point_property_change(selected_index, intent, true)
+	_request_point_property_change(selected_index, &"control_states_reset", true)
 
 
 # Retain the combined action for existing callers; no current toolbar button uses it.
