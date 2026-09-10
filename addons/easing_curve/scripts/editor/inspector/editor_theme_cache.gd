@@ -25,6 +25,19 @@ static var _editor_theme: Theme
 static var _icons: Dictionary[StringName, Texture2D] = {}
 
 
+static func compact_separation(scale: float) -> int:
+	return maxi(1, roundi(2.0 * scale))
+
+
+static func create_reserved_reset_button(button_tooltip: String) -> Button:
+	var button := Button.new()
+	button.icon = get_icon(ICON_RELOAD)
+	button.flat = true
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	button.tooltip_text = button_tooltip
+	return button
+
+
 static func get_theme() -> Theme:
 	if (
 		DisplayServer.get_name() == "headless"

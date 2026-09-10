@@ -23,6 +23,28 @@ const CurveEditorSettings := preload(
 	"res://addons/easing_curve/scripts/editor/curve_editor_settings.gd"
 )
 
+
+# The field's native minimum must not become an Inspector width requirement.
+class PointToolbarOptionSlot:
+	extends Container
+
+	func _init() -> void:
+		clip_contents = true
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+
+	func _get_minimum_size() -> Vector2:
+		if get_child_count() == 0:
+			return Vector2.ZERO
+		return Vector2(0.0, get_child(0).get_combined_minimum_size().y)
+
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_SORT_CHILDREN and get_child_count():
+			fit_child_in_rect(get_child(0), Rect2(Vector2.ZERO, size))
+
+
 var use_pending_add := true
 # True: hide point controls and snapping in Function mode.
 # False: show those rows with point-only controls inactive.
@@ -162,7 +184,9 @@ var _zoom_row: HBoxContainer
 var _zoom_row_slider: EasingCurveZoomSliderContainer
 
 var _point_toolbar_panel: VBoxContainer
-var _point_toolbar: HFlowContainer
+var _point_toolbar: VBoxContainer
+var _point_mode_row: HBoxContainer
+var _point_states_row: HBoxContainer
 var _point_label: Label
 var _point_reorder_buttons: HBoxContainer
 var _point_move_left_button: Button
@@ -175,6 +199,7 @@ var _point_left_state: OptionButton
 var _point_right_state_label: Label
 var _point_right_state: OptionButton
 var _point_reset_button: Button
+var _point_states_reset_button: Button
 var _updating_point_toolbar := false
 var _graph_render_suppressed := false
 var _backend_point_edit_active := false
@@ -277,7 +302,8 @@ func _update_layout() -> void:
 		return
 	var inset := CONTROL_ROW_INSET * _editor_scale
 	_reserve_point_toolbar_label_column_width()
-	_measure_point_toolbar_options()
+	_reserve_point_toolbar_control_side_label_width()
+	_update_point_toolbar_spacing()
 	_layout.size.x = size.x
 	_graph_canvas.custom_minimum_size.y = _get_graph_size().y + 2.0 * GRAPH_EDGE_PADDING * _editor_scale
 	for side: StringName in [&"margin_left", &"margin_right"]:
@@ -1141,6 +1167,8 @@ func _point_edit_action_name(property_name: StringName) -> String:
 			return "Move Easing Curve Handle"
 		&"left_control_state", &"right_control_state":
 			return "Change Easing Curve Handle State"
+		&"control_states_reset":
+			return "Reset Easing Curve Handle States"
 		&"toolbar_options_reset":
 			return "Reset Easing Curve Point Options"
 		&"handle_mode":
@@ -2590,11 +2618,11 @@ func _create_point_toolbar() -> void:
 
 	_layout.add_child(_point_toolbar_panel)
 
-	_point_toolbar = HFlowContainer.new()
+	_point_toolbar = VBoxContainer.new()
 	_point_toolbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_toolbar.add_theme_constant_override(
-		"h_separation",
-		maxi(1, roundi(2.0 * _editor_scale)),
+		"separation",
+		EDITOR_THEME_CACHE.compact_separation(_editor_scale),
 	)
 	_point_toolbar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_point_toolbar.custom_minimum_size.y = (
@@ -2602,13 +2630,21 @@ func _create_point_toolbar() -> void:
 	)
 
 	_point_toolbar_panel.add_child(_point_toolbar)
+	_point_mode_row = HBoxContainer.new()
+	_point_mode_row.name = &"PointModeRow"
+	_point_mode_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_point_toolbar.add_child(_point_mode_row)
+	_point_states_row = HBoxContainer.new()
+	_point_states_row.name = &"PointStatesRow"
+	_point_states_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_point_toolbar.add_child(_point_states_row)
 
 	var point_label_row := HBoxContainer.new()
 	point_label_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	point_label_row.add_theme_constant_override("separation", 0)
 	point_label_row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	point_label_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_point_toolbar.add_child(point_label_row)
+	_point_mode_row.add_child(point_label_row)
 
 	_point_reorder_buttons = HBoxContainer.new()
 	_point_reorder_buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2628,7 +2664,7 @@ func _create_point_toolbar() -> void:
 		reorder_button_size,
 	)
 	_point_move_left_button.pressed.connect(_request_point_move_up)
-	for style_name in [&"normal", &"hover", &"pressed", &"focus"]:
+	for style_name in [&"normal", &"normal_mirrored", &"hover", &"hover_mirrored", &"pressed", &"pressed_mirrored", &"hover_pressed", &"hover_pressed_mirrored", &"disabled", &"disabled_mirrored", &"focus"]:
 		_point_move_left_button.add_theme_stylebox_override(
 			style_name,
 			StyleBoxEmpty.new(),
@@ -2654,7 +2690,7 @@ func _create_point_toolbar() -> void:
 		reorder_button_size,
 	)
 	_point_move_right_button.pressed.connect(_request_point_move_down)
-	for style_name in [&"normal", &"hover", &"pressed", &"focus"]:
+	for style_name in [&"normal", &"normal_mirrored", &"hover", &"hover_mirrored", &"pressed", &"pressed_mirrored", &"hover_pressed", &"hover_pressed_mirrored", &"disabled", &"disabled_mirrored", &"focus"]:
 		_point_move_right_button.add_theme_stylebox_override(
 			style_name,
 			StyleBoxEmpty.new(),
@@ -2663,7 +2699,7 @@ func _create_point_toolbar() -> void:
 
 	_point_handle_mode = OptionButton.new()
 	_point_handle_mode.fit_to_longest_item = false
-	_point_handle_mode.clip_text = false
+	_point_handle_mode.clip_text = true
 	_point_handle_mode.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_point_handle_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_point_handle_mode.size_flags_stretch_ratio = 1.2
@@ -2693,43 +2729,44 @@ func _create_point_toolbar() -> void:
 		_on_point_toolbar_handle_mode_selected
 	)
 
-	_point_toolbar.add_child(_point_handle_mode)
+	_add_point_toolbar_option(_point_mode_row, _point_handle_mode)
 
 	_point_left_state_label = Label.new()
 	_point_left_state_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_left_state_label.text = "L"
+	_point_left_state_label.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
 	_point_left_group = HBoxContainer.new()
 	_point_left_group.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_toolbar.add_child(_point_left_group)
+	_point_states_row.add_child(_point_left_group)
+	_point_left_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_point_left_group.add_child(_point_left_state_label)
 	_point_left_state = _create_point_toolbar_control_state_option(
 		EasingCurvePoint.ControlSide.LEFT
 	)
-	_point_left_group.add_child(_point_left_state)
+	_add_point_toolbar_option(_point_left_group, _point_left_state)
 
 	_point_right_state_label = Label.new()
 	_point_right_state_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_point_right_state_label.text = "R"
+	_point_right_state_label.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
 	_point_right_group = HBoxContainer.new()
 	_point_right_group.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_point_toolbar.add_child(_point_right_group)
+	_point_states_row.add_child(_point_right_group)
+	_point_right_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_point_right_group.add_child(_point_right_state_label)
 	_reserve_point_toolbar_control_side_label_width()
 	_point_right_state = _create_point_toolbar_control_state_option(
 		EasingCurvePoint.ControlSide.RIGHT
 	)
-	_point_right_group.add_child(_point_right_state)
+	_add_point_toolbar_option(_point_right_group, _point_right_state)
 
-	_point_reset_button = Button.new()
-	_point_reset_button.icon = EDITOR_THEME_CACHE.get_icon(
-		EDITOR_THEME_CACHE.ICON_RELOAD
-	)
-	_point_reset_button.flat = true
-	_point_reset_button.tooltip_text = "Reset Point Options"
-	_point_reset_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_point_reset_button.pressed.connect(_on_point_toolbar_reset_pressed)
-	_point_toolbar.add_child(_point_reset_button)
-
+	_point_reset_button = EDITOR_THEME_CACHE.create_reserved_reset_button("Reset Handle Mode to Free")
+	_point_reset_button.pressed.connect(_on_point_handle_mode_reset_pressed)
+	_point_mode_row.add_child(_point_reset_button)
+	_point_states_reset_button = EDITOR_THEME_CACHE.create_reserved_reset_button("Reset Left and Right Force Linear and Lock states")
+	_point_states_reset_button.pressed.connect(_on_point_states_reset_pressed)
+	_point_states_row.add_child(_point_states_reset_button)
+	_update_point_toolbar_spacing()
 
 	var toolbar_row_height := SELECTION_TOOLBAR_HEIGHT * _editor_scale
 	for toolbar_control: Control in [
@@ -2754,30 +2791,31 @@ func _reserve_point_toolbar_label_column_width() -> void:
 	_point_label.custom_minimum_size.x = ceilf(font.get_string_size("999", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
 
 
-func _measure_point_toolbar_options() -> void:
-	for option: OptionButton in [_point_handle_mode, _point_left_state, _point_right_state]:
-		if option == null or option.selected < 0:
-			continue
-		var font := option.get_theme_font(&"font")
-		var font_size := option.get_theme_font_size(&"font_size")
-		var text_width := font.get_string_size(option.get_item_text(option.selected), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-		var chrome_width := option.get_theme_stylebox(&"normal").get_minimum_size().x
-		var arrow := option.get_theme_icon(&"arrow")
-		if arrow != null:
-			chrome_width += arrow.get_width() + option.get_theme_constant(&"arrow_margin")
-		var available_width := size.x
-		if option != _point_handle_mode:
-			var group := option.get_parent() as HBoxContainer
-			var label := _point_left_state_label if option == _point_left_state else _point_right_state_label
-			available_width -= label.get_combined_minimum_size().x + group.get_theme_constant(&"separation")
-		option.custom_minimum_size.x = minf(ceilf(text_width + chrome_width), maxf(0.0, available_width))
+func _add_point_toolbar_option(row: Container, option: OptionButton) -> void:
+	var slot := PointToolbarOptionSlot.new()
+	slot.add_child(option)
+	row.add_child(slot)
+
+
+func _update_point_toolbar_spacing() -> void:
+	var separation := EDITOR_THEME_CACHE.compact_separation(_editor_scale)
+	for button: Button in [_point_move_left_button, _point_move_right_button]:
+		var icon_width := roundi(16.0 * _editor_scale)
+		button.custom_minimum_size = Vector2.ONE * icon_width
+		if button.get_theme_constant(&"icon_max_width") != icon_width:
+			button.add_theme_constant_override(&"icon_max_width", icon_width)
+	for row: BoxContainer in [_point_toolbar, _point_mode_row, _point_states_row, _point_left_group, _point_right_group]:
+		if row.get_theme_constant(&"separation") != separation:
+			row.add_theme_constant_override("separation", separation)
 
 
 func _reserve_point_toolbar_control_side_label_width() -> void:
-	var label_width := maxf(
-		_point_left_state_label.get_combined_minimum_size().x,
-		_point_right_state_label.get_combined_minimum_size().x,
-	)
+	var font := _point_left_state_label.get_theme_font(&"font")
+	var font_size := _point_left_state_label.get_theme_font_size(&"font_size")
+	var label_width := ceilf(maxf(
+		font.get_string_size("L", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x,
+		font.get_string_size("R", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x,
+	))
 	_point_left_state_label.custom_minimum_size.x = label_width
 	_point_right_state_label.custom_minimum_size.x = label_width
 
@@ -2787,7 +2825,7 @@ func _create_point_toolbar_control_state_option(
 ) -> OptionButton:
 	var option := OptionButton.new()
 	option.fit_to_longest_item = false
-	option.clip_text = false
+	option.clip_text = true
 	option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	option.size_flags_stretch_ratio = 1.0
@@ -2842,6 +2880,7 @@ func _update_point_toolbar() -> void:
 	)
 
 	_point_toolbar.visible = true
+	_point_states_row.visible = valid_selection
 
 	if not valid_selection:
 		_point_label.text = (
@@ -2891,6 +2930,7 @@ func _update_point_toolbar() -> void:
 		):
 			_point_handle_mode.select(index)
 			break
+	_point_handle_mode.tooltip_text = "Handle Mode: " + _point_handle_mode.get_item_text(_point_handle_mode.selected)
 
 	_update_point_toolbar_control_state(
 		point,
@@ -2904,9 +2944,10 @@ func _update_point_toolbar() -> void:
 		and _backend.point_supports_control_state(selected_index),
 	)
 	_set_point_toolbar_reset_available(
-		not _point_toolbar_options_are_default(point)
+		int(point.get(&"handle_mode")) != EasingCurvePoint.HandleMode.FREE
 	)
 
+	_set_reset_button_available(_point_states_reset_button, not _point_control_states_are_default(point))
 	_updating_point_toolbar = false
 
 
@@ -2948,26 +2989,24 @@ func _set_point_toolbar_reorder_available(
 
 
 func _set_point_toolbar_reset_available(available: bool) -> void:
-	_point_reset_button.visible = available
-	var tint := _point_reset_button.self_modulate
-	tint.a = 1.0 if available else 0.0
-	_point_reset_button.self_modulate = tint
-	_point_reset_button.mouse_filter = (
-		Control.MOUSE_FILTER_STOP
-		if available
-		else Control.MOUSE_FILTER_IGNORE
-	)
-	_point_reset_button.focus_mode = (
-		Control.FOCUS_ALL if available else Control.FOCUS_NONE
-	)
-	_point_reset_button.disabled = not available
+	_set_reset_button_available(_point_reset_button, available)
+
+
+func _set_reset_button_available(button: Button, available: bool) -> void:
+	button.self_modulate.a = 1.0 if available else 0.0
+	button.mouse_filter = Control.MOUSE_FILTER_STOP if available else Control.MOUSE_FILTER_IGNORE
+	button.focus_mode = Control.FOCUS_ALL if available else Control.FOCUS_NONE
+	button.disabled = not available
 
 
 func _point_toolbar_options_are_default(point: Resource) -> bool:
+	return int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.FREE and _point_control_states_are_default(point)
+
+
+func _point_control_states_are_default(point: Resource) -> bool:
 	var locks := point.get(&"locked") as Dictionary
 	return (
-		int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.FREE
-		and not bool(point.get(&"left_force_linear"))
+		not bool(point.get(&"left_force_linear"))
 		and not bool(point.get(&"right_force_linear"))
 		and not locks.get(&"left_control_point", false)
 		and not locks.get(&"right_control_point", false)
@@ -2977,22 +3016,24 @@ func _point_toolbar_options_are_default(point: Resource) -> bool:
 func _update_point_toolbar_control_state(
 	_point: Resource,
 	side: EasingCurvePoint.ControlSide,
-	visible: bool,
+	available: bool,
 ) -> void:
-	_set_point_toolbar_control_state_visible(side, visible)
-	if not visible:
-		return
+	_set_point_toolbar_control_state_visible(side, true)
 
 	var option := (
 		_point_left_state
 		if side == EasingCurvePoint.ControlSide.LEFT
 		else _point_right_state
 	)
+	option.disabled = not available
+	option.mouse_filter = Control.MOUSE_FILTER_STOP if available else Control.MOUSE_FILTER_IGNORE
+	option.focus_mode = Control.FOCUS_ALL if available else Control.FOCUS_NONE
 	var control_state := _get_point_toolbar_control_state(selected_index, side)
 	for index in range(option.item_count):
 		if option.get_item_id(index) == control_state:
 			option.select(index)
 			break
+	option.tooltip_text = "%s handle: %s%s" % ["Left" if side == EasingCurvePoint.ControlSide.LEFT else "Right", option.get_item_text(option.selected), " (unavailable)" if not available else ""]
 
 
 func _get_point_toolbar_control_state(
@@ -3055,19 +3096,23 @@ func _on_point_toolbar_control_state_selected(
 	)
 
 
-func _on_point_toolbar_reset_pressed() -> void:
-	if (
-		_backend == null
-		or selected_index < 0
-		or selected_index >= _point_count()
-	):
+func _on_point_handle_mode_reset_pressed() -> void:
+	if _backend == null or selected_index < 0 or selected_index >= _point_count() or _point_reset_button.disabled:
 		return
+	_request_point_property_change(selected_index, &"handle_mode", EasingCurvePoint.HandleMode.FREE)
 
-	_request_point_property_change(
-		selected_index,
-		&"toolbar_options_reset",
-		true,
-	)
+
+func _on_point_states_reset_pressed() -> void:
+	if _backend == null or selected_index < 0 or selected_index >= _point_count() or _point_states_reset_button.disabled:
+		return
+	_request_point_property_change(selected_index, &"control_states_reset", true)
+
+
+# Retain the combined action for existing callers; neither toolbar button uses it.
+func _on_point_toolbar_reset_pressed() -> void:
+	if _backend == null or selected_index < 0 or selected_index >= _point_count():
+		return
+	_request_point_property_change(selected_index, &"toolbar_options_reset", true)
 
 
 func get_world_to_view_scale() -> Vector2:

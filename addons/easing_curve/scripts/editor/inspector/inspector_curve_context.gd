@@ -3868,13 +3868,7 @@ static func _create_option_label(label_text: String) -> Label:
 
 
 static func _create_reserved_reset_button(button_tooltip: String) -> Button:
-	var reset_button := Button.new()
-	reset_button.icon = EDITOR_THEME_CACHE.get_icon(
-		EDITOR_THEME_CACHE.ICON_RELOAD
-	)
-	reset_button.flat = true
-	reset_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	reset_button.tooltip_text = button_tooltip
+	var reset_button := EDITOR_THEME_CACHE.create_reserved_reset_button(button_tooltip)
 	_set_preset_reset_button_available(reset_button, false)
 	return reset_button
 
@@ -3895,7 +3889,7 @@ static func _configure_compact_option(option: OptionButton) -> void:
 # Separation of dropdown elements in graph (Ease, Trans)
 static func _compact_separation() -> int:
 	if Engine.is_editor_hint():
-		return maxi(1, roundi(2.0 * EditorInterface.get_editor_scale()))
+		return EDITOR_THEME_CACHE.compact_separation(EditorInterface.get_editor_scale())
 	return 2
 
 # Separation of points in points list

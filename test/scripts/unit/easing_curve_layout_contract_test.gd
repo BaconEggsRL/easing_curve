@@ -22,6 +22,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_free_mode_preserves_overrides()
 	await _test_grouped_toolbar()
+	await _test_independent_resets()
 	await _test_sibling_capture()
 	await _test_graph_dimensions()
 	_finish("curve layout contract")
@@ -74,16 +75,23 @@ func _test_grouped_toolbar() -> void:
 			curve = legacy
 		var context := HOST.INSPECTOR_PLUGIN.new()
 		var presentation: Control = context.handle_easing_curve_editor(curve)
+		# Keep full-editor captures free of the host's scene-tree/start-page text.
+		var backdrop := ColorRect.new()
+		backdrop.color = Color(0.16, 0.16, 0.16)
+		backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		backdrop.size = Vector2(root.size)
+		root.add_child(backdrop)
 		root.add_child(presentation)
 		var editor: EasingCurveEditor = context.easing_curve_editor
 		editor.selected_index = 1
 		editor._point(1).set(&"left_force_linear", true)
 		editor._point(1).call(&"set_locked", &"right_control_point", true)
 		await _settle()
-		var flow := editor._point_toolbar
-		_expect(flow is HFlowContainer, "Toolbar lost its characterized native wrapping container")
-		_expect(editor._point_left_state.get_parent() == editor._point_left_state_label.get_parent(), "Left label split from its field")
-		_expect(editor._point_right_state.get_parent() == editor._point_right_state_label.get_parent(), "Right label split from its field")
+		var toolbar := editor._point_toolbar
+		var preset_reset := presentation.get_child(0).get_child(5) as Button
+		_expect(toolbar is VBoxContainer and toolbar.get_child_count() == 2, "Selected toolbar must have exactly two fixed rows")
+		_expect(editor._point_left_state.get_parent().get_parent() == editor._point_left_state_label.get_parent(), "Left label split from its field")
+		_expect(editor._point_right_state.get_parent().get_parent() == editor._point_right_state_label.get_parent(), "Right label split from its field")
 		for scale_value: float in [1.0, 1.5, 2.0]:
 			var theme := Theme.new()
 			theme.default_font_size = roundi(16.0 * scale_value)
@@ -96,13 +104,18 @@ func _test_grouped_toolbar() -> void:
 				presentation.size.x = width * scale_value
 				await _settle()
 				var positions: Array[Vector2] = []
-				for group: Control in flow.get_children():
+				for group: Control in toolbar.get_children():
 					positions.append(group.position)
 					if group.visible:
-						_expect(group.position.x >= 0 and group.get_rect().end.x <= flow.size.x + 0.01, "Toolbar group overflowed allocated width")
+						_expect(group.position.x >= 0 and group.get_rect().end.x <= toolbar.size.x + 0.01, "Toolbar group overflowed allocated width")
+				var minimum_changes := [0]
+				var record_change := func(): minimum_changes[0] += 1
+				toolbar.minimum_size_changed.connect(record_change)
 				await _settle()
-				for index in range(flow.get_child_count()):
-					_expect(flow.get_child(index).position == positions[index], "Toolbar layout oscillated at fixed width")
+				toolbar.minimum_size_changed.disconnect(record_change)
+				_expect(minimum_changes[0] == 0, "Settled toolbar kept invalidating minimum size")
+				for index in range(toolbar.get_child_count()):
+					_expect(toolbar.get_child(index).position == positions[index], "Toolbar layout oscillated at fixed width")
 				if arrangements.has(width):
 					_expect(arrangements[width] == positions, "Returning to a width changed row arrangement")
 				arrangements[width] = positions
@@ -111,10 +124,36 @@ func _test_grouped_toolbar() -> void:
 				_expect(editor._snap_toolbar_margin.get_parent() == editor._graph_canvas.get_parent(), "Grid Snap is not a graph sibling")
 				_expect(editor._snap_toolbar_margin.get_rect().end.y <= editor._graph_canvas.position.y, "Grid Snap overlaps graph")
 				_expect(editor._slider.get_global_rect().end.x <= editor.get_global_rect().end.x + 0.01, "Zoom row overflowed Inspector width")
-				for option: OptionButton in [editor._point_handle_mode, editor._point_left_state, editor._point_right_state]:
-					var font := option.get_theme_font(&"font")
-					var extent := font.get_string_size(option.get_item_text(option.selected), HORIZONTAL_ALIGNMENT_LEFT, -1, option.get_theme_font_size(&"font_size"))
-					_expect(option.size.x >= extent.x + option.get_theme_icon(&"arrow").get_width(), "Flow collapsed a state field to its arrow")
+				_assert_fixed_rows(editor, preset_reset)
+				var dimensions := editor._get_graph_view_rect().size
+				var row_height := toolbar.size.y
+				for mode: int in EasingCurvePoint.HandleMode.values():
+					editor._point(1).set(&"handle_mode", mode)
+					editor._update_point_toolbar()
+					await _settle()
+					_assert_fixed_rows(editor, preset_reset)
+					_expect(is_equal_approx(toolbar.size.y, row_height), "Changing mode changed selected toolbar height")
+					_expect(editor._get_graph_view_rect().size == dimensions, "Point state changed graph dimensions")
+					_expect(editor._point_left_state.disabled == (mode not in [0, 4]), "Left state availability does not match mode")
+					_expect(editor._point_right_state.disabled == (mode not in [0, 4]), "Right state availability does not match mode")
+					_expect(presentation.get_combined_minimum_size().x == baseline_width, "Long mode text increased Inspector minimum width")
+				if width == 150.0:
+					for option: OptionButton in [editor._point_handle_mode, editor._point_left_state, editor._point_right_state]:
+						var original := option.get_item_text(option.selected)
+						var allocation: Vector2 = option.get_parent().size
+						option.set_item_text(option.selected, "Long localized control state description")
+						await _settle()
+						_expect(option.get_parent().size == allocation, "Long text changed field allocation")
+						_expect(toolbar.size.y == row_height and editor._get_graph_view_rect().size == dimensions, "Long text wrapped or resized the graph")
+						_expect(presentation.get_combined_minimum_size().x == baseline_width, "Long text raised Inspector minimum width")
+						option.set_item_text(option.selected, original)
+					await _settle()
+				if width == 150.0:
+					print("TOOLBAR_METRICS backend=%s scale=%s width=%s mode=%s left=%s right=%s reset_x=%s preset_x=%s graph=%s" % ["native" if native else "legacy", scale_value, editor.size.x, editor._point_handle_mode.size.x, editor._point_left_state.size.x, editor._point_right_state.size.x, editor._point_reset_button.global_position.x, preset_reset.global_position.x, dimensions])
+				if scale_value == 1.0 and width in [150.0, 220.0, 600.0] and DisplayServer.get_name() != "headless":
+					await RenderingServer.frame_post_draw
+					var capture := root.get_texture().get_image().get_region(Rect2i(presentation.get_global_rect()))
+					capture.save_png("res://test/_temp/point-toolbar-%s-%s.png" % ["native" if native else "legacy", int(width)])
 				editor.autofit()
 				var graph := editor._get_graph_view_rect()
 				_expect(editor._get_autofit_view_rect() == graph, "Auto Fit still subtracts control obstructions")
@@ -128,8 +167,121 @@ func _test_grouped_toolbar() -> void:
 					var label := editor._get_drag_coordinate_label_position(anchor, extent)
 					_expect(graph.encloses(Rect2(label, extent)), "Transient readout escaped the graph")
 			print("WRAP_GATE backend=%s scale=%s presentation_min=%s" % ["native" if native else "legacy", scale_value, baseline_width])
-		presentation.free()
+		for index: int in [0, 2]:
+			editor.selected_index = index
+			editor._update_point_toolbar()
+			await _settle()
+			_assert_fixed_rows(editor, preset_reset)
+			_expect(editor._point_left_state.disabled if index == 0 else editor._point_right_state.disabled, "Missing endpoint side accepts input")
+		editor.selected_index = -1
+		editor._update_point_toolbar()
 		await _settle()
+		_expect(not editor._point_states_row.visible, "No selection reserves the second row")
+		presentation.free()
+		backdrop.free()
+		await _settle()
+
+
+func _assert_fixed_rows(editor: EasingCurveEditor, preset_reset: Button) -> void:
+	var first := editor._point_mode_row
+	var second := editor._point_states_row
+	_expect(first.visible and second.visible, "Selected toolbar lost a logical row")
+	_expect(first.get_rect().end.y <= second.position.y, "Logical rows overlap")
+	_expect(editor._point_handle_mode.get_parent().get_parent() == first, "Handle Mode left Row 1")
+	_expect(editor._point_reorder_buttons.get_parent().get_parent() == first, "Navigation left Row 1")
+	_expect(editor._point_left_group.get_parent() == second and editor._point_right_group.get_parent() == second, "L/R left Row 2")
+	for row: HBoxContainer in [first, second]:
+		var previous_end := 0.0
+		for child: Control in row.get_children():
+			_expect(child.position.x >= previous_end - 0.01 and child.get_rect().end.x <= row.size.x + 0.01, "Row contents overlap or overflow")
+			previous_end = child.get_rect().end.x
+	for button: Button in [editor._point_reset_button, editor._point_states_reset_button]:
+		_expect(button.visible, "Inactive reset removed its slot")
+		_expect(absf(button.global_position.x - preset_reset.global_position.x) <= 1.0, "Reset column left edge differs from Ease/Trans")
+		_expect(absf(button.get_global_rect().end.x - preset_reset.get_global_rect().end.x) <= 1.0, "Reset column right edge differs from Ease/Trans")
+	_expect(absf(editor._point_left_state.size.x - editor._point_right_state.size.x) <= 1.0, "L/R dropdown space is not shared equally")
+	for option: OptionButton in [editor._point_handle_mode, editor._point_left_state, editor._point_right_state]:
+		_expect(option.visible and option.clip_text and option.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS, "State field must remain visible with ellipsis")
+		_expect(option.size.x > 0 and option.size.x <= option.get_parent().size.x + 0.01, "Dropdown cannot shrink into its slot: %s field=%s slot=%s row=%s" % [option.tooltip_text, option.size, option.get_parent().size, editor.size.x])
+		_expect(not option.tooltip_text.is_empty(), "Clipped state lost its tooltip")
+		if option.disabled:
+			_expect(option.mouse_filter == Control.MOUSE_FILTER_IGNORE and option.focus_mode == Control.FOCUS_NONE, "Unavailable field still accepts input")
+
+
+func _test_independent_resets() -> void:
+	var plugin := EditorPlugin.new()
+	var manager := plugin.get_undo_redo()
+	for native: bool in [false, true]:
+		var viewport := SubViewport.new()
+		viewport.size = Vector2i(600, 900)
+		root.add_child(viewport)
+		var curve: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+		curve.set(&"transition" if native else &"trans_type", 100 if native else EasingCurve.TRANS.CUSTOM)
+		var context := HOST.INSPECTOR_PLUGIN.new()
+		context.editor_undo_redo = manager
+		var presentation: Control = context.handle_easing_curve_editor(curve)
+		viewport.add_child(presentation)
+		presentation.size.x = 220.0
+		var editor: EasingCurveEditor = context.easing_curve_editor
+		editor.selected_index = 0
+		await _settle()
+		var history := manager.get_history_undo_redo(manager.get_object_history_id(curve))
+		for mode: int in EasingCurvePoint.HandleMode.values():
+			for reset_states: bool in [false, true]:
+				var point := editor._point(0)
+				point.set(&"handle_mode", EasingCurvePoint.HandleMode.FREE)
+				point.set(&"left_force_linear", true)
+				point.call(&"set_locked", &"right_control_point", true)
+				point.call(&"set_locked", &"position", true)
+				point.set(&"handle_mode", mode)
+				editor._update_point_toolbar()
+				await _settle()
+				manager.clear_history()
+				var before: Variant = editor._backend.capture_snapshot()
+				var overrides := _stored_overrides(editor._point(0))
+				var geometry := [point.get(&"position"), point.get(&"left_control_point"), point.get(&"right_control_point")]
+				var dimensions := editor._get_graph_view_rect().size
+				var button := editor._point_states_reset_button if reset_states else editor._point_reset_button
+				var reset_rect := button.get_global_rect()
+				_click(viewport, reset_rect.get_center())
+				await _settle()
+				if mode == EasingCurvePoint.HandleMode.FREE and not reset_states:
+					_expect(history.get_history_count() == 0, "Inactive mode reset created an action")
+					_expect(editor._backend.capture_snapshot() == before, "Inactive mode reset mutated flags")
+					continue
+				_expect(history.get_history_count() == 1, "Reset did not create exactly one Undo action")
+				point = editor._point(0)
+				if reset_states:
+					_expect(int(point.get(&"handle_mode")) == mode, "State reset changed Handle Mode")
+					_expect(editor._point_control_states_are_default(point), "State reset left hidden overrides")
+					_expect(point.get(&"locked").get(&"position"), "State reset cleared position lock")
+					_expect([point.get(&"position"), point.get(&"left_control_point"), point.get(&"right_control_point")] == geometry, "State reset changed handle geometry")
+				else:
+					_expect(int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.FREE, "Mode reset did not select Free")
+					_expect(_stored_overrides(point) == overrides, "Mode reset changed stored L/R flags")
+				var after: Variant = editor._backend.capture_snapshot()
+				_expect(button.disabled and button.get_global_rect() == reset_rect, "Reset availability shifted its slot")
+				_expect(editor._get_graph_view_rect().size == dimensions, "Reset changed graph dimensions")
+				_expect(history.undo(), "Reset Undo failed")
+				_expect(editor._backend.capture_snapshot() == before, "Reset Undo did not restore complete snapshot")
+				_expect(not history.has_undo(), "Reset created multiple Undo actions")
+				_expect(history.redo(), "Reset Redo failed")
+				_expect(editor._backend.capture_snapshot() == after, "Reset Redo did not restore complete snapshot")
+		print("RESET_GATE backend=%s both reset transactions preserve independent state and Undo/Redo" % ["native" if native else "legacy"])
+		manager.clear_history()
+		viewport.free()
+	plugin.free()
+
+
+func _click(viewport: SubViewport, position: Vector2) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.position = position
+	event.pressed = true
+	viewport.push_input(event, true)
+	event = event.duplicate()
+	event.pressed = false
+	viewport.push_input(event, true)
 
 
 func _test_sibling_capture() -> void:

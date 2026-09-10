@@ -280,7 +280,7 @@ func _test_graph_toolbar_reorder_requests_use_inspector_path() -> void:
 	var editor := EDITOR_DRIVER.curve_editor(inspector)
 	var move_left: Button = editor.get("_point_move_left_button")
 	var move_right: Button = editor.get("_point_move_right_button")
-	var toolbar: HFlowContainer = editor.get("_point_toolbar")
+	var toolbar: VBoxContainer = editor.get("_point_toolbar")
 	var toolbar_panel: VBoxContainer = editor.get("_point_toolbar_panel")
 	var toolbar_height := toolbar.custom_minimum_size.y
 	editor.size = Vector2(600.0, 300.0)

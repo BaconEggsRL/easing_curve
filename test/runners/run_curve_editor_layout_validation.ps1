@@ -84,7 +84,7 @@ Write-Output "Full editor validation host: $hostRoot"
 & $launcher -GodotPath $GodotPath -TimeoutSeconds 60 --editor --path $hostRoot --log-file "$hostRoot/test/_temp/validation.log" *> "$hostRoot/test/_temp/validation-console.txt"
 $suiteExitCode = $LASTEXITCODE
 $outputText = Get-Content -LiteralPath "$hostRoot/test/_temp/validation-console.txt" -Raw
-$outputText -split '\r?\n' | Where-Object { $_ -match '^(PASS:|WRAP_GATE|SCRIPT ERROR:|ERROR: FAIL:)' } | Write-Output
+$outputText -split '\r?\n' | Where-Object { $_ -match '^(PASS:|WRAP_GATE|FREE_MODE_GATE|TOOLBAR_METRICS|RESET_GATE|SCRIPT ERROR:|ERROR: FAIL:)' } | Write-Output
 Write-Output "Preserved logs and captures: $hostRoot/test/_temp"
 if ($suiteExitCode -ne 0 -or $outputText -match 'SCRIPT ERROR:' -or $outputText -notmatch '(?m)^PASS:') {
 	throw "Layout validation failed (exit $suiteExitCode): $hostRoot/test/_temp/validation-console.txt"
