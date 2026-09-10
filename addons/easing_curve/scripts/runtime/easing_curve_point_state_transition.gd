@@ -176,8 +176,14 @@ static func _set_handle_mode(
 			or bool(state.locks.get("right_control_point", false))
 		)
 		var shared_force_linear := (
-			state.left_force_linear or state.right_force_linear
+			not shared_locked and (state.left_force_linear or state.right_force_linear)
 		)
+		# A uniquely locked control owns the Linked position, even when shorter.
+		var left_locked := bool(state.locks.get("left_control_point", false))
+		var right_locked := bool(state.locks.get("right_control_point", false))
+		if left_locked != right_locked:
+			var locked_position := state.left_control_point if left_locked else state.right_control_point
+			handles = {"left": locked_position, "right": locked_position}
 
 		state.locks["left_control_point"] = shared_locked
 		state.locks["right_control_point"] = shared_locked

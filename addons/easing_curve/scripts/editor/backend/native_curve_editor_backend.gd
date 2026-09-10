@@ -237,18 +237,11 @@ func apply_point_property(
 				return false
 			point.set(property_name, value)
 		&"handle_mode":
-			point.set(&"handle_mode", int(value))
 			if int(value) == EasingCurvePoint.HandleMode.LINKED:
-				# Match the Legacy Inspector transition without changing runtime setters.
-				var state: Dictionary = point.call(&"capture_state")
-				var locks: Dictionary = state[&"locked"]
-				var shared_locked := bool(locks[&"left_control_point"]) or bool(locks[&"right_control_point"])
-				var shared_linear := bool(state[&"left_force_linear"]) or bool(state[&"right_force_linear"])
-				locks[&"left_control_point"] = shared_locked
-				locks[&"right_control_point"] = shared_locked
-				state[&"left_force_linear"] = shared_linear
-				state[&"right_force_linear"] = shared_linear
-				point.call(&"apply_state", state)
+				if not _apply_linked_handle_mode(point):
+					return false
+			else:
+				point.set(&"handle_mode", int(value))
 		&"left_control_state", &"right_control_state":
 			var side := (
 				CONTROL_SIDE_LEFT
@@ -282,6 +275,28 @@ func apply_point_property(
 	):
 		_apply_display_space_handles(current_point, property_name, edited_state)
 	return bool(current_point.call(&"apply_state", edited_state))
+
+
+func _apply_linked_handle_mode(point: Resource) -> bool:
+	# Resolve precedence and geometry from the original state, before a runtime
+	# setter can collapse the handles. Both Inspectors use the same transition.
+	var snapshot: Dictionary = point.call(&"capture_state")
+	var state := PointState.new()
+	var properties: Array[StringName] = [
+		&"position", &"left_control_point", &"right_control_point", &"handle_mode",
+		&"left_force_linear", &"right_force_linear",
+	]
+	for property_name in properties:
+		state.set(property_name, snapshot[property_name])
+	for property_name in state.locks:
+		state.locks[property_name] = bool(snapshot[&"locked"].get(property_name, false))
+	var resolved := PointTransition.set_handle_mode(
+		state, EasingCurvePoint.HandleMode.LINKED, PointTransition.Policy.INSPECTOR,
+	)
+	for property_name in properties:
+		snapshot[property_name] = resolved.get(property_name)
+	snapshot[&"locked"] = resolved.locks
+	return bool(point.call(&"apply_state", snapshot))
 
 
 func _apply_display_space_handles(point: Resource, property_name: StringName, edited_state: Dictionary) -> void:

@@ -187,15 +187,20 @@ under `test/_temp/`. Full validation passed 33 of 34 suites; only the two known
 CSS-label assertions failed. The correction changes `native_curve_editor_backend.gd`,
 the existing layout contract suite and this document.
 
-The Native Inspector's Handle Mode transition also combines stored overrides
-when entering Linked: either handle lock locks both sides, and either Force
-Linear flag enables both sides. Locks and Force Linear are combined independently
-so masked flags are preserved. Position locks and runtime point setters are
-unchanged. This covers Free with L Locked / R Free (and the reverse), which is
+Both Inspectors use the same pure Handle Mode transition when entering Linked.
+The shared state resolves in priority order: Locked, Linear, then Free. Either
+lock locks both sides and clears both losing Force Linear flags. If exactly one
+side is locked, its existing coordinate becomes both handles' coordinate even
+when the other handle is longer. With both sides locked, the existing longest
+handle rule breaks the tie. With no locks, either Linear flag enables both sides.
+Position locks and runtime point setters are unchanged. This covers Free with
+L Locked / R Free or Linear (and the reverse), which is
 a different path from editing a dropdown after the point is already Linked.
 Regression coverage checks all 16 flag combinations, both endpoints and reversed
 mapping, blocked viewport dragging, and one Undo restoring the original asymmetric
-Free state. The expanded suite reproduced 108 failures before this correction
+Free state. Returning from Linked Locked to Free retains the shared coordinate
+and cannot reactivate the discarded Linear flag. Undo restores the original
+asymmetric state, including that original flag. The earlier expanded suite reproduced 108 failures before its correction
 and passed all 24,215 checks afterward. Full validation again passed 33 of 34
 suites, with only the two known CSS-label failures. Evidence is under
 `test/_temp/native-enter-linked-*-console.txt`.
@@ -218,4 +223,23 @@ the rebuilt Windows release DLL passes all 2,053 smoke checks. Build and test lo
 are under `test/_temp/inactive-overrides-*`. Full-editor layout/input validation
 passes 24,693 checks. Reopen an existing Godot session before retesting to ensure
 it loads the rebuilt Native library; only the Windows release binary was rebuilt.
+Full validation passed 33 of 34 suites, with only the two known CSS-label failures.
+
+### Linked state precedence and locked geometry
+
+The mixed Linear/Locked case is covered through both Inspector transaction paths,
+both endpoints, reverse transforms, viewport drag blocking and complete Undo/Redo.
+Separate fixtures make the locked control shorter than the unlocked control and
+verify that its coordinate wins. All 16 stored flag combinations are checked.
+Entering Linked resolves competing overrides; passing through an inactive mode
+still leaves stored overrides untouched. Returning to Free preserves the resolved
+Linked geometry, while explicitly selecting the main Linear mode still collapses
+both handles by design.
+
+The expanded pre-fix run failed 200 checks. The corrected full-editor suite passes
+24,873 checks; evidence is in `test/_temp/linked-precedence-*-console.txt`.
+The older Legacy drag fixture permits at most 0.000001 units of float32 rounding
+in restored handle coordinates. It still requires exact resource order, point
+positions, modes and flags; the new Linked transition snapshots remain exact.
+No Native library rebuild is needed for this Inspector-policy change.
 Full validation passed 33 of 34 suites, with only the two known CSS-label failures.

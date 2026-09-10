@@ -21,6 +21,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_mode_override_transitions()
+	_test_locked_handle_precedence()
 	await _test_grouped_toolbar()
 	await _test_independent_resets()
 	await _test_sibling_capture()
@@ -47,15 +48,43 @@ func _test_mode_override_transitions() -> void:
 				var before := _stored_overrides(point)
 				_expect(backend.apply_point_property(0, &"handle_mode", EasingCurvePoint.HandleMode.FREE, false), "Free mode edit was rejected")
 				_expect(_stored_overrides(backend.get_point(0)) == before, "Free mode changed stored flags: native=%s mode=%s flags=%s" % [native, mode, flags])
+				point = backend.get_point(0)
+				var locked_position: Vector2 = point.get(&"left_control_point" if flags & 4 else &"right_control_point")
 				_expect(backend.apply_point_property(0, &"handle_mode", EasingCurvePoint.HandleMode.LINKED, false), "Linked mode edit was rejected")
 				point = backend.get_point(0)
 				var locks: Dictionary = point.get(&"locked")
 				var shared_locked := bool(flags & 12)
-				var shared_linear := bool(flags & 3)
+				var shared_linear := bool(flags & 3) and not shared_locked
 				_expect(bool(locks[&"left_control_point"]) == shared_locked and bool(locks[&"right_control_point"]) == shared_locked, "Entering Linked did not combine stored locks: native=%s flags=%s" % [native, flags])
 				_expect(bool(point.get(&"left_force_linear")) == shared_linear and bool(point.get(&"right_force_linear")) == shared_linear, "Entering Linked did not combine stored Force Linear: native=%s flags=%s" % [native, flags])
 				_expect(locks[&"position"] == before[2][&"position"], "Entering Linked changed position lock")
+				if (flags & 12) in [4, 8]:
+					_expect(point.get(&"left_control_point") == locked_position and point.get(&"right_control_point") == locked_position, "Linked ignored the uniquely locked handle position")
 		print("FREE_MODE_GATE backend=%s preserved overrides for all modes and flag combinations" % ["native" if native else "legacy"])
+
+
+func _test_locked_handle_precedence() -> void:
+	for native: bool in [false, true]:
+		for locked_side: int in [0, 1]:
+			for opposite_state: int in EasingCurvePoint.ControlState.values():
+				var curve: Resource = ClassDB.instantiate(&"NativeEasingCurve") if native else EasingCurve.new()
+				curve.set(&"transition" if native else &"trans_type", 100 if native else EasingCurve.TRANS.CUSTOM)
+				var backend = EasingCurveEditor.BackendFactory.create(curve)
+				var point: Resource = backend.get_point(0)
+				var locked_property := &"left_control_point" if locked_side == 0 else &"right_control_point"
+				var opposite_property := &"right_control_point" if locked_side == 0 else &"left_control_point"
+				var short_handle := Vector2(0.1, 0.1)
+				var long_handle := Vector2(0.8, 0.2)
+				point.set(locked_property, short_handle)
+				point.set(opposite_property, long_handle)
+				point.call(&"set_locked", locked_property, true)
+				point.call(&"set_locked", opposite_property, opposite_state == EasingCurvePoint.ControlState.LOCKED)
+				point.set(&"right_force_linear" if locked_side == 0 else &"left_force_linear", opposite_state == EasingCurvePoint.ControlState.LINEAR)
+				_expect(backend.apply_point_property(0, &"handle_mode", EasingCurvePoint.HandleMode.LINKED, false), "Linked precedence edit failed")
+				point = backend.get_point(0)
+				var expected := long_handle if opposite_state == EasingCurvePoint.ControlState.LOCKED else short_handle
+				_expect(point.get(&"left_control_point") == expected and point.get(&"right_control_point") == expected, "Linked chose a longer unlocked control over the locked control, or lost the both-locked tie rule")
+				_expect(not point.get(&"left_force_linear") and not point.get(&"right_force_linear"), "Locked precedence left stale Linear flags")
 
 
 func _stored_overrides(point: Resource) -> Array:
@@ -362,14 +391,40 @@ func _test_inactive_override_drags(editor: EasingCurveEditor, manager: EditorUnd
 				_expect(not (point.get(property_name) as Vector2).is_equal_approx(point.get(&"position")), "Inactive Force Linear collapsed a handle during viewport drag")
 			var after: Variant = editor._backend.capture_snapshot()
 			_expect(after != before and history.get_history_count() == 1, "Handle drag did not commit one geometry edit")
-			_expect(history.undo() and editor._backend.capture_snapshot() == before, "Handle drag Undo lost geometry or inactive overrides")
-			_expect(history.redo() and editor._backend.capture_snapshot() == after, "Handle drag Redo lost geometry or inactive overrides")
+			_expect(history.undo() and _drag_snapshots_match(editor._backend.capture_snapshot(), before), "Handle drag Undo lost geometry or inactive overrides")
+			_expect(history.redo() and _drag_snapshots_match(editor._backend.capture_snapshot(), after), "Handle drag Redo lost geometry or inactive overrides")
+
+
+func _drag_snapshots_match(actual: Dictionary, expected: Dictionary) -> bool:
+	if actual == expected:
+		return true
+	if actual[&"point_states"] is not Dictionary:
+		return false
+	# Legacy restores modes through float32 geometry setters. Permit only tiny
+	# handle rounding; resource order, positions, modes and overrides stay exact.
+	var normalized := actual.duplicate()
+	var states: Dictionary = actual[&"point_states"].duplicate()
+	for property_name: StringName in [&"left_control_points", &"right_control_points"]:
+		var values: PackedVector2Array = states[property_name]
+		var target: PackedVector2Array = expected[&"point_states"][property_name]
+		if values.size() != target.size():
+			return false
+		for index in range(values.size()):
+			if values[index].distance_to(target[index]) > 0.000001:
+				return false
+		states[property_name] = target
+	normalized[&"point_states"] = states
+	return normalized == expected
 
 
 func _test_enter_linked_with_one_lock(editor: EasingCurveEditor, manager: EditorUndoRedoManager, history: UndoRedo, point_index: int, locked_side: StringName) -> void:
 	editor.selected_index = point_index
 	editor._backend.apply_point_property(point_index, &"toolbar_options_reset", true, false)
-	editor._point(point_index).call(&"set_locked", locked_side, true)
+	var point := editor._point(point_index)
+	var opposite_force := &"right_force_linear" if locked_side == &"left_control_point" else &"left_force_linear"
+	point.set(opposite_force, true)
+	point.call(&"set_locked", locked_side, true)
+	var locked_position: Vector2 = point.get(locked_side)
 	editor._update_point_toolbar()
 	await _settle()
 	manager.clear_history()
@@ -383,12 +438,21 @@ func _test_enter_linked_with_one_lock(editor: EasingCurveEditor, manager: Editor
 	for property_name: StringName in [&"left_control_point", &"right_control_point"]:
 		_expect(editor._backend.is_point_property_locked(point_index, property_name), "Entering Linked displays Locked but leaves a movable handle")
 	_expect(editor._point_left_state.get_selected_id() == EasingCurvePoint.ControlState.LOCKED and editor._point_right_state.get_selected_id() == EasingCurvePoint.ControlState.LOCKED, "Entering Linked did not refresh both Locked dropdowns")
+	point = editor._point(point_index)
+	_expect(not point.get(&"left_force_linear") and not point.get(&"right_force_linear"), "Linked Locked retained a competing Linear override")
+	_expect(point.get(&"left_control_point") == locked_position and point.get(&"right_control_point") == locked_position, "Linked Locked moved away from the locked handle position")
 	var after: Variant = editor._backend.capture_snapshot()
 	await _assert_linked_handle_cannot_drag(editor, point_index)
 	_expect(editor._backend.capture_snapshot() == after, "Viewport drag moved a handle after entering Linked with one lock")
 	_expect(history.undo() and editor._backend.capture_snapshot() == before, "Linked Undo did not restore the asymmetric Free state")
 	_expect(not history.has_undo(), "Entering Linked created multiple Undo actions")
 	_expect(history.redo() and editor._backend.capture_snapshot() == after, "Linked Redo did not restore shared locks")
+	editor._backend.apply_point_property(point_index, &"handle_mode", EasingCurvePoint.HandleMode.FREE, false)
+	point = editor._point(point_index)
+	_expect(point.get(&"left_control_point") == locked_position and point.get(&"right_control_point") == locked_position, "Returning to Free reapplied a discarded Linear override")
+	editor._backend.apply_point_property(point_index, &"handle_mode", EasingCurvePoint.HandleMode.LINEAR, false)
+	point = editor._point(point_index)
+	_expect(point.get(&"left_control_point") == point.get(&"position") and point.get(&"right_control_point") == point.get(&"position"), "Explicit Linear Handle Mode no longer collapses both controls")
 
 
 func _test_state_dropdown_edit(editor: EasingCurveEditor, manager: EditorUndoRedoManager, history: UndoRedo, shared: bool, point_index: int, control_state: int) -> void:
