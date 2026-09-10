@@ -51,6 +51,14 @@ static func apply(
 				control_state,
 			)
 
+		&"left_control_state_reset":
+			state.left_force_linear = false
+			state.locks["left_control_point"] = false
+
+		&"right_control_state_reset":
+			state.right_force_linear = false
+			state.locks["right_control_point"] = false
+
 		&"control_states_reset":
 			# Clear stored overrides even when the current mode masks them.
 			state.left_force_linear = false

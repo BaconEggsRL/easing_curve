@@ -242,13 +242,15 @@ func apply_point_property(
 			)
 			if not _apply_control_state(point, side, int(value)):
 				return false
-		&"control_states_reset":
+		&"left_control_state_reset", &"right_control_state_reset", &"control_states_reset":
 			# Clearing hidden overrides must not change the mode or handle geometry.
 			var state: Dictionary = point.call(&"capture_state")
-			state[&"left_force_linear"] = false
-			state[&"right_force_linear"] = false
-			state[&"locked"][&"left_control_point"] = false
-			state[&"locked"][&"right_control_point"] = false
+			if property_name != &"right_control_state_reset":
+				state[&"left_force_linear"] = false
+				state[&"locked"][&"left_control_point"] = false
+			if property_name != &"left_control_state_reset":
+				state[&"right_force_linear"] = false
+				state[&"locked"][&"right_control_point"] = false
 			point.call(&"apply_state", state)
 		&"toolbar_options_reset":
 			point.set(&"handle_mode", 0)
