@@ -1,0 +1,74 @@
+name: Documentation
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**'
+      - 'addons/easing_curve/**'
+      - 'test/scripts/docs/**'
+      - 'test/scripts/unit/practical_examples_test.gd'
+      - 'test/scripts/support/test_case.gd'
+      - 'test/runners/**'
+      - 'tooling/godot/**'
+      - 'release/addon_files.txt'
+      - 'README.md'
+      - '.github/workflows/documentation.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read Godot tooling manifest
+        id: godot-tooling
+        shell: pwsh
+        run: ./tooling/godot/read_manifest.ps1
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ steps.godot-tooling.outputs.official_version }}
+          use-dotnet: false
+          include-templates: false
+      - name: Install qualified editor
+        shell: pwsh
+        run: ./tooling/godot/install_editor.ps1
+      - name: Validate portable scenes and site
+        shell: pwsh
+        run: ./test/runners/run_documentation_tests.ps1 -GodotPath (Get-Command godot -ErrorAction Stop).Source
+      - name: Preserve failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-failures
+          path: test/_temp/documentation-*/test/_temp/*.log
+      - uses: actions/upload-pages-artifact@v4
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        with:
+          path: docs
+  deploy:
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy documentation
+        id: deployment
+        uses: actions/deploy-pages@v4

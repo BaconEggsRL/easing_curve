@@ -21,6 +21,38 @@ the portable fallback.
 
 **&nbsp;**
 
+## Put a curve to work
+
+[Read the practical HTML guide](https://baconeggsrl.github.io/easing_curve/) for
+Tweens, AnimationPlayer, direct sampling, and editing curves while a scene runs.
+The site source is in `docs/index.html`; publishing is handled by the Documentation workflow.
+
+```gdscript
+@export var curve: EasingCurve
+
+func animate() -> void:
+	var tween := create_tween().set_trans(Tween.TRANS_LINEAR)
+	var motion := tween.tween_property(self, "position:x", 300.0, 1.0)
+	if curve != null:
+		motion.set_custom_interpolator(curve.sample)
+```
+
+Attach this to a Node2D and assign a new EasingCurve in the Inspector. The Tween
+supplies time; the resource supplies the interpolation weight. Use endpoints
+(0, 0) and (1, 1) to reach the ordinary start and target values.
+
+New in the development version (1.2.3-dev), three standalone examples are included
+in `res://addons/easing_curve/examples/` and the next packaged release (not the stable v1.2.2 ZIP):
+
+* `popup.tscn`: a Back Out property Tween, with replay cancellation.
+* `sliding_door.tscn`: AnimationPlayer drives a linear progress property that samples Smoothstep.
+* `charge_meter.tscn`: sample a Power curve into a bounded percentage, with a scrubber.
+
+Open a scene and press F6. Select its root to edit Curve and Duration. The examples
+use portable EasingCurve resources and do not require Native libraries. Each
+script handles resource replacement and change signals; the HTML guide explains
+the live-debug workflow and its limits.
+
 # User Guide
 
 ### Compatibility:

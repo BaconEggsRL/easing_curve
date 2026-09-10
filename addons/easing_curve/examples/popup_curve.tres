@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="EasingCurve" format=3]
+
+[ext_resource type="Script" path="res://addons/easing_curve/scripts/runtime/easing_curve.gd" id="1_pxx5p"]
+
+[resource]
+script = ExtResource("1_pxx5p")
+ease_type = 1
+trans_type = 13
+_css_linear_points = PackedVector2Array(0, 0, 1, 1)
+_css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.25, 1)
+_point_count = 2
+_point_0/position = Vector2(0, 0)
+_point_0/left_control_point = Vector2(0, 0)
+_point_0/right_control_point = Vector2(0.33333334, 1.5671934)
+_point_0/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_0/handle_mode = 0
+_point_0/left_force_linear = false
+_point_0/right_force_linear = false
+_point_1/position = Vector2(1, 1)
+_point_1/left_control_point = Vector2(0.6666667, 1)
+_point_1/right_control_point = Vector2(1, 1)
+_point_1/locked = Dictionary[String, bool]({
+"left_control_point": false,
+"position": false,
+"right_control_point": false
+})
+_point_1/handle_mode = 0
+_point_1/left_force_linear = false
+_point_1/right_force_linear = false

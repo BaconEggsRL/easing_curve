@@ -1,0 +1,97 @@
+[gd_scene format=3]
+
+[ext_resource type="Theme" path="res://addons/easing_curve/examples/example_theme.tres" id="1_rjc2e"]
+[ext_resource type="Script" path="res://addons/easing_curve/examples/charge_meter.gd" id="2_7tqa8"]
+[ext_resource type="Resource" path="res://addons/easing_curve/examples/charge_meter_curve.tres" id="3_628dt"]
+
+[node name="ChargeMeter" type="Control" unique_id=1945538668]
+layout_mode = 3
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme = ExtResource("1_rjc2e")
+script = ExtResource("2_7tqa8")
+curve = ExtResource("3_628dt")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=809435395]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.07450981, 0.14117648, 0.1254902, 1)
+
+[node name="Margin" type="MarginContainer" parent="." unique_id=1469044252]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 36
+theme_override_constants/margin_top = 36
+theme_override_constants/margin_right = 36
+theme_override_constants/margin_bottom = 36
+
+[node name="Layout" type="VBoxContainer" parent="Margin" unique_id=1746312055]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Margin/Layout" unique_id=183356826]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "03 / Shape a charge-up"
+
+[node name="Label2" type="Label" parent="Margin/Layout" unique_id=286444935]
+layout_mode = 2
+text = "Power In / Direct sampling / Bounded percentage"
+
+[node name="Stage" type="CenterContainer" parent="Margin/Layout" unique_id=1644540476]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Margin/Layout/Stage" unique_id=2110821165]
+custom_minimum_size = Vector2(470, 0)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Margin/Layout/Stage/VBoxContainer" unique_id=293020381]
+layout_mode = 2
+text = "CHARGE"
+
+[node name="Meter" type="ProgressBar" parent="Margin/Layout/Stage/VBoxContainer" unique_id=2068476799]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+
+[node name="Label2" type="Label" parent="Margin/Layout/Stage/VBoxContainer" unique_id=1132651960]
+layout_mode = 2
+text = "Normalized time (drag or use arrow keys)"
+
+[node name="Progress" type="HSlider" parent="Margin/Layout/Stage/VBoxContainer" unique_id=1377437407]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 1.0
+step = 0.001
+
+[node name="Readout" type="Label" parent="Margin/Layout/Stage/VBoxContainer" unique_id=762004122]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Time: 0.00   Sample: 0.000   Charge: 0.0%"
+
+[node name="Buttons" type="HBoxContainer" parent="Margin/Layout" unique_id=534467802]
+layout_mode = 2
+
+[node name="Replay" type="Button" parent="Margin/Layout/Buttons" unique_id=60710218]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Replay"
+
+[node name="Reset" type="Button" parent="Margin/Layout/Buttons" unique_id=1401709257]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Reset"
+
+[node name="Label3" type="Label" parent="Margin/Layout" unique_id=256132524]
+layout_mode = 2
+text = "Select the scene root to edit Curve and Duration. Run with F6.
+While running, edit the local Curve with Live Scene Editing enabled; edits restart motion."
+autowrap_mode = 3
+
+[connection signal="value_changed" from="Margin/Layout/Stage/VBoxContainer/Progress" to="." method="scrub"]
+[connection signal="pressed" from="Margin/Layout/Buttons/Replay" to="." method="replay"]
+[connection signal="pressed" from="Margin/Layout/Buttons/Reset" to="." method="reset"]

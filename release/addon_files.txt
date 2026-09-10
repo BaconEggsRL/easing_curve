@@ -121,3 +121,16 @@ scripts/runtime/easing_curve_snapshot_codec.gd
 scripts/runtime/easing_curve_snapshot_codec.gd.uid
 scripts/runtime/point.gd
 scripts/runtime/point.gd.uid
+examples/charge_meter_curve.tres
+examples/charge_meter.gd
+examples/charge_meter.gd.uid
+examples/charge_meter.tscn
+examples/example_theme.tres
+examples/popup_curve.tres
+examples/popup.gd
+examples/popup.gd.uid
+examples/popup.tscn
+examples/sliding_door_curve.tres
+examples/sliding_door.gd
+examples/sliding_door.gd.uid
+examples/sliding_door.tscn

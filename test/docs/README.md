@@ -79,6 +79,34 @@ the packaged ZIP is the complete dual-API download.
 
 ## Rendered and manual checks
 
+### Practical examples and documentation
+
+Run `./test/runners/run_documentation_tests.ps1` to validate the three bundled
+examples in an isolated project without Native binaries or development addons.
+This also checks the browser sample data, JavaScript syntax, local links,
+recipe/source consistency, and release allowlist. Node.js is required.
+Pass `-UpdateSamples` after deliberately changing an example's saved curve;
+the runner regenerates `docs/curve_samples.js` through Godot, then validates it.
+Normal validation never rewrites documentation data.
+
+Open `docs/index.html` directly or serve `docs/` with a local static server.
+The Documentation workflow validates pull requests and deploys this directory
+to GitHub Pages only from `master`. Set the repository's Pages publishing source
+to **GitHub Actions**; no custom domain is required.
+
+For visible verification, open each scene in `addons/easing_curve/examples/`
+and press F6. Check replay/reset, popup pivot and overshoot, door open/close,
+and the meter scrubber. With Live Scene Editing enabled, change the local
+Curve's parameters or handles and undo; motion should restart, while a parked
+meter should resample its current progress. The documentation's door example
+does not implement editor-only timeline preview.
+
+The initial 4.7.1 verification rendered all three examples and confirmed the
+meter's local Inspector Power edit and undo reached the running scene:
+at progress 0.5, Power 2 → 3 → undo produced charge 25% → 12.5% → 25%.
+
+### Existing Inspector checks
+
 ```powershell
 ./test/runners/run_curve_editor_layout_validation.ps1
 ./test/runners/run_curve_editor_layout_validation.ps1 -Suite easing_curve_editor_gesture_characterization_test

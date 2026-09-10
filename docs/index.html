@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Use Easing Curve in Godot: practical Tween, AnimationPlayer, and sampled-value examples with interactive motion previews.">
+  <title>Easing Curve · From curve to motion</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="curve_samples.js" defer></script>
+  <script src="site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to documentation</a>
+<aside>
+  <a class="brand" href="#start">Easing Curve<span>GODOT 4 / PRACTICAL GUIDE</span></a>
+  <nav aria-label="Documentation">
+    <a href="#start">Start here</a>
+    <a href="#first-tween">Your first Tween</a>
+    <a href="#popup">01 · Popup panel</a>
+    <a href="#sliding-door">02 · AnimationPlayer door</a>
+    <a href="#charge-meter">03 · Charge meter</a>
+    <a href="#live-preview">Edit while it runs</a>
+    <a href="#reference">API &amp; common pitfalls</a>
+  </nav>
+  <a class="repo" href="https://github.com/BaconEggsRL/easing_curve">Source &amp; full editor guide ↗</a>
+</aside>
+<main id="main">
+  <header id="start">
+    <p class="eyebrow">PRACTICAL GUIDE</p>
+    <h1>From curve<br>to motion.</h1>
+    <p class="intro">A curve describes <em>how a value changes</em>. A Tween or animation supplies the time. Connect them to make a popup settle, a door glide, or a charge build.</p>
+    <div class="flow" aria-label="Linear time goes into curve.sample, producing a value used for a property">Time <code>0 → 1</code><b aria-hidden="true">→</b><code>curve.sample(t)</code><b aria-hidden="true">→</b> Property</div>
+    <p>Use built-in Tween transitions when a standard ease is enough. Use Easing Curve when you want to edit the shape visually, tune its parameters, add segments, or reuse one authored resource across effects.</p>
+  </header>
+
+  <section id="first-tween">
+    <h2>Your first Tween</h2>
+    <ol>
+      <li>Install the <a href="https://github.com/BaconEggsRL/easing_curve/releases/tag/v1.2.2">packaged plugin</a> under <code>res://addons/easing_curve/</code>. Enable <strong>Easing Curve</strong> in Project Settings → Plugins.</li>
+      <li>Attach the script below to a <code>Node2D</code> with something visible beneath it. Select the node, create a <strong>New EasingCurve</strong> in the exported Curve field, and choose a preset.</li>
+      <li>Run the scene. Edit and save the resource to reuse the same motion elsewhere.</li>
+    </ol>
+    <pre><code>extends Node2D
+@export var curve: EasingCurve
+
+func _ready() -> void:
+	var tween := create_tween().set_trans(Tween.TRANS_LINEAR)
+	var motion := tween.tween_property(self, "position:x", 300.0, 1.0)
+	if curve != null:
+		motion.set_custom_interpolator(curve.sample)</code></pre>
+    <p><strong>Time and distance stay separate.</strong> The Tween above takes one second and ends at x = 300 for a curve ending at 1. Change the duration to change speed; change the resource to change the feel. Its input stays linear so you don’t apply easing twice.</p>
+    <div class="note"><strong>New in the development version (1.2.3-dev):</strong> the examples below are in <code>res://addons/easing_curve/examples/</code> and will be included in the next packaged release. They are not in the stable v1.2.2 ZIP. Use a source checkout containing the examples, or copy the <a href="https://github.com/BaconEggsRL/easing_curve/tree/master/addons/easing_curve/examples">complete examples directory</a> into an installed addon. Open a scene and press <kbd>F6</kbd>. These examples use portable GDScript resources and need no Native library.</div>
+  </section>
+
+  <section id="popup">
+    <p class="eyebrow">01 / PROPERTY TWEEN</p>
+    <h2>A popup that settles into place</h2>
+    <p>Start small, grow past the target, then settle. <strong>Back · Out</strong> gives a confirmation panel a little weight. This same connection works for position, rotation, color, and other Tween-compatible properties.</p>
+    <div class="demo" data-example="popup" data-duration="0.6">
+      <div class="demo-top"><span>BACK / OUT</span><span>Scale · 0.2 → 1</span></div>
+      <div class="stage popup-stage"><div class="popup-panel motion-target"><strong>Saved!</strong><span>Your progress is ready.</span></div></div>
+      <div class="demo-controls" hidden>
+        <button class="play" type="button">Play</button><button class="replay" type="button">Replay</button>
+        <label>Duration <input class="duration" type="number" min="0.05" max="10" step="0.05" value="0.6"> s</label>
+        <label class="scrub-label">Progress <input class="progress" type="range" min="0" max="1" step="0.001" value="0"></label>
+        <output class="readout">t 0.00 · sample 0.000</output>
+      </div>
+    </div>
+    <p class="caption">Browser illustration using samples from the bundled resource. Play is opt-in; drag Progress to inspect the overshoot.</p>
+    <h3>In Godot</h3>
+    <p>Open <a href="https://github.com/BaconEggsRL/easing_curve/blob/master/addons/easing_curve/examples/popup.tscn">popup.tscn</a>. The root owns a centered PanelContainer named <code>Popup</code>. Press Replay, then adjust the root’s Curve → Back Overshoot and replay the effect.</p>
+    <pre><code data-source="popup.gd">	panel.pivot_offset = panel.size / 2.0
+	tween = create_tween()
+	tween.set_trans(Tween.TRANS_LINEAR)
+	var motion := tween.tween_property(panel, "scale", Vector2.ONE, maxf(duration, 0.05))
+	if curve != null:
+		motion.set_custom_interpolator(curve.sample)</code></pre>
+    <p>The <a href="https://github.com/BaconEggsRL/easing_curve/blob/master/addons/easing_curve/examples/popup.gd">complete script</a> kills the old Tween and resets scale before replaying. Keep overshoot for motion; clamping would flatten the effect. Scale changes are visual and do not change a Container’s layout allocation.</p>
+  </section>
+
+  <section id="sliding-door">
+    <p class="eyebrow">02 / ANIMATIONPLAYER</p>
+    <h2>A door on your animation timeline</h2>
+    <p>Use <strong>Smoothstep · In Out</strong> to ease a sliding door at both ends. AnimationPlayer animates one exported <code>progress</code> value; the script converts that into a position.</p>
+    <div class="demo" data-example="sliding_door" data-duration="1.5">
+      <div class="demo-top"><span>SMOOTHSTEP / IN OUT</span><span>Position · closed → open</span></div>
+      <div class="stage door-stage"><div class="door-track"><div class="door-panel motion-target">SLIDING DOOR</div></div></div>
+      <div class="demo-controls" hidden>
+        <button class="play" type="button">Play</button><button class="replay" type="button">Replay</button>
+        <label>Duration <input class="duration" type="number" min="0.05" max="10" step="0.05" value="1.5"> s</label>
+        <label class="scrub-label">Progress <input class="progress" type="range" min="0" max="1" step="0.001" value="0"></label>
+        <output class="readout">t 0.00 · sample 0.000</output>
+      </div>
+    </div>
+    <h3>In Godot</h3>
+    <ol>
+      <li>Open <a href="https://github.com/BaconEggsRL/easing_curve/blob/master/addons/easing_curve/examples/sliding_door.tscn">sliding_door.tscn</a>. Select its AnimationPlayer and the <strong>open</strong> animation.</li>
+      <li>Inspect the root’s <code>progress</code> value track: a key at 0 seconds has value 0, and a key at 1 second has value 1. Track interpolation is Linear and key transition is 1.</li>
+      <li>Run the scene. Replay opens the door; Close plays the same animation backwards. The exported Duration scales the one-second clip.</li>
+    </ol>
+    <pre><code data-source="sliding_door.gd">@export_range(0.0, 1.0, 0.001) var progress := 0.0:
+	set(value):
+		progress = clampf(value, 0.0, 1.0)
+		if is_node_ready():
+			var weight := curve.sample(progress) if curve != null else progress
+			door.position = closed_position.lerp(open_position, weight)</code></pre>
+    <p>This is a bridge through a scripted property, not a new AnimationPlayer track type. Keep other tracks for sounds or synchronized visuals. The <a href="https://github.com/BaconEggsRL/easing_curve/blob/master/addons/easing_curve/examples/sliding_door.gd">door script</a> runs at runtime; scrubbing the editor timeline alone does not preview its derived position. This example moves a visual panel, not a physics body.</p>
+  </section>
+
+  <section id="charge-meter">
+    <p class="eyebrow">03 / SAMPLE A VALUE</p>
+    <h2>A charge that builds slowly, then quickly</h2>
+    <p>A curve does not need to animate a node. Here <strong>Power · In</strong> maps elapsed progress into charge. The default power of 2 gives 25% charge halfway through the duration.</p>
+    <div class="demo" data-example="charge_meter" data-duration="2">
+      <div class="demo-top"><span>POWER / IN</span><span>Value · 0 → 100%</span></div>
+      <div class="stage meter-stage"><div class="meter-wrap"><label for="browser-charge">CHARGE</label><progress id="browser-charge" class="motion-target" value="0" max="100">0%</progress><span class="charge-value">0%</span></div></div>
+      <div class="demo-controls" hidden>
+        <button class="play" type="button">Play</button><button class="replay" type="button">Replay</button>
+        <label>Duration <input class="duration" type="number" min="0.05" max="10" step="0.05" value="2"> s</label>
+        <label class="scrub-label">Progress <input class="progress" type="range" min="0" max="1" step="0.001" value="0"></label>
+        <output class="readout">t 0.00 · sample 0.000</output>
+      </div>
+    </div>
+    <h3>In Godot</h3>
+    <p>Open <a href="https://github.com/BaconEggsRL/easing_curve/blob/master/addons/easing_curve/examples/charge_meter.tscn">charge_meter.tscn</a>. Replay supplies linear progress through <code>tween_method()</code>. Drag the slider to stop playback and sample a particular moment. Try changing Power while parked at 0.5.</p>
+    <pre><code data-source="charge_meter.gd">func apply_charge(value: float) -> void:
+	progress = clampf(value, 0.0, 1.0)
+	var weight := curve.sample(progress) if curve != null else progress
+	meter.value = clampf(weight, 0.0, 1.0) * 100.0
+	scrubber.set_value_no_signal(progress)
+	%Readout.text = "Time: %.2f   Sample: %.3f   Charge: %.1f%%" % [progress, weight, meter.value]</code></pre>
+    <p>For your own timer, use <code>clampf(elapsed / duration, 0.0, 1.0)</code> with a positive duration. Feed the sampled value into opacity, shader strength, camera zoom, or another value. Clamp only when that value has bounds. The <a href="https://github.com/BaconEggsRL/easing_curve/blob/master/addons/easing_curve/examples/charge_meter.gd">complete meter script</a> keeps the slider and readout synchronized.</p>
+  </section>
+
+  <section id="live-preview">
+    <p class="eyebrow">ITERATE IN CONTEXT</p>
+    <h2>Edit while it runs</h2>
+    <ol>
+      <li>Open an example scene, select its root in the <strong>Local</strong> scene tree, and expand the exported Curve.</li>
+      <li>Enable <strong>Debug → Live Scene Editing</strong> and run the current scene with <kbd>F6</kbd>.</li>
+      <li>Press Replay in the running scene. In the local Inspector, change a curve parameter or drag a point/handle. Committed curve changes restart the motion. Undo should restore the previous shape and replay it.</li>
+      <li>For the charge meter, stop at a slider position first. Curve changes then resample that position instead of moving the slider.</li>
+    </ol>
+    <p>The plugin publishes Inspector edits through Godot’s live-debug bridge. These scripts listen to <code>Resource.changed</code>; they disconnect the old resource when you assign a replacement. Playback samples the current resource directly.</p>
+    <div class="note"><strong>Local and Remote are different.</strong> Local edits author the resource you will save. Remote edits affect the running instance and are not a way to save your design. This workflow depends on an editor debug session; changing an arbitrary file on disk does not automatically reload it in an exported game.</div>
+    <p>If changes do not arrive, check Live Scene Editing, select the example root rather than an unrelated saved resource, and restart the scene. Editing a resource shared by multiple nodes can affect all of them. Use <strong>Make Unique</strong> before giving one effect its own curve, then save the scene/resource intentionally.</p>
+    <p>Want to compare easing against Godot’s built-in transitions? The existing comparison scene remains at <code>res://addons/easing_curve/_test_scene/test.tscn</code>.</p>
+  </section>
+
+  <section id="reference">
+    <h2>The small API you need</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Use</th><th>Interface</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td>Sample</td><td><code>curve.sample(t)</code></td><td>Input is clamped to 0–1. Output may overshoot or have custom endpoints.</td></tr>
+        <tr><td>Apply to a Tween</td><td><code>set_custom_interpolator(curve.sample)</code></td><td>The sampled result becomes the interpolation weight.</td></tr>
+        <tr><td>Observe edits</td><td><code>curve.changed.connect(callback)</code></td><td>Reapply a sampled value or restart your effect when the resource changes.</td></tr>
+        <tr><td>Use Native</td><td><code>@export var curve: NativeEasingCurve</code></td><td>The same sample callable; requires a matching packaged Native binary.</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Compatibility</h3>
+    <p>Plugin v1.2.2 supports Godot 4.4.1 and newer. This project’s primary validation runtime is 4.7.1. <code>EasingCurve</code> remains supported and portable. Native is supported on Windows x86_64 and non-threaded Web; use the packaged release ZIP because GitHub source archives omit its binaries.</p>
+    <p>To adapt a recipe for Native, change the exported type, create/assign a NativeEasingCurve, and keep <code>curve.sample</code>. The full example scripts also type their setter fields as EasingCurve, so update that declaration when adapting them. Do not cast between the two families or copy numeric transition IDs; use Inspector conversion to create a separate copy.</p>
+    <h3>Common pitfalls</h3>
+    <ul>
+      <li><strong>“It doesn’t accept this resource.”</strong> EasingCurve extends Resource, not Godot’s Curve. Use its sample method in your script; it is not a drop-in replacement for Curve-only properties.</li>
+      <li><strong>“The timing looks different.”</strong> Use a Linear Tween transition and linear AnimationPlayer progress. Additional easing changes the input before sampling.</li>
+      <li><strong>“The effect fights itself.”</strong> Kill the previous Tween before starting another on the same property.</li>
+      <li><strong>“It doesn’t reach the target.”</strong> A curve ending at 0.8 produces 80% interpolation. Use endpoints (0, 0) and (1, 1) when you want an ordinary start-to-finish transition. Constant, Jitter, and custom curves may intentionally behave otherwise.</li>
+      <li><strong>“My edited shape vanished.”</strong> Changing a geometry-generating preset parameter can replace manually edited points. Undo restores the previous geometry.</li>
+    </ul>
+    <p class="caption">Browser demos linearly interpolate 257 samples exported from the bundled Godot resources. They illustrate the saved examples, not arbitrary live edits in your editor. No plugin code or Godot runtime runs in this page.</p>
+    <p>Further reading: <a href="https://docs.godotengine.org/en/4.4/classes/class_propertytweener.html#class-propertytweener-method-set-custom-interpolator">Godot custom interpolation</a> · <a href="https://docs.godotengine.org/en/4.4/classes/class_animation.html">Animation tracks</a> · <a href="https://github.com/BaconEggsRL/easing_curve#user-guide">Full curve editor guide</a></p>
+  </section>
+  <footer>Easing Curve · MIT licensed · <a href="https://github.com/BaconEggsRL/easing_curve/issues">Report an issue</a></footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EasingCurve" format=3]
+
+[ext_resource type="Script" path="res://addons/easing_curve/scripts/runtime/easing_curve.gd" id="1_mwnh0"]
+
+[resource]
+script = ExtResource("1_mwnh0")
+trans_type = 6
+curve_mode = 1
+function_callable = Callable()
+_css_linear_points = PackedVector2Array(0, 0, 1, 1)
+_css_cubic_bezier_controls = PackedFloat64Array(0.25, 0.1, 0.25, 1)
+_point_count = 0

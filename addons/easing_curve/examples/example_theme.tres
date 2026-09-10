@@ -1,0 +1,19 @@
+[gd_resource type="Theme" format=3]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_w67d7"]
+content_margin_left = 24.0
+content_margin_top = 24.0
+content_margin_right = 24.0
+content_margin_bottom = 24.0
+bg_color = Color(0.13725491, 0.34509805, 0.30588236, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[resource]
+default_font_size = 20
+HBoxContainer/constants/separation = 18
+Label/colors/font_color = Color(0.9019608, 0.9411765, 0.92941177, 1)
+PanelContainer/styles/panel = SubResource("StyleBoxFlat_w67d7")
+VBoxContainer/constants/separation = 18

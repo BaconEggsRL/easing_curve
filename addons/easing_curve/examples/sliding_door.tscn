@@ -1,0 +1,110 @@
+[gd_scene format=3]
+
+[ext_resource type="Theme" path="res://addons/easing_curve/examples/example_theme.tres" id="1_ec5rf"]
+[ext_resource type="Script" path="res://addons/easing_curve/examples/sliding_door.gd" id="2_oysyj"]
+[ext_resource type="Resource" path="res://addons/easing_curve/examples/sliding_door_curve.tres" id="3_cduni"]
+
+[sub_resource type="Animation" id="Animation_28fn6"]
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:progress")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 1),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_f6n7f"]
+_data = {
+&"open": SubResource("Animation_28fn6")
+}
+
+[node name="SlidingDoor" type="Control" unique_id=409256648]
+layout_mode = 3
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme = ExtResource("1_ec5rf")
+script = ExtResource("2_oysyj")
+curve = ExtResource("3_cduni")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1576041736]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.07450981, 0.14117648, 0.1254902, 1)
+
+[node name="Margin" type="MarginContainer" parent="." unique_id=538461362]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 36
+theme_override_constants/margin_top = 36
+theme_override_constants/margin_right = 36
+theme_override_constants/margin_bottom = 36
+
+[node name="Layout" type="VBoxContainer" parent="Margin" unique_id=982923858]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Margin/Layout" unique_id=102353251]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "02 / A door on a timeline"
+
+[node name="Label2" type="Label" parent="Margin/Layout" unique_id=1172925818]
+layout_mode = 2
+text = "Smoothstep In Out / AnimationPlayer / Position"
+
+[node name="Stage" type="CenterContainer" parent="Margin/Layout" unique_id=973277287]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="MotionSpace" type="Control" parent="Margin/Layout/Stage" unique_id=1751344947]
+custom_minimum_size = Vector2(480, 210)
+layout_mode = 2
+
+[node name="Door" type="PanelContainer" parent="Margin/Layout/Stage/MotionSpace" unique_id=507978601]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 200)
+layout_mode = 0
+
+[node name="Label" type="Label" parent="Margin/Layout/Stage/MotionSpace/Door" unique_id=1679242603]
+layout_mode = 2
+text = "SLIDING DOOR"
+horizontal_alignment = 1
+
+[node name="Buttons" type="HBoxContainer" parent="Margin/Layout" unique_id=1695619108]
+layout_mode = 2
+
+[node name="Replay" type="Button" parent="Margin/Layout/Buttons" unique_id=1781827692]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Replay"
+
+[node name="Reset" type="Button" parent="Margin/Layout/Buttons" unique_id=458167803]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Reset"
+
+[node name="Close" type="Button" parent="Margin/Layout/Buttons" unique_id=1083436632]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Close"
+
+[node name="Label3" type="Label" parent="Margin/Layout" unique_id=1170302348]
+layout_mode = 2
+text = "Select the scene root to edit Curve and Duration. Run with F6.
+While running, edit the local Curve with Live Scene Editing enabled; edits restart motion."
+autowrap_mode = 3
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=741904312]
+libraries/ = SubResource("AnimationLibrary_f6n7f")
+
+[connection signal="pressed" from="Margin/Layout/Buttons/Replay" to="." method="replay"]
+[connection signal="pressed" from="Margin/Layout/Buttons/Reset" to="." method="reset"]
+[connection signal="pressed" from="Margin/Layout/Buttons/Close" to="." method="close"]
