@@ -34,17 +34,16 @@ The selected-point toolbar always has two non-wrapping rows:
 - Navigation/index, Handle Mode, reserved mode-reset slot.
 - L and R dropdowns on one shared row, followed by one reserved shared reset.
 
-Linked mode replaces the two side dropdowns with a single LR dropdown in the
-same row. LR displays and edits the backend's existing shared Linked state.
-It stays editable at either endpoint whenever one handle is available.
+Linked mode keeps the separate L and R dropdowns on the same row. Both display
+the backend's shared Linked state; editing either available side updates both.
+At endpoints, the missing side remains visible but disabled.
 
 Shrinkable slots report height independently of preferred text width. Dropdowns
-clip/ellipsize text and retain tooltips. L/R share the available row width; LR
-uses the full available field width. Labels reserve the width needed for the
-current L/R or LR presentation. The trailing reset slot stays aligned with
+clip/ellipsize text and retain tooltips. L/R share the available row width equally
+in every mode. Labels reserve matching widths. The trailing reset slot stays aligned with
 Handle Mode and Ease/Trans. Inactive resets remain allocated, transparent,
 disabled and non-focusable. Unavailable side fields remain visible but disabled
-outside Linked mode. No selection hides the state row; Function-mode visibility
+in every mode. No selection hides the state row; Function-mode visibility
 is unchanged.
 
 Switching between Linked and other Handle Modes preserves the two-row height
@@ -56,7 +55,7 @@ settle without recurring minimum-size changes. Grid Snap and zoom stay separate.
 Handle Mode reset remains `handle_mode = Free` and preserves stored Force Linear
 and Lock flags. The shared state-row reset always submits `control_states_reset`:
 it clears both sides' Force Linear and handle-lock flags, preserving Handle Mode,
-position locks and handle coordinates. This applies to both L/R and LR layouts.
+position locks and handle coordinates. This also applies in Linked mode.
 Each dropdown edit or reset remains one Undo/Redo action.
 
 The earlier side-specific reset intents remain available to existing internal
@@ -90,7 +89,7 @@ ordinary resizing retains the user's zoom and pan.
 
 Run `test/runners/run_all_tests.ps1 --run` for all isolated correctness suites.
 The layout contract suite covers both backends, narrow/wide allocations, aspect
-breakpoints, scale/font changes, minimum widths, shared L/R controls and a combined Linked dropdown,
+breakpoints, scale/font changes, minimum widths, separate L/R fields in every mode,
 long-label clipping, reset-column alignment, independent reset transactions,
 transient label bounds and repeatable fitting.
 
@@ -132,8 +131,8 @@ This is automated scale/font coverage, not three separate OS-DPI sessions.
 | 150% | 225 | 92 | 75 / 76 | 193 | 213 x 213 | 168 |
 | 200% | 300 | 134 | 105 / 105 | 268 | 284 x 284 | 189 |
 
-All widths are measured pixels. The LR field uses 94 / 158 / 221 pixels at the
-three corresponding scale/width allocations. All reset columns match Ease/Trans left and right edges
+All widths are measured pixels. Linked mode uses the same field allocations.
+All reset columns match Ease/Trans left and right edges
 exactly; no row wraps. Presentation minimum widths match
 the pre-refinement measurements. The existing property-wrapper compensation
 is unchanged. `point-toolbar-{native|legacy}-{separate|linked}-{150|220|600}.png` captures include
@@ -142,7 +141,7 @@ fold/reopen, scrolling, dragging and feedback.
 
 Final validation on Godot 4.7.1 passed 33 of 34 isolated suites. The only failures
 were the same two baseline CSS-label assertions noted above. Both headless and
-full-editor layout runs passed 21,935 checks. Full-editor gesture validation
+full-editor layout runs passed 22,895 checks. Full-editor gesture validation
 passed 831 checks, and coordinate-readout validation passed 1,035 checks. Narrow,
 medium and wide selected-point captures were visually inspected, including
 visible navigation arrows, active reset buttons and strict graph boundaries.
@@ -152,14 +151,14 @@ Undo/Redo, shared Linked state, opposite-side preservation and reversed mapping.
 
 Preserved evidence under `test/_temp/`:
 
-- Full suite: `shared-row-full-console.txt`.
-- Layout and reset checks: `shared-row-final-console.txt`.
-- Clean active-reset captures: `layout-editor-7b458038d9e94cbcbd0b95dff29358e7/test/_temp/`.
-- Rendered gestures: `shared-row-gesture-console.txt`.
-- Rendered readouts: `shared-row-readout-console.txt`.
+- Full suite: `split-linked-full-console.txt`.
+- Layout and reset checks: `split-linked-layout-console.txt`.
+- Active-reset captures: `layout-editor-be6b9c3806c54df9acf2dc9cee997dab/test/_temp/`.
+- Rendered gestures: `split-linked-gesture-console.txt`.
+- Rendered readouts: `split-linked-readout-console.txt`.
 
-This refinement began on `feature/curve-editor-max-graph-area` at `d33e7bd`.
-Existing test-scene edits were left outside this change. The earlier no-selection indicator change to `0` is
+This refinement began on clean `feature/curve-editor-max-graph-area` at `fda3850`.
+The earlier no-selection indicator change to `0` is
 preserved. No test-scene edits were made. `dev` remains
 `23760bcbf7bfdfe43b7cca3c7177d956bb645663`.
 

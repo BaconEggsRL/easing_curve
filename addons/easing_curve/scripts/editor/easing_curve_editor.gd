@@ -2937,23 +2937,20 @@ func _update_point_toolbar() -> void:
 			break
 	_point_handle_mode.tooltip_text = "Handle Mode: " + _point_handle_mode.get_item_text(_point_handle_mode.selected)
 
-	var linked := int(point.get(&"handle_mode")) == EasingCurvePoint.HandleMode.LINKED
 	var supports_states: bool = _backend.point_supports_control_state(selected_index)
-	_point_left_state_label.text = "LR" if linked else "L"
 	_update_point_toolbar_control_state(
 		EasingCurvePoint.ControlSide.LEFT,
-		supports_states and (selected_index > 0 or (linked and _point_count() > 1)),
-		"Left and Right" if linked else "Left",
+		supports_states and selected_index > 0,
+		"Left",
 	)
 	_update_point_toolbar_control_state(
 		EasingCurvePoint.ControlSide.RIGHT,
-		not linked and supports_states and selected_index < _point_count() - 1,
+		supports_states and selected_index < _point_count() - 1,
 		"Right",
 	)
 	_set_point_toolbar_reset_available(
 		int(point.get(&"handle_mode")) != EasingCurvePoint.HandleMode.FREE
 	)
-	_point_right_group.visible = not linked
 	_set_reset_button_available(_point_states_reset_button, not _point_control_states_are_default(point))
 	_updating_point_toolbar = false
 

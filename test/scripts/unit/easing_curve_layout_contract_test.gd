@@ -137,7 +137,7 @@ func _test_grouped_toolbar() -> void:
 					_expect(is_equal_approx(toolbar.size.y, row_height), "Linked must retain the shared toolbar row height")
 					_expect(editor._get_graph_view_rect().size == dimensions, "Point state changed graph dimensions")
 					_expect(editor._point_left_state.disabled == (mode not in [0, 4]), "Left state availability does not match mode")
-					_expect(editor._point_right_state.disabled == (mode != 0), "Right state availability does not match mode")
+					_expect(editor._point_right_state.disabled == (mode not in [0, 4]), "Right state availability does not match mode")
 					_expect(presentation.get_combined_minimum_size().x == baseline_width, "Long mode text increased Inspector minimum width")
 					if scale_value == 1.0 and width in [150.0, 220.0, 600.0] and mode in [0, 4] and DisplayServer.get_name() != "headless":
 						await RenderingServer.frame_post_draw
@@ -178,7 +178,8 @@ func _test_grouped_toolbar() -> void:
 			editor._update_point_toolbar()
 			await _settle()
 			_assert_fixed_rows(editor, preset_reset)
-			_expect(not editor._point_left_state.disabled, "Linked endpoint lost its available side")
+			_expect(editor._point_left_state.disabled if index == 0 else editor._point_right_state.disabled, "Linked missing endpoint side accepts input")
+			_expect(not editor._point_right_state.disabled if index == 0 else not editor._point_left_state.disabled, "Linked endpoint lost its available side")
 		editor.selected_index = -1
 		editor._update_point_toolbar()
 		await _settle()
@@ -192,17 +193,17 @@ func _assert_fixed_rows(editor: EasingCurveEditor, preset_reset: Button) -> void
 	var first := editor._point_mode_row
 	var second := editor._point_states_row
 	var linked := int(editor._point(editor.selected_index).get(&"handle_mode")) == EasingCurvePoint.HandleMode.LINKED
-	_expect(first.visible and second.visible and editor._point_right_group.visible == not linked, "Mode has the wrong visible row count")
+	_expect(first.visible and second.visible and editor._point_left_group.visible and editor._point_right_group.visible, "Mode has the wrong visible rows or side controls")
 	_expect(first.get_rect().end.y <= second.position.y, "Logical rows overlap")
-	_expect(editor._point_left_state_label.text == ("LR" if linked else "L"), "Shared state label does not match mode")
+	_expect(editor._point_left_state_label.text == "L" and editor._point_right_state_label.text == "R", "Side labels changed with mode")
 	_expect(editor._point_handle_mode.get_parent().get_parent() == first, "Handle Mode left Row 1")
 	_expect(editor._point_reorder_buttons.get_parent().get_parent() == first, "Navigation left Row 1")
 	_expect(editor._point_left_group.get_parent() == second and editor._point_right_group.get_parent() == second, "Side controls must share a row")
 	if linked:
-		_expect(editor._point_left_state.get_selected_id() == editor._get_point_toolbar_control_state(editor.selected_index, EasingCurvePoint.ControlSide.RIGHT), "LR does not show the shared backend state")
-	else:
-		_expect(editor._point_left_state.global_position.y == editor._point_right_state.global_position.y, "L/R fields do not share a row")
-		_expect(absf(editor._point_left_state.size.x - editor._point_right_state.size.x) <= 1.0, "Side fields have different allocations")
+		_expect(editor._point_left_state.get_selected_id() == editor._get_point_toolbar_control_state(editor.selected_index, EasingCurvePoint.ControlSide.RIGHT), "Left field does not show the shared Linked state")
+		_expect(editor._point_left_state.get_selected_id() == editor._point_right_state.get_selected_id(), "Linked fields disagree")
+	_expect(editor._point_left_state.global_position.y == editor._point_right_state.global_position.y, "L/R fields do not share a row")
+	_expect(absf(editor._point_left_state.size.x - editor._point_right_state.size.x) <= 1.0, "Side fields have different allocations")
 	for row: HBoxContainer in [first, second]:
 		if not row.visible:
 			continue
@@ -294,7 +295,7 @@ func _test_independent_resets() -> void:
 					_expect(editor._backend.capture_snapshot() == after, "Reset Redo did not restore complete snapshot")
 			for shared: bool in [false, true]:
 				await _test_state_dropdown_edit(editor, manager, history, shared)
-			print("RESET_GATE backend=%s reverse=%s mode and shared L/R or LR edits preserve independent state and Undo/Redo" % ["native" if native else "legacy", reverse_sides])
+			print("RESET_GATE backend=%s reverse=%s mode/shared resets and Linked side edits preserve state and Undo/Redo" % ["native" if native else "legacy", reverse_sides])
 			manager.clear_history()
 			viewport.free()
 	plugin.free()
@@ -306,7 +307,7 @@ func _test_state_dropdown_edit(editor: EasingCurveEditor, manager: EditorUndoRed
 	editor._update_point_toolbar()
 	await _settle()
 	manager.clear_history()
-	var option := editor._point_left_state if shared else editor._point_right_state
+	var option := editor._point_right_state
 	_expect(not option.disabled and option.is_visible_in_tree(), "State-edit fixture selected an unavailable dropdown")
 	var before: Variant = editor._backend.capture_snapshot()
 	var item := option.get_item_index(EasingCurvePoint.ControlState.LINEAR)
