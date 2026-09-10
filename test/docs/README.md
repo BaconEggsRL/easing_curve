@@ -149,7 +149,7 @@ The [Godot Tween comparison](GODOT_TWEEN_BENCHMARK.md) runs the upstream
 Run `./test/runners/run_godot_tween_comparison.ps1` for three rendered trials per
 case, or add `-ValidateOnly` for deterministic workload checks. JSON, CSV and
 Markdown reports include a local Tween baseline and pinned upstream provenance.
-These six performance cases are separate from the 24-suite correctness manifest.
+These six performance cases are separate from the correctness manifest.
 
 Run `./test/runners/run_godot_benchmark_web.ps1 -Serve` to view saved results in
 Godot's existing Hugo/Plotly benchmark interface, with Native, Legacy, Tween and
@@ -160,7 +160,7 @@ combined graphs. Python 3 and Hugo are required; see the
 
 The [ownership follow-up](INSPECTOR_OWNERSHIP.md) records the graph/Points lifetime
 fixes, the indexed regression suite, rendered input coverage and baseline
-diagnostic comparison. Run `./test/runners/run_all_tests.ps1 --run` for all 24
+diagnostic comparison. Run `./test/runners/run_all_tests.ps1 --run` for all registered
 correctness suites.
 
 ## v1.2.0 parity coverage audit
@@ -322,43 +322,94 @@ Logs were preserved under `_exports/_validation/ci-gui-*.log` and
 The hosted workflow rerun, rebuilt candidate exports/archive and visible manual
 sign-off remain outstanding. No release or merge was performed.
 
+## GitHub build failures and release gates
+
+Current scope: tests, bug fixes and release gates only. Feature work is frozen.
+
+On 2026-09-10, Native builds
+[34490073007](https://github.com/BaconEggsRL/easing_curve/actions/runs/34490073007)
+and [34490624449](https://github.com/BaconEggsRL/easing_curve/actions/runs/34490624449)
+failed in `windows-tests`: 33 of 34 suites passed, but the Undo/Redo suite
+expected enum-derived `Css Cubic Bezier` / `Css Linear` labels. The Inspector
+intentionally displays `cubic-bezier()` / `linear()`. The fix records those
+literal expectations in the test and reports expected/actual labels on failure.
+The native compilation jobs succeeded; downstream export/package jobs were
+blocked by the correctness gate.
+
+For future failures:
+
+1. Inspect the first failing job with `gh run view <run-id> --log-failed`.
+   Read the failing assertion and suite summary before changing build tooling.
+   A workflow named **Native builds** can fail after compilation succeeds.
+2. Trace the tested behavior and its callers. Intentional UI-label changes
+   require updating independent test expectations; do not call the production
+   formatter to generate expected values or remove the assertion.
+3. Reproduce with the CI editor/runtime versions and the isolated full runner.
+   A focused PASS is insufficient while another registered suite still fails.
+4. Require zero process exit, a PASS marker and no unexpected diagnostics.
+   Preserve failed logs; do not broaden diagnostic allowlists or retry a
+   deterministic failure into a pass. Exit `-1073741819` (`0xC0000005`) is a
+   native crash even when the log looks clean. The separately qualified fix
+   for the Godot editor shutdown crash is documented in
+   [tooling/godot](../../tooling/godot/README.md).
+
+For a fresh local PowerShell 7 session, select the official runtime through
+`EASING_CURVE_GODOT_PATH` (or `-GodotPath`) and install/configure the pinned editor:
+
+```powershell
+.\tooling\godot\install_editor.ps1
+$pin = Get-Content .\tooling\godot\editor-pin.json -Raw | ConvertFrom-Json
+$env:EASING_CURVE_EDITOR_GODOT_PATH = (Resolve-Path .\test\_temp\pinned-editor\godot-editor.exe).Path
+$env:EASING_CURVE_EDITOR_GODOT_SHA256 = $pin.editor_sha256
+.\test\runners\run_all_tests.ps1 --run
+```
+
+The installer writes `GITHUB_ENV` in Actions; locally the environment variables
+must be set in the invoking session. Editor exports use the official template
+version in `editor-pin.json`, not the patched editor's custom version string.
+
+After correctness passes, run the existing Windows release export, Web
+debug/release browser runtime and exact archive gates from
+[native-build.yml](../../.github/workflows/native-build.yml). `-SkipBuild`
+requires existing binaries; release certification requires artifacts from the
+successful CI run for the exact release commit. Local working-tree results
+do not certify a committed release or the hosted workflow. Preserve summaries
+outside `test/_temp` before cleanup; cleanup also removes the downloaded editor,
+so run it only after all dependent gates finish and failed evidence is retained.
+
+Local validation on 2026-09-10, working tree based on `c1deb9102ed5710759bb5a092aab957e0fc41b47`:
+
+- Before the fix: 33/34 suites passed; the same two label assertions failed.
+- After the fix: 34/34 suites passed, including 640 Undo/Redo checks.
+- All five process, runner-hardening, tooling, archive-diagnostics and release
+  workflow contract scripts passed. Windows/Web manifest checks passed.
+- Windows release export and Web debug/release browser runtime passed using
+  existing local binaries (`-SkipBuild`) and official 4.7.1 templates.
+- The working-tree ZIP passed hash/content checks, both APIs and clean-project
+  enable/disable/re-enable checks. SHA256:
+  `F5677E7486CDFBB5C04D78A06A02B15994888890FB475A3CEAC9C92033CFC1B3`.
+
+Logs: `_exports/_validation/ci-fix-20260910/`. The baseline failure and older
+unarchived diagnostics remain under `test/_temp`; global cleanup was not run.
+Visible-only layout fixtures remain skipped in the headless suite. These are
+local results, not a new CI certification, Native rebuild or published release.
+A concurrent edit to `addons/easing_curve/_test_scene/test.tscn` appeared after
+the isolated test project and ZIP were created. It was preserved and is not
+covered by these results; validate that scene before certifying a later archive.
+
 ## Automated suites
 
 `test/runners/run_all_tests.ps1` is the sole source of truth for the explicit
-automated-suite manifest. It currently registers 23 suites: 12 headless and
-11 Editor-host. Their entrypoint scripts and `.uid` sidecars live under
-`test/scripts/`. Do not infer an automated suite or its mode from its filename.
+automated-suite manifest. List the current entrypoints with:
 
-### Headless suites
+```powershell
+.\test\runners\run_all_tests.ps1 --list
+```
 
-- `css_linear_test.gd`
-- `curve_editor_backend_contract_test.gd`
-- `easing_curve_editor_rmb_delete_test.gd`
-- `easing_curve_manual_reorder_test.gd`
-- `easing_curve_transform_test.gd`
-- `easing_curve_v105_regression_test.gd`
-- `native_v2_smoke_test.gd`
-- `native_public_contract_test.gd`
-- `runtime_curve_updates_test.gd`
-- `serialization_transition_contract_test.gd`
-- `test_scene_curve_backend_test.gd`
-- `tween_equivalence_test.gd`
-
-### Editor-host suites
-
-The following suites require an Editor-host launch:
-
-- `easing_curve_control_editability_test.gd`
-- `easing_curve_preview_generator_test.gd`
-- `easing_curve_editor_position_x_drag_test.gd`
-- `easing_curve_linear_control_alias_test.gd`
-- `easing_curve_points_list_add_editor_test.gd`
-- `easing_curve_points_list_reorder_editor_test.gd`
-- `easing_curve_point_state_characterization_test.gd`
-- `easing_curve_selection_refresh_characterization_test.gd`
-- `easing_curve_editor_gesture_characterization_test.gd`
-- `curve_editor_vertical_slice_test.gd`
-- `editor_undo_redo_test.gd`
+Scripts and `.uid` sidecars live under `test/scripts/unit/`; shared harnesses
+live under `test/scripts/support/`. The manifest's `Editor` flag selects the
+host mode. Do not infer a suite or its mode from its filename, or copy the
+manifest into documentation where it can become stale.
 
 Run an Editor-dependent test with:
 
@@ -377,25 +428,29 @@ Run every headless and Editor-host suite independently with:
 .\test\runners\run_all_tests.ps1 --run
 ```
 
-The PowerShell runner uses `EASING_CURVE_GODOT_PATH` when set and otherwise uses
-its configured Godot 4.7 console fallback. Before running the suites, it creates
+Use PowerShell 7. The runner selects the official runtime from `-GodotPath`,
+`EASING_CURVE_GODOT_PATH`, or `godot` on PATH, in that order. Editor invocations
+use the checksum-verified editor configured by the tooling manifest; see the
+setup below. Before running the suites, it creates
 a generated project under `test/_temp/runner` containing only the Easing Curve
 addon, test scripts, and test presets. The generated project enables only the
 Easing Curve plugin, so root-project development plugins and autoloads cannot
 affect product-test startup. An Editor import pass initializes its script-class
- cache, then the runner starts the 12 compatible suites with `--headless` and adds
-`--editor` only for the 11 suites that require an Editor/Inspector host.
+cache, then the runner starts each suite with `--headless` and adds `--editor`
+for suites marked as requiring an Editor/Inspector host.
 
-Only after that command exits successfully with every suite passing, immediately
-run:
+After the final full suite and any dependent export/archive gates pass, preserve
+the validation summaries outside `test/_temp`, then run:
 
 ```powershell
 .\test\runners\run_all_tests.ps1 --cleanup
 ```
 
-This is the required final validation step. It removes the runner's temporary
-logs and artifacts from `test/_temp` while preserving `test/_temp/.gdignore`
-and the directory itself. Do not run cleanup after a failure, crash, timeout,
+This is the final cleanup step, not a test. It removes everything in
+`test/_temp`, including the pinned editor and other runs' artifacts, while
+preserving `test/_temp/.gdignore` and the directory itself. Do not run it while
+another test is active or unarchived failure evidence is still needed.
+Do not run cleanup after a failure, crash, timeout,
 missing PASS marker, script error, or any other unexpected result; retain those
 artifacts for debugging. If tests are rerun while investigating a problem, run
 cleanup only after the final full suite passes.
@@ -412,9 +467,8 @@ for those tests. Godot 4.7.1's exact Windows root-certificate-store diagnostic
 is classified separately because it also occurs in the isolated product-only
 host; other unexpected diagnostics still fail the suite.
 
-`test/runners/run_godot.ps1` retains its existing behavior for standalone or
-full-suite invocations, including selecting the configured Godot 4.7.1
-console executable and supplying a repository-local log when one is not given.
+`test/runners/run_godot.ps1` applies the same executable selection for standalone
+invocations and supplies a repository-local log when one is not given.
 
 Under Godot 4.7 `--editor --headless`, `editor_undo_redo_test.gd` skips its
 `FoldableContainer` fixture because it crashes in that environment and its
@@ -436,14 +490,14 @@ responses. It does not invoke real `git push`, tag mutation, or `gh` commands.
 
 ## Test-asset ownership
 
-Only the 23 scripts under `test/scripts/unit/` in the explicit runner manifest
-above are release-gating automated suites. The following assets are
+Only scripts under `test/scripts/unit/` in the runner's explicit manifest are
+release-gating correctness suites. The following assets are
 intentionally documented by their observed repository role; none is registered
 by `test/runners/run_all_tests.ps1`.
 
 ### Shared automated-test harness and fixtures
 
-- `editor_host_test_harness.gd` is preloaded by the 11 Editor-host suites to
+- `editor_host_test_harness.gd` is preloaded by Editor-host suites to
   require an Editor/Inspector host and create their Inspector contexts.
 - `presets/legacy_pre_flat_triangle.tres` and
   `presets/legacy_flat_without_force_linear.tres` are serialization fixtures

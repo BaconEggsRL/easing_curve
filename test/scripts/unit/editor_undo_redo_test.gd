@@ -552,6 +552,10 @@ func _test_transition_presentation_contract() -> void:
 		EasingCurve.TRANS.CSS_LINEAR,
 		EasingCurve.TRANS.CSS_CUBIC_BEZIER,
 	]
+	var expected_css_labels := {
+		EasingCurve.TRANS.CSS_CUBIC_BEZIER: "cubic-bezier()",
+		EasingCurve.TRANS.CSS_LINEAR: "linear()",
+	}
 	var option := INSPECTOR_PLUGIN._create_transition_option(EasingCurve.TRANS.CSS_LINEAR)
 	var popup := option.get_popup()
 	var expected_index := 0
@@ -563,9 +567,15 @@ func _test_transition_presentation_contract() -> void:
 		expected_index += 1
 		for transition: EasingCurve.TRANS in group["items"]:
 			var expected_label := String(EasingCurve.TRANS.keys()[transition]).to_lower().capitalize().replace("_", " ")
+			expected_label = expected_css_labels.get(transition, expected_label)
 			_expect(not popup.is_item_separator(expected_index), "%s became a separator" % expected_label)
 			_expect(option.get_item_id(expected_index) == transition, "%s dropdown ID or order changed" % expected_label)
-			_expect(option.get_item_text(expected_index) == expected_label, "%s dropdown label changed" % expected_label)
+			_expect(
+				option.get_item_text(expected_index) == expected_label,
+				"Transition %s: expected label '%s', got '%s'" % [
+					EasingCurve.TRANS.keys()[transition], expected_label, option.get_item_text(expected_index),
+				],
+			)
 			seen.append(transition)
 			expected_index += 1
 
