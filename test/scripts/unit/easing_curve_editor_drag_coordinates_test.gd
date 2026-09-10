@@ -21,6 +21,7 @@ func _run() -> void:
 		await _test_coordinate_tracking_and_minimum_gap(native)
 	_test_display_space_handle_parity()
 	_test_grid_snapping()
+	await _test_display_settings()
 	await _test_rendered()
 	_finish("drag coordinates")
 
@@ -450,6 +451,50 @@ func _test_grid_snapping() -> void:
 		editor.snap_count = 200
 		_expect(editor.snap_count == 100, "Snap count accepted more than 100")
 		_expect(editor._coordinate_readout.z_index > 0 and editor._coordinate_readout.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Readout is not a foreground input-transparent overlay")
+		_dispose(editor)
+
+
+func _test_display_settings() -> void:
+	var settings := EditorInterface.get_editor_settings()
+	var tooltip_key := EasingCurveEditor.CurveEditorSettings.HIDE_POSITION_TOOLTIP_SETTING
+	var snapping_key := EasingCurveEditor.CurveEditorSettings.HIDE_GRID_SNAPPING_ROW_SETTING
+	var original_tooltip: Variant = settings.get_setting(tooltip_key)
+	var original_snapping: Variant = settings.get_setting(snapping_key)
+	var editors: Array[EasingCurveEditor] = [_fixture(false), _fixture(true)]
+	for editor: EasingCurveEditor in editors:
+		editor.snap_enabled = true
+		editor.snap_count = 20
+		_press(editor, _resolved(editor, &"position"))
+	await process_frame
+	await process_frame
+	for hide_tooltip: bool in [false, true]:
+		for hide_snapping: bool in [false, true]:
+			settings.set_setting(tooltip_key, hide_tooltip)
+			settings.set_setting(snapping_key, hide_snapping)
+			# Exercise the real settings_changed subscription in both open editors.
+			await process_frame
+			await process_frame
+			await process_frame
+			for editor: EasingCurveEditor in editors:
+				_expect(editor._coordinate_readout.is_visible_in_tree() == not hide_tooltip, "Tooltip setting did not update an open editor")
+				_expect(editor._snap_toolbar_margin.is_visible_in_tree() == not hide_snapping, "Grid row setting did not update an open editor")
+				_expect(editor.snap_enabled and editor.snap_count == 20, "Hiding grid row changed snapping configuration")
+				_expect(editor._get_drag_coordinate_position().is_equal_approx(_resolved(editor, &"position")), "Display settings changed active drag coordinates")
+				_expect_coordinate_placement(editor, _resolved(editor, &"position"))
+				var point_row_bottom := editor._point_toolbar_panel.position.y + editor._point_toolbar_panel.size.y
+				var expected_graph_top := point_row_bottom + editor._layout.get_theme_constant(&"separation")
+				if not hide_snapping:
+					expected_graph_top += editor._snap_toolbar_margin.size.y + editor._layout.get_theme_constant(&"separation")
+				_expect(is_equal_approx(editor._graph_canvas.position.y, expected_graph_top), "Hidden snap row retained height or separation")
+				var rebuilt := _fixture(editor.get_curve().is_class("NativeEasingCurve"))
+				_expect(rebuilt._coordinate_readout.visible == not hide_tooltip and rebuilt._snap_toolbar_margin.visible == not hide_snapping, "New editor ignored saved display settings")
+				_dispose(rebuilt)
+	settings.set_setting(tooltip_key, original_tooltip)
+	settings.set_setting(snapping_key, original_snapping)
+	await process_frame
+	await process_frame
+	for editor: EasingCurveEditor in editors:
+		editor._handle_left_released()
 		_dispose(editor)
 
 

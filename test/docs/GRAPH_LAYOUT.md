@@ -53,6 +53,12 @@ canvas. Drawing and input convert at the canvas boundary while public view/world
 coordinates remain editor-local. The coordinate readout reserves no persistent
 height; formatting, horizontal/vertical tracking and edge clamping are retained.
 
+Editor Settings → Easing Curve → Curve Editor provides `Hide Position Tooltip`
+and `Hide Grid Snapping Row`. Both default to off and update open Inspectors
+immediately. Hiding the snapping row removes its height and separation without
+changing snap enablement or subdivisions. Hiding the tooltip affects graph and
+Inspector coordinate drags without changing editing behavior.
+
 Godot mouse capture was verified with viewport-dispatched left, middle and right
 button events across siblings, then with actual point, handle, pan, add and delete
 gestures. An active graph gesture continues through motion/release over controls;

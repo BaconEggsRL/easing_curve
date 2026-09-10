@@ -167,6 +167,7 @@ var _snap_button: Button
 var _snap_toolbar_margin: MarginContainer
 var _snap_count_input: EditorSpinSlider
 var _coordinate_readout: Control
+var _hide_grid_snapping_row := false
 var _zoom_x: float = 1.0 # horizontal zoom
 var _zoom_y: float = 1.0 # vertical zoom
 var _zoom_step := 0
@@ -267,7 +268,7 @@ func _ready() -> void:
 	resized.connect(_queue_layout)
 	theme_changed.connect(_queue_layout)
 	_update_layout()
-	_update_point_toolbar()
+	_sync_display_settings()
 
 
 func _ensure_layout() -> void:
@@ -360,6 +361,15 @@ func set_default_new_point_handle_mode(handle_mode: int) -> void:
 
 func _on_editor_settings_changed() -> void:
 	_sync_default_new_point_handle_mode()
+	_sync_display_settings()
+
+
+func _sync_display_settings() -> void:
+	_hide_grid_snapping_row = CurveEditorSettings.get_hide_grid_snapping_row()
+	if _coordinate_readout != null:
+		_coordinate_readout.visible = not CurveEditorSettings.get_hide_position_tooltip()
+	_update_point_toolbar()
+	queue_redraw()
 
 
 func _sync_default_new_point_handle_mode() -> void:
@@ -2858,7 +2868,7 @@ func _update_point_toolbar() -> void:
 
 	var hide_toolbar := _is_point_toolbar_hidden()
 	_point_toolbar_panel.visible = not hide_toolbar
-	_snap_toolbar_margin.visible = not hide_toolbar
+	_snap_toolbar_margin.visible = not hide_toolbar and not _hide_grid_snapping_row
 
 	if hide_toolbar:
 		_set_point_toolbar_reorder_available(false, false)
