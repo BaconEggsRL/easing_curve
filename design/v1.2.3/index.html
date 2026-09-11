@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Easing Curve · Motion lab / 1.2.3</title>
+  <link rel="icon" href="assets/icons/Curve.svg"><link rel="stylesheet" href="styles.css">
+  <script defer src="assets/curve_samples.js"></script><script defer src="fixtures.js"></script><script defer src="script.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<aside class="sidebar">
+  <a class="brand" href="#overview"><img src="assets/icons/Curve.svg" alt=""><span>Easing Curve<small>MOTION LAB / 1.2.3</small></span></a>
+  <div class="nav-label">DESIGN EXPLORATION</div>
+  <nav aria-label="Laboratory sections">
+    <a href="#overview"><span>00</span> Overview</a>
+    <a href="#authoring"><span>01</span> Inspector & tracks</a>
+    <a href="#values"><span>02</span> Targets & values</a>
+    <a href="#buttons"><span>03</span> Juicy buttons</a>
+    <a href="#restore"><span>04</span> Reverse & restore</a>
+    <a href="#architecture"><span>05</span> Architecture & API</a>
+    <a href="#decisions"><span>06</span> Boundaries & decisions</a>
+  </nav>
+  <div class="sidebar-bottom"><span class="status-dot"></span> Local, self-contained prototype<p>Working interactions.<br>Provisional production ideas.</p><a href="README.md">Review guide ↗</a></div>
+</aside>
+<main id="content">
+  <header class="topbar"><span>WORKSPACE <b>/</b> EasingTween exploration</span><span class="tag">DESIGN ONLY</span></header>
+  <section id="overview" class="page">
+    <div class="eyebrow">FROM CURVE TO CHARACTER</div>
+    <h1>Give your interface<br><em>a little life.</em></h1>
+    <p class="lede">A working laboratory for applying Easing Curve to everyday animation. Configure a property, try a curve, and compare what feels right.</p>
+    <div class="hero-actions"><a class="button primary" href="#buttons">Try a juicy button <span>↗</span></a><a class="button" href="#authoring">Explore the Inspector →</a></div>
+    <div class="hero-visual" aria-label="Curve becomes button animation">
+      <div class="hero-graph"><span class="eyebrow">BACK OUT / 120 MS</span><svg viewBox="0 0 460 170" role="img" aria-label="An overshooting Back Out easing curve"><path class="gridline" d="M20 20H440M20 70H440M20 120H440M20 160H440M20 20V160M125 20V160M230 20V160M335 20V160M440 20V160"/><path class="hero-line" d="M20 155C110 18 245 -7 310 27C355 45 410 47 440 47"/><circle cx="440" cy="47" r="5" fill="#b2e8ce"/></svg><div class="axis-caption"><span>TIME →</span><span>OVERSHOOT IS INTENTIONAL</span></div></div>
+      <div class="hero-target"><span class="eyebrow">MAKE IT TANGIBLE</span><a href="#buttons" class="hero-button">Play with motion ↗</a><small>Hover · press · focus · return</small></div>
+    </div>
+    <div class="section-heading"><h2>One idea. Three ways in.</h2><span class="muted">Curve + duration + property + playback</span></div>
+    <div class="cards three"><article><span class="number">01 / DESIGNER</span><h3>Author it in the Inspector</h3><p>Choose a target and a typed destination. Preview without writing tween boilerplate.</p></article><article><span class="number">02 / PROGRAMMER</span><h3>Call what you configured</h3><p>A small scene node exposes playback. Explore <code>$HoverTween.play()</code> and return behavior.</p></article><article><span class="number">03 / CODE FIRST</span><h3>Keep the convenience small</h3><p>Compare a curve helper with Godot’s existing custom interpolator. Extra API must earn its place.</p></article></div>
+    <div class="flow"><span>Trigger</span><i>→</i><span>Resolve values</span><i>→</i><span>Configure playback</span><i>→</i><span>Sample curve</span><i>→</i><span>Apply property</span></div>
+    <div class="cards two"><article><span class="badge working">WORKING LABS</span><h3>Compare the actual workflow</h3><p>Tracks, property pickers, typed values, capture timing, trigger routing, and returns all work on a small simulated scene. Each comparison uses the same browser playback code.</p></article><article><span class="badge future">DOCUMENTED ONLY</span><h3>Keep the engine in Godot</h3><p>Scene lifecycle, persistence, UndoRedo, baking, and advanced process options are annotated proposals. Browser results establish UX behavior, not engine compatibility.</p></article></div>
+    <p class="note">Recommended for evaluation means “try this first,” never “approved for production.” This lab informs a separate v1.2.3 production plan.</p>
+  </section>
+  <section id="authoring" class="page" hidden>
+    <div class="eyebrow">LAB 01 / AUTHORING</div><h1>Small surface.<br><em>Room to compose.</em></h1><p class="lede">Compare a single-property Inspector, expandable rows, and a selected-track panel. Change defaults on one side and keep the other as your reference.</p>
+    <div class="lab-toolbar"><span class="badge recommended">RECOMMENDED FOR EVALUATION · EXPANDABLE ROWS</span><button data-run-pair="authoring">▶ Preview both</button></div>
+    <div class="lab-pair" data-lab="authoring"></div>
+    <div class="cards three"><article><h3>Simple</h3><p>One property is fast to discover. Multiple properties require graduating to the track view. Hidden tracks are retained but do not play in Simple.</p></article><article><h3>Expandable rows</h3><p>See the whole gesture and edit in context. Large typed values make the Inspector longer.</p></article><article><h3>Selected detail</h3><p>A compact list and one editing surface. Fewer fields on screen, but more selection changes.</p></article></div>
+    <details class="annotation"><summary>Further ownership alternatives · annotated candidates</summary><p><b>Curve per phase:</b> Enter, exit, and press can each supply defaults. This fits interactions but introduces phase ownership into generic animation.</p><p><b>Normalized timeline:</b> offsets and duration multipliers support coordinated gestures; they also drift toward timeline authoring. The strip above is deliberately read-only.</p><p><b>Shared duration + multiplier:</b> convenient proportional timing but harder to predict than explicit seconds. This lab exercises shared, per-track, and shared-with-override seconds.</p></details>
+  </section>
+  <section id="values" class="page" hidden>
+    <div class="eyebrow">LAB 02 / BINDINGS</div><h1>The destination<br><em>can change.</em></h1><p class="lede">Animate Character.position toward Character.target_position. Preview both, then change the destination during the delay to compare Play-time and track-start capture.</p>
+    <div class="lab-toolbar"><span class="badge working">FIXED MOCK SCENE · TYPED PROPERTIES</span><button data-run-pair="values">▶ Preview both</button><button data-source-pair="values">Change both destinations during delay</button></div>
+    <div class="lab-pair" data-lab="values"></div>
+    <div class="cards two"><article><h3>Four modes, visible intent</h3><p><b>Current</b> reads the target at the capture boundary. <b>Value</b> uses a literal. <b>Relative</b> adds an offset to that captured value. <b>Property</b> reads another compatible property once. It does not follow a moving source continuously.</p></article><article><h3>A picker, not a path guessing game</h3><p>The mock registry includes components, custom script values, and material parameters. Production could use <code>Object.get_property_list()</code> and <code>Shader.get_shader_uniform_list()</code>. Bool is excluded: choose a discrete action if that is needed later.</p></article></div>
+    <p class="note">Godot’s <code>from_current()</code> captures when the PropertyTweener is created. A proposed “read at track start” mode needs deliberate runtime resolution. These names are not interchangeable.</p>
+  </section>
+  <section id="buttons" class="page" hidden>
+    <div class="eyebrow">LAB 03 / INTERACTION</div><h1>Feel the difference.<br><em>Then choose the wiring.</em></h1><p class="lede">Hover, press, or tab into a button. Architecture switches change the authoring and signal route while keeping the animation implementation and recipe the same.</p>
+    <div class="lab-toolbar"><span class="badge recommended">RECOMMENDED FOR EVALUATION · COMPANION VS HELPER</span><button data-run-pair="buttons">▶ Preview both</button></div>
+    <div class="lab-pair" data-lab="buttons"></div>
+    <div class="cards two"><article><h3>One overlap rule, openly provisional</h3><p>Press takes transform priority. Otherwise hover or focus adds emphasis. Focus keeps its own visible accent. Release returns to the still-active hover/focus state; a newer event cancels motion from the current visible value.</p></article><article><h3>What the original button taught us</h3><p>The local JuicyButton project already auditions Inspector events, squashes on press, lifts on hover, and uses separate return curves. Its captured starting position motivates the layout-change experiments. Focus behavior is new exploration.</p></article></div>
+    <p class="note">Signal names are mapped to browser events for UX evaluation. No Godot input dispatch, signal connection storage, or scene-tree lifecycle is simulated.</p>
+  </section>
+  <section id="restore" class="page" hidden>
+    <div class="eyebrow">LAB 04 / RETURN BEHAVIOR</div><h1>Back to…<br><em>which normal?</em></h1><p class="lede">Compare returning to captured values with returning to a fresh external baseline. Move the layout or change its base scale after playback, then choose Return.</p>
+    <div class="lab-toolbar"><span class="badge working">SNAPSHOT ≠ ENDPOINTS ≠ BASELINE</span><button data-run-pair="restore">▶ Preview both</button><button data-baseline-pair="restore">Move both baselines +24 px</button><button data-return-pair="restore">↶ Return both</button></div>
+    <div class="lab-pair" data-lab="restore"></div>
+    <div class="flow"><span>Snapshot editor values</span><i>→</i><span>Capture playback endpoints</span><i>→</i><span>Preview / stop / reverse</span><i>→</i><span>Reset snapshot</span></div>
+    <div class="cards three"><article><h3>Exact reverse</h3><p>Traverse the captured curve backward from the current progress. This is distinct from swapping endpoints and applying a new easing curve.</p></article><article><h3>Fresh baseline</h3><p>Return to an external source of intended layout state. Reading a currently animated value cannot reveal what another system meant “normal” to be.</p></article><article><h3>Engine requirements</h3><p>Real preview would need capture/restore across editor selection changes, scene closure, target deletion, plugin shutdown, and undo operations. Those remain design constraints, not browser implementations.</p></article></div>
+  </section>
+  <section id="architecture" class="page" hidden>
+    <div class="eyebrow">REFERENCE / PROVISIONAL CONTRACTS</div><h1>Use the engine.<br><em>Reduce the ceremony.</em></h1><p class="lede">The addon supplies an authored interpolation function. Godot already supplies value interpolation and Tween lifetime. No new production classes are introduced by this laboratory.</p>
+    <h2>Where does authoring live?</h2><div class="cards three"><article><span class="badge recommended">RECOMMENDED FOR EVALUATION</span><h3>Node + track Resources</h3><pre>Button
+└─ EasingTween
+   tracks: [Scale, Lift, Tint]</pre><p>One playback owner, shareable track data. Nested Resource editing and target binding need care.</p></article><article><span class="badge">CANDIDATE</span><h3>One node per property</h3><pre>Button
+├─ ScaleTween
+├─ LiftTween
+└─ TintTween</pre><p>Direct, familiar scene composition. Coordination creates more nodes and references.</p></article><article><span class="badge">CANDIDATE</span><h3>Animation resource + host</h3><pre>Button
+└─ PlaybackHost
+   animation: HoverResource</pre><p>Reusable authored gestures. Binding an asset to each scene adds another step.</p></article></div>
+    <h2>Keep authored data separate from a running interaction</h2><div class="cards two"><article><h3>Proposed authored track</h3><p>Target binding · property · typed From/To modes · curve · duration · delay · enabled.</p><p>These are conceptual fields, not a final serialized schema.</p></article><article><h3>Per-playback instance</h3><p>Resolved objects · captured endpoints · elapsed time · cancellation · preview snapshot.</p><p>Live references and mutable captured baselines must not leak into shared track Resources.</p></article></div>
+    <div class="flow"><span>Node / resource authoring</span><i>→</i><span>Runtime binding</span><i>→</i><span>Godot Tween + linear time</span><i>→</i><span>curve.sample(t)</span><i>→</i><span>PropertyTweener</span></div>
+    <h2>Convenience API candidates</h2><p>Every example below is proposed syntax unless explicitly marked existing. No EasingTween API exists in this lab.</p>
+    <div class="cards two"><article><span class="badge">CANDIDATE · CONFIGURED NODE</span><pre>$HoverTween.play()
+$HoverTween.reverse()
+$HoverTween.play_to(destination)</pre><p>Discoverable on a scene node. Multitrack <code>play_to</code> needs an explicit target-track policy before production.</p></article><article><span class="badge">CANDIDATE · CURVE CONVENIENCE</span><pre>curve.tween_property(button, ^"scale", Vector2(1.08, 1.08), 0.12)
+curve.tween_property(node, ^"position:y", target_y, duration)</pre><p>Easy to discover from the resource. Both independent curve families would need a consistent contract.</p></article></div>
+    <div class="table-wrap"><table><thead><tr><th>API location</th><th>Benefit</th><th>Cost / unresolved choice</th></tr></thead><tbody><tr><td>EasingCurve method</td><td>Shortest discoverable call</td><td>Resource gains playback responsibility; Native parity</td></tr><tr><td>EasingTween static helper</td><td>One shared convenience entry point</td><td>Node/static naming overlap; explicit curve argument</td></tr><tr><td>Utility class</td><td>Independent of resource family</td><td>Another class for users to find</td></tr><tr><td>Helper accepting curve</td><td>Composition without modifying resources</td><td>Less discoverable than a resource method</td></tr><tr><td>No new interpolation helper</td><td>Keep sample() + built-ins</td><td>A few extra lines for code-first users</td></tr></tbody></table></div>
+    <p class="note">Returning a <b>Tween</b> preserves cancellation and completion control; a <b>PropertyTweener</b> exposes property modifiers. A wrapper return type adds a concept. Compare these before adding API. An optional <code>curve.interpolate(initial, delta, elapsed, duration)</code> would also need explicit zero-duration and extrapolation semantics.</p>
+    <h2>Existing engine tools</h2><div class="table-wrap"><table><thead><tr><th>Tool</th><th>Actual role</th><th>Design implication</th></tr></thead><tbody><tr><td><a href="https://docs.godotengine.org/en/stable/classes/class_@globalscope.html#class-globalscope-method-ease">ease(x, curve)</a></td><td>Exponent-based scalar shaping; curve is a number</td><td>Not an EasingCurve resource or playback owner</td></tr><tr><td><a href="https://docs.godotengine.org/en/stable/classes/class_tween.html#class-tween-method-interpolate-value">Tween.interpolate_value()</a></td><td>Initial + delta, elapsed seconds, duration, built-in trans/ease</td><td>Zero duration returns final; elapsed can extrapolate; no curve callback parameter</td></tr><tr><td>Tween.tween_property()</td><td>Existing property playback and lifetime</td><td>Reuse lifecycle machinery; cancel conflicting tweens explicitly</td></tr><tr><td><a href="https://docs.godotengine.org/en/stable/classes/class_propertytweener.html">set_custom_interpolator()</a></td><td>Curve sample becomes the interpolation weight</td><td>Use linear tweener transition to avoid double easing; preserve overshoot</td></tr><tr><td>from_current()</td><td>Captures at PropertyTweener creation</td><td>Not a synonym for reading after a delay</td></tr><tr><td>Tween.stop()</td><td>Stops/resets Tween state, not property values</td><td>Lab Stop freezes values; Reset restores a separate snapshot</td></tr></tbody></table></div>
+    <h2>Repository constraints</h2><ul class="readable"><li>Legacy and Native are supported independent resource families; numeric transition IDs are not interchangeable.</li><li>Current project: Godot 4.7, validated sample export: 4.7.1. Existing release compatibility: 4.4.1+. Native requires a matching binary.</li><li>Sampling clamps time, not output. Curves may overshoot or have unusual endpoints; no automatic normalization is implied.</li><li>Curve Reverse/Invert transforms are separate from playback reversal. The browser never mutates a shared sample table.</li><li>Existing editor backends unify Inspector presentation, not runtime animation ownership.</li><li>Godot 4.7 offset transforms require enabling. With visual-only enabled, hit testing stays at the original location. The wrapper alternative is separately shown for older supported versions.</li></ul>
+    <p><a href="https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-property-offset-transform-enabled">Control offset transform semantics ↗</a> · <a href="https://docs.godotengine.org/en/stable/classes/class_shader.html#class-shader-method-get-shader-uniform-list">Shader uniform metadata ↗</a></p>
+  </section>
+  <section id="decisions" class="page" hidden>
+    <div class="eyebrow">NEXT / DECIDE WITH EVIDENCE</div><h1>A small animation tool.<br><em>A clear boundary.</em></h1><p class="lede">Finish the lab review before choosing production scope. These recommendations are hypotheses to test, not a v1.2.3 feature commitment.</p>
+    <div class="cards two"><article><h3>Use EasingTween when…</h3><p>A compact property gesture needs Inspector authoring, dynamic destinations, or simple replay. Use code Tween when procedural composition is already clearer in code.</p></article><article><h3>Use AnimationPlayer / Tree when…</h3><p>Choose AnimationPlayer for long authored sequences, coordinated keys, and scrubbing. Choose AnimationTree for blending and animation transitions.</p></article></div>
+    <article class="future-panel"><span class="badge future">FUTURE · NOT IMPLEMENTED</span><h2>Bake a curve into authored keys?</h2><div class="flow"><span>Fixed endpoints + curve</span><i>→</i><span>Sample + measure error</span><i>→</i><span>Property keys / Bézier tracks</span><i>→</i><span>AnimationPlayer</span></div><svg viewBox="0 0 600 95" role="img" aria-label="Sample points approximate an oscillating curve"><path d="M10 80 Q80 -5 140 30T260 25T380 30T490 30H590" fill="none" stroke="#a9c5ff" stroke-width="2"/><path d="M10 80L60 32L110 22L160 36L210 35L260 25L310 24L360 31L410 31L460 29L510 30L590 30" fill="none" stroke="#b2e8ce" stroke-dasharray="4 5"/><g fill="#b2e8ce"><circle cx="60" cy="32" r="4"/><circle cx="160" cy="36" r="4"/><circle cx="260" cy="25" r="4"/><circle cx="360" cy="31" r="4"/><circle cx="460" cy="29" r="4"/></g></svg><p>Bounce, Elastic, Spring, Jitter, and arbitrary functions may need sampled keys. A single cubic Bézier cannot generally reproduce them. Sampling needs error bounds and care around discontinuities and overshoot; dynamic Property destinations must be frozen before baking.</p><button disabled>Bake to AnimationPlayer · future</button><button disabled>Create Animation · future</button></article>
+    <h2>Decision register <small>14 open product questions</small></h2><div class="table-wrap"><table><thead><tr><th>Question</th><th>Provisional recommendation / alternatives</th><th>Evidence needed</th></tr></thead><tbody id="decision-rows"></tbody></table></div>
+    <p class="note">Handoff: record the preferred variants and remaining uncertainties, then write a separate production implementation plan with Godot validation. This HTML lab does not establish a runtime schema, lifecycle contract, release scope, or migration policy.</p>
+  </section>
+  <footer> EASING CURVE <span>1.2.3 EXPLORATION · ALL PRODUCTION CHOICES PROVISIONAL</span></footer>
+</main>
+<dialog id="picker"><form method="dialog"><div class="section-heading"><h2 id="picker-title">Choose a property</h2><button aria-label="Close picker">×</button></div></form><label class="search-label">Search <input type="search" id="picker-search" autocomplete="off"></label><div id="picker-results"></div><p class="muted">Fixture metadata only · choose by keyboard or pointer</p></dialog>
+<noscript><p class="note">Enable JavaScript for the working labs. The overview and reference content remain readable.</p><style>.page[hidden]{display:block}</style></noscript>
+</body></html>

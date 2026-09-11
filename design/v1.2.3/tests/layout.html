@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Motion lab · layout review</title>
+<style>body{margin:16px;background:#111821;color:#eee;font:14px system-ui}header{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px}select,a{color:#b2e8ce;background:#202d3f;padding:7px}iframe{border:1px solid #678;display:block;background:#171b22}p{font-size:12px;color:#aab8ca}</style>
+<header><strong>Layout review harness</strong><label>Viewport width <select id="width"><option>360</option><option selected>700</option><option>1280</option></select></label><label>Content zoom <select id="zoom"><option value="1">100%</option><option value="2">200%</option></select></label><label>Section <select id="section"><option>overview</option><option selected>authoring</option><option>values</option><option>buttons</option><option>restore</option><option>architecture</option><option>decisions</option></select></label><a href="../index.html">Full laboratory ↗</a></header>
+<p>This same-origin iframe tests real CSS breakpoints. Content zoom uses CSS zoom for enlarged-content review; it does not change browser preferences. This harness is optional and has no role in playback.</p>
+<iframe title="Responsive laboratory" src="../index.html#authoring" width="700" height="900"></iframe>
+<script>
+const frame = document.querySelector('iframe');
+function layout() { frame.width = document.querySelector('#width').value; frame.contentDocument.documentElement.style.zoom = document.querySelector('#zoom').value; }
+frame.addEventListener('load', layout);
+document.querySelector('#width').addEventListener('change', layout);
+document.querySelector('#zoom').addEventListener('change', layout);
+document.querySelector('#section').addEventListener('change', event => { frame.src = '../index.html#' + event.target.value; });
+</script></html>
