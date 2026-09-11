@@ -2,7 +2,7 @@
 
 [ext_resource type="Theme" uid="uid://cl6r4pc1kex55" path="res://addons/easing_curve/examples/example_theme.tres" id="1_8ip3j"]
 [ext_resource type="Script" uid="uid://b8g1agd7nyqjk" path="res://addons/easing_curve/examples/popup.gd" id="2_nw7cc"]
-[ext_resource type="Resource" path="res://addons/easing_curve/examples/popup_curve.tres" id="3_gck6s"]
+[ext_resource type="Resource" uid="uid://cvolbxp5h0yri" path="res://addons/easing_curve/examples/popup_curve.tres" id="3_gck6s"]
 
 [node name="Popup" type="Control" unique_id=1748182326]
 layout_mode = 3

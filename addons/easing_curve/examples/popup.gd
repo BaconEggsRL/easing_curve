@@ -17,6 +17,7 @@ var tween: Tween
 
 
 func _ready() -> void:
+	panel.pivot_offset = panel.size / 2.0
 	reset()
 	%Replay.grab_focus()
 
@@ -25,7 +26,6 @@ func replay() -> void:
 	if not is_node_ready():
 		return
 	reset()
-	panel.pivot_offset = panel.size / 2.0
 	tween = create_tween()
 	tween.set_trans(Tween.TRANS_LINEAR)
 	var motion := tween.tween_property(panel, "scale", Vector2.ONE, maxf(duration, 0.05))
