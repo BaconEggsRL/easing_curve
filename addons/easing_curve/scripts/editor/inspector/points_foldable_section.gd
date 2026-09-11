@@ -110,7 +110,7 @@ func setup(section_title: String, content: Control, object: Resource) -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var initially_folded: bool = folded_by_section.get(
 		fold_state_key,
-		false,
+		section_title == "Curve Editor",
 	)
 	if ClassDB.class_exists(&"FoldableContainer"):
 		_native_section = ClassDB.instantiate(&"FoldableContainer") as Control
